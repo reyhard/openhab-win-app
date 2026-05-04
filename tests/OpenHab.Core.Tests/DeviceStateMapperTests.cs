@@ -1,3 +1,4 @@
+using System.Globalization;
 using OpenHab.Core.DeviceState;
 
 namespace OpenHab.Core.Tests;
@@ -29,5 +30,56 @@ public sealed class DeviceStateMapperTests
         var updates = DeviceStateMapper.Map(snapshot, mapping);
 
         Assert.Equal([new DeviceStateUpdate("PcLockedState", "OFF")], updates);
+    }
+
+    [Fact]
+    public void ThrowsForNullSnapshot()
+    {
+        var mapping = new DeviceStateMapping("PcBatteryLevel", "PcChargingState", "PcLockedState", "PcSessionState");
+
+        var ex = Assert.Throws<ArgumentNullException>(() => DeviceStateMapper.Map(null!, mapping));
+
+        Assert.Equal("snapshot", ex.ParamName);
+    }
+
+    [Fact]
+    public void ThrowsForNullMapping()
+    {
+        var snapshot = new DeviceStateSnapshot(87, true, true, "locked");
+
+        var ex = Assert.Throws<ArgumentNullException>(() => DeviceStateMapper.Map(snapshot, null!));
+
+        Assert.Equal("mapping", ex.ParamName);
+    }
+
+    [Fact]
+    public void OmitsUpdatesWhenSnapshotFieldsAreNull()
+    {
+        var mapping = new DeviceStateMapping("PcBatteryLevel", "PcChargingState", "PcLockedState", "PcSessionState");
+        var snapshot = new DeviceStateSnapshot(null, null, null, null);
+
+        var updates = DeviceStateMapper.Map(snapshot, mapping);
+
+        Assert.Empty(updates);
+    }
+
+    [Fact]
+    public void FormatsBatteryPercentUsingInvariantCulture()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("pl-PL");
+            var mapping = new DeviceStateMapping("PcBatteryLevel", null, null, null);
+            var snapshot = new DeviceStateSnapshot(87, null, null, null);
+
+            var updates = DeviceStateMapper.Map(snapshot, mapping);
+
+            Assert.Equal([new DeviceStateUpdate("PcBatteryLevel", "87")], updates);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
     }
 }
