@@ -4,6 +4,8 @@ public static class EndpointSelector
 {
     public static TransportSelection Select(ServerProfile profile, bool localReachable)
     {
+        ArgumentNullException.ThrowIfNull(profile);
+
         return profile.EndpointMode switch
         {
             EndpointMode.LocalOnly => SelectRequired(profile.Name, TransportKind.Local, profile.LocalEndpoint, "LocalOnly", "local"),

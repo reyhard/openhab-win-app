@@ -34,6 +34,7 @@ public sealed class EndpointSelectorTests
         var result = EndpointSelector.Select(profile, localReachable: true);
 
         Assert.Equal(TransportKind.Local, result.Kind);
+        Assert.Equal(new Uri("http://openhab:8080"), result.BaseUri);
     }
 
     [Fact]
@@ -44,6 +45,7 @@ public sealed class EndpointSelectorTests
         var result = EndpointSelector.Select(profile, localReachable: false);
 
         Assert.Equal(TransportKind.Cloud, result.Kind);
+        Assert.Equal(new Uri("https://myopenhab.org"), result.BaseUri);
     }
 
     [Fact]
@@ -54,5 +56,15 @@ public sealed class EndpointSelectorTests
         var error = Assert.Throws<InvalidOperationException>(() => EndpointSelector.Select(profile, localReachable: true));
 
         Assert.Equal("Profile 'home' is CloudOnly but has no cloud endpoint.", error.Message);
+    }
+
+    [Fact]
+    public void LocalOnlyRequiresLocalEndpoint()
+    {
+        var profile = new ServerProfile("home", LocalEndpoint: null, new Uri("https://myopenhab.org"), EndpointMode.LocalOnly);
+
+        var error = Assert.Throws<InvalidOperationException>(() => EndpointSelector.Select(profile, localReachable: true));
+
+        Assert.Equal("Profile 'home' is LocalOnly but has no local endpoint.", error.Message);
     }
 }
