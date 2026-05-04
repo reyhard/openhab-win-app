@@ -23,6 +23,13 @@ public static class SitemapNormalizer
 
     public static NormalizedSitemapPage Normalize(SitemapPage page)
     {
+        ArgumentNullException.ThrowIfNull(page);
+
+        if (page.Widgets is null)
+        {
+            throw new ArgumentException($"Sitemap page '{page.Label}' has null widgets.", nameof(page));
+        }
+
         var widgets = page.Widgets
             .Where(widget => widget.IsVisible)
             .Select(NormalizeWidget)
@@ -33,16 +40,28 @@ public static class SitemapNormalizer
 
     private static NormalizedSitemapWidget NormalizeWidget(SitemapWidget widget)
     {
+        if (widget.Mappings is null)
+        {
+            throw new ArgumentException($"Visible widget '{widget.Label}' has null mappings.", nameof(widget));
+        }
+
+        if (widget.Children is null)
+        {
+            throw new ArgumentException($"Visible widget '{widget.Label}' has null children.", nameof(widget));
+        }
+
         var supported = NativeTypes.Contains(widget.Type);
+        var mappings = widget.Mappings.ToArray();
+        var children = widget.Children.ToArray();
         return new NormalizedSitemapWidget(
             widget.Label,
             widget.Type,
             widget.ItemName,
             widget.State,
-            widget.Mappings,
-            widget.Children.Count > 0,
+            mappings,
+            children.Length > 0,
             !supported,
             supported ? SitemapFallbackKind.None : SitemapFallbackKind.MainUiOrBrowser,
-            widget.Children);
+            children);
     }
 }
