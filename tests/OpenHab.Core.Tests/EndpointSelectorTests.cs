@@ -49,7 +49,7 @@ public sealed class EndpointSelectorTests
     [Fact]
     public void CloudOnlyRequiresCloudEndpoint()
     {
-        var profile = new ServerProfile("home", new Uri("http://openhab:8080"), cloudEndpoint: null, EndpointMode.CloudOnly);
+        var profile = new ServerProfile("home", new Uri("http://openhab:8080"), CloudEndpoint: null, EndpointMode.CloudOnly);
 
         var error = Assert.Throws<InvalidOperationException>(() => EndpointSelector.Select(profile, localReachable: true));
 
