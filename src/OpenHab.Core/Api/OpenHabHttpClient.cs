@@ -43,7 +43,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
 
     private async Task SendPlainTextAsync(HttpMethod method, string relativePath, string body, CancellationToken cancellationToken)
     {
-        var request = new HttpRequestMessage(method, BuildUri(relativePath))
+        using var request = new HttpRequestMessage(method, BuildUri(relativePath))
         {
             Content = new StringContent(body)
         };
@@ -55,7 +55,13 @@ public sealed class OpenHabHttpClient : IOpenHabClient
 
     private Uri BuildUri(string relativePath)
     {
-        return new Uri(_baseUri, relativePath);
+        var baseBuilder = new UriBuilder(_baseUri);
+        if (!baseBuilder.Path.EndsWith("/", StringComparison.Ordinal))
+        {
+            baseBuilder.Path += "/";
+        }
+
+        return new Uri(baseBuilder.Uri, relativePath.TrimStart('/'));
     }
 
     private static async Task ThrowIfFailedAsync(HttpResponseMessage response, CancellationToken cancellationToken)

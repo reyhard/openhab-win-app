@@ -61,4 +61,30 @@ public sealed class OpenHabHttpClientTests
         Assert.Equal(HttpStatusCode.Unauthorized, error.StatusCode);
         Assert.DoesNotContain("secret", error.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task SendCommandPreservesConfiguredBasePath()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK);
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("https://myopenhab.org/openhab"));
+
+        await client.SendCommandAsync("Light", "ON", CancellationToken.None);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal("https://myopenhab.org/openhab/rest/items/Light", request.RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task SendCommandHonorsCanceledToken()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK);
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("https://myopenhab.org"));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.SendCommandAsync("Light", "ON", cts.Token));
+        Assert.Empty(handler.Requests);
+    }
 }
