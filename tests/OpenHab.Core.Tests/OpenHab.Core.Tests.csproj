@@ -22,4 +22,8 @@
     <ProjectReference Include="..\..\src\OpenHab.Core\OpenHab.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\TestSupport\**\*.cs" LinkBase="TestSupport" />
+  </ItemGroup>
+
 </Project>
