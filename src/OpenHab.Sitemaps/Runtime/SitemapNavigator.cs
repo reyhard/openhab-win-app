@@ -8,6 +8,7 @@ public sealed class SitemapNavigator
 
     public SitemapNavigator(SitemapPage rootPage)
     {
+        ArgumentNullException.ThrowIfNull(rootPage);
         CurrentPage = rootPage;
     }
 
@@ -15,6 +16,16 @@ public sealed class SitemapNavigator
 
     public SitemapIntent ActivateWidget(int widgetIndex)
     {
+        if (CurrentPage.Widgets is null)
+        {
+            throw new InvalidOperationException("Current page widgets cannot be null.");
+        }
+
+        if (widgetIndex < 0 || widgetIndex >= CurrentPage.Widgets.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(widgetIndex));
+        }
+
         var widget = CurrentPage.Widgets[widgetIndex];
         if (widget.Children.Count > 0)
         {
