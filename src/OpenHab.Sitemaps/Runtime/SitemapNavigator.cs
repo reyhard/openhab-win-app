@@ -1,0 +1,55 @@
+using OpenHab.Sitemaps.Models;
+
+namespace OpenHab.Sitemaps.Runtime;
+
+public sealed class SitemapNavigator
+{
+    private readonly Stack<SitemapPage> _backStack = new();
+
+    public SitemapNavigator(SitemapPage rootPage)
+    {
+        CurrentPage = rootPage;
+    }
+
+    public SitemapPage CurrentPage { get; private set; }
+
+    public SitemapIntent ActivateWidget(int widgetIndex)
+    {
+        var widget = CurrentPage.Widgets[widgetIndex];
+        if (widget.Children.Count > 0)
+        {
+            _backStack.Push(CurrentPage);
+            CurrentPage = widget.Children[0];
+            return new NavigateIntent(CurrentPage.Id);
+        }
+
+        if (widget.Type == SitemapWidgetType.Switch && widget.ItemName is not null)
+        {
+            var command = string.Equals(widget.State, "ON", StringComparison.OrdinalIgnoreCase) ? "OFF" : "ON";
+            return new SendCommandIntent(widget.ItemName, command);
+        }
+
+        if (IsFallbackWidget(widget.Type))
+        {
+            return new OpenFallbackIntent(widget.Label);
+        }
+
+        return new NoOpIntent();
+    }
+
+    public bool Back()
+    {
+        if (_backStack.Count == 0)
+        {
+            return false;
+        }
+
+        CurrentPage = _backStack.Pop();
+        return true;
+    }
+
+    private static bool IsFallbackWidget(SitemapWidgetType type)
+    {
+        return type is SitemapWidgetType.Webview or SitemapWidgetType.Mapview or SitemapWidgetType.Video or SitemapWidgetType.Chart;
+    }
+}
