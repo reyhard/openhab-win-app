@@ -175,4 +175,48 @@ public sealed class OpenHabSitemapJsonParserTests
         Assert.Contains("home", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("widget", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ParseHomepageFlattensFrameChildren()
+    {
+        const string json = """
+        {
+          "homepage": {
+            "id": "home",
+            "title": "Home",
+            "widgets": [
+              {
+                "type": "Frame",
+                "label": "Living Room",
+                "widgets": [
+                  {
+                    "type": "Switch",
+                    "label": "Light [ON]",
+                    "item": { "name": "LivingRoom_Light", "state": "ON" }
+                  },
+                  {
+                    "type": "Text",
+                    "label": "Temperature [22.5]",
+                    "item": { "name": "LivingRoom_Temp", "state": "22.5" }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+        """;
+
+        var page = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        // Frame + 2 children = 3 widgets total
+        Assert.Equal(3, page.Widgets.Count);
+        Assert.Equal(SitemapWidgetType.Frame, page.Widgets[0].Type);
+        Assert.Equal("Living Room", page.Widgets[0].Label);
+        Assert.Equal(SitemapWidgetType.Switch, page.Widgets[1].Type);
+        Assert.Equal("Light", page.Widgets[1].Label);
+        Assert.Equal("ON", page.Widgets[1].State);
+        Assert.Equal(SitemapWidgetType.Text, page.Widgets[2].Type);
+        Assert.Equal("Temperature", page.Widgets[2].Label);
+        Assert.Equal("22.5", page.Widgets[2].State);
+    }
 }

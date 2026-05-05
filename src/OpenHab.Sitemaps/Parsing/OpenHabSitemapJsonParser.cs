@@ -51,7 +51,22 @@ public static class OpenHabSitemapJsonParser
                         $"Sitemap page '{id}' contains a non-object widget entry.");
                 }
 
-                widgets.Add(ParseWidget(widgetElement));
+                var widget = ParseWidget(widgetElement);
+                widgets.Add(widget);
+
+                // Frames contain inline child widgets that need to be flattened into the page.
+                if (widget.Type == SitemapWidgetType.Frame &&
+                    widgetElement.TryGetProperty("widgets", out var frameWidgetsElement) &&
+                    frameWidgetsElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var childElement in frameWidgetsElement.EnumerateArray())
+                    {
+                        if (childElement.ValueKind == JsonValueKind.Object)
+                        {
+                            widgets.Add(ParseWidget(childElement));
+                        }
+                    }
+                }
             }
         }
 

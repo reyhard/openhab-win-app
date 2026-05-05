@@ -43,6 +43,7 @@ public enum SitemapWidgetType
     Webview,
     Mapview,
     Image,
+    Frame,
     Video,
     Chart
 }
