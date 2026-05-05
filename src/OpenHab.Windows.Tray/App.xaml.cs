@@ -27,7 +27,18 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
-        ICredentialStore credentialStore = new WindowsCredentialStore();
+        ICredentialStore? credentialStore;
+        try
+        {
+            credentialStore = new WindowsCredentialStore();
+        }
+        catch
+        {
+            // PasswordVault may not be available in all Windows configurations.
+            // Token methods will throw InvalidOperationException when no store is configured.
+            credentialStore = null;
+        }
+
         var settingsController = new AppSettingsController(credentialStore);
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
@@ -77,34 +88,42 @@ public partial class App : Application
 
     private void StartNotificationPolling(AppSettingsController settingsController)
     {
-        var settings = settingsController.Current;
-        if (settings.EndpointMode == EndpointMode.LocalOnly) return;
-
-        ToastService.EnsureRegistered();
-        ToastService.NotificationActivated += (_, _) =>
+        try
         {
-            _ = uiDispatcherQueue?.TryEnqueue(() => window?.Activate());
-        };
+            var settings = settingsController.Current;
+            if (settings.EndpointMode == EndpointMode.LocalOnly) return;
 
-        var cloudToken = GetApiTokenSync(settingsController, TransportKind.Cloud);
-        notificationPoller = new NotificationPoller(
-            httpClient!,
-            settings.CloudEndpoint,
-            apiToken: cloudToken,
-            dispatcher: uiDispatcherQueue);
+            ToastService.EnsureRegistered();
+            ToastService.NotificationActivated += (_, _) =>
+            {
+                _ = uiDispatcherQueue?.TryEnqueue(() => window?.Activate());
+            };
 
-        notificationPoller.NotificationReceived += (_, notification) =>
+            var cloudToken = GetApiTokenSync(settingsController, TransportKind.Cloud);
+            notificationPoller = new NotificationPoller(
+                httpClient!,
+                settings.CloudEndpoint,
+                apiToken: cloudToken,
+                dispatcher: uiDispatcherQueue);
+
+            notificationPoller.NotificationReceived += (_, notification) =>
+            {
+                var title = notification.Severity is not null
+                    ? $"[{notification.Severity}] openHAB"
+                    : "openHAB";
+                var body = notification.Message.Length > 200
+                    ? notification.Message[..197] + "..."
+                    : notification.Message;
+                ToastService.Show(title, body);
+            };
+
+            notificationPoller.Start();
+        }
+        catch
         {
-            var title = notification.Severity is not null
-                ? $"[{notification.Severity}] openHAB"
-                : "openHAB";
-            var body = notification.Message.Length > 200
-                ? notification.Message[..197] + "..."
-                : notification.Message;
-            ToastService.Show(title, body);
-        };
-
-        notificationPoller.Start();
+            // Notification infrastructure may not be available in all configurations
+            // (e.g., unpackaged apps without shortcut identity, or restricted user accounts).
+        }
     }
 
     // Sync helper — safe because the underlying store returns Task.FromResult.
