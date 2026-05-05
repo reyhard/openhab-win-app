@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using OpenHab.Rendering.Descriptors;
@@ -9,6 +10,8 @@ public static class SitemapControlFactory
 {
     public static FrameworkElement Create(SitemapRowDescriptor row)
     {
+        ArgumentNullException.ThrowIfNull(row);
+
         return row.Control switch
         {
             RenderControlKind.Toggle => CreateToggle(row),
@@ -35,13 +38,22 @@ public static class SitemapControlFactory
 
     private static FrameworkElement CreateSlider(SitemapRowDescriptor row)
     {
-        var value = double.TryParse(row.State, out var parsed) ? parsed : 0;
+        var value = double.TryParse(row.State, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 0, 100)
+            : 0;
+
         return new StackPanel
         {
             Spacing = 4,
             Children =
             {
-                new TextBlock { Text = row.Label },
+                new TextBlock
+                {
+                    Text = row.Label,
+                    TextWrapping = TextWrapping.WrapWholeWords,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxLines = 2
+                },
                 new Slider { Minimum = 0, Maximum = 100, Value = value }
             }
         };
@@ -77,9 +89,23 @@ public static class SitemapControlFactory
             }
         };
 
-        grid.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+        grid.Children.Add(new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxLines = 2
+        });
 
-        var stateText = new TextBlock { Text = state, VerticalAlignment = VerticalAlignment.Center };
+        var stateText = new TextBlock
+        {
+            Text = state,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 180
+        };
         Grid.SetColumn(stateText, 1);
         grid.Children.Add(stateText);
 
