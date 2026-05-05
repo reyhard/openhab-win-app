@@ -49,18 +49,13 @@ public static class SitemapControlFactory
             ? Math.Clamp(parsed, 0, 100)
             : 0;
 
-        var canActivate = row.Action == RenderActionKind.SendCommand && activateRow is not null;
         var slider = new Slider
         {
             Minimum = 0,
             Maximum = 100,
             Value = value,
-            IsEnabled = canActivate
+            IsEnabled = false
         };
-        if (canActivate)
-        {
-            slider.PointerCaptureLost += async (_, _) => await activateRow!();
-        }
 
         return new StackPanel
         {
@@ -85,13 +80,8 @@ public static class SitemapControlFactory
         {
             Content = CreateButtonTextBlock(string.IsNullOrWhiteSpace(row.State) ? row.Label : $"{row.Label}: {row.State}"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            IsEnabled = row.Action == RenderActionKind.SendCommand && activateRow is not null
+            IsEnabled = false
         };
-
-        if (row.Action == RenderActionKind.SendCommand && activateRow is not null)
-        {
-            button.Click += async (_, _) => await activateRow();
-        }
 
         return button;
     }

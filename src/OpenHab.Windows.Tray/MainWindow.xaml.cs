@@ -90,9 +90,13 @@ public sealed partial class MainWindow : Window
         for (var index = 0; index < rows.Count; index++)
         {
             var rowIndex = index;
+            var row = rows[index];
+            var activateRow = row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand
+                ? () => OnRowActivatedAsync(rowIndex)
+                : null;
             SitemapRows.Children.Add(SitemapControlFactory.Create(
-                rows[index],
-                () => OnRowActivatedAsync(rowIndex)));
+                row,
+                activateRow));
         }
     }
 

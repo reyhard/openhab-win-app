@@ -155,4 +155,24 @@ public sealed class OpenHabSitemapJsonParserTests
 
         Assert.Throws<FormatException>(() => OpenHabSitemapJsonParser.ParseHomepage(json));
     }
+
+    [Fact]
+    public void ParseHomepageThrowsForNonObjectWidgetEntry()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  "invalid-widget"
+                ]
+              }
+            }
+            """;
+
+        var ex = Assert.Throws<FormatException>(() => OpenHabSitemapJsonParser.ParseHomepage(json));
+
+        Assert.Contains("home", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("widget", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

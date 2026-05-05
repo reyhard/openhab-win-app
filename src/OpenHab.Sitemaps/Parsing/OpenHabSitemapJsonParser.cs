@@ -45,6 +45,12 @@ public static class OpenHabSitemapJsonParser
         {
             foreach (var widgetElement in widgetsElement.EnumerateArray())
             {
+                if (widgetElement.ValueKind != JsonValueKind.Object)
+                {
+                    throw new FormatException(
+                        $"Sitemap page '{id}' contains a non-object widget entry.");
+                }
+
                 widgets.Add(ParseWidget(widgetElement));
             }
         }
