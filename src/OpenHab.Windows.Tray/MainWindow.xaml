@@ -56,9 +56,19 @@
                     <TextBox x:Name="LocalEndpointText"
                              Header="Local endpoint"
                              LostFocus="EndpointText_LostFocus" />
-                    <TextBox x:Name="CloudEndpointText"
-                             Header="Cloud endpoint"
-                             LostFocus="EndpointText_LostFocus" />
+                     <TextBox x:Name="CloudEndpointText"
+                              Header="Cloud endpoint"
+                              LostFocus="EndpointText_LostFocus" />
+                     <PasswordBox x:Name="LocalTokenBox"
+                                  Header="Local API token"
+                                  PlaceholderText="Enter token (optional)"
+                                  LostFocus="TokenBox_LostFocus"
+                                  Tag="Local" />
+                     <PasswordBox x:Name="CloudTokenBox"
+                                  Header="Cloud API token"
+                                  PlaceholderText="Enter token (optional)"
+                                  LostFocus="TokenBox_LostFocus"
+                                  Tag="Cloud" />
                 </StackPanel>
             </TabViewItem>
         </TabView>

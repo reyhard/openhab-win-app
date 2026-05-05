@@ -3,6 +3,8 @@ using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
 using OpenHab.Core.Api;
+using OpenHab.Core.Auth;
+using OpenHab.Core.Profiles;
 using OpenHab.Windows.Tray.Tray;
 using System.Threading;
 using Microsoft.UI.Dispatching;
@@ -23,13 +25,20 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
-        var settingsController = new AppSettingsController();
+        ICredentialStore credentialStore = new WindowsCredentialStore();
+        var settingsController = new AppSettingsController(credentialStore);
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
         var runtimeController = new SitemapRuntimeController(
             settingsController,
             renderController,
-            (transport, endpoint) => new OpenHabHttpClient(httpClient, endpoint));
+            (transportKind, endpoint) =>
+            {
+                string? token = null;
+                try { token = settingsController.GetApiTokenAsync(transportKind, CancellationToken.None).GetAwaiter().GetResult(); }
+                catch { }
+                return new OpenHabHttpClient(httpClient, endpoint, apiToken: token);
+            });
 
         window = new MainWindow(settingsController, runtimeController);
         trayIcon = new TrayIconService(
@@ -44,7 +53,20 @@ public partial class App : Application
                 Exit();
             });
 
+        _ = InitializeAsync(settingsController);
         window.Activate();
+    }
+
+    private static async Task InitializeAsync(AppSettingsController settingsController)
+    {
+        try
+        {
+            await settingsController.InitializeAsync();
+        }
+        catch
+        {
+            // Credential store hydration is best-effort at startup.
+        }
     }
 
     private void OnProcessExit(object? sender, EventArgs args)

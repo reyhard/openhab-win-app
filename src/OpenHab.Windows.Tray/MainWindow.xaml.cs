@@ -72,6 +72,8 @@ public sealed partial class MainWindow : Window
         LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
         CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
         SitemapNameText.Text = settingsController.Current.SitemapName;
+        LocalTokenBox.Password = settingsController.Current.HasLocalToken ? "••••••••" : string.Empty;
+        CloudTokenBox.Password = settingsController.Current.HasCloudToken ? "••••••••" : string.Empty;
     }
 
     private void RefreshRuntimeBindings()
@@ -166,6 +168,32 @@ public sealed partial class MainWindow : Window
         {
             settingsController.SetSitemapName(SitemapNameText.Text);
             await LoadRuntimeAsync();
+        }
+        catch (ArgumentException)
+        {
+            RefreshSettingsBindings();
+        }
+    }
+
+    private async void TokenBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not PasswordBox box || box.Tag is not string tag) return;
+        if (isRefreshing) return;
+
+        var transportKind = tag == "Local" ? TransportKind.Local : TransportKind.Cloud;
+        var token = box.Password;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                await settingsController.ClearApiTokenAsync(transportKind, CancellationToken.None);
+            }
+            else if (token is not "••••••••")
+            {
+                await settingsController.SetApiTokenAsync(transportKind, token, CancellationToken.None);
+                await RefreshRuntimeAsync();
+            }
         }
         catch (ArgumentException)
         {
