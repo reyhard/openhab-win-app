@@ -6,6 +6,8 @@ public sealed class WindowsCredentialStore : ICredentialStore
 {
     public Task StoreAsync(string resource, string key, string secret, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(resource))
             throw new ArgumentException("Resource must not be blank.", nameof(resource));
         if (string.IsNullOrWhiteSpace(key))
@@ -13,9 +15,19 @@ public sealed class WindowsCredentialStore : ICredentialStore
         if (string.IsNullOrWhiteSpace(secret))
             throw new ArgumentException("Secret must not be blank.", nameof(secret));
 
-        cancellationToken.ThrowIfCancellationRequested();
-
         var vault = new PasswordVault();
+
+        // Remove any existing credential first to allow updates.
+        try
+        {
+            var existing = vault.Retrieve(resource, key);
+            vault.Remove(existing);
+        }
+        catch (Exception ex) when (ex.HResult == unchecked((int)0x80070490))
+        {
+            // Not found — that's fine, we're about to add.
+        }
+
         vault.Add(new PasswordCredential(resource, key, secret));
         return Task.CompletedTask;
     }

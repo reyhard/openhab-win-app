@@ -35,6 +35,9 @@ public partial class App : Application
             (transportKind, endpoint) =>
             {
                 string? token = null;
+                // NOTE: GetAwaiter().GetResult() is safe here because WindowsCredentialStore.RetrieveAsync
+                // returns Task.FromResult and never suspends. If the store becomes genuinely async,
+                // this must be refactored to avoid deadlocking on the UI thread.
                 try { token = settingsController.GetApiTokenAsync(transportKind, CancellationToken.None).GetAwaiter().GetResult(); }
                 catch { }
                 return new OpenHabHttpClient(httpClient, endpoint, apiToken: token);

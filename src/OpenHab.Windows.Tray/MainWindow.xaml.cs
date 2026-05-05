@@ -195,8 +195,9 @@ public sealed partial class MainWindow : Window
                 await RefreshRuntimeAsync();
             }
         }
-        catch (ArgumentException)
+        catch (Exception ex)
         {
+            StatusText.Text = $"Failed to save token: {ex.Message}";
             RefreshSettingsBindings();
         }
     }
