@@ -5,7 +5,7 @@ Date: 2026-05-05
 ## Source Documents
 
 - Design spec: `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md`
-- Foundation status: `docs/superpowers/status/2026-05-05-openhab-windows-foundation-status.md`
+- Foundation plan: `docs/superpowers/plans/2026-05-04-openhab-windows-foundation.md`
 - UI slice plan: `docs/superpowers/plans/2026-05-05-openhab-windows-ui-slice.md`
 
 ## Completed
@@ -21,7 +21,7 @@ Date: 2026-05-05
 
 - `dotnet test OpenHab.Windows.sln`: success, failed: 0, passed: 59, skipped: 0, total: 59 (4 test projects).
 - `dotnet build OpenHab.Windows.sln --configuration Release`: build succeeded, warnings: 0, errors: 0.
-- `git status --short --ignored`: only ignored `bin/` and `obj/` build outputs were reported; no untracked generated WinUI outputs; `.gitignore` unchanged.
+- `git status --short --ignored`: only ignored build/tooling outputs were reported (`bin/`, `obj/`, `.vs/`, `.dotnet-home/`); no untracked generated WinUI outputs required `.gitignore` changes.
 
 ## Still Out Of Scope
 
