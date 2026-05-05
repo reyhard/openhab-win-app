@@ -2,6 +2,8 @@ using Microsoft.UI.Xaml;
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
 using OpenHab.Windows.Tray.Tray;
+using System.Threading;
+using Microsoft.UI.Dispatching;
 
 namespace OpenHab.Windows.Tray;
 
@@ -9,11 +11,13 @@ public partial class App : Application
 {
     private MainWindow? window;
     private TrayIconService? trayIcon;
-    private bool isShuttingDown;
+    private DispatcherQueue? uiDispatcherQueue;
+    private int isShuttingDown;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+        uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
         var settingsController = new AppSettingsController();
         var renderController = new SitemapRenderController(settingsController);
@@ -41,12 +45,23 @@ public partial class App : Application
 
     private void ShutdownTrayResources()
     {
-        if (isShuttingDown)
+        // Shared shutdown path for both tray-initiated exit and process-exit cleanup.
+        if (Interlocked.Exchange(ref isShuttingDown, 1) != 0)
         {
             return;
         }
 
-        isShuttingDown = true;
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess && dispatcher.TryEnqueue(ShutdownTrayResourcesCore))
+        {
+            return;
+        }
+
+        ShutdownTrayResourcesCore();
+    }
+
+    private void ShutdownTrayResourcesCore()
+    {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         trayIcon?.Dispose();
         trayIcon = null;
