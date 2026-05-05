@@ -7,11 +7,13 @@ public sealed record AppSettings(
     SitemapSkinKind Skin,
     EndpointMode EndpointMode,
     Uri LocalEndpoint,
-    Uri CloudEndpoint)
+    Uri CloudEndpoint,
+    string SitemapName)
 {
     public static AppSettings Default { get; } = new(
         SitemapSkinKind.Windows11,
         EndpointMode.Automatic,
         new Uri("http://openhab.local:8080"),
-        new Uri("https://myopenhab.org"));
+        new Uri("https://myopenhab.org"),
+        "default");
 }

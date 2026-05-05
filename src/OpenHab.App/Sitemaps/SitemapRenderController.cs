@@ -1,6 +1,7 @@
 using OpenHab.App.Settings;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Rendering.Skins;
+using OpenHab.Sitemaps.Models;
 
 namespace OpenHab.App.Sitemaps;
 
@@ -14,9 +15,10 @@ public sealed class SitemapRenderController
         this.settingsController = settingsController;
     }
 
-    public SitemapRenderDescriptor BuildCurrentDescriptor()
+    public SitemapRenderDescriptor BuildCurrentDescriptor(NormalizedSitemapPage page)
     {
-        var page = SampleSitemapFactory.CreateHomePage();
+        ArgumentNullException.ThrowIfNull(page);
+
         ISitemapSkin skin = settingsController.Current.Skin switch
         {
             SitemapSkinKind.Basic => new BasicSitemapSkin(),

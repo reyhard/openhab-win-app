@@ -49,6 +49,16 @@ public sealed class AppSettingsController
         };
     }
 
+    public void SetSitemapName(string sitemapName)
+    {
+        if (string.IsNullOrWhiteSpace(sitemapName))
+        {
+            throw new ArgumentException("Sitemap name cannot be blank.", nameof(sitemapName));
+        }
+
+        Current = Current with { SitemapName = sitemapName };
+    }
+
     private static bool IsHttpOrHttps(Uri endpoint)
     {
         return endpoint.Scheme == Uri.UriSchemeHttp || endpoint.Scheme == Uri.UriSchemeHttps;

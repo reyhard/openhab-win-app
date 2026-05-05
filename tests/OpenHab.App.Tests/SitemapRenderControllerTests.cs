@@ -11,8 +11,9 @@ public sealed class SitemapRenderControllerTests
     {
         var settings = new AppSettingsController();
         var controller = new SitemapRenderController(settings);
+        var page = SampleSitemapFactory.CreateHomePage();
 
-        var descriptor = controller.BuildCurrentDescriptor();
+        var descriptor = controller.BuildCurrentDescriptor(page);
 
         Assert.Equal(SitemapSkinKind.Windows11, descriptor.Skin);
         Assert.Equal("home", descriptor.PageId);
@@ -47,8 +48,9 @@ public sealed class SitemapRenderControllerTests
         var settings = new AppSettingsController();
         settings.SetSkin(SitemapSkinKind.Basic);
         var controller = new SitemapRenderController(settings);
+        var page = SampleSitemapFactory.CreateHomePage();
 
-        var descriptor = controller.BuildCurrentDescriptor();
+        var descriptor = controller.BuildCurrentDescriptor(page);
 
         Assert.Equal(SitemapSkinKind.Basic, descriptor.Skin);
         Assert.Equal(3, descriptor.Rows.Count);
@@ -61,5 +63,16 @@ public sealed class SitemapRenderControllerTests
         var exception = Assert.Throws<ArgumentNullException>(() => new SitemapRenderController(null!));
 
         Assert.Equal("settingsController", exception.ParamName);
+    }
+
+    [Fact]
+    public void BuildCurrentDescriptorThrowsForNullPage()
+    {
+        var settings = new AppSettingsController();
+        var controller = new SitemapRenderController(settings);
+
+        var exception = Assert.Throws<ArgumentNullException>(() => controller.BuildCurrentDescriptor(null!));
+
+        Assert.Equal("page", exception.ParamName);
     }
 }
