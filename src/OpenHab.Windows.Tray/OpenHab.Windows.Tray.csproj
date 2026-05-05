@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\OpenHab.App\OpenHab.App.csproj" />
     <ProjectReference Include="..\OpenHab.Core\OpenHab.Core.csproj" />
     <ProjectReference Include="..\OpenHab.Rendering\OpenHab.Rendering.csproj" />
