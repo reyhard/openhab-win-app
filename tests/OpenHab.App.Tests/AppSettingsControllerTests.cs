@@ -39,4 +39,48 @@ public sealed class AppSettingsControllerTests
 
         Assert.Contains("absolute", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void SetEndpointsThrowsWhenLocalEndpointIsNull()
+    {
+        var controller = new AppSettingsController();
+
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            controller.SetEndpoints(null!, new Uri("https://myopenhab.org")));
+
+        Assert.Equal("localEndpoint", exception.ParamName);
+    }
+
+    [Fact]
+    public void SetEndpointsThrowsWhenCloudEndpointIsNull()
+    {
+        var controller = new AppSettingsController();
+
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            controller.SetEndpoints(new Uri("http://openhab.local:8080"), null!));
+
+        Assert.Equal("cloudEndpoint", exception.ParamName);
+    }
+
+    [Fact]
+    public void SetEndpointsRejectsNonHttpAbsoluteUris()
+    {
+        var controller = new AppSettingsController();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            controller.SetEndpoints(new Uri("ftp://openhab.local:21"), new Uri("https://myopenhab.org")));
+
+        Assert.Contains("HTTP or HTTPS", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SetEndpointsRejectsNonHttpAbsoluteCloudUri()
+    {
+        var controller = new AppSettingsController();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            controller.SetEndpoints(new Uri("http://openhab.local:8080"), new Uri("ftp://myopenhab.org")));
+
+        Assert.Contains("HTTP or HTTPS", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

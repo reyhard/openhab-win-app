@@ -27,9 +27,19 @@ public sealed class AppSettingsController
             throw new ArgumentException("Local endpoint must be an absolute URI.", nameof(localEndpoint));
         }
 
+        if (!IsHttpOrHttps(localEndpoint))
+        {
+            throw new ArgumentException("Local endpoint must use HTTP or HTTPS.", nameof(localEndpoint));
+        }
+
         if (!cloudEndpoint.IsAbsoluteUri)
         {
             throw new ArgumentException("Cloud endpoint must be an absolute URI.", nameof(cloudEndpoint));
+        }
+
+        if (!IsHttpOrHttps(cloudEndpoint))
+        {
+            throw new ArgumentException("Cloud endpoint must use HTTP or HTTPS.", nameof(cloudEndpoint));
         }
 
         Current = Current with
@@ -37,5 +47,10 @@ public sealed class AppSettingsController
             LocalEndpoint = localEndpoint,
             CloudEndpoint = cloudEndpoint
         };
+    }
+
+    private static bool IsHttpOrHttps(Uri endpoint)
+    {
+        return endpoint.Scheme == Uri.UriSchemeHttp || endpoint.Scheme == Uri.UriSchemeHttps;
     }
 }
