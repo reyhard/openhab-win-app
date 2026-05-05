@@ -49,6 +49,19 @@ public static class SitemapControlFactory
             ? Math.Clamp(parsed, 0, 100)
             : 0;
 
+        var canActivate = row.Action == RenderActionKind.SendCommand && activateRow is not null;
+        var slider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = value,
+            IsEnabled = canActivate
+        };
+        if (canActivate)
+        {
+            slider.PointerCaptureLost += async (_, _) => await activateRow!();
+        }
+
         return new StackPanel
         {
             Spacing = 4,
@@ -61,23 +74,10 @@ public static class SitemapControlFactory
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     MaxLines = 2
                 },
-                new Slider
-                {
-                    Minimum = 0,
-                    Maximum = 100,
-                    Value = value,
-                    IsEnabled = row.Action == RenderActionKind.SendCommand && activateRow is not null
-                }
+                slider
             }
         };
-
-        if (control.Children[1] is Slider slider && row.Action == RenderActionKind.SendCommand && activateRow is not null)
-        {
-            slider.PointerCaptureLost += async (_, _) => await activateRow();
-        }
-
-        return control;
-     }
+    }
 
     private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<Task>? activateRow)
     {
