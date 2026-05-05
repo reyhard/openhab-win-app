@@ -19,6 +19,8 @@ Date: 2026-05-05
 - Wired credential store and token-aware HTTP client factory into tray app startup.
 - Fixed duplicate credential handling in `WindowsCredentialStore.StoreAsync`.
 - Added thread-safe settings updates with lock, exhaustive `TransportKind` dispatch, and startup hydration of token flags.
+- Added JSON file persistence for app settings (`%LocalAppData%\OpenHab.WinApp\settings.json`). Settings survive app restarts. Token flags excluded from serialization (tokens stored in PasswordVault only).
+- Added crash tolerance for unpackaged apps: credential store and notification initialization wrapped in try-catch for graceful degradation.
 
 ### Notifications
 
@@ -28,9 +30,15 @@ Date: 2026-05-05
 - Toast activation opens the main window.
 - Added thread safety (Interlocked), bounded dedup set, DispatcherQueue-aware event marshaling, and error diagnostics to the poller.
 
+### Bug Fixes Applied
+
+- **Frame widget rendering**: Added `Frame` to `SitemapWidgetType` enum. JSON parser now extracts and flattens inline child widgets from Frame containers so switches and other controls inside frames render correctly.
+- **Settings persistence**: Settings now saved to JSON file on every change and loaded at startup. Endpoints, sitemap name, skin, and endpoint mode survive restarts.
+- **Unpackaged app crash**: `WindowsCredentialStore` construction and `NotificationPoller` initialization wrapped in try-catch to prevent crash when WinRT APIs are unavailable without admin rights.
+
 ## Verification
 
-- `dotnet test OpenHab.Windows.sln`: **99 tests run, 99 passed, 0 failed, 0 skipped** (4 test projects).
+- `dotnet test OpenHab.Windows.sln`: **100 tests run, 100 passed, 0 failed, 0 skipped** (4 test projects).
 - `dotnet build OpenHab.Windows.sln --configuration Release`: build succeeded, **0 warnings, 0 errors**.
 
 ### Test breakdown
@@ -39,23 +47,23 @@ Date: 2026-05-05
 |---------|-------|--------|
 | OpenHab.Core.Tests | 27 | All pass |
 | OpenHab.App.Tests | 33 | All pass |
-| OpenHab.Sitemaps.Tests | 29 | All pass |
+| OpenHab.Sitemaps.Tests | 30 | All pass |
 | OpenHab.Rendering.Tests | 10 | All pass |
-| **Total** | **99** | **0 failed** |
+| **Total** | **100** | **0 failed** |
 
-### New tests added this slice
+### Tests added this slice
 
 | Area | Tests |
 |------|-------|
 | Credential store (store, retrieve, remove, blank rejection) | 5 |
 | HTTP client auth (header injection, omission, token redaction, URL leak) | 4 |
 | App settings tokens (set, clear, get, no-store errors, hydration, non-interference) | 11 |
-| **Total new** | **20** |
+| Frame widget parsing (flatten children from Frame containers) | 1 |
+| **Total new** | **21** |
 
 ## Still Out Of Scope
 
 - openHAB event stream subscriptions and live item updates.
-- Persistent settings and migrations (token persistence is via PasswordVault only).
 - OAuth2 / myopenhab.org login flow.
 - Notification history or inbox UI.
 - Rich notification actions (dismiss, mark read, reply).
