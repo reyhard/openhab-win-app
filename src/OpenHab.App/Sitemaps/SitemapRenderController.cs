@@ -10,6 +10,7 @@ public sealed class SitemapRenderController
 
     public SitemapRenderController(AppSettingsController settingsController)
     {
+        ArgumentNullException.ThrowIfNull(settingsController);
         this.settingsController = settingsController;
     }
 
