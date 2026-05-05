@@ -13,6 +13,7 @@ public sealed class AppSettingsController
     private const string CloudTokenKey = "cloud-token";
 
     private readonly ICredentialStore? credentialStore;
+    private readonly object syncRoot = new();
 
     public AppSettings Current { get; private set; } = AppSettings.Default;
 
@@ -21,14 +22,32 @@ public sealed class AppSettingsController
         this.credentialStore = credentialStore;
     }
 
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        if (credentialStore is null) return;
+
+        var hasLocal = await credentialStore.RetrieveAsync(CredentialResource, LocalTokenKey, cancellationToken) is not null;
+        var hasCloud = await credentialStore.RetrieveAsync(CredentialResource, CloudTokenKey, cancellationToken) is not null;
+        lock (syncRoot)
+        {
+            Current = Current with { HasLocalToken = hasLocal, HasCloudToken = hasCloud };
+        }
+    }
+
     public void SetSkin(SitemapSkinKind skin)
     {
-        Current = Current with { Skin = skin };
+        lock (syncRoot)
+        {
+            Current = Current with { Skin = skin };
+        }
     }
 
     public void SetEndpointMode(EndpointMode endpointMode)
     {
-        Current = Current with { EndpointMode = endpointMode };
+        lock (syncRoot)
+        {
+            Current = Current with { EndpointMode = endpointMode };
+        }
     }
 
     public void SetEndpoints(Uri localEndpoint, Uri cloudEndpoint)
@@ -56,11 +75,14 @@ public sealed class AppSettingsController
             throw new ArgumentException("Cloud endpoint must use HTTP or HTTPS.", nameof(cloudEndpoint));
         }
 
-        Current = Current with
+        lock (syncRoot)
         {
-            LocalEndpoint = localEndpoint,
-            CloudEndpoint = cloudEndpoint
-        };
+            Current = Current with
+            {
+                LocalEndpoint = localEndpoint,
+                CloudEndpoint = cloudEndpoint
+            };
+        }
     }
 
     public void SetSitemapName(string sitemapName)
@@ -74,7 +96,10 @@ public sealed class AppSettingsController
             throw new ArgumentException("Sitemap name can only contain letters, digits, underscores, and hyphens.", nameof(sitemapName));
         }
 
-        Current = Current with { SitemapName = sitemapName };
+        lock (syncRoot)
+        {
+            Current = Current with { SitemapName = sitemapName };
+        }
     }
 
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
@@ -85,12 +110,24 @@ public sealed class AppSettingsController
         if (string.IsNullOrWhiteSpace(token))
             throw new ArgumentException("Token must not be blank.", nameof(token));
 
-        var key = transportKind == TransportKind.Local ? LocalTokenKey : CloudTokenKey;
+        var key = transportKind switch
+        {
+            TransportKind.Local => LocalTokenKey,
+            TransportKind.Cloud => CloudTokenKey,
+            _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
+        };
+
         await credentialStore.StoreAsync(CredentialResource, key, token, cancellationToken);
 
-        Current = transportKind == TransportKind.Local
-            ? Current with { HasLocalToken = true }
-            : Current with { HasCloudToken = true };
+        lock (syncRoot)
+        {
+            Current = transportKind switch
+            {
+                TransportKind.Local => Current with { HasLocalToken = true },
+                TransportKind.Cloud => Current with { HasCloudToken = true },
+                _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
+            };
+        }
     }
 
     public async Task ClearApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
@@ -98,12 +135,24 @@ public sealed class AppSettingsController
         if (credentialStore is null)
             throw new InvalidOperationException("No credential store is configured.");
 
-        var key = transportKind == TransportKind.Local ? LocalTokenKey : CloudTokenKey;
+        var key = transportKind switch
+        {
+            TransportKind.Local => LocalTokenKey,
+            TransportKind.Cloud => CloudTokenKey,
+            _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
+        };
+
         await credentialStore.RemoveAsync(CredentialResource, key, cancellationToken);
 
-        Current = transportKind == TransportKind.Local
-            ? Current with { HasLocalToken = false }
-            : Current with { HasCloudToken = false };
+        lock (syncRoot)
+        {
+            Current = transportKind switch
+            {
+                TransportKind.Local => Current with { HasLocalToken = false },
+                TransportKind.Cloud => Current with { HasCloudToken = false },
+                _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
+            };
+        }
     }
 
     public async Task<string?> GetApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
@@ -111,7 +160,13 @@ public sealed class AppSettingsController
         if (credentialStore is null)
             throw new InvalidOperationException("No credential store is configured.");
 
-        var key = transportKind == TransportKind.Local ? LocalTokenKey : CloudTokenKey;
+        var key = transportKind switch
+        {
+            TransportKind.Local => LocalTokenKey,
+            TransportKind.Cloud => CloudTokenKey,
+            _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
+        };
+
         return await credentialStore.RetrieveAsync(CredentialResource, key, cancellationToken);
     }
 
