@@ -53,6 +53,16 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void SetSitemapNameRejectsInvalidCharacters()
+    {
+        var controller = new AppSettingsController();
+
+        var exception = Assert.Throws<ArgumentException>(() => controller.SetSitemapName("home/main"));
+
+        Assert.Equal("sitemapName", exception.ParamName);
+    }
+
+    [Fact]
     public void RejectsRelativeEndpointUris()
     {
         var controller = new AppSettingsController();

@@ -8,7 +8,7 @@ namespace OpenHab.App.Tests.Runtime;
 public sealed class SitemapRuntimeControllerTests
 {
     [Fact]
-    public async Task LoadUsesLocalEndpointWhenConfigured()
+    public async Task LoadUsesLocalEndpointInAutomaticModeWhenLocalSucceeds()
     {
         var settings = new AppSettingsController();
         settings.SetSitemapName("default");
@@ -27,6 +27,44 @@ public sealed class SitemapRuntimeControllerTests
         Assert.Equal("default", localClient.RequestedSitemaps[0]);
         Assert.Empty(cloudClient.RequestedSitemaps);
         Assert.NotNull(controller.Current.Descriptor);
+    }
+
+    [Fact]
+    public async Task LoadUsesLocalClientInLocalOnlyMode()
+    {
+        var settings = new AppSettingsController();
+        settings.SetEndpointMode(EndpointMode.LocalOnly);
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var cloudClient = new FakeOpenHabClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient);
+
+        await controller.LoadAsync();
+
+        Assert.Equal(TransportKind.Local, controller.Current.ActiveTransport);
+        Assert.Single(localClient.RequestedSitemaps);
+        Assert.Empty(cloudClient.RequestedSitemaps);
+    }
+
+    [Fact]
+    public async Task LoadUsesCloudClientInCloudOnlyMode()
+    {
+        var settings = new AppSettingsController();
+        settings.SetEndpointMode(EndpointMode.CloudOnly);
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        var cloudClient = new FakeOpenHabClient();
+        cloudClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var controller = CreateRuntimeController(settings, localClient, cloudClient);
+
+        await controller.LoadAsync();
+
+        Assert.Equal(TransportKind.Cloud, controller.Current.ActiveTransport);
+        Assert.Empty(localClient.RequestedSitemaps);
+        Assert.Single(cloudClient.RequestedSitemaps);
     }
 
     [Fact]
