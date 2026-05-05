@@ -21,6 +21,7 @@ Date: 2026-05-05
 
 - `dotnet test OpenHab.Windows.sln`: success, failed: 0, passed: 59, skipped: 0, total: 59 (4 test projects).
 - `dotnet build OpenHab.Windows.sln --configuration Release`: build succeeded, warnings: 0, errors: 0.
+- `git status --short --ignored`: only ignored `bin/` and `obj/` build outputs were reported; no untracked generated WinUI outputs; `.gitignore` unchanged.
 
 ## Still Out Of Scope
 
