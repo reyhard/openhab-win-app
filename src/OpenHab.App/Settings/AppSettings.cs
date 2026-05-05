@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 
@@ -9,8 +10,8 @@ public sealed record AppSettings(
     Uri LocalEndpoint,
     Uri CloudEndpoint,
     string SitemapName,
-    bool HasLocalToken = false,
-    bool HasCloudToken = false)
+    [property: JsonIgnore] bool HasLocalToken = false,
+    [property: JsonIgnore] bool HasCloudToken = false)
 {
     public static AppSettings Default { get; } = new(
         SitemapSkinKind.Windows11,

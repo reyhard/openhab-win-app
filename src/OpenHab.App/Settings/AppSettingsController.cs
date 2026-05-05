@@ -1,6 +1,8 @@
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using System.IO;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace OpenHab.App.Settings;
@@ -12,14 +14,22 @@ public sealed class AppSettingsController
     private const string LocalTokenKey = "local-token";
     private const string CloudTokenKey = "cloud-token";
 
+    private static readonly string SettingsFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "OpenHab.WinApp",
+        "settings.json");
+
     private readonly ICredentialStore? credentialStore;
     private readonly object syncRoot = new();
+
+    private string SettingsDirectory => Path.GetDirectoryName(SettingsFilePath)!;
 
     public AppSettings Current { get; private set; } = AppSettings.Default;
 
     public AppSettingsController(ICredentialStore? credentialStore = null)
     {
         this.credentialStore = credentialStore;
+        TryLoad();
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -40,6 +50,7 @@ public sealed class AppSettingsController
         {
             Current = Current with { Skin = skin };
         }
+        _ = SaveAsync();
     }
 
     public void SetEndpointMode(EndpointMode endpointMode)
@@ -48,6 +59,7 @@ public sealed class AppSettingsController
         {
             Current = Current with { EndpointMode = endpointMode };
         }
+        _ = SaveAsync();
     }
 
     public void SetEndpoints(Uri localEndpoint, Uri cloudEndpoint)
@@ -83,6 +95,7 @@ public sealed class AppSettingsController
                 CloudEndpoint = cloudEndpoint
             };
         }
+        _ = SaveAsync();
     }
 
     public void SetSitemapName(string sitemapName)
@@ -100,6 +113,7 @@ public sealed class AppSettingsController
         {
             Current = Current with { SitemapName = sitemapName };
         }
+        _ = SaveAsync();
     }
 
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
@@ -128,6 +142,7 @@ public sealed class AppSettingsController
                 _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
             };
         }
+        _ = SaveAsync();
     }
 
     public async Task ClearApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
@@ -153,6 +168,7 @@ public sealed class AppSettingsController
                 _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
             };
         }
+        _ = SaveAsync();
     }
 
     public async Task<string?> GetApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
@@ -168,6 +184,74 @@ public sealed class AppSettingsController
         };
 
         return await credentialStore.RetrieveAsync(CredentialResource, key, cancellationToken);
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            Directory.CreateDirectory(SettingsDirectory);
+            var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(SettingsFilePath, json);
+        }
+        catch
+        {
+            // Best-effort persistence — swallow IO errors.
+        }
+    }
+
+    private void TryLoad()
+    {
+        try
+        {
+            if (!File.Exists(SettingsFilePath)) return;
+            var json = File.ReadAllText(SettingsFilePath);
+            var loaded = JsonSerializer.Deserialize<AppSettings>(json);
+            if (loaded is not null)
+            {
+                // Preserve token flags (they're hydrated from credential store separately).
+                // Use the loaded settings but keep HasLocalToken/HasCloudToken from Current (defaults).
+                lock (syncRoot)
+                {
+                    Current = loaded with
+                    {
+                        HasLocalToken = Current.HasLocalToken,
+                        HasCloudToken = Current.HasCloudToken
+                    };
+                }
+            }
+        }
+        catch
+        {
+            // Corrupt or missing settings file — stick with defaults.
+        }
+    }
+
+    private async Task TryLoadAsync()
+    {
+        try
+        {
+            if (!File.Exists(SettingsFilePath)) return;
+            var json = await File.ReadAllTextAsync(SettingsFilePath);
+            var loaded = JsonSerializer.Deserialize<AppSettings>(json);
+            if (loaded is not null)
+            {
+                // Preserve token flags (they're hydrated from credential store separately).
+                // Use the loaded settings but keep HasLocalToken/HasCloudToken from Current (defaults).
+                lock (syncRoot)
+                {
+                    Current = loaded with
+                    {
+                        HasLocalToken = Current.HasLocalToken,
+                        HasCloudToken = Current.HasCloudToken
+                    };
+                }
+            }
+        }
+        catch
+        {
+            // Corrupt or missing settings file — stick with defaults.
+        }
     }
 
     private static bool IsHttpOrHttps(Uri endpoint)

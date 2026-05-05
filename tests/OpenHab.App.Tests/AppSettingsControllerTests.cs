@@ -3,11 +3,28 @@ using OpenHab.App.Tests.Settings;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using System.IO;
 
 namespace OpenHab.App.Tests;
 
 public sealed class AppSettingsControllerTests
 {
+    private static readonly string SettingsFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "OpenHab.WinApp",
+        "settings.json");
+
+    public AppSettingsControllerTests()
+    {
+        // Retry deletion — fire-and-forget SaveAsync from a previous test may still be writing.
+        for (int i = 0; i < 5; i++)
+        {
+            try { File.Delete(SettingsFilePath); } catch { }
+            if (!File.Exists(SettingsFilePath)) break;
+            Thread.Sleep(10);
+        }
+    }
+
     [Fact]
     public void DefaultsUseWindows11SkinAndAutomaticEndpointMode()
     {
