@@ -52,8 +52,14 @@ public partial class App : Application
         }
 
         var dispatcher = uiDispatcherQueue;
-        if (dispatcher is not null && !dispatcher.HasThreadAccess && dispatcher.TryEnqueue(ShutdownTrayResourcesCore))
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
         {
+            if (dispatcher.TryEnqueue(ShutdownTrayResourcesCore))
+            {
+                return;
+            }
+
+            // Late process shutdown can prevent marshaled cleanup; avoid direct WinForms disposal off the UI thread.
             return;
         }
 

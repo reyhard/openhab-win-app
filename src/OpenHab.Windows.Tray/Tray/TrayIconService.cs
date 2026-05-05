@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace OpenHab.Windows.Tray.Tray;
@@ -7,7 +8,8 @@ public sealed class TrayIconService : IDisposable
 {
     private readonly NotifyIcon notifyIcon;
     private readonly ContextMenuStrip contextMenu;
-    private bool isDisposed;
+    private readonly EventHandler doubleClickHandler;
+    private int isDisposed;
 
     public TrayIconService(Action showWindow, Action exitApplication)
     {
@@ -26,17 +28,18 @@ public sealed class TrayIconService : IDisposable
             Visible = true
         };
 
-        notifyIcon.DoubleClick += (_, _) => showWindow();
+        doubleClickHandler = (_, _) => showWindow();
+        notifyIcon.DoubleClick += doubleClickHandler;
     }
 
     public void Dispose()
     {
-        if (isDisposed)
+        if (Interlocked.Exchange(ref isDisposed, 1) != 0)
         {
             return;
         }
 
-        isDisposed = true;
+        notifyIcon.DoubleClick -= doubleClickHandler;
         notifyIcon.Visible = false;
         notifyIcon.ContextMenuStrip = null;
         notifyIcon.Dispose();
