@@ -6,21 +6,23 @@ namespace OpenHab.Windows.Tray.Tray;
 public sealed class TrayIconService : IDisposable
 {
     private readonly NotifyIcon notifyIcon;
+    private readonly ContextMenuStrip contextMenu;
+    private bool isDisposed;
 
     public TrayIconService(Action showWindow, Action exitApplication)
     {
         ArgumentNullException.ThrowIfNull(showWindow);
         ArgumentNullException.ThrowIfNull(exitApplication);
 
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("Open", image: null, (_, _) => showWindow());
-        menu.Items.Add("Exit", image: null, (_, _) => exitApplication());
+        contextMenu = new ContextMenuStrip();
+        contextMenu.Items.Add("Open", image: null, (_, _) => showWindow());
+        contextMenu.Items.Add("Exit", image: null, (_, _) => exitApplication());
 
         notifyIcon = new NotifyIcon
         {
             Icon = SystemIcons.Application,
             Text = "openHAB",
-            ContextMenuStrip = menu,
+            ContextMenuStrip = contextMenu,
             Visible = true
         };
 
@@ -29,7 +31,15 @@ public sealed class TrayIconService : IDisposable
 
     public void Dispose()
     {
+        if (isDisposed)
+        {
+            return;
+        }
+
+        isDisposed = true;
         notifyIcon.Visible = false;
+        notifyIcon.ContextMenuStrip = null;
         notifyIcon.Dispose();
+        contextMenu.Dispose();
     }
 }

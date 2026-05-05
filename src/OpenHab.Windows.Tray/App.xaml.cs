@@ -9,9 +9,12 @@ public partial class App : Application
 {
     private MainWindow? window;
     private TrayIconService? trayIcon;
+    private bool isShuttingDown;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+
         var settingsController = new AppSettingsController();
         var renderController = new SitemapRenderController(settingsController);
 
@@ -24,10 +27,28 @@ public partial class App : Application
             },
             exitApplication: () =>
             {
-                trayIcon?.Dispose();
+                ShutdownTrayResources();
                 Exit();
             });
 
         window.Activate();
+    }
+
+    private void OnProcessExit(object? sender, EventArgs args)
+    {
+        ShutdownTrayResources();
+    }
+
+    private void ShutdownTrayResources()
+    {
+        if (isShuttingDown)
+        {
+            return;
+        }
+
+        isShuttingDown = true;
+        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        trayIcon?.Dispose();
+        trayIcon = null;
     }
 }
