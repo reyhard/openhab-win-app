@@ -1,16 +1,21 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.UI.Dispatching;
 
 namespace OpenHab.Windows.Notifications;
 
 public sealed class NotificationPoller : IDisposable
 {
+    private const int MaxSeenIds = 200;
+
     private readonly HttpClient httpClient;
     private readonly Uri cloudBaseUri;
     private readonly string? apiToken;
     private readonly TimeSpan pollInterval;
     private readonly HashSet<string> seenIds = new();
+    private readonly DispatcherQueue? dispatcher;
 
+    private int isStarted;
     private CancellationTokenSource? cts;
     private Task? pollingTask;
 
@@ -20,28 +25,31 @@ public sealed class NotificationPoller : IDisposable
         HttpClient httpClient,
         Uri cloudBaseUri,
         string? apiToken = null,
-        TimeSpan? pollInterval = null)
+        TimeSpan? pollInterval = null,
+        DispatcherQueue? dispatcher = null)
     {
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.cloudBaseUri = cloudBaseUri ?? throw new ArgumentNullException(nameof(cloudBaseUri));
         this.apiToken = apiToken;
         this.pollInterval = pollInterval ?? TimeSpan.FromSeconds(60);
+        this.dispatcher = dispatcher;
     }
 
     public bool IsRunning => pollingTask is not null && !pollingTask.IsCompleted;
 
+    public string? LastError { get; private set; }
+
     public void Start()
     {
-        if (IsRunning) return;
+        if (Interlocked.CompareExchange(ref isStarted, 1, 0) != 0) return;
         cts = new CancellationTokenSource();
         pollingTask = PollLoopAsync(cts.Token);
     }
 
     public void Stop()
     {
+        if (Interlocked.CompareExchange(ref isStarted, 0, 1) != 1) return;
         cts?.Cancel();
-        cts?.Dispose();
-        cts = null;
     }
 
     public void Dispose()
@@ -62,9 +70,9 @@ public sealed class NotificationPoller : IDisposable
             {
                 break;
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Silently ignore polling errors — next cycle will retry.
+                LastError = ex.Message;
             }
 
             try
@@ -102,8 +110,21 @@ public sealed class NotificationPoller : IDisposable
         {
             if (seenIds.Add(notification.Id))
             {
-                NotificationReceived?.Invoke(this, notification);
+                RaiseNotification(notification);
             }
         }
+
+        if (seenIds.Count > MaxSeenIds)
+        {
+            seenIds.Clear();
+        }
+    }
+
+    private void RaiseNotification(CloudNotification notification)
+    {
+        if (dispatcher is not null)
+            dispatcher.TryEnqueue(() => NotificationReceived?.Invoke(this, notification));
+        else
+            NotificationReceived?.Invoke(this, notification);
     }
 }
