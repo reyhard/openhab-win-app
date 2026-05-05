@@ -17,6 +17,10 @@ public static class OpenHabSitemapJsonParser
         {
             throw new FormatException("Sitemap JSON does not contain a homepage object.");
         }
+        if (homepageElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new FormatException("Sitemap homepage must be a JSON object.");
+        }
 
         return ParsePage(homepageElement);
     }

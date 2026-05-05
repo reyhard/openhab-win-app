@@ -63,6 +63,29 @@ public sealed class OpenHabSitemapJsonParserTests
     }
 
     [Fact]
+    public void ParseHomepageParsesWidgetTypeCaseInsensitively()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "sWiTcH",
+                    "label": "Kitchen Light [ON]"
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        var widget = Assert.Single(parsed.Widgets);
+        Assert.Equal(SitemapWidgetType.Switch, widget.Type);
+    }
+
+    [Fact]
     public void ParseHomepageUsesStateFromLabelAndDefaultsMappingsChildrenAndVisibility()
     {
         const string json = """
@@ -96,11 +119,40 @@ public sealed class OpenHabSitemapJsonParserTests
         Assert.Empty(widget.Children);
     }
 
+    [Fact]
+    public void ParseHomepageUsesPageLabelWhenTitleIsMissing()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "label": "Fallback Label"
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        Assert.Equal("Fallback Label", parsed.Label);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("  ")]
     public void ParseHomepageThrowsForBlankInput(string json)
     {
         Assert.Throws<ArgumentException>(() => OpenHabSitemapJsonParser.ParseHomepage(json));
+    }
+
+    [Fact]
+    public void ParseHomepageThrowsForNonObjectHomepage()
+    {
+        const string json = """
+            {
+              "homepage": null
+            }
+            """;
+
+        Assert.Throws<FormatException>(() => OpenHabSitemapJsonParser.ParseHomepage(json));
     }
 }
