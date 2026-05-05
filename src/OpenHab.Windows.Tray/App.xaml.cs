@@ -1,9 +1,12 @@
 using Microsoft.UI.Xaml;
+using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
+using OpenHab.Core.Api;
 using OpenHab.Windows.Tray.Tray;
 using System.Threading;
 using Microsoft.UI.Dispatching;
+using System.Net.Http;
 
 namespace OpenHab.Windows.Tray;
 
@@ -12,6 +15,7 @@ public partial class App : Application
     private MainWindow? window;
     private TrayIconService? trayIcon;
     private DispatcherQueue? uiDispatcherQueue;
+    private HttpClient? httpClient;
     private int isShuttingDown;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -21,13 +25,18 @@ public partial class App : Application
 
         var settingsController = new AppSettingsController();
         var renderController = new SitemapRenderController(settingsController);
+        httpClient = new HttpClient();
+        var runtimeController = new SitemapRuntimeController(
+            settingsController,
+            renderController,
+            (transport, endpoint) => new OpenHabHttpClient(httpClient, endpoint));
 
-        window = new MainWindow(settingsController, renderController);
+        window = new MainWindow(settingsController, runtimeController);
         trayIcon = new TrayIconService(
             showWindow: () =>
             {
                 window.Activate();
-                window.Refresh();
+                _ = window.RefreshRuntimeAsync();
             },
             exitApplication: () =>
             {
@@ -71,5 +80,7 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         trayIcon?.Dispose();
         trayIcon = null;
+        httpClient?.Dispose();
+        httpClient = null;
     }
 }

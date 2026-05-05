@@ -15,6 +15,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(EndpointMode.Automatic, controller.Current.EndpointMode);
         Assert.Equal(new Uri("http://openhab.local:8080"), controller.Current.LocalEndpoint);
         Assert.Equal(new Uri("https://myopenhab.org"), controller.Current.CloudEndpoint);
+        Assert.Equal("default", controller.Current.SitemapName);
     }
 
     [Fact]
@@ -27,6 +28,38 @@ public sealed class AppSettingsControllerTests
 
         Assert.Equal(SitemapSkinKind.Basic, controller.Current.Skin);
         Assert.Equal(EndpointMode.CloudOnly, controller.Current.EndpointMode);
+    }
+
+    [Fact]
+    public void CanChangeSitemapName()
+    {
+        var controller = new AppSettingsController();
+
+        controller.SetSitemapName("home");
+
+        Assert.Equal("home", controller.Current.SitemapName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void SetSitemapNameRejectsBlankInput(string sitemapName)
+    {
+        var controller = new AppSettingsController();
+
+        var exception = Assert.Throws<ArgumentException>(() => controller.SetSitemapName(sitemapName));
+
+        Assert.Equal("sitemapName", exception.ParamName);
+    }
+
+    [Fact]
+    public void SetSitemapNameRejectsInvalidCharacters()
+    {
+        var controller = new AppSettingsController();
+
+        var exception = Assert.Throws<ArgumentException>(() => controller.SetSitemapName("home/main"));
+
+        Assert.Equal("sitemapName", exception.ParamName);
     }
 
     [Fact]

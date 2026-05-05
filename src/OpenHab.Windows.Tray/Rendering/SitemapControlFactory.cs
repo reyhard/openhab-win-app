@@ -8,15 +8,15 @@ namespace OpenHab.Windows.Tray.Rendering;
 
 public static class SitemapControlFactory
 {
-    public static FrameworkElement Create(SitemapRowDescriptor row)
+    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow)
     {
         ArgumentNullException.ThrowIfNull(row);
 
         return row.Control switch
         {
-            RenderControlKind.Toggle => CreateToggle(row),
-            RenderControlKind.Slider => CreateSlider(row),
-            RenderControlKind.Selection => CreateSelection(row),
+            RenderControlKind.Toggle => CreateToggle(row, activateRow),
+            RenderControlKind.Slider => CreateSlider(row, activateRow),
+            RenderControlKind.Selection => CreateSelection(row, activateRow),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row)
         };
@@ -27,20 +27,35 @@ public static class SitemapControlFactory
         return CreateRow(row.Label, row.State ?? string.Empty);
     }
 
-    private static FrameworkElement CreateToggle(SitemapRowDescriptor row)
+    private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow)
     {
-        return new ToggleSwitch
+        var toggle = new ToggleSwitch
         {
             Header = row.Label,
             IsOn = string.Equals(row.State, "ON", StringComparison.OrdinalIgnoreCase)
         };
+
+        if (row.Action == RenderActionKind.SendCommand && activateRow is not null)
+        {
+            toggle.Toggled += async (_, _) => await activateRow();
+        }
+
+        return toggle;
     }
 
-    private static FrameworkElement CreateSlider(SitemapRowDescriptor row)
+    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<Task>? activateRow)
     {
         var value = double.TryParse(row.State, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
             ? Math.Clamp(parsed, 0, 100)
             : 0;
+
+        var slider = new Slider
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = value,
+            IsEnabled = false
+        };
 
         return new StackPanel
         {
@@ -54,18 +69,21 @@ public static class SitemapControlFactory
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     MaxLines = 2
                 },
-                new Slider { Minimum = 0, Maximum = 100, Value = value }
+                slider
             }
         };
     }
 
-    private static FrameworkElement CreateSelection(SitemapRowDescriptor row)
+    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<Task>? activateRow)
     {
-        return new Button
+        var button = new Button
         {
             Content = CreateButtonTextBlock(string.IsNullOrWhiteSpace(row.State) ? row.Label : $"{row.Label}: {row.State}"),
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            IsEnabled = false
         };
+
+        return button;
     }
 
     private static FrameworkElement CreateFallback(SitemapRowDescriptor row)

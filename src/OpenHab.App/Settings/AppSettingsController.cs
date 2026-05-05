@@ -1,10 +1,13 @@
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using System.Text.RegularExpressions;
 
 namespace OpenHab.App.Settings;
 
 public sealed class AppSettingsController
 {
+    private static readonly Regex SitemapNamePattern = new("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
+
     public AppSettings Current { get; private set; } = AppSettings.Default;
 
     public void SetSkin(SitemapSkinKind skin)
@@ -47,6 +50,20 @@ public sealed class AppSettingsController
             LocalEndpoint = localEndpoint,
             CloudEndpoint = cloudEndpoint
         };
+    }
+
+    public void SetSitemapName(string sitemapName)
+    {
+        if (string.IsNullOrWhiteSpace(sitemapName))
+        {
+            throw new ArgumentException("Sitemap name cannot be blank.", nameof(sitemapName));
+        }
+        if (!SitemapNamePattern.IsMatch(sitemapName))
+        {
+            throw new ArgumentException("Sitemap name can only contain letters, digits, underscores, and hyphens.", nameof(sitemapName));
+        }
+
+        Current = Current with { SitemapName = sitemapName };
     }
 
     private static bool IsHttpOrHttps(Uri endpoint)
