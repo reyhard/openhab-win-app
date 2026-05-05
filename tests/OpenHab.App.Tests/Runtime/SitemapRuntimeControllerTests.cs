@@ -134,6 +134,29 @@ public sealed class SitemapRuntimeControllerTests
         Assert.Contains("failed", controller.Current.StatusText, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task RefreshCancellationIsPropagatedAndNotConvertedToOfflineError()
+    {
+        var settings = new AppSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        localClient.EnqueueSitemapFailure(new OperationCanceledException("Canceled"));
+        var cloudClient = new FakeOpenHabClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient);
+
+        await controller.LoadAsync();
+        var descriptorBeforeCancel = controller.Current.Descriptor;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => controller.RefreshAsync());
+
+        Assert.Equal(descriptorBeforeCancel, controller.Current.Descriptor);
+        Assert.Equal(ConnectionState.Online, controller.Current.ConnectionState);
+        Assert.False(controller.Current.HasError);
+        Assert.False(controller.Current.IsBusy);
+    }
+
     private static SitemapRuntimeController CreateRuntimeController(
         AppSettingsController settings,
         FakeOpenHabClient localClient,

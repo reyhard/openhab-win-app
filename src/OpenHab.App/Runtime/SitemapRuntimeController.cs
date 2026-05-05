@@ -55,6 +55,10 @@ public sealed class SitemapRuntimeController
                 HasError = false
             };
         }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
         catch (Exception firstError) when (settings.EndpointMode == EndpointMode.Automatic && primary.Kind == TransportKind.Local)
         {
             var fallback = new TransportSelection(TransportKind.Cloud, settings.CloudEndpoint);
@@ -70,6 +74,10 @@ public sealed class SitemapRuntimeController
                     IsBusy = false,
                     HasError = false
                 };
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception fallbackError)
             {
@@ -91,6 +99,10 @@ public sealed class SitemapRuntimeController
                 IsBusy = false,
                 HasError = true
             };
+        }
+        finally
+        {
+            Current = Current with { IsBusy = false };
         }
     }
 
