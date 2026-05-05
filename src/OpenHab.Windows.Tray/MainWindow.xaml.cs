@@ -27,20 +27,26 @@ public sealed partial class MainWindow : Window
     public void Refresh()
     {
         isRefreshing = true;
-        var descriptor = renderController.BuildCurrentDescriptor();
-        TitleText.Text = descriptor.Title;
-        SitemapRows.Children.Clear();
-
-        foreach (var row in descriptor.Rows)
+        try
         {
-            SitemapRows.Children.Add(SitemapControlFactory.Create(row));
-        }
+            var descriptor = renderController.BuildCurrentDescriptor();
+            TitleText.Text = descriptor.Title;
+            SitemapRows.Children.Clear();
 
-        SkinCombo.SelectedItem = settingsController.Current.Skin;
-        EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
-        LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
-        CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
-        isRefreshing = false;
+            foreach (var row in descriptor.Rows)
+            {
+                SitemapRows.Children.Add(SitemapControlFactory.Create(row));
+            }
+
+            SkinCombo.SelectedItem = settingsController.Current.Skin;
+            EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
+            LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
+            CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     private void InitializeSettingsControls()
@@ -68,6 +74,7 @@ public sealed partial class MainWindow : Window
         }
 
         settingsController.SetEndpointMode(endpointMode);
+        Refresh();
     }
 
     private void EndpointText_LostFocus(object sender, RoutedEventArgs e)
@@ -75,7 +82,14 @@ public sealed partial class MainWindow : Window
         if (Uri.TryCreate(LocalEndpointText.Text, UriKind.Absolute, out var localEndpoint)
             && Uri.TryCreate(CloudEndpointText.Text, UriKind.Absolute, out var cloudEndpoint))
         {
-            settingsController.SetEndpoints(localEndpoint, cloudEndpoint);
+            try
+            {
+                settingsController.SetEndpoints(localEndpoint, cloudEndpoint);
+            }
+            catch (ArgumentException)
+            {
+                Refresh();
+            }
         }
     }
 }
