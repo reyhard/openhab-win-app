@@ -16,6 +16,8 @@ public sealed class OpenHabHttpClientAuthTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             RequestCount++;
             AuthHeaderValue = request.Headers.Authorization?.ToString();
 
@@ -60,7 +62,7 @@ public sealed class OpenHabHttpClientAuthTests
     }
 
     [Fact]
-    public async Task RedactsTokenFromExceptionMessage()
+    public async Task DoesNotIncludeTokenInExceptionMessage()
     {
         var handler = new CapturingHandler { StatusCode = HttpStatusCode.Unauthorized, ResponseBody = "unauthorized request" };
         var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"), apiToken: "oh.secret.token999");

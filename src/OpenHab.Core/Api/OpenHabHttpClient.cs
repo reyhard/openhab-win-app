@@ -21,6 +21,9 @@ public sealed class OpenHabHttpClient : IOpenHabClient
 
     public OpenHabHttpClient(HttpClient httpClient, Uri baseUri, string? apiToken = null)
     {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(baseUri);
+
         _httpClient = httpClient;
         _baseUri = baseUri;
         _apiToken = apiToken;
