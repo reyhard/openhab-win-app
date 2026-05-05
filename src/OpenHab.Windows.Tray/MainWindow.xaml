@@ -1,0 +1,41 @@
+<Window
+    x:Class="OpenHab.Windows.Tray.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="openHAB">
+    <Grid Margin="16" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="TitleText"
+                   FontSize="20"
+                   FontWeight="SemiBold" />
+
+        <TabView Grid.Row="1"
+                 IsAddTabButtonVisible="False">
+            <TabViewItem Header="Sitemap">
+                <ScrollViewer>
+                    <StackPanel x:Name="SitemapRows" Spacing="8" />
+                </ScrollViewer>
+            </TabViewItem>
+            <TabViewItem Header="Settings">
+                <StackPanel Spacing="12" MaxWidth="420">
+                    <ComboBox x:Name="SkinCombo"
+                              Header="Skin"
+                              SelectionChanged="SkinCombo_SelectionChanged" />
+                    <ComboBox x:Name="EndpointModeCombo"
+                              Header="Endpoint mode"
+                              SelectionChanged="EndpointModeCombo_SelectionChanged" />
+                    <TextBox x:Name="LocalEndpointText"
+                             Header="Local endpoint"
+                             LostFocus="EndpointText_LostFocus" />
+                    <TextBox x:Name="CloudEndpointText"
+                             Header="Cloud endpoint"
+                             LostFocus="EndpointText_LostFocus" />
+                </StackPanel>
+            </TabViewItem>
+        </TabView>
+    </Grid>
+</Window>
