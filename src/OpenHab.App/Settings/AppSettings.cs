@@ -8,7 +8,9 @@ public sealed record AppSettings(
     EndpointMode EndpointMode,
     Uri LocalEndpoint,
     Uri CloudEndpoint,
-    string SitemapName)
+    string SitemapName,
+    bool HasLocalToken = false,
+    bool HasCloudToken = false)
 {
     public static AppSettings Default { get; } = new(
         SitemapSkinKind.Windows11,

@@ -1,4 +1,6 @@
 using OpenHab.App.Settings;
+using OpenHab.App.Tests.Settings;
+using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 
@@ -115,5 +117,85 @@ public sealed class AppSettingsControllerTests
             controller.SetEndpoints(new Uri("http://openhab.local:8080"), new Uri("ftp://myopenhab.org")));
 
         Assert.Contains("HTTP or HTTPS", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DefaultsHaveNoTokens()
+    {
+        var controller = new AppSettingsController();
+
+        Assert.False(controller.Current.HasLocalToken);
+        Assert.False(controller.Current.HasCloudToken);
+    }
+
+    [Fact]
+    public async Task SetAndClearLocalApiToken()
+    {
+        var store = new FakeCredentialStore();
+        var controller = new AppSettingsController(store);
+
+        await controller.SetApiTokenAsync(TransportKind.Local, "my-local-token");
+
+        Assert.True(controller.Current.HasLocalToken);
+        Assert.Equal("my-local-token", await store.RetrieveAsync("OpenHabAuth", "local-token", CancellationToken.None));
+
+        await controller.ClearApiTokenAsync(TransportKind.Local);
+
+        Assert.False(controller.Current.HasLocalToken);
+        Assert.Null(await store.RetrieveAsync("OpenHabAuth", "local-token", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SetAndClearCloudApiToken()
+    {
+        var store = new FakeCredentialStore();
+        var controller = new AppSettingsController(store);
+
+        await controller.SetApiTokenAsync(TransportKind.Cloud, "my-cloud-token");
+
+        Assert.True(controller.Current.HasCloudToken);
+        Assert.Equal("my-cloud-token", await store.RetrieveAsync("OpenHabAuth", "cloud-token", CancellationToken.None));
+
+        await controller.ClearApiTokenAsync(TransportKind.Cloud);
+
+        Assert.False(controller.Current.HasCloudToken);
+        Assert.Null(await store.RetrieveAsync("OpenHabAuth", "cloud-token", CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task SetApiTokenRejectsBlankToken(string token)
+    {
+        var store = new FakeCredentialStore();
+        var controller = new AppSettingsController(store);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => controller.SetApiTokenAsync(TransportKind.Local, token));
+
+        Assert.Equal("token", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task GetApiTokenAsyncReturnsTokenFromStore()
+    {
+        var store = new FakeCredentialStore();
+        await store.StoreAsync("OpenHabAuth", "local-token", "pre-seeded-token", CancellationToken.None);
+        var controller = new AppSettingsController(store);
+
+        var result = await controller.GetApiTokenAsync(TransportKind.Local);
+
+        Assert.Equal("pre-seeded-token", result);
+    }
+
+    [Fact]
+    public async Task GetApiTokenAsyncReturnsNullWhenNotStored()
+    {
+        var store = new FakeCredentialStore();
+        var controller = new AppSettingsController(store);
+
+        var result = await controller.GetApiTokenAsync(TransportKind.Local);
+
+        Assert.Null(result);
     }
 }
