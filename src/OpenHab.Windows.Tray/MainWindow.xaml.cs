@@ -91,7 +91,7 @@ public sealed partial class MainWindow : Window
         {
             var rowIndex = index;
             var row = rows[index];
-            var activateRow = row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand
+            Func<Task>? activateRow = row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand
                 ? () => OnRowActivatedAsync(rowIndex)
                 : null;
             SitemapRows.Children.Add(SitemapControlFactory.Create(
