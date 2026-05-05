@@ -79,17 +79,20 @@ public sealed partial class MainWindow : Window
 
     private void EndpointText_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (Uri.TryCreate(LocalEndpointText.Text, UriKind.Absolute, out var localEndpoint)
-            && Uri.TryCreate(CloudEndpointText.Text, UriKind.Absolute, out var cloudEndpoint))
+        if (!Uri.TryCreate(LocalEndpointText.Text, UriKind.Absolute, out var localEndpoint)
+            || !Uri.TryCreate(CloudEndpointText.Text, UriKind.Absolute, out var cloudEndpoint))
         {
-            try
-            {
-                settingsController.SetEndpoints(localEndpoint, cloudEndpoint);
-            }
-            catch (ArgumentException)
-            {
-                Refresh();
-            }
+            Refresh();
+            return;
+        }
+
+        try
+        {
+            settingsController.SetEndpoints(localEndpoint, cloudEndpoint);
+        }
+        catch (ArgumentException)
+        {
+            Refresh();
         }
     }
 }
