@@ -1,2 +1,8 @@
 .worktrees
 .worktrees/
+bin/
+obj/
+.dotnet/
+.dotnet_cli/
+.vs/
+publish/
