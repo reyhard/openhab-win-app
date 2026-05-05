@@ -63,7 +63,7 @@ public static class SitemapControlFactory
     {
         return new Button
         {
-            Content = string.IsNullOrWhiteSpace(row.State) ? row.Label : $"{row.Label}: {row.State}",
+            Content = CreateButtonTextBlock(string.IsNullOrWhiteSpace(row.State) ? row.Label : $"{row.Label}: {row.State}"),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
     }
@@ -72,9 +72,20 @@ public static class SitemapControlFactory
     {
         return new Button
         {
-            Content = row.Label,
+            Content = CreateButtonTextBlock(row.Label),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             IsEnabled = false
+        };
+    }
+
+    private static TextBlock CreateButtonTextBlock(string text)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxLines = 2
         };
     }
 
