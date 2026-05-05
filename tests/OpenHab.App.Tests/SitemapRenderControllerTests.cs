@@ -2,11 +2,28 @@ using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Sitemaps.Models;
+using System.IO;
 
 namespace OpenHab.App.Tests;
 
 public sealed class SitemapRenderControllerTests
 {
+    private static readonly string SettingsFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "OpenHab.WinApp",
+        "settings.json");
+
+    public SitemapRenderControllerTests()
+    {
+        // Retry deletion — fire-and-forget SaveAsync from a previous test may still be writing.
+        for (int i = 0; i < 5; i++)
+        {
+            try { File.Delete(SettingsFilePath); } catch { }
+            if (!File.Exists(SettingsFilePath)) break;
+            Thread.Sleep(10);
+        }
+    }
+
     [Fact]
     public void BuildsWindows11DescriptorByDefault()
     {

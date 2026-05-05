@@ -2,11 +2,28 @@ using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
 using OpenHab.Core.Profiles;
+using System.IO;
 
 namespace OpenHab.App.Tests.Runtime;
 
 public sealed class SitemapRuntimeControllerTests
 {
+    private static readonly string SettingsFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "OpenHab.WinApp",
+        "settings.json");
+
+    public SitemapRuntimeControllerTests()
+    {
+        // Retry deletion — fire-and-forget SaveAsync from a previous test may still be writing.
+        for (int i = 0; i < 5; i++)
+        {
+            try { File.Delete(SettingsFilePath); } catch { }
+            if (!File.Exists(SettingsFilePath)) break;
+            Thread.Sleep(10);
+        }
+    }
+
     [Fact]
     public async Task LoadUsesLocalEndpointInAutomaticModeWhenLocalSucceeds()
     {
