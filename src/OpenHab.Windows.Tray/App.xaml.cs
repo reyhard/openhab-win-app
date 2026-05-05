@@ -5,6 +5,7 @@ using OpenHab.App.Sitemaps;
 using OpenHab.Core.Api;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
+using OpenHab.Windows.Notifications;
 using OpenHab.Windows.Tray.Tray;
 using System.Threading;
 using Microsoft.UI.Dispatching;
@@ -18,6 +19,7 @@ public partial class App : Application
     private TrayIconService? trayIcon;
     private DispatcherQueue? uiDispatcherQueue;
     private HttpClient? httpClient;
+    private NotificationPoller? notificationPoller;
     private int isShuttingDown;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -58,6 +60,7 @@ public partial class App : Application
 
         _ = InitializeAsync(settingsController);
         window.Activate();
+        StartNotificationPolling(settingsController);
     }
 
     private static async Task InitializeAsync(AppSettingsController settingsController)
@@ -70,6 +73,45 @@ public partial class App : Application
         {
             // Credential store hydration is best-effort at startup.
         }
+    }
+
+    private void StartNotificationPolling(AppSettingsController settingsController)
+    {
+        var settings = settingsController.Current;
+        if (settings.EndpointMode == EndpointMode.LocalOnly) return;
+
+        ToastService.EnsureRegistered();
+        ToastService.NotificationActivated += (_, _) =>
+        {
+            _ = uiDispatcherQueue?.TryEnqueue(() => window?.Activate());
+        };
+
+        var cloudToken = GetApiTokenSync(settingsController, TransportKind.Cloud);
+        notificationPoller = new NotificationPoller(
+            httpClient!,
+            settings.CloudEndpoint,
+            apiToken: cloudToken,
+            dispatcher: uiDispatcherQueue);
+
+        notificationPoller.NotificationReceived += (_, notification) =>
+        {
+            var title = notification.Severity is not null
+                ? $"[{notification.Severity}] openHAB"
+                : "openHAB";
+            var body = notification.Message.Length > 200
+                ? notification.Message[..197] + "..."
+                : notification.Message;
+            ToastService.Show(title, body);
+        };
+
+        notificationPoller.Start();
+    }
+
+    // Sync helper — safe because the underlying store returns Task.FromResult.
+    private static string? GetApiTokenSync(AppSettingsController controller, TransportKind kind)
+    {
+        try { return controller.GetApiTokenAsync(kind, CancellationToken.None).GetAwaiter().GetResult(); }
+        catch { return null; }
     }
 
     private void OnProcessExit(object? sender, EventArgs args)
@@ -103,6 +145,8 @@ public partial class App : Application
     private void ShutdownTrayResourcesCore()
     {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        notificationPoller?.Dispose();
+        notificationPoller = null;
         trayIcon?.Dispose();
         trayIcon = null;
         httpClient?.Dispose();

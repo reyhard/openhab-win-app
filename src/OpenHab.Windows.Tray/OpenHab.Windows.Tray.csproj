@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\OpenHab.App\OpenHab.App.csproj" />
     <ProjectReference Include="..\OpenHab.Core\OpenHab.Core.csproj" />
+    <ProjectReference Include="..\OpenHab.Windows.Notifications\OpenHab.Windows.Notifications.csproj" />
     <ProjectReference Include="..\OpenHab.Rendering\OpenHab.Rendering.csproj" />
   </ItemGroup>
 </Project>
