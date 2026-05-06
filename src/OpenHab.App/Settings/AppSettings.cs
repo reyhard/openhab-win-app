@@ -10,6 +10,8 @@ public sealed record AppSettings(
     Uri LocalEndpoint,
     Uri CloudEndpoint,
     string SitemapName,
+    bool FollowSystemTheme = true,
+    bool UseWindows11Icons = false,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
     [property: JsonIgnore] string? CloudUserName = null)

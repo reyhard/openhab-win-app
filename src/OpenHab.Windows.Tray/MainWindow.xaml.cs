@@ -107,6 +107,9 @@ public sealed partial class MainWindow : Window
         CloudUserNameText.Text = settingsController.Current.CloudUserName ?? string.Empty;
         suppressTokenEditTracking = false;
 
+        FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
+        UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
+
         LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
             ? "Stored token configured. Type to replace, or leave unchanged."
             : "Enter token (optional)";
@@ -392,5 +395,15 @@ public sealed partial class MainWindow : Window
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         await RefreshRuntimeAsync();
+    }
+
+    private void FollowThemeToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        settingsController.SetFollowSystemTheme(FollowThemeToggle.IsOn);
+    }
+
+    private void UseWin11IconsToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        settingsController.SetUseWindows11Icons(UseWin11IconsToggle.IsOn);
     }
 }

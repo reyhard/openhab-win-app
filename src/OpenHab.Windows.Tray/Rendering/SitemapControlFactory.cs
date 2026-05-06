@@ -16,8 +16,8 @@ public static class SitemapControlFactory
         return row.Control switch
         {
             RenderControlKind.Toggle => CreateToggle(row, activateRow),
-            RenderControlKind.Slider => CreateSlider(row, activateRow, sendCommand),
-            RenderControlKind.Selection => CreateSelection(row, activateRow, sendCommand),
+            RenderControlKind.Slider => CreateSlider(row, sendCommand),
+            RenderControlKind.Selection => CreateSelection(row, sendCommand),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row, activateRow, baseUri)
         };
@@ -72,7 +72,7 @@ public static class SitemapControlFactory
         return toggle;
     }
 
-    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand)
+    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<string, Task>? sendCommand)
     {
         var value = double.TryParse(row.State, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
             ? Math.Clamp(parsed, 0, 100)
@@ -111,7 +111,7 @@ public static class SitemapControlFactory
         };
     }
 
-    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand)
+    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<string, Task>? sendCommand)
     {
         var panel = new StackPanel { Spacing = 4 };
         panel.Children.Add(new TextBlock
@@ -132,10 +132,10 @@ public static class SitemapControlFactory
 
         if (sendCommand is not null)
         {
-            comboBox.SelectionChanged += (_, _) =>
+            comboBox.SelectionChanged += async (_, _) =>
             {
                 if (comboBox.SelectedItem is ComboBoxItem { Tag: string cmd })
-                    _ = sendCommand(cmd);
+                    await sendCommand(cmd);
             };
         }
 

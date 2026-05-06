@@ -1,3 +1,4 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using OpenHab.App.Runtime;
@@ -5,6 +6,7 @@ using OpenHab.App.Settings;
 using OpenHab.Core.Api;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
+using Windows.Graphics;
 
 namespace OpenHab.Windows.Tray;
 
@@ -25,6 +27,7 @@ public sealed partial class FlyoutWindow : Window
         this.requestOpenMainWindow = requestOpenMainWindow;
 
         InitializeComponent();
+        this.Activated += OnFlyoutActivated;
         RefreshSettingsBindings();
         _ = LoadRuntimeAsync();
     }
@@ -163,5 +166,31 @@ public sealed partial class FlyoutWindow : Window
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         requestOpenMainWindow();
+    }
+
+    private void OnFlyoutActivated(object sender, WindowActivatedEventArgs args)
+    {
+        this.Activated -= OnFlyoutActivated;
+        var appWindow = this.AppWindow;
+        var currentPos = appWindow.Position;
+        var startY = currentPos.Y + 60;
+        appWindow.Move(new PointInt32(currentPos.X, startY));
+        _ = AnimateSlideUpAsync(appWindow, currentPos.Y);
+    }
+
+    private static async Task AnimateSlideUpAsync(AppWindow window, int targetY)
+    {
+        var pos = window.Position;
+        var startY = pos.Y;
+        var steps = 8;
+        var delay = TimeSpan.FromMilliseconds(12);
+        for (int i = 1; i <= steps; i++)
+        {
+            var t = (double)i / steps;
+            var eased = 1.0 - Math.Pow(1.0 - t, 3.0); // ease-out cubic
+            var y = (int)(startY + (targetY - startY) * eased);
+            window.Move(new PointInt32(pos.X, y));
+            await Task.Delay(delay);
+        }
     }
 }

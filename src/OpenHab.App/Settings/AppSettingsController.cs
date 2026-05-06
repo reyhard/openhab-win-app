@@ -124,6 +124,24 @@ public sealed class AppSettingsController
         _ = SaveAsync();
     }
 
+    public void SetFollowSystemTheme(bool follow)
+    {
+        lock (syncRoot)
+        {
+            Current = Current with { FollowSystemTheme = follow };
+        }
+        _ = SaveAsync();
+    }
+
+    public void SetUseWindows11Icons(bool use)
+    {
+        lock (syncRoot)
+        {
+            Current = Current with { UseWindows11Icons = use };
+        }
+        _ = SaveAsync();
+    }
+
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)

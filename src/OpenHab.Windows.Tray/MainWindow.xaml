@@ -33,8 +33,11 @@
                       SelectionChanged="SitemapCombo_SelectionChanged" />
             <Button Grid.Column="1"
                     Margin="0,24,0,0"
-                    Content="Refresh"
-                    Click="RefreshButton_Click" />
+                    Click="RefreshButton_Click"
+                    ToolTipService.ToolTip="Refresh"
+                    Width="36" Height="36" Padding="4">
+                <FontIcon Glyph="&#xE72C;" FontSize="14" />
+            </Button>
         </Grid>
 
         <Border Grid.Row="2"
@@ -88,6 +91,14 @@
                                  PlaceholderText="Enter myopenHAB password"
                                  PasswordChanged="CloudPasswordBox_PasswordChanged"
                                  LostFocus="CloudCredentials_LostFocus" />
+                    <ToggleSwitch x:Name="FollowThemeToggle"
+                                  Header="Follow Windows color scheme"
+                                  OnContent="On" OffContent="Off"
+                                  Toggled="FollowThemeToggle_Toggled" />
+                    <ToggleSwitch x:Name="UseWin11IconsToggle"
+                                  Header="Use Windows 11 style icons"
+                                  OnContent="On" OffContent="Off"
+                                  Toggled="UseWin11IconsToggle_Toggled" />
                 </StackPanel>
             </ScrollViewer>
         </Border>
