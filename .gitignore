@@ -4,5 +4,7 @@ bin/
 obj/
 .dotnet/
 .dotnet_cli/
+.dotnet-main/
+.sisyphus/
 .vs/
 publish/
