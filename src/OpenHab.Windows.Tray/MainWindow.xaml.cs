@@ -135,9 +135,11 @@ public sealed partial class MainWindow : Window
         {
             var rowIndex = index;
             var row = rows[index];
-            Func<Task>? activateRow = row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand
-                ? () => OnRowActivatedAsync(rowIndex)
-                : null;
+            Func<Task>? activateRow = null;
+            if (row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand)
+                activateRow = () => OnRowActivatedAsync(rowIndex);
+            else if (row.Action == RenderActionKind.Navigate)
+                activateRow = () => OnRowNavigateAsync(rowIndex);
             Func<string, Task>? sendCommand = row.Action == RenderActionKind.SendCommand
                 ? cmd => runtimeController.SendCommandForRowAsync(rowIndex, cmd)
                 : null;
@@ -159,6 +161,16 @@ public sealed partial class MainWindow : Window
         {
             await runtimeController.ActivateRowAsync(rowIndex, ct);
         });
+    }
+
+    private async Task OnRowNavigateAsync(int rowIndex)
+    {
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        await RunRuntimeOperationAsync(async ct => await runtimeController.NavigateToChildAsync(rowIndex, ct));
     }
 
     private async void SkinCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

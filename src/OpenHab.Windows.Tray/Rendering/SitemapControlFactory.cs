@@ -18,13 +18,39 @@ public static class SitemapControlFactory
             RenderControlKind.Slider => CreateSlider(row, activateRow, sendCommand),
             RenderControlKind.Selection => CreateSelection(row, activateRow, sendCommand),
             RenderControlKind.Fallback => CreateFallback(row),
-            _ => CreateText(row)
+            _ => CreateText(row, activateRow)
         };
     }
 
-    private static FrameworkElement CreateText(SitemapRowDescriptor row)
+    private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null)
     {
-        return CreateRow(row.Label, row.State ?? string.Empty);
+        var grid = CreateRow(row.Label, row.State ?? string.Empty);
+
+        if (activateRow is not null && row.Action == RenderActionKind.Navigate)
+        {
+            var chevron = new FontIcon
+            {
+                Glyph = "\uE76C",
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Opacity = 0.6
+            };
+            Grid.SetColumn(chevron, 2);
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.Children.Add(chevron);
+
+            var button = new Button
+            {
+                Content = grid,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Padding = new Thickness(0)
+            };
+            button.Click += async (_, _) => await activateRow();
+            return button;
+        }
+
+        return grid;
     }
 
     private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow)
@@ -135,7 +161,7 @@ public static class SitemapControlFactory
         };
     }
 
-    private static FrameworkElement CreateRow(string label, string state)
+    private static Grid CreateRow(string label, string state)
     {
         var grid = new Grid
         {

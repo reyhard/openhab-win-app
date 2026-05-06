@@ -121,6 +121,25 @@ public sealed class SitemapRuntimeController
         return true;
     }
 
+    public async Task<bool> NavigateToChildAsync(int rowIndex, CancellationToken ct = default)
+    {
+        if (currentPage is null || rowIndex < 0 || rowIndex >= currentPage.Widgets.Count) return false;
+        var widget = currentPage.Widgets[rowIndex];
+        if (widget.Children.Count == 0) return false;
+
+        var childPage = widget.Children[0];
+        var normalized = SitemapNormalizer.Normalize(childPage);
+        currentPage = normalized;
+
+        var descriptor = renderController.BuildCurrentDescriptor(normalized);
+        Current = Current with
+        {
+            Descriptor = descriptor,
+            StatusText = $"Navigated to: {normalized.Label}"
+        };
+        return true;
+    }
+
     public async Task<bool> ActivateRowAsync(int rowIndex, CancellationToken cancellationToken = default)
     {
         if (rowIndex < 0)
