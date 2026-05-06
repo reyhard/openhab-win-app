@@ -27,4 +27,10 @@
     <ProjectReference Include="..\OpenHab.Windows.Notifications\OpenHab.Windows.Notifications.csproj" />
     <ProjectReference Include="..\OpenHab.Rendering\OpenHab.Rendering.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\openhab-icon.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>

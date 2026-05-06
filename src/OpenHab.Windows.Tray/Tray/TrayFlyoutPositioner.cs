@@ -6,16 +6,16 @@ namespace OpenHab.Windows.Tray.Tray;
 
 public static class TrayFlyoutPositioner
 {
-    private const int DefaultFlyoutWidth = 500;
+    private const int DefaultFlyoutWidth = 460;
     private const int DefaultFlyoutHeight = 560;
     private const int ScreenPadding = 8;
 
-    public static void PlaceNearTrayArea(FlyoutWindow flyoutWindow)
+    public static void PlaceNearTrayArea(FlyoutWindow flyoutWindow, int preferredWidth)
     {
         ArgumentNullException.ThrowIfNull(flyoutWindow);
 
         var appWindow = flyoutWindow.AppWindow;
-        var width = appWindow.Size.Width > 0 ? appWindow.Size.Width : DefaultFlyoutWidth;
+        var width = preferredWidth > 0 ? preferredWidth : DefaultFlyoutWidth;
         var height = appWindow.Size.Height > 0 ? appWindow.Size.Height : DefaultFlyoutHeight;
         var placement = CalculatePlacement(width, height);
 

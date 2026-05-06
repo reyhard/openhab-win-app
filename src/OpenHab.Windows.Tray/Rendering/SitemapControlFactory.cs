@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -92,7 +93,13 @@ public static class SitemapControlFactory
         if (glyph is null)
             return null;
 
-        return new FontIcon { Glyph = glyph, FontSize = 16, Opacity = 0.8 };
+        return new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 14,
+            Opacity = 0.8,
+            FontFamily = new FontFamily("Segoe MDL2 Assets")
+        };
     }
 
     private readonly record struct RowLayout(Grid Grid, int LabelColumn, int ValueColumn, int ControlColumn);
@@ -165,8 +172,8 @@ public static class SitemapControlFactory
             var image = new Image
             {
                 Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName)}")),
-                Width = 20,
-                Height = 20,
+                Width = 16,
+                Height = 16,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(image, column);
@@ -232,6 +239,11 @@ public static class SitemapControlFactory
 
     private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null, Uri? baseUri = null, bool useWindowsIcons = false)
     {
+        if (IsSectionHeader(row))
+        {
+            return CreateSectionHeader(row.Label);
+        }
+
         var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
         var grid = layout.Grid;
         var navigateAction = row.Action == RenderActionKind.Navigate ? activateRow : null;
@@ -269,6 +281,28 @@ public static class SitemapControlFactory
         }
 
         return WrapWithBorder(grid);
+    }
+
+    private static bool IsSectionHeader(SitemapRowDescriptor row)
+    {
+        return row.Control == RenderControlKind.Text
+            && row.Action == RenderActionKind.None
+            && string.IsNullOrWhiteSpace(row.State)
+            && string.IsNullOrWhiteSpace(row.IconName);
+    }
+
+    private static FrameworkElement CreateSectionHeader(string label)
+    {
+        return new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(2, 12, 2, 6),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            TextAlignment = TextAlignment.Left,
+            FontSize = 18,
+            FontWeight = FontWeights.SemiBold,
+            Opacity = 0.92
+        };
     }
 
     private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow, Uri? baseUri = null, bool useWindowsIcons = false)
@@ -403,7 +437,8 @@ public static class SitemapControlFactory
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(8, 4, 8, 4)
+            Padding = new Thickness(8, 4, 8, 4),
+            MinHeight = 40
         };
     }
 }

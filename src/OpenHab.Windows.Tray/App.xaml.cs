@@ -22,6 +22,7 @@ public partial class App : Application
     private FlyoutWindow? flyoutWindow;
     private TrayIconService? trayIcon;
     private TrayShellController? shellController;
+    private AppSettingsController? settingsController;
     private DispatcherQueue? uiDispatcherQueue;
     private HttpClient? httpClient;
     private NotificationPoller? notificationPoller;
@@ -46,7 +47,7 @@ public partial class App : Application
             credentialStore = null;
         }
 
-        var settingsController = new AppSettingsController(credentialStore);
+        settingsController = new AppSettingsController(credentialStore);
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
         runtimeController = new SitemapRuntimeController(
@@ -80,6 +81,11 @@ public partial class App : Application
             requestOpenMainWindow: () =>
             {
                 shellController.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
+            },
+            requestHideFlyout: () =>
+            {
+                shellController.HandleWindowCloseRequested(TrayShellSurface.Flyout);
                 _ = ApplyShellStateAsync();
             });
 
@@ -238,7 +244,9 @@ public partial class App : Application
                     break;
                 case TrayShellSurface.Flyout:
                     main.AppWindow.Hide();
-                    TrayFlyoutPositioner.PlaceNearTrayArea(flyout);
+                    TrayFlyoutPositioner.PlaceNearTrayArea(
+                        flyout,
+                        settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
                     flyout.Activate();
                     break;
                 default:
