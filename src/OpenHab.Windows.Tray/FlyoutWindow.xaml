@@ -40,7 +40,7 @@
                 CornerRadius="6"
                 Padding="10">
             <ScrollViewer>
-                <StackPanel x:Name="SitemapRows" Spacing="10" />
+                <StackPanel x:Name="SitemapRows" Spacing="4" />
             </ScrollViewer>
         </Border>
 

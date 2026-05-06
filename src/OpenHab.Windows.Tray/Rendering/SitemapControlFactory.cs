@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using OpenHab.Rendering.Descriptors;
 
@@ -205,6 +206,7 @@ public static class SitemapControlFactory
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 14,
             TextWrapping = TextWrapping.WrapWholeWords,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxLines = 2
@@ -259,13 +261,14 @@ public static class SitemapControlFactory
                 Content = grid,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(0)
+                Padding = new Thickness(0),
+                BorderThickness = new Thickness(0)
             };
             button.Click += async (_, _) => await navigate();
-            return button;
+            return WrapWithBorder(button);
         }
 
-        return grid;
+        return WrapWithBorder(grid);
     }
 
     private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow, Uri? baseUri = null, bool useWindowsIcons = false)
@@ -301,7 +304,7 @@ public static class SitemapControlFactory
             toggle.Toggled += async (_, _) => await activateRow();
         }
 
-        return grid;
+        return WrapWithBorder(grid);
     }
 
     private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<string, Task>? sendCommand, Uri? baseUri = null, bool useWindowsIcons = false)
@@ -334,7 +337,7 @@ public static class SitemapControlFactory
         Grid.SetColumnSpan(slider, 2);
         grid.Children.Add(slider);
 
-        return grid;
+        return WrapWithBorder(grid);
     }
 
     private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<string, Task>? sendCommand, Uri? baseUri = null, bool useWindowsIcons = false)
@@ -367,17 +370,18 @@ public static class SitemapControlFactory
         Grid.SetColumnSpan(comboBox, 2);
         grid.Children.Add(comboBox);
 
-        return grid;
+        return WrapWithBorder(grid);
     }
 
     private static FrameworkElement CreateFallback(SitemapRowDescriptor row)
     {
-        return new Button
+        return WrapWithBorder(new Button
         {
             Content = CreateButtonTextBlock(row.Label),
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            IsEnabled = false
-        };
+            IsEnabled = false,
+            BorderThickness = new Thickness(0)
+        });
     }
 
     private static TextBlock CreateButtonTextBlock(string text)
@@ -388,6 +392,18 @@ public static class SitemapControlFactory
             TextWrapping = TextWrapping.WrapWholeWords,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxLines = 2
+        };
+    }
+
+    private static Border WrapWithBorder(FrameworkElement child)
+    {
+        return new Border
+        {
+            Child = child,
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8, 4, 8, 4)
         };
     }
 }
