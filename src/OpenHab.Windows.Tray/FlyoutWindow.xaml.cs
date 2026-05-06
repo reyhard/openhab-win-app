@@ -41,27 +41,7 @@ public sealed partial class FlyoutWindow : Window
 
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
     {
-        var currentSitemap = settingsController.Current.SitemapName;
-        SitemapCombo.SelectionChanged -= SitemapCombo_SelectionChanged;
-        SitemapCombo.Items.Clear();
-
-        foreach (var sitemap in sitemaps)
-        {
-            var item = new ComboBoxItem
-            {
-                Content = sitemap.Label,
-                Tag = sitemap.Name
-            };
-
-            SitemapCombo.Items.Add(item);
-
-            if (string.Equals(sitemap.Name, currentSitemap, StringComparison.OrdinalIgnoreCase))
-            {
-                SitemapCombo.SelectedItem = item;
-            }
-        }
-
-        SitemapCombo.SelectionChanged += SitemapCombo_SelectionChanged;
+        SitemapComboHelper.Populate(SitemapCombo, sitemaps, settingsController.Current.SitemapName, SitemapCombo_SelectionChanged);
     }
 
     private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
