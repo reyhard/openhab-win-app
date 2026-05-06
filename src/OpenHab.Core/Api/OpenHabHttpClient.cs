@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 
 namespace OpenHab.Core.Api;
 
@@ -18,18 +19,32 @@ public sealed class OpenHabHttpClient : IOpenHabClient
     private readonly HttpClient _httpClient;
     private readonly Uri _baseUri;
     private readonly string? _apiToken;
+    private readonly string? _basicUserName;
+    private readonly string? _basicPassword;
 
-    public OpenHabHttpClient(HttpClient httpClient, Uri baseUri, string? apiToken = null)
+    public OpenHabHttpClient(
+        HttpClient httpClient,
+        Uri baseUri,
+        string? apiToken = null,
+        string? basicUserName = null,
+        string? basicPassword = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(baseUri);
 
+        if (!string.IsNullOrWhiteSpace(apiToken) && !string.IsNullOrWhiteSpace(basicUserName))
+        {
+            throw new ArgumentException("Configure either bearer token auth or basic auth, not both.");
+        }
+
         _httpClient = httpClient;
         _baseUri = baseUri;
         _apiToken = apiToken;
+        _basicUserName = basicUserName;
+        _basicPassword = basicPassword;
     }
 
-    public bool IsAuthenticated => !string.IsNullOrWhiteSpace(_apiToken);
+    public bool IsAuthenticated => !string.IsNullOrWhiteSpace(_apiToken) || !string.IsNullOrWhiteSpace(_basicUserName);
 
     public Task SendCommandAsync(string itemName, string command, CancellationToken cancellationToken)
     {
@@ -80,6 +95,14 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         if (!string.IsNullOrWhiteSpace(_apiToken))
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _apiToken);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_basicUserName))
+        {
+            var raw = $"{_basicUserName}:{_basicPassword ?? string.Empty}";
+            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
         }
     }
 

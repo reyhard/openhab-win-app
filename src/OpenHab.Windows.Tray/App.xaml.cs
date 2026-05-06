@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using OpenHab.App.Tray;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
@@ -10,16 +11,20 @@ using OpenHab.Windows.Tray.Tray;
 using System.Threading;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace OpenHab.Windows.Tray;
 
 public partial class App : Application
 {
-    private MainWindow? window;
+    private MainWindow? mainWindow;
+    private FlyoutWindow? flyoutWindow;
     private TrayIconService? trayIcon;
+    private TrayShellController? shellController;
     private DispatcherQueue? uiDispatcherQueue;
     private HttpClient? httpClient;
     private NotificationPoller? notificationPoller;
+    private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
     private int isShuttingDown;
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -47,31 +52,60 @@ public partial class App : Application
             renderController,
             (transportKind, endpoint) =>
             {
-                string? token = null;
-                // NOTE: GetAwaiter().GetResult() is safe here because WindowsCredentialStore.RetrieveAsync
-                // returns Task.FromResult and never suspends. If the store becomes genuinely async,
-                // this must be refactored to avoid deadlocking on the UI thread.
-                try { token = settingsController.GetApiTokenAsync(transportKind, CancellationToken.None).GetAwaiter().GetResult(); }
-                catch { }
-                return new OpenHabHttpClient(httpClient, endpoint, apiToken: token);
+                var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
+                return new OpenHabHttpClient(
+                    httpClient,
+                    endpoint,
+                    apiToken: auth.ApiToken,
+                    basicUserName: auth.BasicUserName,
+                    basicPassword: auth.BasicPassword);
             });
 
-        window = new MainWindow(settingsController, runtimeController);
-        trayIcon = new TrayIconService(
-            showWindow: () =>
+        shellController = new TrayShellController();
+        shellController.HandleLaunch();
+
+        mainWindow = new MainWindow(
+            settingsController,
+            runtimeController,
+            requestHideToTray: () =>
             {
-                window.Activate();
-                _ = window.RefreshRuntimeAsync();
+                shellController.HandleWindowCloseRequested(TrayShellSurface.MainWindow);
+                _ = ApplyShellStateAsync();
+            });
+        flyoutWindow = new FlyoutWindow(
+            settingsController,
+            runtimeController,
+            requestOpenMainWindow: () =>
+            {
+                shellController.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
+            });
+
+        flyoutWindow.AppWindow.Closing += (sender, args) =>
+        {
+            args.Cancel = true;
+            shellController.HandleWindowCloseRequested(TrayShellSurface.Flyout);
+            _ = ApplyShellStateAsync();
+        };
+
+        trayIcon = new TrayIconService(
+            toggleFlyout: () =>
+            {
+                shellController.HandlePrimaryTrayClick();
+                _ = ApplyShellStateAsync();
+            },
+            openMainWindow: () =>
+            {
+                shellController.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
             },
             exitApplication: () =>
             {
-                ShutdownTrayResources();
-                Exit();
+                shellController.HandleExitRequested();
+                _ = ApplyShellStateAsync();
             });
 
-        _ = InitializeAsync(settingsController);
-        window.Activate();
-        StartNotificationPolling(settingsController);
+        _ = CompleteStartupAsync(settingsController);
     }
 
     private static async Task InitializeAsync(AppSettingsController settingsController)
@@ -96,14 +130,24 @@ public partial class App : Application
             ToastService.EnsureRegistered();
             ToastService.NotificationActivated += (_, _) =>
             {
-                _ = uiDispatcherQueue?.TryEnqueue(() => window?.Activate());
+                _ = uiDispatcherQueue?.TryEnqueue(() =>
+                {
+                    if (shellController is null)
+                    {
+                        return;
+                    }
+
+                    shellController.HandleNotificationActivated();
+                    _ = ApplyShellStateAsync();
+                });
             };
 
-            var cloudToken = GetApiTokenSync(settingsController, TransportKind.Cloud);
+            var cloudCredentials = GetCloudCredentialsSync(settingsController);
             notificationPoller = new NotificationPoller(
                 httpClient!,
                 settings.CloudEndpoint,
-                apiToken: cloudToken,
+                basicUserName: cloudCredentials?.UserName,
+                basicPassword: cloudCredentials?.Password,
                 dispatcher: uiDispatcherQueue);
 
             notificationPoller.NotificationReceived += (_, notification) =>
@@ -133,9 +177,99 @@ public partial class App : Application
         catch { return null; }
     }
 
+    private static CloudCredentials? GetCloudCredentialsSync(AppSettingsController controller)
+    {
+        try { return controller.GetCloudCredentialsAsync(CancellationToken.None).GetAwaiter().GetResult(); }
+        catch { return null; }
+    }
+
+    private static RuntimeAuth ResolveRuntimeAuthSync(AppSettingsController controller, TransportKind kind)
+    {
+        if (kind == TransportKind.Local)
+        {
+            return new RuntimeAuth(GetApiTokenSync(controller, TransportKind.Local), null, null);
+        }
+
+        var cloudCredentials = GetCloudCredentialsSync(controller);
+        return new RuntimeAuth(null, cloudCredentials?.UserName, cloudCredentials?.Password);
+    }
+
+    private readonly record struct RuntimeAuth(string? ApiToken, string? BasicUserName, string? BasicPassword);
+
     private void OnProcessExit(object? sender, EventArgs args)
     {
         ShutdownTrayResources();
+    }
+
+    private async Task ApplyShellStateAsync()
+    {
+        await shellApplySemaphore.WaitAsync();
+        try
+        {
+            if (shellController is null)
+            {
+                return;
+            }
+
+            var state = shellController.Current;
+
+            if (state.ShouldExitProcess)
+            {
+                ShutdownTrayResources();
+                Exit();
+                return;
+            }
+
+            var main = mainWindow;
+            var flyout = flyoutWindow;
+
+            if (main is null || flyout is null)
+            {
+                return;
+            }
+
+            switch (state.VisibleSurface)
+            {
+                case TrayShellSurface.MainWindow:
+                    flyout.AppWindow.Hide();
+                    main.Activate();
+                    break;
+                case TrayShellSurface.Flyout:
+                    main.AppWindow.Hide();
+                    TrayFlyoutPositioner.PlaceNearTrayArea(flyout);
+                    flyout.Activate();
+                    break;
+                default:
+                    main.AppWindow.Hide();
+                    flyout.AppWindow.Hide();
+                    break;
+            }
+
+            if (state.PendingRefresh)
+            {
+                if (state.VisibleSurface == TrayShellSurface.MainWindow)
+                {
+                    await main.RefreshRuntimeAsync();
+                }
+                else if (state.VisibleSurface == TrayShellSurface.Flyout)
+                {
+                    await flyout.RefreshRuntimeAsync();
+                }
+
+                shellController.HandleRefreshCompleted();
+            }
+        }
+        finally
+        {
+            shellApplySemaphore.Release();
+        }
+    }
+
+    private async Task CompleteStartupAsync(AppSettingsController settingsController)
+    {
+        await InitializeAsync(settingsController);
+        await ApplyShellStateAsync();
+        StartNotificationPolling(settingsController);
     }
 
     private void ShutdownTrayResources()

@@ -12,7 +12,8 @@ public sealed class AppSettingsController
     private static readonly Regex SitemapNamePattern = new("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
     private const string CredentialResource = "OpenHabAuth";
     private const string LocalTokenKey = "local-token";
-    private const string CloudTokenKey = "cloud-token";
+    private const string CloudUserNameKey = "cloud-username";
+    private const string CloudPasswordKey = "cloud-password";
 
     private static readonly string SettingsFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -37,10 +38,17 @@ public sealed class AppSettingsController
         if (credentialStore is null) return;
 
         var hasLocal = await credentialStore.RetrieveAsync(CredentialResource, LocalTokenKey, cancellationToken) is not null;
-        var hasCloud = await credentialStore.RetrieveAsync(CredentialResource, CloudTokenKey, cancellationToken) is not null;
+        var cloudUserName = await credentialStore.RetrieveAsync(CredentialResource, CloudUserNameKey, cancellationToken);
+        var cloudPassword = await credentialStore.RetrieveAsync(CredentialResource, CloudPasswordKey, cancellationToken);
+        var hasCloudCredentials = !string.IsNullOrWhiteSpace(cloudUserName) && !string.IsNullOrWhiteSpace(cloudPassword);
         lock (syncRoot)
         {
-            Current = Current with { HasLocalToken = hasLocal, HasCloudToken = hasCloud };
+            Current = Current with
+            {
+                HasLocalToken = hasLocal,
+                HasCloudCredentials = hasCloudCredentials,
+                CloudUserName = cloudUserName
+            };
         }
     }
 
@@ -127,7 +135,7 @@ public sealed class AppSettingsController
         var key = transportKind switch
         {
             TransportKind.Local => LocalTokenKey,
-            TransportKind.Cloud => CloudTokenKey,
+            TransportKind.Cloud => throw new ArgumentException("Cloud transport uses username and password credentials.", nameof(transportKind)),
             _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
         };
 
@@ -138,7 +146,6 @@ public sealed class AppSettingsController
             Current = transportKind switch
             {
                 TransportKind.Local => Current with { HasLocalToken = true },
-                TransportKind.Cloud => Current with { HasCloudToken = true },
                 _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
             };
         }
@@ -153,7 +160,7 @@ public sealed class AppSettingsController
         var key = transportKind switch
         {
             TransportKind.Local => LocalTokenKey,
-            TransportKind.Cloud => CloudTokenKey,
+            TransportKind.Cloud => throw new ArgumentException("Cloud transport uses username and password credentials.", nameof(transportKind)),
             _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
         };
 
@@ -164,7 +171,6 @@ public sealed class AppSettingsController
             Current = transportKind switch
             {
                 TransportKind.Local => Current with { HasLocalToken = false },
-                TransportKind.Cloud => Current with { HasCloudToken = false },
                 _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
             };
         }
@@ -179,11 +185,72 @@ public sealed class AppSettingsController
         var key = transportKind switch
         {
             TransportKind.Local => LocalTokenKey,
-            TransportKind.Cloud => CloudTokenKey,
+            TransportKind.Cloud => throw new ArgumentException("Cloud transport uses username and password credentials.", nameof(transportKind)),
             _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
         };
 
         return await credentialStore.RetrieveAsync(CredentialResource, key, cancellationToken);
+    }
+
+    public async Task SetCloudCredentialsAsync(string userName, string password, CancellationToken cancellationToken = default)
+    {
+        if (credentialStore is null)
+            throw new InvalidOperationException("No credential store is configured.");
+
+        if (string.IsNullOrWhiteSpace(userName))
+            throw new ArgumentException("Cloud user name must not be blank.", nameof(userName));
+
+        if (string.IsNullOrWhiteSpace(password))
+            throw new ArgumentException("Cloud password must not be blank.", nameof(password));
+
+        var normalizedUserName = userName.Trim();
+        await credentialStore.StoreAsync(CredentialResource, CloudUserNameKey, normalizedUserName, cancellationToken);
+        await credentialStore.StoreAsync(CredentialResource, CloudPasswordKey, password, cancellationToken);
+
+        lock (syncRoot)
+        {
+            Current = Current with
+            {
+                HasCloudCredentials = true,
+                CloudUserName = normalizedUserName
+            };
+        }
+        _ = SaveAsync();
+    }
+
+    public async Task ClearCloudCredentialsAsync(CancellationToken cancellationToken = default)
+    {
+        if (credentialStore is null)
+            throw new InvalidOperationException("No credential store is configured.");
+
+        await credentialStore.RemoveAsync(CredentialResource, CloudUserNameKey, cancellationToken);
+        await credentialStore.RemoveAsync(CredentialResource, CloudPasswordKey, cancellationToken);
+
+        lock (syncRoot)
+        {
+            Current = Current with
+            {
+                HasCloudCredentials = false,
+                CloudUserName = null
+            };
+        }
+        _ = SaveAsync();
+    }
+
+    public async Task<CloudCredentials?> GetCloudCredentialsAsync(CancellationToken cancellationToken = default)
+    {
+        if (credentialStore is null)
+            throw new InvalidOperationException("No credential store is configured.");
+
+        var userName = await credentialStore.RetrieveAsync(CredentialResource, CloudUserNameKey, cancellationToken);
+        var password = await credentialStore.RetrieveAsync(CredentialResource, CloudPasswordKey, cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
+        {
+            return null;
+        }
+
+        return new CloudCredentials(userName, password);
     }
 
     private async Task SaveAsync()
@@ -209,14 +276,14 @@ public sealed class AppSettingsController
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
-                // Preserve token flags (they're hydrated from credential store separately).
-                // Use the loaded settings but keep HasLocalToken/HasCloudToken from Current (defaults).
+                // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
                 {
                     Current = loaded with
                     {
                         HasLocalToken = Current.HasLocalToken,
-                        HasCloudToken = Current.HasCloudToken
+                        HasCloudCredentials = Current.HasCloudCredentials,
+                        CloudUserName = Current.CloudUserName
                     };
                 }
             }
@@ -236,14 +303,14 @@ public sealed class AppSettingsController
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
-                // Preserve token flags (they're hydrated from credential store separately).
-                // Use the loaded settings but keep HasLocalToken/HasCloudToken from Current (defaults).
+                // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
                 {
                     Current = loaded with
                     {
                         HasLocalToken = Current.HasLocalToken,
-                        HasCloudToken = Current.HasCloudToken
+                        HasCloudCredentials = Current.HasCloudCredentials,
+                        CloudUserName = Current.CloudUserName
                     };
                 }
             }

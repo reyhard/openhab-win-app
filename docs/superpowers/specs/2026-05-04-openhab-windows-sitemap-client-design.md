@@ -93,8 +93,16 @@ Each server profile supports:
 
 - Local endpoint, such as `http://openhab:8080`.
 - Cloud or remote endpoint, such as `https://myopenhab.org`.
-- Credentials or API token for each endpoint where needed.
+- Local API token authentication where needed.
+- Cloud/myopenHAB username and password authentication where needed.
 - Endpoint mode: `Automatic`, `LocalOnly`, or `CloudOnly`.
+
+Authentication is intentionally asymmetric:
+
+- Local openHAB access uses an API token and `Authorization: Bearer <token>`.
+- Cloud/myopenHAB access uses username and password with HTTP Basic authentication, matching the Android app's remote connection model.
+
+The app should not treat myopenHAB as a bearer-token transport by default. The same cloud username/password must be used consistently for foreground cloud browsing and cloud notification polling.
 
 `Automatic` prefers local when reachable and falls back to cloud when local fails. `LocalOnly` never sends traffic through cloud. `CloudOnly` uses the cloud endpoint for foreground browsing, commands, cloud notification polling, and device telemetry. This makes laptops outside the home network a first-class scenario.
 

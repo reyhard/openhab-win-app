@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Microsoft.UI.Dispatching;
 
@@ -11,6 +13,8 @@ public sealed class NotificationPoller : IDisposable
     private readonly HttpClient httpClient;
     private readonly Uri cloudBaseUri;
     private readonly string? apiToken;
+    private readonly string? basicUserName;
+    private readonly string? basicPassword;
     private readonly TimeSpan pollInterval;
     private readonly HashSet<string> seenIds = new();
     private readonly DispatcherQueue? dispatcher;
@@ -25,12 +29,21 @@ public sealed class NotificationPoller : IDisposable
         HttpClient httpClient,
         Uri cloudBaseUri,
         string? apiToken = null,
+        string? basicUserName = null,
+        string? basicPassword = null,
         TimeSpan? pollInterval = null,
         DispatcherQueue? dispatcher = null)
     {
+        if (!string.IsNullOrWhiteSpace(apiToken) && !string.IsNullOrWhiteSpace(basicUserName))
+        {
+            throw new ArgumentException("Configure either bearer token auth or basic auth, not both.");
+        }
+
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         this.cloudBaseUri = cloudBaseUri ?? throw new ArgumentNullException(nameof(cloudBaseUri));
         this.apiToken = apiToken;
+        this.basicUserName = basicUserName;
+        this.basicPassword = basicPassword;
         this.pollInterval = pollInterval ?? TimeSpan.FromSeconds(60);
         this.dispatcher = dispatcher;
     }
@@ -93,8 +106,13 @@ public sealed class NotificationPoller : IDisposable
 
         if (apiToken is not null)
         {
-            request.Headers.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiToken);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(basicUserName))
+        {
+            var raw = $"{basicUserName}:{basicPassword ?? string.Empty}";
+            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
         }
 
         using var response = await httpClient.SendAsync(request, cancellationToken);

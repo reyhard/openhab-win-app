@@ -32,9 +32,12 @@ public sealed class AppSettingsControllerTests
 
         Assert.Equal(SitemapSkinKind.Windows11, controller.Current.Skin);
         Assert.Equal(EndpointMode.Automatic, controller.Current.EndpointMode);
-        Assert.Equal(new Uri("http://openhab.local:8080"), controller.Current.LocalEndpoint);
+        Assert.Equal(new Uri("http://openhab:8080"), controller.Current.LocalEndpoint);
         Assert.Equal(new Uri("https://myopenhab.org"), controller.Current.CloudEndpoint);
         Assert.Equal("default", controller.Current.SitemapName);
+        Assert.False(controller.Current.HasLocalToken);
+        Assert.False(controller.Current.HasCloudCredentials);
+        Assert.Null(controller.Current.CloudUserName);
     }
 
     [Fact]
@@ -109,7 +112,7 @@ public sealed class AppSettingsControllerTests
         var controller = new AppSettingsController();
 
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            controller.SetEndpoints(new Uri("http://openhab.local:8080"), null!));
+            controller.SetEndpoints(new Uri("http://openhab:8080"), null!));
 
         Assert.Equal("cloudEndpoint", exception.ParamName);
     }
@@ -131,35 +134,39 @@ public sealed class AppSettingsControllerTests
         var controller = new AppSettingsController();
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            controller.SetEndpoints(new Uri("http://openhab.local:8080"), new Uri("ftp://myopenhab.org")));
+            controller.SetEndpoints(new Uri("http://openhab:8080"), new Uri("ftp://myopenhab.org")));
 
         Assert.Contains("HTTP or HTTPS", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void DefaultsHaveNoTokens()
+    public void DefaultsHaveNoTokensOrCloudCredentials()
     {
         var controller = new AppSettingsController();
 
         Assert.False(controller.Current.HasLocalToken);
-        Assert.False(controller.Current.HasCloudToken);
+        Assert.False(controller.Current.HasCloudCredentials);
+        Assert.Null(controller.Current.CloudUserName);
     }
 
     [Fact]
-    public async Task InitializeAsyncHydratesTokenFlags()
+    public async Task InitializeAsyncHydratesTokenAndCloudCredentialFlags()
     {
         var store = new FakeCredentialStore();
         await store.StoreAsync("OpenHabAuth", "local-token", "local", CancellationToken.None);
-        await store.StoreAsync("OpenHabAuth", "cloud-token", "cloud", CancellationToken.None);
+        await store.StoreAsync("OpenHabAuth", "cloud-username", "cloud-user", CancellationToken.None);
+        await store.StoreAsync("OpenHabAuth", "cloud-password", "cloud-password", CancellationToken.None);
         var controller = new AppSettingsController(store);
 
         Assert.False(controller.Current.HasLocalToken);
-        Assert.False(controller.Current.HasCloudToken);
+        Assert.False(controller.Current.HasCloudCredentials);
+        Assert.Null(controller.Current.CloudUserName);
 
         await controller.InitializeAsync();
 
         Assert.True(controller.Current.HasLocalToken);
-        Assert.True(controller.Current.HasCloudToken);
+        Assert.True(controller.Current.HasCloudCredentials);
+        Assert.Equal("cloud-user", controller.Current.CloudUserName);
     }
 
     [Fact]
@@ -171,33 +178,45 @@ public sealed class AppSettingsControllerTests
         await controller.SetApiTokenAsync(TransportKind.Local, "my-local-token");
 
         Assert.True(controller.Current.HasLocalToken);
-        Assert.False(controller.Current.HasCloudToken);
+        Assert.False(controller.Current.HasCloudCredentials);
+        Assert.Null(controller.Current.CloudUserName);
         Assert.Equal("my-local-token", await store.RetrieveAsync("OpenHabAuth", "local-token", CancellationToken.None));
 
         await controller.ClearApiTokenAsync(TransportKind.Local);
 
         Assert.False(controller.Current.HasLocalToken);
-        Assert.False(controller.Current.HasCloudToken);
+        Assert.False(controller.Current.HasCloudCredentials);
+        Assert.Null(controller.Current.CloudUserName);
         Assert.Null(await store.RetrieveAsync("OpenHabAuth", "local-token", CancellationToken.None));
     }
 
     [Fact]
-    public async Task SetAndClearCloudApiToken()
+    public async Task SetGetAndClearCloudCredentials()
     {
         var store = new FakeCredentialStore();
         var controller = new AppSettingsController(store);
 
-        await controller.SetApiTokenAsync(TransportKind.Cloud, "my-cloud-token");
+        await controller.SetCloudCredentialsAsync("my-cloud-user", "my-cloud-password");
 
-        Assert.True(controller.Current.HasCloudToken);
+        Assert.True(controller.Current.HasCloudCredentials);
         Assert.False(controller.Current.HasLocalToken);
-        Assert.Equal("my-cloud-token", await store.RetrieveAsync("OpenHabAuth", "cloud-token", CancellationToken.None));
+        Assert.Equal("my-cloud-user", controller.Current.CloudUserName);
+        Assert.Equal("my-cloud-user", await store.RetrieveAsync("OpenHabAuth", "cloud-username", CancellationToken.None));
+        Assert.Equal("my-cloud-password", await store.RetrieveAsync("OpenHabAuth", "cloud-password", CancellationToken.None));
 
-        await controller.ClearApiTokenAsync(TransportKind.Cloud);
+        var credentials = await controller.GetCloudCredentialsAsync();
 
-        Assert.False(controller.Current.HasCloudToken);
+        Assert.NotNull(credentials);
+        Assert.Equal("my-cloud-user", credentials!.UserName);
+        Assert.Equal("my-cloud-password", credentials.Password);
+
+        await controller.ClearCloudCredentialsAsync();
+
+        Assert.False(controller.Current.HasCloudCredentials);
         Assert.False(controller.Current.HasLocalToken);
-        Assert.Null(await store.RetrieveAsync("OpenHabAuth", "cloud-token", CancellationToken.None));
+        Assert.Null(controller.Current.CloudUserName);
+        Assert.Null(await store.RetrieveAsync("OpenHabAuth", "cloud-username", CancellationToken.None));
+        Assert.Null(await store.RetrieveAsync("OpenHabAuth", "cloud-password", CancellationToken.None));
     }
 
     [Theory]
@@ -268,5 +287,51 @@ public sealed class AppSettingsControllerTests
             () => controller.GetApiTokenAsync(TransportKind.Local));
 
         Assert.Contains("No credential store", exception.Message);
+    }
+
+    [Fact]
+    public async Task CloudTransportRejectsApiTokenOperations()
+    {
+        var store = new FakeCredentialStore();
+        var controller = new AppSettingsController(store);
+
+        var setException = await Assert.ThrowsAsync<ArgumentException>(
+            () => controller.SetApiTokenAsync(TransportKind.Cloud, "token"));
+        var clearException = await Assert.ThrowsAsync<ArgumentException>(
+            () => controller.ClearApiTokenAsync(TransportKind.Cloud));
+        var getException = await Assert.ThrowsAsync<ArgumentException>(
+            () => controller.GetApiTokenAsync(TransportKind.Cloud));
+
+        Assert.Equal("transportKind", setException.ParamName);
+        Assert.Equal("transportKind", clearException.ParamName);
+        Assert.Equal("transportKind", getException.ParamName);
+    }
+
+    [Fact]
+    public async Task GetCloudCredentialsAsyncReturnsNullWhenNotStored()
+    {
+        var store = new FakeCredentialStore();
+        var controller = new AppSettingsController(store);
+
+        var result = await controller.GetCloudCredentialsAsync();
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task CloudCredentialMethodsThrowWhenNoStore()
+    {
+        var controller = new AppSettingsController();
+
+        var setException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => controller.SetCloudCredentialsAsync("user", "password"));
+        var clearException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => controller.ClearCloudCredentialsAsync());
+        var getException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => controller.GetCloudCredentialsAsync());
+
+        Assert.Contains("No credential store", setException.Message);
+        Assert.Contains("No credential store", clearException.Message);
+        Assert.Contains("No credential store", getException.Message);
     }
 }

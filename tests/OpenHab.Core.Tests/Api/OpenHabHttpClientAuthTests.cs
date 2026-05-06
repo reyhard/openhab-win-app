@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using OpenHab.Core.Api;
 
 namespace OpenHab.Core.Tests.Api;
@@ -51,6 +52,23 @@ public sealed class OpenHabHttpClientAuthTests
     }
 
     [Fact]
+    public async Task InjectsBasicAuthIntoRequestHeaders()
+    {
+        var handler = new CapturingHandler { ResponseBody = """{"name":"home"}""" };
+        var client = new OpenHabHttpClient(
+            new HttpClient(handler),
+            new Uri("http://openhab:8080"),
+            basicUserName: "cloud.user",
+            basicPassword: "cloud.secret");
+
+        await client.GetSitemapJsonAsync("home", CancellationToken.None);
+
+        var expected = Convert.ToBase64String(Encoding.UTF8.GetBytes("cloud.user:cloud.secret"));
+        Assert.NotNull(handler.AuthHeaderValue);
+        Assert.Equal($"Basic {expected}", handler.AuthHeaderValue);
+    }
+
+    [Fact]
     public async Task OmitsAuthorizationHeaderWhenTokenIsNull()
     {
         var handler = new CapturingHandler { ResponseBody = """{"name":"home"}""" };
@@ -59,6 +77,22 @@ public sealed class OpenHabHttpClientAuthTests
         await client.GetSitemapJsonAsync("home", CancellationToken.None);
 
         Assert.Null(handler.AuthHeaderValue);
+    }
+
+    [Fact]
+    public void RejectsBearerAndBasicAuthTogether()
+    {
+        var handler = new CapturingHandler();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new OpenHabHttpClient(
+                new HttpClient(handler),
+                new Uri("http://openhab:8080"),
+                apiToken: "oh.test.token123",
+                basicUserName: "cloud.user",
+                basicPassword: "cloud.secret"));
+
+        Assert.Contains("either bearer token auth or basic auth, not both", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

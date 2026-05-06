@@ -3,22 +3,26 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="openHAB">
-    <Grid Margin="16" RowSpacing="12">
+    <Grid Margin="20" RowSpacing="16" ColumnSpacing="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*" />
+            <ColumnDefinition Width="3*" />
+        </Grid.ColumnDefinitions>
 
-        <StackPanel Spacing="4">
+        <StackPanel Grid.ColumnSpan="2" Spacing="4">
             <TextBlock x:Name="TitleText"
-                       FontSize="20"
+                       FontSize="24"
                        FontWeight="SemiBold" />
             <TextBlock x:Name="StatusText"
                        Opacity="0.8" />
         </StackPanel>
 
-        <Grid Grid.Row="1" ColumnSpacing="8">
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -26,7 +30,7 @@
             </Grid.ColumnDefinitions>
             <TextBox x:Name="SitemapNameText"
                      Header="Sitemap name"
-                     Width="220"
+                     MaxWidth="360"
                      LostFocus="SitemapNameText_LostFocus" />
             <Button Grid.Column="1"
                     Margin="0,24,0,0"
@@ -38,15 +42,28 @@
                     Click="RefreshButton_Click" />
         </Grid>
 
-        <TabView Grid.Row="2"
-                 IsAddTabButtonVisible="False">
-            <TabViewItem Header="Sitemap">
-                <ScrollViewer>
-                    <StackPanel x:Name="SitemapRows" Spacing="8" />
-                </ScrollViewer>
-            </TabViewItem>
-            <TabViewItem Header="Settings">
-                <StackPanel Spacing="12" MaxWidth="420">
+        <Border Grid.Row="2"
+                Grid.Column="0"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12">
+            <ScrollViewer>
+                <StackPanel x:Name="SitemapRows" Spacing="8" />
+            </ScrollViewer>
+        </Border>
+
+        <Border Grid.Row="2"
+                Grid.Column="1"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12">
+            <ScrollViewer>
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Settings"
+                               FontSize="18"
+                               FontWeight="SemiBold" />
                     <ComboBox x:Name="SkinCombo"
                               Header="Skin"
                               SelectionChanged="SkinCombo_SelectionChanged" />
@@ -56,21 +73,28 @@
                     <TextBox x:Name="LocalEndpointText"
                              Header="Local endpoint"
                              LostFocus="EndpointText_LostFocus" />
-                     <TextBox x:Name="CloudEndpointText"
-                              Header="Cloud endpoint"
-                              LostFocus="EndpointText_LostFocus" />
-                     <PasswordBox x:Name="LocalTokenBox"
-                                  Header="Local API token"
-                                  PlaceholderText="Enter token (optional)"
-                                  LostFocus="TokenBox_LostFocus"
-                                  Tag="Local" />
-                     <PasswordBox x:Name="CloudTokenBox"
-                                  Header="Cloud API token"
-                                  PlaceholderText="Enter token (optional)"
-                                  LostFocus="TokenBox_LostFocus"
-                                  Tag="Cloud" />
+                    <TextBox x:Name="CloudEndpointText"
+                             Header="Cloud endpoint"
+                             LostFocus="EndpointText_LostFocus" />
+                    <PasswordBox x:Name="LocalTokenBox"
+                                 Header="Local API token"
+                                 PlaceholderText="Enter token (optional)"
+                                 GotFocus="TokenBox_GotFocus"
+                                 PasswordChanged="TokenBox_PasswordChanged"
+                                 LostFocus="TokenBox_LostFocus"
+                                 Tag="Local" />
+                    <TextBox x:Name="CloudUserNameText"
+                             Header="Cloud email / username"
+                             PlaceholderText="Enter myopenHAB email"
+                             TextChanged="CloudUserNameText_TextChanged"
+                             LostFocus="CloudCredentials_LostFocus" />
+                    <PasswordBox x:Name="CloudPasswordBox"
+                                 Header="Cloud password"
+                                 PlaceholderText="Enter myopenHAB password"
+                                 PasswordChanged="CloudPasswordBox_PasswordChanged"
+                                 LostFocus="CloudCredentials_LostFocus" />
                 </StackPanel>
-            </TabViewItem>
-        </TabView>
+            </ScrollViewer>
+        </Border>
     </Grid>
 </Window>

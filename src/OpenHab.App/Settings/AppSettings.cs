@@ -11,12 +11,13 @@ public sealed record AppSettings(
     Uri CloudEndpoint,
     string SitemapName,
     [property: JsonIgnore] bool HasLocalToken = false,
-    [property: JsonIgnore] bool HasCloudToken = false)
+    [property: JsonIgnore] bool HasCloudCredentials = false,
+    [property: JsonIgnore] string? CloudUserName = null)
 {
     public static AppSettings Default { get; } = new(
         SitemapSkinKind.Windows11,
         EndpointMode.Automatic,
-        new Uri("http://openhab.local:8080"),
+        new Uri("http://openhab:8080"),
         new Uri("https://myopenhab.org"),
         "default");
 }

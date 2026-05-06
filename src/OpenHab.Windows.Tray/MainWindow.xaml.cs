@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Windowing;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Profiles;
@@ -12,14 +13,30 @@ public sealed partial class MainWindow : Window
 {
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
+    private readonly Action requestHideToTray;
     private bool isRefreshing;
+    private bool suppressTokenEditTracking;
+    private bool localTokenEdited;
+    private bool cloudTokenEdited;
+    private bool cloudUserNameEdited;
+    private bool isHandlingCloseRequest;
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
+        : this(settingsController, runtimeController, () => { })
+    {
+    }
+
+    public MainWindow(
+        AppSettingsController settingsController,
+        SitemapRuntimeController runtimeController,
+        Action requestHideToTray)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
+        this.requestHideToTray = requestHideToTray;
 
         InitializeComponent();
+        AppWindow.Closing += AppWindow_Closing;
         InitializeSettingsControls();
         RefreshSettingsBindings();
         _ = LoadRuntimeAsync();
@@ -72,8 +89,22 @@ public sealed partial class MainWindow : Window
         LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
         CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
         SitemapNameText.Text = settingsController.Current.SitemapName;
-        LocalTokenBox.Password = settingsController.Current.HasLocalToken ? "••••••••" : string.Empty;
-        CloudTokenBox.Password = settingsController.Current.HasCloudToken ? "••••••••" : string.Empty;
+
+        suppressTokenEditTracking = true;
+        LocalTokenBox.Password = string.Empty;
+        CloudPasswordBox.Password = string.Empty;
+        CloudUserNameText.Text = settingsController.Current.CloudUserName ?? string.Empty;
+        suppressTokenEditTracking = false;
+
+        LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
+            ? "Stored token configured. Type to replace, or leave unchanged."
+            : "Enter token (optional)";
+        CloudPasswordBox.PlaceholderText = settingsController.Current.HasCloudCredentials
+            ? "Stored password configured. Type to replace, or leave unchanged."
+            : "Enter myopenHAB password";
+        localTokenEdited = false;
+        cloudTokenEdited = false;
+        cloudUserNameEdited = false;
     }
 
     private void RefreshRuntimeBindings()
@@ -180,6 +211,12 @@ public sealed partial class MainWindow : Window
         if (sender is not PasswordBox box || box.Tag is not string tag) return;
         if (isRefreshing) return;
 
+        var wasEdited = IsTokenBoxEdited(tag);
+        if (!wasEdited)
+        {
+            return;
+        }
+
         var transportKind = tag == "Local" ? TransportKind.Local : TransportKind.Cloud;
         var token = box.Password;
 
@@ -188,8 +225,9 @@ public sealed partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(token))
             {
                 await settingsController.ClearApiTokenAsync(transportKind, CancellationToken.None);
+                await RefreshRuntimeAsync();
             }
-            else if (token is not "••••••••")
+            else
             {
                 await settingsController.SetApiTokenAsync(transportKind, token, CancellationToken.None);
                 await RefreshRuntimeAsync();
@@ -199,6 +237,126 @@ public sealed partial class MainWindow : Window
         {
             StatusText.Text = $"Failed to save token: {ex.Message}";
             RefreshSettingsBindings();
+        }
+    }
+
+    private void TokenBox_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not PasswordBox box || box.Tag is not string tag || suppressTokenEditTracking)
+        {
+            return;
+        }
+
+        SetTokenBoxEdited(tag, false);
+    }
+
+    private void TokenBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (sender is not PasswordBox box || box.Tag is not string tag || suppressTokenEditTracking)
+        {
+            return;
+        }
+
+        SetTokenBoxEdited(tag, true);
+    }
+
+    private bool IsTokenBoxEdited(string tag) => tag == "Local" ? localTokenEdited : cloudTokenEdited;
+
+    private void SetTokenBoxEdited(string tag, bool edited)
+    {
+        if (tag == "Local")
+        {
+            localTokenEdited = edited;
+            return;
+        }
+
+        cloudTokenEdited = edited;
+    }
+
+    private void CloudUserNameText_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (suppressTokenEditTracking)
+        {
+            return;
+        }
+
+        cloudUserNameEdited = true;
+    }
+
+    private void CloudPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (suppressTokenEditTracking)
+        {
+            return;
+        }
+
+        cloudTokenEdited = true;
+    }
+
+    private async void CloudCredentials_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        await Task.Yield();
+        if (CloudUserNameText.FocusState != FocusState.Unfocused
+            || CloudPasswordBox.FocusState != FocusState.Unfocused)
+        {
+            return;
+        }
+
+        if (!cloudUserNameEdited && !cloudTokenEdited)
+        {
+            return;
+        }
+
+        var userName = CloudUserNameText.Text.Trim();
+        var password = CloudPasswordBox.Password;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+            {
+                await settingsController.ClearCloudCredentialsAsync(CancellationToken.None);
+                await RefreshRuntimeAsync();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                StatusText.Text = "Cloud password is required when username is set. Existing credentials were not changed.";
+                RefreshSettingsBindings();
+                return;
+            }
+
+            await settingsController.SetCloudCredentialsAsync(userName, password, CancellationToken.None);
+            await RefreshRuntimeAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Failed to save cloud credentials: {ex.Message}";
+            RefreshSettingsBindings();
+        }
+    }
+
+    private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (isHandlingCloseRequest)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+        isHandlingCloseRequest = true;
+        try
+        {
+            requestHideToTray();
+        }
+        finally
+        {
+            isHandlingCloseRequest = false;
         }
     }
 

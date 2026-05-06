@@ -8,16 +8,18 @@ public sealed class TrayIconService : IDisposable
 {
     private readonly NotifyIcon notifyIcon;
     private readonly ContextMenuStrip contextMenu;
-    private readonly EventHandler doubleClickHandler;
+    private readonly MouseEventHandler mouseClickHandler;
     private int isDisposed;
 
-    public TrayIconService(Action showWindow, Action exitApplication)
+    public TrayIconService(Action toggleFlyout, Action openMainWindow, Action exitApplication)
     {
-        ArgumentNullException.ThrowIfNull(showWindow);
+        ArgumentNullException.ThrowIfNull(toggleFlyout);
+        ArgumentNullException.ThrowIfNull(openMainWindow);
         ArgumentNullException.ThrowIfNull(exitApplication);
 
         contextMenu = new ContextMenuStrip();
-        contextMenu.Items.Add("Open", image: null, (_, _) => showWindow());
+        contextMenu.Items.Add("Open flyout", image: null, (_, _) => toggleFlyout());
+        contextMenu.Items.Add("Open main window", image: null, (_, _) => openMainWindow());
         contextMenu.Items.Add("Exit", image: null, (_, _) => exitApplication());
 
         notifyIcon = new NotifyIcon
@@ -28,8 +30,14 @@ public sealed class TrayIconService : IDisposable
             Visible = true
         };
 
-        doubleClickHandler = (_, _) => showWindow();
-        notifyIcon.DoubleClick += doubleClickHandler;
+        mouseClickHandler = (_, e) =>
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                toggleFlyout();
+            }
+        };
+        notifyIcon.MouseClick += mouseClickHandler;
     }
 
     public void Dispose()
@@ -39,7 +47,7 @@ public sealed class TrayIconService : IDisposable
             return;
         }
 
-        notifyIcon.DoubleClick -= doubleClickHandler;
+        notifyIcon.MouseClick -= mouseClickHandler;
         notifyIcon.Visible = false;
         notifyIcon.ContextMenuStrip = null;
         notifyIcon.Dispose();
