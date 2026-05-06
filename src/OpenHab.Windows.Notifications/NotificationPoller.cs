@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.UI.Dispatching;
+using OpenHab.Core;
 
 namespace OpenHab.Windows.Notifications;
 
@@ -54,6 +55,7 @@ public sealed class NotificationPoller : IDisposable
 
     public void Start()
     {
+        DiagnosticLogger.Info($"Notification polling started - endpoint: {cloudBaseUri.Host}");
         if (Interlocked.CompareExchange(ref isStarted, 1, 0) != 0) return;
         cts = new CancellationTokenSource();
         pollingTask = PollLoopAsync(cts.Token);
@@ -61,6 +63,7 @@ public sealed class NotificationPoller : IDisposable
 
     public void Stop()
     {
+        DiagnosticLogger.Info("Notification polling stopped");
         if (Interlocked.CompareExchange(ref isStarted, 0, 1) != 1) return;
         cts?.Cancel();
     }
@@ -73,6 +76,7 @@ public sealed class NotificationPoller : IDisposable
 
     private async Task PollLoopAsync(CancellationToken cancellationToken)
     {
+        DiagnosticLogger.Info("Notification poll loop started");
         while (!cancellationToken.IsCancellationRequested)
         {
             try
@@ -85,7 +89,9 @@ public sealed class NotificationPoller : IDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                DiagnosticLogger.Error("Poll error", ex);
                 LastError = ex.Message;
+                DiagnosticLogger.Info("Polling will retry after error");
             }
 
             try
@@ -102,35 +108,54 @@ public sealed class NotificationPoller : IDisposable
     private async Task PollOnceAsync(CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get,
-            new Uri(cloudBaseUri, "rest/notifications?limit=20"));
+            new Uri(cloudBaseUri, "api/v1/notifications"));
 
         if (apiToken is not null)
         {
+            DiagnosticLogger.Info("Using Bearer auth");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiToken);
         }
         else if (!string.IsNullOrWhiteSpace(basicUserName))
         {
+            DiagnosticLogger.Info("Using Basic auth");
             var raw = $"{basicUserName}:{basicPassword ?? string.Empty}";
             var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
         }
+        else
+        {
+            DiagnosticLogger.Warn("No auth - credentials missing");
+        }
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode) return;
+        if (!response.IsSuccessStatusCode)
+        {
+            DiagnosticLogger.Warn($"Cloud notifications returned HTTP {(int)response.StatusCode}");
+            return;
+        }
 
         var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         var notifications = await response.Content
             .ReadFromJsonAsync<List<CloudNotification>>(options, cancellationToken);
 
-        if (notifications is null) return;
+        if (notifications is null)
+        {
+            DiagnosticLogger.Warn("Notifications response was null");
+            return;
+        }
 
+        var newCount = 0;
         foreach (var notification in notifications.OrderBy(n => n.Created))
         {
             if (seenIds.Add(notification.Id))
             {
+                newCount++;
+                DiagnosticLogger.Info($"New notification: Id={notification.Id}, Severity={notification.Severity}");
                 RaiseNotification(notification);
             }
         }
+
+        DiagnosticLogger.Info($"Polled {newCount} new notifications out of {notifications.Count} total");
 
         if (seenIds.Count > MaxSeenIds)
         {

@@ -115,6 +115,10 @@
                                SmallChange="10"
                                SpinButtonPlacementMode="Inline"
                                ValueChanged="FlyoutWidthBox_ValueChanged" />
+                    <Button x:Name="ViewLogsButton"
+                            Content="View diagnostic logs"
+                            Margin="0,8,0,0"
+                            Click="ViewLogsButton_Click" />
                 </StackPanel>
             </ScrollViewer>
         </Border>

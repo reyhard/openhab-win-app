@@ -1,8 +1,11 @@
+using System.Diagnostics;
+using System.IO;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Windowing;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
@@ -426,5 +429,25 @@ public sealed partial class MainWindow : Window
         }
 
         settingsController.SetFlyoutWidth(width);
+    }
+
+    private void ViewLogsButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var logPath = DiagnosticLogger.LogPath;
+            if (File.Exists(logPath))
+            {
+                Process.Start(new ProcessStartInfo(logPath) { UseShellExecute = true });
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{logPath}\"") { UseShellExecute = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Could not open logs: {ex.Message}";
+        }
     }
 }

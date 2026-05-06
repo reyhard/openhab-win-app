@@ -6,6 +6,7 @@ using OpenHab.App.Sitemaps;
 using OpenHab.Core.Api;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
+using OpenHab.Core;
 using OpenHab.Windows.Notifications;
 using OpenHab.Windows.Tray.Tray;
 using System.Linq;
@@ -132,10 +133,29 @@ public partial class App : Application
     {
         try
         {
+            DiagnosticLogger.Info("Starting notification polling");
             var settings = settingsController.Current;
-            if (settings.EndpointMode == EndpointMode.LocalOnly) return;
+            if (settings.EndpointMode == EndpointMode.LocalOnly)
+            {
+                DiagnosticLogger.Info("Notification polling skipped — EndpointMode is LocalOnly");
+                return;
+            }
+
+            try
+            {
+                ShortcutRegistrar.EnsureRegistered(Environment.ProcessPath!);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLogger.Error("Shortcut registration failed", ex);
+                // Continue — ToastService might still work if shortcut was created by a previous run.
+            }
 
             ToastService.EnsureRegistered();
+            if (!ToastService.IsAvailable)
+            {
+                DiagnosticLogger.Warn("Toast notifications unavailable — notifications will be logged to diagnostics file only");
+            }
             ToastService.NotificationActivated += (_, _) =>
             {
                 _ = uiDispatcherQueue?.TryEnqueue(() =>
@@ -151,6 +171,7 @@ public partial class App : Application
             };
 
             var cloudCredentials = GetCloudCredentialsSync(settingsController);
+            DiagnosticLogger.Info($"Cloud credentials resolved: {(cloudCredentials is not null ? "yes" : "no")}");
             notificationPoller = new NotificationPoller(
                 httpClient!,
                 settings.CloudEndpoint,
@@ -158,8 +179,11 @@ public partial class App : Application
                 basicPassword: cloudCredentials?.Password,
                 dispatcher: uiDispatcherQueue);
 
+            DiagnosticLogger.Info($"Notification poller created — polling {settings.CloudEndpoint.Host} every 60s");
+
             notificationPoller.NotificationReceived += (_, notification) =>
             {
+                DiagnosticLogger.Info($"Notification received — severity: {notification.Severity ?? "none"}");
                 var title = notification.Severity is not null
                     ? $"[{notification.Severity}] openHAB"
                     : "openHAB";
@@ -171,10 +195,11 @@ public partial class App : Application
 
             notificationPoller.Start();
         }
-        catch
+        catch (Exception ex)
         {
             // Notification infrastructure may not be available in all configurations
             // (e.g., unpackaged apps without shortcut identity, or restricted user accounts).
+            DiagnosticLogger.Error("Failed to start notification polling", ex);
         }
     }
 
@@ -301,6 +326,7 @@ public partial class App : Application
             // Best-effort; dropdown will be empty if server unreachable.
         }
 
+        DiagnosticLogger.Info("Completing startup — starting notification polling");
         StartNotificationPolling(settingsController);
     }
 
@@ -330,6 +356,7 @@ public partial class App : Application
     private void ShutdownTrayResourcesCore()
     {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        DiagnosticLogger.Info("Shutting down notification poller");
         notificationPoller?.Dispose();
         notificationPoller = null;
         trayIcon?.Dispose();

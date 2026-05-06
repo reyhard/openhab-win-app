@@ -30,6 +30,8 @@ public sealed class TrayIconService : IDisposable
             Visible = true
         };
 
+        notifyIcon.BalloonTipClicked += (_, _) => openMainWindow();
+
         mouseClickHandler = (_, e) =>
         {
             if (e.Button == MouseButtons.Left)
@@ -38,6 +40,16 @@ public sealed class TrayIconService : IDisposable
             }
         };
         notifyIcon.MouseClick += mouseClickHandler;
+    }
+
+    /// <summary>
+    /// Shows a balloon tip notification next to the tray icon.
+    /// Works on all Windows configurations — no MSIX or COM registration required.
+    /// </summary>
+    public void ShowBalloon(string title, string text)
+    {
+        if (isDisposed != 0) return;
+        notifyIcon.ShowBalloonTip(5000, title, text, ToolTipIcon.None);
     }
 
     public void Dispose()
