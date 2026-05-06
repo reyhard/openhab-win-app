@@ -8,6 +8,7 @@ public sealed class FakeOpenHabClient : IOpenHabClient
 
     public List<(string ItemName, string Command)> CommandsSent { get; } = new();
     public List<string> RequestedSitemaps { get; } = new();
+    public List<SitemapInfo> Sitemaps { get; set; } = new();
 
     public void EnqueueSitemapJson(string json)
     {
@@ -39,5 +40,10 @@ public sealed class FakeOpenHabClient : IOpenHabClient
         }
 
         return sitemapResponses.Dequeue()(sitemapName, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<SitemapInfo>> GetSitemapsAsync(CancellationToken ct)
+    {
+        return Task.FromResult<IReadOnlyList<SitemapInfo>>(Sitemaps);
     }
 }

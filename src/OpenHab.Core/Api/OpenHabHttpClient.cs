@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 
 namespace OpenHab.Core.Api;
 
@@ -64,6 +65,28 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         using var response = await _httpClient.SendAsync(request, cancellationToken);
         await ThrowIfFailedAsync(response, cancellationToken);
         return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<SitemapInfo>> GetSitemapsAsync(CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri("rest/sitemaps"));
+        ApplyAuth(request);
+
+        using var response = await _httpClient.SendAsync(request, ct);
+        await ThrowIfFailedAsync(response, ct);
+
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+
+        var results = new List<SitemapInfo>();
+        foreach (var element in json.RootElement.EnumerateArray())
+        {
+            var name = element.GetProperty("name").GetString() ?? string.Empty;
+            var label = element.GetProperty("label").GetString() ?? string.Empty;
+            results.Add(new SitemapInfo(name, label));
+        }
+
+        return results;
     }
 
     private async Task SendPlainTextAsync(HttpMethod method, string relativePath, string body, CancellationToken cancellationToken)
