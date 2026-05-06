@@ -1,6 +1,8 @@
+using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
@@ -44,7 +46,14 @@ public sealed partial class FlyoutWindow : Window
 
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
     {
-        SitemapComboHelper.Populate(SitemapCombo, sitemaps, settingsController.Current.SitemapName, SitemapCombo_SelectionChanged);
+        SitemapMenuFlyout.Items.Clear();
+        var current = settingsController.Current.SitemapName;
+        foreach (var s in sitemaps)
+        {
+            var item = new MenuFlyoutItem { Text = s.Label, Tag = s.Name };
+            item.Click += SitemapMenuItem_Click;
+            SitemapMenuFlyout.Items.Add(item);
+        }
     }
 
     private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
@@ -73,17 +82,7 @@ public sealed partial class FlyoutWindow : Window
 
     private void RefreshSettingsBindings()
     {
-        var currentName = settingsController.Current.SitemapName;
-        foreach (ComboBoxItem item in SitemapCombo.Items)
-        {
-            if (string.Equals(item.Tag as string, currentName, StringComparison.OrdinalIgnoreCase))
-            {
-                SitemapCombo.SelectedItem = item;
-                return;
-            }
-        }
-
-        SitemapCombo.SelectedItem = null;
+        // Sitemap selection is now reflected via the title; no ComboBox to update.
     }
 
     private void RefreshRuntimeBindings()
@@ -91,6 +90,7 @@ public sealed partial class FlyoutWindow : Window
         var snapshot = runtimeController.Current;
         TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
         StatusText.Text = snapshot.StatusText;
+        BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
         SitemapRows.Children.Clear();
 
         var rows = snapshot.Descriptor?.Rows;
@@ -140,16 +140,12 @@ public sealed partial class FlyoutWindow : Window
         await RunRuntimeOperationAsync(async ct => await runtimeController.NavigateToChildAsync(rowIndex, ct));
     }
 
-    private async void SitemapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void SitemapMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        if (isRefreshing)
+        if (sender is MenuFlyoutItem item && item.Tag is string name)
         {
-            return;
-        }
-
-        if (SitemapCombo.SelectedItem is ComboBoxItem item && item.Tag is string sitemapName)
-        {
-            settingsController.SetSitemapName(sitemapName);
+            if (isRefreshing) return;
+            settingsController.SetSitemapName(name);
             await LoadRuntimeAsync();
         }
     }
@@ -169,9 +165,21 @@ public sealed partial class FlyoutWindow : Window
         requestOpenMainWindow();
     }
 
+    private void NavigateBack_Click(object sender, RoutedEventArgs e)
+    {
+        if (!runtimeController.CanGoBack || isRefreshing) return;
+        isRefreshing = true;
+        try
+        {
+            runtimeController.NavigateBack();
+            RefreshRuntimeBindings();
+        }
+        finally { isRefreshing = false; }
+    }
+
     private void TitleText_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        SitemapCombo.IsDropDownOpen = true;
+        FlyoutBase.ShowAttachedFlyout((FrameworkElement)sender);
     }
 
     private void OnFlyoutActivated(object sender, WindowActivatedEventArgs args)

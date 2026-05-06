@@ -12,33 +12,47 @@ public static class SitemapControlFactory
 {
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["light"] = "\uE706",
+        ["light"] = "\uE706", ["lights"] = "\uE706",
         ["switch"] = "\uE8A3",
-        ["rollershutter"] = "\uE7A0",
-        ["heating"] = "\uE7B2",
-        ["temperature"] = "\uE7B2",
-        ["contact"] = "\uE8E1",
-        ["motion"] = "\uE7A6",
-        ["alarm"] = "\uE7BA",
-        ["battery"] = "\uEBA0",
-        ["energy"] = "\uE994",
-        ["power"] = "\uE994",
+        ["rollershutter"] = "\uE7A0", ["blinds"] = "\uE7A0",
+        ["heating"] = "\uE7B2", ["temperature"] = "\uE7B2", ["temp"] = "\uE7B2",
+        ["humidity"] = "\uE7A6", ["moisture"] = "\uE7A6",
+        ["contact"] = "\uE8E1", ["door"] = "\uE8E1", ["window"] = "\uE8E1", ["garagedoor"] = "\uE8E1",
+        ["motion"] = "\uE7A6", ["presence"] = "\uE716", ["occupancy"] = "\uE716",
+        ["alarm"] = "\uE7BA", ["smoke"] = "\uE7BA", ["siren"] = "\uE995",
+        ["battery"] = "\uEBA0", ["batterylevel"] = "\uEBA0",
+        ["energy"] = "\uE994", ["power"] = "\uE994",
         ["lock"] = "\uE72E",
-        ["door"] = "\uE8E1",
-        ["window"] = "\uE8E1",
-        ["garagedoor"] = "\uE8E1",
-        ["blinds"] = "\uE7A0",
         ["dimmer"] = "\uE706",
-        ["colorpicker"] = "\uE790",
-        ["speaker"] = "\uE7F5",
-        ["tv"] = "\uE7F4",
-        ["network"] = "\uE701",
-        ["presence"] = "\uE716",
-        ["smoke"] = "\uE7BA",
+        ["colorpicker"] = "\uE790", ["color"] = "\uE790",
+        ["speaker"] = "\uE7F5", ["audio"] = "\uE7F5", ["receiver"] = "\uE7F5",
+        ["tv"] = "\uE7F4", ["screen"] = "\uE7F4",
+        ["network"] = "\uE701", ["wifi"] = "\uE701",
         ["camera"] = "\uE722",
-        ["fan"] = "\uE785",
-        ["water"] = "\uE7A6",
-        ["quality"] = "\uE769",
+        ["fan"] = "\uE785", ["pump"] = "\uE785",
+        ["water"] = "\uE7A6", ["gas"] = "\uE7A6",
+        ["quality"] = "\uE769", ["co2"] = "\uE769", ["airquality"] = "\uE769",
+        ["chart"] = "\uE9D2", ["number"] = "\uE9D2",
+        ["text"] = "\uE8A5", ["string"] = "\uE8A5", ["group"] = "\uE902",
+        ["none"] = "\uE776",
+        ["settings"] = "\uE713", ["setup"] = "\uE713",
+        ["sun"] = "\uE706", ["sunrise"] = "\uE706", ["sunset"] = "\uE706",
+        ["moon"] = "\uE708",
+        ["cloud"] = "\uE753", ["weather"] = "\uE753",
+        ["rain"] = "\uE7A6", ["wind"] = "\uE7A6", ["snow"] = "\uE7A6",
+        ["pressure"] = "\uE976",
+        ["groundfloor"] = "\uE831", ["ground_floor"] = "\uE831",
+        ["firstfloor"] = "\uE831", ["first_floor"] = "\uE831",
+        ["floorplan"] = "\uE831",
+        ["kitchen"] = "\uE7A7", ["bath"] = "\uE7A8", ["bathroom"] = "\uE7A8",
+        ["bedroom"] = "\uE7A9", ["living"] = "\uE7AA", ["office"] = "\uE7AB",
+        ["garage"] = "\uE83D", ["garden"] = "\uE7A5", ["terrace"] = "\uE7A5",
+        ["attic"] = "\uE831", ["cellar"] = "\uE831", ["basement"] = "\uE831",
+        ["time"] = "\uE787", ["datetime"] = "\uE787", ["date"] = "\uE787",
+        ["location"] = "\uE707",
+        ["player"] = "\uE768", ["music"] = "\uE768",
+        ["image"] = "\uE722", ["video"] = "\uE722",
+        ["outlet"] = "\uE994", ["plug"] = "\uE994",
     };
 
     private static FontIcon? ResolveWin11Icon(string? iconName)
@@ -101,6 +115,7 @@ public static class SitemapControlFactory
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         var labelBlock = new TextBlock
         {
@@ -113,11 +128,22 @@ public static class SitemapControlFactory
         Grid.SetColumn(labelBlock, 0);
         grid.Children.Add(labelBlock);
 
+        var stateBlock = new TextBlock
+        {
+            Text = row.State ?? string.Empty,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 8, 0),
+            Opacity = 0.7,
+            FontSize = 13
+        };
+        Grid.SetColumn(stateBlock, 1);
+        grid.Children.Add(stateBlock);
+
         var toggle = new ToggleSwitch
         {
             IsOn = string.Equals(row.State, "ON", StringComparison.OrdinalIgnoreCase)
         };
-        Grid.SetColumn(toggle, 1);
+        Grid.SetColumn(toggle, 2);
         grid.Children.Add(toggle);
 
         if (row.Action == RenderActionKind.SendCommand && activateRow is not null)
@@ -251,7 +277,7 @@ public static class SitemapControlFactory
                 {
                     var image = new Image
                     {
-                        Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}.png")),
+                        Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}")),
                         Width = 20,
                         Height = 20,
                         VerticalAlignment = VerticalAlignment.Center
@@ -264,7 +290,7 @@ public static class SitemapControlFactory
             {
                 var image = new Image
                 {
-                    Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}.png")),
+                    Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}")),
                     Width = 20,
                     Height = 20,
                     VerticalAlignment = VerticalAlignment.Center

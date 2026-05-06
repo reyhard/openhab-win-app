@@ -14,6 +14,8 @@ public sealed class SitemapRuntimeController
     private readonly SitemapRenderController renderController;
     private readonly Func<TransportKind, Uri, IOpenHabClient> clientFactory;
     private NormalizedSitemapPage? currentPage;
+    private readonly Stack<NormalizedSitemapPage> backStack = new();
+    public bool CanGoBack => backStack.Count > 0;
 
     public SitemapRuntimeController(
         AppSettingsController settingsController,
@@ -127,6 +129,7 @@ public sealed class SitemapRuntimeController
         var widget = currentPage.Widgets[rowIndex];
         if (widget.Children.Count == 0) return false;
 
+        backStack.Push(currentPage);
         var childPage = widget.Children[0];
         var normalized = SitemapNormalizer.Normalize(childPage);
         currentPage = normalized;
@@ -137,6 +140,15 @@ public sealed class SitemapRuntimeController
             Descriptor = descriptor,
             StatusText = $"Navigated to: {normalized.Label}"
         };
+        return true;
+    }
+
+    public bool NavigateBack()
+    {
+        if (backStack.Count == 0) return false;
+        currentPage = backStack.Pop();
+        var descriptor = renderController.BuildCurrentDescriptor(currentPage);
+        Current = Current with { Descriptor = descriptor, StatusText = currentPage.Label };
         return true;
     }
 
@@ -184,6 +196,7 @@ public sealed class SitemapRuntimeController
         var json = await client.GetSitemapJsonAsync(sitemapName, cancellationToken);
         var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
         var normalized = SitemapNormalizer.Normalize(parsed);
+        backStack.Clear();
         currentPage = normalized;
         return renderController.BuildCurrentDescriptor(normalized);
     }

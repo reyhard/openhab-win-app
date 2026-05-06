@@ -8,6 +8,7 @@ using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Windows.Notifications;
 using OpenHab.Windows.Tray.Tray;
+using System.Linq;
 using System.Threading;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
@@ -279,6 +280,13 @@ public partial class App : Application
                 flyoutWindow?.PopulateSitemaps(sitemaps);
                 mainWindow?.PopulateSitemaps(sitemaps);
             });
+
+            // Auto-select first available sitemap if current doesn't exist
+            var settings = settingsController.Current;
+            if (sitemaps.Count > 0 && !sitemaps.Any(s => string.Equals(s.Name, settings.SitemapName, StringComparison.OrdinalIgnoreCase)))
+            {
+                settingsController.SetSitemapName(sitemaps[0].Name);
+            }
         }
         catch
         {
