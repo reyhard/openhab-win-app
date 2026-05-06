@@ -1,5 +1,7 @@
 namespace OpenHab.Rendering.Descriptors;
 
+public sealed record SitemapMapOption(string Command, string Label);
+
 public sealed record SitemapRenderDescriptor(
     SitemapSkinKind Skin,
     string PageId,
@@ -11,7 +13,19 @@ public sealed record SitemapRowDescriptor(
     string? State,
     RenderControlKind Control,
     RenderActionKind Action,
-    RenderDensity Density);
+    RenderDensity Density,
+    IReadOnlyList<SitemapMapOption> SelectionOptions)
+{
+    public SitemapRowDescriptor(
+        string Label,
+        string? State,
+        RenderControlKind Control,
+        RenderActionKind Action,
+        RenderDensity Density)
+        : this(Label, State, Control, Action, Density, [])
+    {
+    }
+}
 
 public enum SitemapSkinKind
 {

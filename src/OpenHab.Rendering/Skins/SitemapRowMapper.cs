@@ -1,3 +1,4 @@
+using System.Linq;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Sitemaps.Models;
 
@@ -10,7 +11,8 @@ internal static class SitemapRowMapper
         var control = ControlFor(widget);
         var action = ActionFor(widget, control);
         var state = TransformState(widget.State, widget.Mappings);
-        return new SitemapRowDescriptor(widget.Label, state, control, action, density);
+        var options = widget.Mappings.Select(m => new SitemapMapOption(m.Command, m.Label)).ToArray();
+        return new SitemapRowDescriptor(widget.Label, state, control, action, density, options);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)

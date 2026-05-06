@@ -8,7 +8,7 @@ namespace OpenHab.Windows.Tray.Rendering;
 
 public static class SitemapControlFactory
 {
-    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow)
+    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -16,7 +16,7 @@ public static class SitemapControlFactory
         {
             RenderControlKind.Toggle => CreateToggle(row, activateRow),
             RenderControlKind.Slider => CreateSlider(row, activateRow),
-            RenderControlKind.Selection => CreateSelection(row, activateRow),
+            RenderControlKind.Selection => CreateSelection(row, activateRow, sendCommand),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row)
         };
@@ -74,16 +74,36 @@ public static class SitemapControlFactory
         };
     }
 
-    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<Task>? activateRow)
+    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand)
     {
-        var button = new Button
+        var panel = new StackPanel { Spacing = 4 };
+        panel.Children.Add(new TextBlock
         {
-            Content = CreateButtonTextBlock(string.IsNullOrWhiteSpace(row.State) ? row.Label : $"{row.Label}: {row.State}"),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            IsEnabled = false
-        };
+            Text = row.Label,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxLines = 2
+        });
 
-        return button;
+        var comboBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        foreach (var option in row.SelectionOptions)
+        {
+            comboBox.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Command });
+            if (string.Equals(option.Command, row.State, StringComparison.OrdinalIgnoreCase))
+                comboBox.SelectedIndex = comboBox.Items.Count - 1;
+        }
+
+        if (sendCommand is not null)
+        {
+            comboBox.SelectionChanged += (_, _) =>
+            {
+                if (comboBox.SelectedItem is ComboBoxItem { Tag: string cmd })
+                    _ = sendCommand(cmd);
+            };
+        }
+
+        panel.Children.Add(comboBox);
+        return panel;
     }
 
     private static FrameworkElement CreateFallback(SitemapRowDescriptor row)

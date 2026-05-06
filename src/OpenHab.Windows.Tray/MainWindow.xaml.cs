@@ -138,9 +138,13 @@ public sealed partial class MainWindow : Window
             Func<Task>? activateRow = row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand
                 ? () => OnRowActivatedAsync(rowIndex)
                 : null;
+            Func<string, Task>? sendCommand = row.Action == RenderActionKind.SendCommand
+                ? cmd => runtimeController.SendCommandForRowAsync(rowIndex, cmd)
+                : null;
             SitemapRows.Children.Add(SitemapControlFactory.Create(
                 row,
-                activateRow));
+                activateRow,
+                sendCommand));
         }
     }
 

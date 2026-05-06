@@ -106,6 +106,21 @@ public sealed class SitemapRuntimeController
         }
     }
 
+    public async Task<bool> SendCommandForRowAsync(int rowIndex, string command, CancellationToken ct = default)
+    {
+        if (currentPage is null || rowIndex < 0 || rowIndex >= currentPage.Widgets.Count) return false;
+        var widget = currentPage.Widgets[rowIndex];
+        if (string.IsNullOrWhiteSpace(widget.ItemName)) return false;
+        var activeTransport = Current.ActiveTransport ?? throw new InvalidOperationException("No active transport.");
+        var endpoint = activeTransport == TransportKind.Local
+            ? settingsController.Current.LocalEndpoint
+            : settingsController.Current.CloudEndpoint;
+        var client = clientFactory(activeTransport, endpoint);
+        await client.SendCommandAsync(widget.ItemName, command, ct);
+        await RefreshAsync(ct);
+        return true;
+    }
+
     public async Task<bool> ActivateRowAsync(int rowIndex, CancellationToken cancellationToken = default)
     {
         if (rowIndex < 0)

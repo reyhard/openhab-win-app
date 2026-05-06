@@ -103,7 +103,10 @@ public sealed partial class FlyoutWindow : Window
             Func<Task>? activateRow = row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand
                 ? () => OnRowActivatedAsync(rowIndex)
                 : null;
-            SitemapRows.Children.Add(SitemapControlFactory.Create(row, activateRow));
+            Func<string, Task>? sendCommand = row.Action == RenderActionKind.SendCommand
+                ? cmd => runtimeController.SendCommandForRowAsync(rowIndex, cmd)
+                : null;
+            SitemapRows.Children.Add(SitemapControlFactory.Create(row, activateRow, sendCommand));
         }
     }
 
