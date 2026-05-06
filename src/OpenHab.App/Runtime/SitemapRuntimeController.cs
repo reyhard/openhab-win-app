@@ -5,6 +5,7 @@ using OpenHab.Core.Profiles;
 using OpenHab.Sitemaps.Models;
 using OpenHab.Sitemaps.Parsing;
 using OpenHab.Sitemaps.Runtime;
+using System.Linq;
 
 namespace OpenHab.App.Runtime;
 
@@ -52,6 +53,7 @@ public sealed class SitemapRuntimeController
                 Descriptor = descriptor,
                 ActiveTransport = primary.Kind,
                 ConnectionState = ConnectionState.Online,
+                Breadcrumbs = BuildBreadcrumbTrail(),
                 StatusText = $"Connected via {primary.Kind.ToString().ToLowerInvariant()}.",
                 IsBusy = false,
                 HasError = false
@@ -72,6 +74,7 @@ public sealed class SitemapRuntimeController
                     Descriptor = descriptor,
                     ActiveTransport = fallback.Kind,
                     ConnectionState = ConnectionState.Online,
+                    Breadcrumbs = BuildBreadcrumbTrail(),
                     StatusText = "Connected via cloud (local failed).",
                     IsBusy = false,
                     HasError = false
@@ -138,6 +141,7 @@ public sealed class SitemapRuntimeController
         Current = Current with
         {
             Descriptor = descriptor,
+            Breadcrumbs = BuildBreadcrumbTrail(),
             StatusText = $"Navigated to: {normalized.Label}"
         };
         return true;
@@ -148,7 +152,42 @@ public sealed class SitemapRuntimeController
         if (backStack.Count == 0) return false;
         currentPage = backStack.Pop();
         var descriptor = renderController.BuildCurrentDescriptor(currentPage);
-        Current = Current with { Descriptor = descriptor, StatusText = currentPage.Label };
+        Current = Current with
+        {
+            Descriptor = descriptor,
+            Breadcrumbs = BuildBreadcrumbTrail(),
+            StatusText = currentPage.Label
+        };
+        return true;
+    }
+
+    public bool NavigateToBreadcrumb(int breadcrumbIndex)
+    {
+        var trail = BuildBreadcrumbPages();
+        if (breadcrumbIndex < 0 || breadcrumbIndex >= trail.Count)
+        {
+            return false;
+        }
+
+        if (breadcrumbIndex == trail.Count - 1)
+        {
+            return true;
+        }
+
+        currentPage = trail[breadcrumbIndex];
+        backStack.Clear();
+        for (var index = 0; index < breadcrumbIndex; index++)
+        {
+            backStack.Push(trail[index]);
+        }
+
+        var descriptor = renderController.BuildCurrentDescriptor(currentPage);
+        Current = Current with
+        {
+            Descriptor = descriptor,
+            Breadcrumbs = BuildBreadcrumbTrail(),
+            StatusText = currentPage.Label
+        };
         return true;
     }
 
@@ -218,5 +257,23 @@ public sealed class SitemapRuntimeController
             EndpointMode.Automatic => new TransportSelection(TransportKind.Local, settings.LocalEndpoint),
             _ => throw new InvalidOperationException($"Unsupported endpoint mode '{settings.EndpointMode}'.")
         };
+    }
+
+    private IReadOnlyList<string> BuildBreadcrumbTrail()
+    {
+        return BuildBreadcrumbPages()
+            .Select(page => page.Label)
+            .ToArray();
+    }
+
+    private List<NormalizedSitemapPage> BuildBreadcrumbPages()
+    {
+        var trail = backStack.Reverse().ToList();
+        if (currentPage is not null)
+        {
+            trail.Add(currentPage);
+        }
+
+        return trail;
     }
 }

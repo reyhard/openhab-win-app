@@ -174,6 +174,30 @@ public sealed class SitemapRuntimeControllerTests
         Assert.False(controller.Current.IsBusy);
     }
 
+    [Fact]
+    public async Task NavigationUpdatesBreadcrumbTrailAndSupportsBreadcrumbJump()
+    {
+        var settings = new AppSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var cloudClient = new FakeOpenHabClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient);
+
+        await controller.LoadAsync();
+        Assert.Equal(["Home"], controller.Current.Breadcrumbs);
+
+        var navigated = await controller.NavigateToChildAsync(0);
+        Assert.True(navigated);
+        Assert.Equal(["Home", "Kitchen"], controller.Current.Breadcrumbs);
+
+        var jumped = controller.NavigateToBreadcrumb(0);
+        Assert.True(jumped);
+        Assert.Equal(["Home"], controller.Current.Breadcrumbs);
+        Assert.False(controller.CanGoBack);
+    }
+
     private static SitemapRuntimeController CreateRuntimeController(
         AppSettingsController settings,
         FakeOpenHabClient localClient,
@@ -211,6 +235,38 @@ public sealed class SitemapRuntimeControllerTests
                       "state": "21.4 C"
                     },
                     "visibility": true
+                  }
+                ]
+              }
+            }
+            """;
+    }
+
+    private static string HomepageWithChildJson()
+    {
+        return """
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  {
+                    "type": "Group",
+                    "label": "Kitchen",
+                    "linkedPage": {
+                      "id": "kitchen",
+                      "title": "Kitchen",
+                      "widgets": [
+                        {
+                          "type": "Text",
+                          "label": "Temperature [21.7 C]",
+                          "item": {
+                            "name": "Kitchen_Temp",
+                            "state": "21.7 C"
+                          }
+                        }
+                      ]
+                    }
                   }
                 ]
               }

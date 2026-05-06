@@ -7,6 +7,7 @@ public sealed record SitemapRuntimeSnapshot(
     SitemapRenderDescriptor? Descriptor,
     TransportKind? ActiveTransport,
     ConnectionState ConnectionState,
+    IReadOnlyList<string> Breadcrumbs,
     string StatusText,
     bool IsBusy,
     bool HasError)
@@ -15,6 +16,7 @@ public sealed record SitemapRuntimeSnapshot(
         Descriptor: null,
         ActiveTransport: null,
         ConnectionState.Unknown,
+        Breadcrumbs: [],
         StatusText: "Not connected.",
         IsBusy: false,
         HasError: false);
