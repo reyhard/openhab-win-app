@@ -9,7 +9,16 @@ internal static class SitemapRowMapper
     {
         var control = ControlFor(widget);
         var action = ActionFor(widget, control);
-        return new SitemapRowDescriptor(widget.Label, widget.State, control, action, density);
+        var state = TransformState(widget.State, widget.Mappings);
+        return new SitemapRowDescriptor(widget.Label, state, control, action, density);
+    }
+
+    private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
+    {
+        if (string.IsNullOrEmpty(state) || mappings.Count == 0) return state;
+        var match = mappings.FirstOrDefault(m =>
+            string.Equals(m.Command, state, StringComparison.OrdinalIgnoreCase));
+        return match is not null && !string.IsNullOrWhiteSpace(match.Label) ? match.Label : state;
     }
 
     private static RenderControlKind ControlFor(NormalizedSitemapWidget widget)

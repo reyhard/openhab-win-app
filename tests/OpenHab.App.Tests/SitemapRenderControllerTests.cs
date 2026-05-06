@@ -40,7 +40,7 @@ public sealed class SitemapRenderControllerTests
 
         var row0 = descriptor.Rows[0];
         Assert.Equal("Porch Light", row0.Label);
-        Assert.Equal("ON", row0.State);
+        Assert.Equal("On", row0.State);
         Assert.Equal(RenderControlKind.Toggle, row0.Control);
         Assert.Equal(RenderActionKind.SendCommand, row0.Action);
         Assert.Equal(RenderDensity.Comfortable, row0.Density);
