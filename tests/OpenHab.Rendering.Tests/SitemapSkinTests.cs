@@ -112,6 +112,105 @@ public sealed class SitemapSkinTests
         Assert.Equal(RenderActionKind.OpenFallback, descriptor.Rows[0].Action);
     }
 
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void SwitchRow_PreservesIconNameInDescriptor(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget("Light", SitemapWidgetType.Switch, "Light", "ON", [], false, false, SitemapFallbackKind.None, [], "light")
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal("light", row.IconName);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void SwitchRow_PreservesRawStateInDescriptor(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget("Light", SitemapWidgetType.Switch, "Light", "ON",
+                [new SitemapMapping("ON", "An"), new SitemapMapping("OFF", "Aus")],
+                false, false, SitemapFallbackKind.None, [])
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal("An", row.State);
+        Assert.Equal("ON", row.RawState);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void TextRow_PreservesIconNameInDescriptor(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget("Temp", SitemapWidgetType.Text, "Temp", "21", [], false, false, SitemapFallbackKind.None, [], "temperature")
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal("temperature", row.IconName);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void SliderRow_PreservesIconNameInDescriptor(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget("Dimmer", SitemapWidgetType.Slider, "Dimmer", "50", [], false, false, SitemapFallbackKind.None, [], "dimmer")
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal("dimmer", row.IconName);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void SelectionRow_PreservesIconNameInDescriptor(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget("Mode", SitemapWidgetType.Selection, "Mode", "Home", [], false, false, SitemapFallbackKind.None, [], "settings")
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal("settings", row.IconName);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void WidgetWithoutIcon_HasNullIconName(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget("Text", SitemapWidgetType.Text, "Text", "hi", [], false, false, SitemapFallbackKind.None, [])
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Null(row.IconName);
+    }
+
     private static NormalizedSitemapPage Page()
     {
         return new NormalizedSitemapPage("root", "Home", [

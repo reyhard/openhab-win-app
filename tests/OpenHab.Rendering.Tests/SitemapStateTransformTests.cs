@@ -71,4 +71,52 @@ public sealed class SitemapStateTransformTests
 
         Assert.Equal("UNKNOWN", row.State);
     }
+
+    [Fact]
+    public void ToRow_ToggleWithMappedLabel_PreservesRawStateAndUsesMappedState()
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Light",
+                SitemapWidgetType.Switch,
+                "LightItem",
+                "ON",
+                [new SitemapMapping("ON", "An"), new SitemapMapping("OFF", "Aus")],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [])
+        ]);
+
+        var descriptor = new Windows11SitemapSkin().Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Toggle, row.Control);
+        Assert.Equal("An", row.State);
+        Assert.Equal("ON", row.RawState);
+    }
+
+    [Fact]
+    public void ToRow_ToggleWithoutMappings_StateEqualsRawState()
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Light",
+                SitemapWidgetType.Switch,
+                "LightItem",
+                "OFF",
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [])
+        ]);
+
+        var descriptor = new Windows11SitemapSkin().Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Toggle, row.Control);
+        Assert.Equal("OFF", row.State);
+        Assert.Equal("OFF", row.RawState);
+    }
 }

@@ -10,10 +10,17 @@ namespace OpenHab.Windows.Tray.Rendering;
 
 public static class SitemapControlFactory
 {
+    private const double ValueLaneWidth = 96;
+    private const double ControlLaneWidth = 48;
+
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["light"] = "\uE706", ["lights"] = "\uE706",
-        ["switch"] = "\uE8A3",
+        ["lighton"] = "\uE706", ["lightoff"] = "\uE706",
+        ["lightson"] = "\uE706", ["lightsoff"] = "\uE706",
+        ["switch"] = "\uE7E8",
+        ["switchon"] = "\uE7E8", ["switchoff"] = "\uE7E8",
+        ["poweron"] = "\uE7E8", ["poweroff"] = "\uE7E8",
         ["rollershutter"] = "\uE7A0", ["blinds"] = "\uE7A0",
         ["heating"] = "\uE7B2", ["temperature"] = "\uE7B2", ["temp"] = "\uE7B2",
         ["humidity"] = "\uE7A6", ["moisture"] = "\uE7A6",
@@ -55,12 +62,71 @@ public static class SitemapControlFactory
         ["outlet"] = "\uE994", ["plug"] = "\uE994",
     };
 
-    private static FontIcon? ResolveWin11Icon(string? iconName)
+    // Built once: normalized-key → glyph, for fuzzy icon-name matching.
+    // GroupBy handles alias collisions (groundfloor + ground_floor, firstfloor + first_floor)
+    // that normalize to the same key but share an identical glyph.
+    private static readonly Dictionary<string, string> NormalizedWin11IconMap = Win11IconMap
+        .GroupBy(kvp => NormalizeIconName(kvp.Key))
+        .ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
+
+    internal static string? ResolveGlyphForIcon(string? iconName)
     {
         if (string.IsNullOrWhiteSpace(iconName)) return null;
+
+        // Exact match first (case-insensitive, preserves the original map behaviour).
         if (Win11IconMap.TryGetValue(iconName, out var glyph))
-            return new FontIcon { Glyph = glyph, FontSize = 16, Opacity = 0.8 };
+            return glyph;
+
+        // Fallback: normalize and try again so common variants still match.
+        var normalized = NormalizeIconName(iconName);
+        if (NormalizedWin11IconMap.TryGetValue(normalized, out glyph))
+            return glyph;
+
         return null;
+    }
+
+    private static FontIcon? ResolveWin11Icon(string? iconName)
+    {
+        var glyph = ResolveGlyphForIcon(iconName);
+        if (glyph is null)
+            return null;
+
+        return new FontIcon { Glyph = glyph, FontSize = 16, Opacity = 0.8 };
+    }
+
+    private readonly record struct RowLayout(Grid Grid, int LabelColumn, int ValueColumn, int ControlColumn);
+
+    /// <summary>
+    /// Collapses separators and digits so common openHAB icon-name variants
+    /// (e.g. "roller_shutter", "ground-floor", "chart-1") still resolve.
+    /// </summary>
+    internal static string NormalizeIconName(string? iconName)
+    {
+        if (string.IsNullOrWhiteSpace(iconName)) return string.Empty;
+        ReadOnlySpan<char> span = iconName.Trim();
+
+        // Estimate worst-case capacity (trim + removed separators/digits).
+        var sb = new System.Text.StringBuilder(span.Length);
+        foreach (var ch in span)
+        {
+            if (ch is '_' or '-') continue;   // collapse separators
+            if (char.IsDigit(ch)) continue;   // strip numeric suffixes
+            sb.Append(char.ToLowerInvariant(ch));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>Pure-logic query: does the normalized icon name resolve
+    /// to a known Win11 glyph?  Safe to call in tests without WinUI runtime.</summary>
+    internal static bool CanResolveNormalizedIcon(string? iconName)
+    {
+        if (string.IsNullOrWhiteSpace(iconName)) return false;
+        // Exact match first.
+        if (Win11IconMap.ContainsKey(iconName)) return true;
+        // Normalized fallback.
+        var normalized = NormalizeIconName(iconName);
+        return NormalizedWin11IconMap.ContainsKey(normalized);
     }
 
     public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand = null, Uri? baseUri = null, bool useWindowsIcons = false)
@@ -69,31 +135,123 @@ public static class SitemapControlFactory
 
         return row.Control switch
         {
-            RenderControlKind.Toggle => CreateToggle(row, activateRow),
-            RenderControlKind.Slider => CreateSlider(row, sendCommand),
-            RenderControlKind.Selection => CreateSelection(row, sendCommand),
+            RenderControlKind.Toggle => CreateToggle(row, activateRow, baseUri, useWindowsIcons),
+            RenderControlKind.Slider => CreateSlider(row, sendCommand, baseUri, useWindowsIcons),
+            RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row, activateRow, baseUri, useWindowsIcons)
         };
     }
 
+    private static bool TryAddIcon(Grid grid, int column, string? iconName, Uri? baseUri, bool useWindowsIcons)
+    {
+        if (string.IsNullOrWhiteSpace(iconName)) return false;
+
+        if (useWindowsIcons)
+        {
+            var winIcon = ResolveWin11Icon(iconName);
+            if (winIcon is not null)
+            {
+                winIcon.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(winIcon, column);
+                grid.Children.Add(winIcon);
+                return true;
+            }
+        }
+
+        if (baseUri is not null)
+        {
+            var image = new Image
+            {
+                Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName)}")),
+                Width = 20,
+                Height = 20,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(image, column);
+            grid.Children.Add(image);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool CanDisplayIcon(string? iconName, Uri? baseUri, bool useWindowsIcons)
+    {
+        if (string.IsNullOrWhiteSpace(iconName)) return false;
+        return baseUri is not null || (useWindowsIcons && ResolveGlyphForIcon(iconName) is not null);
+    }
+
+    private static RowLayout CreateRowLayout(string label, Uri? baseUri, string? iconName, bool useWindowsIcons)
+    {
+        var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var hasIcon = CanDisplayIcon(iconName, baseUri, useWindowsIcons);
+
+        if (hasIcon)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            TryAddIcon(grid, 0, iconName, baseUri, useWindowsIcons);
+        }
+
+        var labelColumn = hasIcon ? 1 : 0;
+        var valueColumn = hasIcon ? 2 : 1;
+        var controlColumn = hasIcon ? 3 : 2;
+
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ValueLaneWidth) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ControlLaneWidth) });
+
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxLines = 2
+        };
+        Grid.SetColumn(labelBlock, labelColumn);
+        grid.Children.Add(labelBlock);
+
+        return new RowLayout(grid, labelColumn, valueColumn, controlColumn);
+    }
+
+    private static TextBlock CreateStateTextBlock(string state)
+    {
+        return new TextBlock
+        {
+            Text = state,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Right,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+    }
+
     private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null, Uri? baseUri = null, bool useWindowsIcons = false)
     {
-        var grid = CreateRow(row.Label, row.State ?? string.Empty, baseUri, row.IconName, useWindowsIcons);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var grid = layout.Grid;
+        var navigateAction = row.Action == RenderActionKind.Navigate ? activateRow : null;
+        var isNavigate = navigateAction is not null;
 
-        if (activateRow is not null && row.Action == RenderActionKind.Navigate)
+        var stateText = CreateStateTextBlock(row.State ?? string.Empty);
+        Grid.SetColumn(stateText, layout.ValueColumn);
+        Grid.SetColumnSpan(stateText, isNavigate ? 1 : 2);
+        grid.Children.Add(stateText);
+
+        if (navigateAction is not null)
         {
-            var hasIcon = row.IconName is not null && baseUri is not null;
-            var chevronCol = hasIcon ? 3 : 2;
+            Func<Task> navigate = navigateAction;
             var chevron = new FontIcon
             {
                 Glyph = "\uE76C",
                 FontSize = 12,
+                HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Opacity = 0.6
             };
-            Grid.SetColumn(chevron, chevronCol);
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(chevron, layout.ControlColumn);
             grid.Children.Add(chevron);
 
             var button = new Button
@@ -103,47 +261,39 @@ public static class SitemapControlFactory
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 Padding = new Thickness(0)
             };
-            button.Click += async (_, _) => await activateRow();
+            button.Click += async (_, _) => await navigate();
             return button;
         }
 
         return grid;
     }
 
-    private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow)
+    private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow, Uri? baseUri = null, bool useWindowsIcons = false)
     {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var grid = layout.Grid;
+        var rawState = row.RawState ?? row.State;
 
-        var labelBlock = new TextBlock
-        {
-            Text = row.Label,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxLines = 2
-        };
-        Grid.SetColumn(labelBlock, 0);
-        grid.Children.Add(labelBlock);
-
-        var stateBlock = new TextBlock
-        {
-            Text = row.State ?? string.Empty,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 8, 0),
-            Opacity = 0.7,
-            FontSize = 13
-        };
-        Grid.SetColumn(stateBlock, 1);
+        var stateBlock = CreateStateTextBlock(
+            string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase) ? "ON" : "OFF");
+        stateBlock.Margin = new Thickness(0, 0, 8, 0);
+        stateBlock.Opacity = 0.7;
+        stateBlock.FontSize = 13;
+        stateBlock.MinWidth = 32;
+        Grid.SetColumn(stateBlock, layout.ValueColumn);
         grid.Children.Add(stateBlock);
 
         var toggle = new ToggleSwitch
         {
-            IsOn = string.Equals(row.State, "ON", StringComparison.OrdinalIgnoreCase)
+            IsOn = string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase),
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            Width = 48,
+            MinWidth = 0,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        Grid.SetColumn(toggle, 2);
+        Grid.SetColumn(toggle, layout.ControlColumn);
         grid.Children.Add(toggle);
 
         if (row.Action == RenderActionKind.SendCommand && activateRow is not null)
@@ -154,8 +304,11 @@ public static class SitemapControlFactory
         return grid;
     }
 
-    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<string, Task>? sendCommand)
+    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<string, Task>? sendCommand, Uri? baseUri = null, bool useWindowsIcons = false)
     {
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var grid = layout.Grid;
+
         var value = double.TryParse(row.State, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
             ? Math.Clamp(parsed, 0, 100)
             : 0;
@@ -164,7 +317,8 @@ public static class SitemapControlFactory
         {
             Minimum = 0,
             Maximum = 100,
-            Value = value
+            Value = value,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         if (sendCommand is not null)
@@ -176,35 +330,23 @@ public static class SitemapControlFactory
             };
         }
 
-        return new StackPanel
-        {
-            Spacing = 4,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = row.Label,
-                    TextWrapping = TextWrapping.WrapWholeWords,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxLines = 2
-                },
-                slider
-            }
-        };
+        Grid.SetColumn(slider, layout.ValueColumn);
+        Grid.SetColumnSpan(slider, 2);
+        grid.Children.Add(slider);
+
+        return grid;
     }
 
-    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<string, Task>? sendCommand)
+    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<string, Task>? sendCommand, Uri? baseUri = null, bool useWindowsIcons = false)
     {
-        var panel = new StackPanel { Spacing = 4 };
-        panel.Children.Add(new TextBlock
-        {
-            Text = row.Label,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxLines = 2
-        });
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var grid = layout.Grid;
 
-        var comboBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var comboBox = new ComboBox
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
+        };
         foreach (var option in row.SelectionOptions)
         {
             comboBox.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Command });
@@ -221,8 +363,11 @@ public static class SitemapControlFactory
             };
         }
 
-        panel.Children.Add(comboBox);
-        return panel;
+        Grid.SetColumn(comboBox, layout.ValueColumn);
+        Grid.SetColumnSpan(comboBox, 2);
+        grid.Children.Add(comboBox);
+
+        return grid;
     }
 
     private static FrameworkElement CreateFallback(SitemapRowDescriptor row)
@@ -244,84 +389,5 @@ public static class SitemapControlFactory
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxLines = 2
         };
-    }
-
-    private static Grid CreateRow(string label, string state, Uri? baseUri = null, string? iconName = null, bool useWindowsIcons = false)
-    {
-        var hasIcon = iconName is not null && (baseUri is not null || useWindowsIcons);
-        var labelCol = hasIcon ? 1 : 0;
-        var stateCol = hasIcon ? 2 : 1;
-
-        var grid = new Grid();
-
-        if (hasIcon)
-        {
-            grid.ColumnDefinitions.Insert(0, new ColumnDefinition { Width = new GridLength(24) });
-        }
-
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        if (hasIcon)
-        {
-            if (useWindowsIcons)
-            {
-                var winIcon = ResolveWin11Icon(iconName);
-                if (winIcon is not null)
-                {
-                    winIcon.VerticalAlignment = VerticalAlignment.Center;
-                    Grid.SetColumn(winIcon, 0);
-                    grid.Children.Add(winIcon);
-                }
-                else if (baseUri is not null)
-                {
-                    var image = new Image
-                    {
-                        Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}")),
-                        Width = 20,
-                        Height = 20,
-                        VerticalAlignment = VerticalAlignment.Center
-                    };
-                    Grid.SetColumn(image, 0);
-                    grid.Children.Add(image);
-                }
-            }
-            else if (baseUri is not null)
-            {
-                var image = new Image
-                {
-                    Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}")),
-                    Width = 20,
-                    Height = 20,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                Grid.SetColumn(image, 0);
-                grid.Children.Add(image);
-            }
-        }
-
-        var labelBlock = new TextBlock
-        {
-            Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.WrapWholeWords,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxLines = 2
-        };
-        Grid.SetColumn(labelBlock, labelCol);
-        grid.Children.Add(labelBlock);
-
-        var stateText = new TextBlock
-        {
-            Text = state,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextWrapping = TextWrapping.NoWrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 180
-        };
-        Grid.SetColumn(stateText, stateCol);
-        grid.Children.Add(stateText);
-
-        return grid;
     }
 }
