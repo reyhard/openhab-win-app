@@ -17,19 +17,24 @@ public sealed partial class FlyoutWindow : Window
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
     private readonly Action requestOpenMainWindow;
+    private readonly Action requestHideFlyout;
     private bool isRefreshing;
+    private bool suppressNextDeactivationHide;
 
     public FlyoutWindow(
         AppSettingsController settingsController,
         SitemapRuntimeController runtimeController,
-        Action requestOpenMainWindow)
+        Action requestOpenMainWindow,
+        Action requestHideFlyout)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
         this.requestOpenMainWindow = requestOpenMainWindow;
+        this.requestHideFlyout = requestHideFlyout;
 
         InitializeComponent();
-        this.Activated += OnFlyoutActivated;
+        ConfigureFlyoutWindow();
+        this.Activated += OnWindowActivated;
         RefreshSettingsBindings();
         _ = LoadRuntimeAsync();
     }
@@ -90,6 +95,9 @@ public sealed partial class FlyoutWindow : Window
         var snapshot = runtimeController.Current;
         TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
         StatusText.Text = snapshot.StatusText;
+        BreadcrumbBar.ItemsSource = snapshot.Breadcrumbs.Count > 0
+            ? snapshot.Breadcrumbs
+            : new[] { TitleText.Text };
         BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
         SitemapRows.Children.Clear();
 
@@ -157,11 +165,13 @@ public sealed partial class FlyoutWindow : Window
 
     private void OpenAppButton_Click(object sender, RoutedEventArgs e)
     {
+        suppressNextDeactivationHide = true;
         requestOpenMainWindow();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
+        suppressNextDeactivationHide = true;
         requestOpenMainWindow();
     }
 
@@ -177,19 +187,78 @@ public sealed partial class FlyoutWindow : Window
         finally { isRefreshing = false; }
     }
 
-    private void TitleText_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    private void SitemapPickerButton_Click(object sender, RoutedEventArgs e)
     {
-        FlyoutBase.ShowAttachedFlyout((FrameworkElement)sender);
+        if (sender is FrameworkElement element)
+        {
+            ShowSitemapMenuAt(element);
+        }
     }
 
-    private void OnFlyoutActivated(object sender, WindowActivatedEventArgs args)
+    private void SitemapHeaderArea_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        this.Activated -= OnFlyoutActivated;
-        var appWindow = this.AppWindow;
-        var currentPos = appWindow.Position;
-        var startY = currentPos.Y + 60;
-        appWindow.Move(new PointInt32(currentPos.X, startY));
-        _ = AnimateSlideUpAsync(appWindow, currentPos.Y);
+        if (sender is FrameworkElement element)
+        {
+            ShowSitemapMenuAt(element);
+        }
+    }
+
+    private async void OnWindowActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState == WindowActivationState.Deactivated)
+        {
+            if (suppressNextDeactivationHide)
+            {
+                suppressNextDeactivationHide = false;
+                return;
+            }
+
+            requestHideFlyout();
+            return;
+        }
+
+        var currentPos = AppWindow.Position;
+        var startY = currentPos.Y + 34;
+        AppWindow.Move(new PointInt32(currentPos.X, startY));
+        await AnimateSlideUpAsync(AppWindow, currentPos.Y);
+    }
+
+    private void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
+    {
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        if (runtimeController.NavigateToBreadcrumb(args.Index))
+        {
+            RefreshRuntimeBindings();
+        }
+    }
+
+    private void ConfigureFlyoutWindow()
+    {
+        var appWindow = AppWindow;
+        if (appWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
+            presenter.IsResizable = false;
+            presenter.IsMaximizable = false;
+            presenter.IsMinimizable = false;
+            presenter.IsAlwaysOnTop = true;
+        }
+
+        appWindow.IsShownInSwitchers = false;
+    }
+
+    private void ShowSitemapMenuAt(FrameworkElement target)
+    {
+        if (SitemapMenuFlyout.Items.Count == 0)
+        {
+            return;
+        }
+
+        SitemapMenuFlyout.ShowAt(target);
     }
 
     private static async Task AnimateSlideUpAsync(AppWindow window, int targetY)
