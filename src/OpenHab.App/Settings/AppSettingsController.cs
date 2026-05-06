@@ -9,6 +9,9 @@ namespace OpenHab.App.Settings;
 
 public sealed class AppSettingsController
 {
+    public const int MinFlyoutWidth = 360;
+    public const int MaxFlyoutWidth = 900;
+
     private static readonly Regex SitemapNamePattern = new("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
     private const string CredentialResource = "OpenHabAuth";
     private const string LocalTokenKey = "local-token";
@@ -138,6 +141,22 @@ public sealed class AppSettingsController
         lock (syncRoot)
         {
             Current = Current with { UseWindows11Icons = use };
+        }
+        _ = SaveAsync();
+    }
+
+    public void SetFlyoutWidth(int width)
+    {
+        if (width < MinFlyoutWidth || width > MaxFlyoutWidth)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(width),
+                $"Flyout width must be between {MinFlyoutWidth} and {MaxFlyoutWidth}.");
+        }
+
+        lock (syncRoot)
+        {
+            Current = Current with { FlyoutWidth = width };
         }
         _ = SaveAsync();
     }
@@ -294,10 +313,11 @@ public sealed class AppSettingsController
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
+                var normalized = NormalizeLoadedSettings(loaded);
                 // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
                 {
-                    Current = loaded with
+                    Current = normalized with
                     {
                         HasLocalToken = Current.HasLocalToken,
                         HasCloudCredentials = Current.HasCloudCredentials,
@@ -321,10 +341,11 @@ public sealed class AppSettingsController
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
+                var normalized = NormalizeLoadedSettings(loaded);
                 // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
                 {
-                    Current = loaded with
+                    Current = normalized with
                     {
                         HasLocalToken = Current.HasLocalToken,
                         HasCloudCredentials = Current.HasCloudCredentials,
@@ -342,5 +363,16 @@ public sealed class AppSettingsController
     private static bool IsHttpOrHttps(Uri endpoint)
     {
         return endpoint.Scheme == Uri.UriSchemeHttp || endpoint.Scheme == Uri.UriSchemeHttps;
+    }
+
+    private static AppSettings NormalizeLoadedSettings(AppSettings settings)
+    {
+        var width = settings.FlyoutWidth;
+        if (width < MinFlyoutWidth || width > MaxFlyoutWidth)
+        {
+            width = AppSettings.Default.FlyoutWidth;
+        }
+
+        return settings with { FlyoutWidth = width };
     }
 }

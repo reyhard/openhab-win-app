@@ -12,6 +12,7 @@ public sealed record AppSettings(
     string SitemapName,
     bool FollowSystemTheme = true,
     bool UseWindows11Icons = false,
+    int FlyoutWidth = 460,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
     [property: JsonIgnore] string? CloudUserName = null)

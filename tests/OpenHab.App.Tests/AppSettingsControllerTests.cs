@@ -35,6 +35,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(new Uri("http://openhab:8080"), controller.Current.LocalEndpoint);
         Assert.Equal(new Uri("https://myopenhab.org"), controller.Current.CloudEndpoint);
         Assert.Equal("default", controller.Current.SitemapName);
+        Assert.Equal(460, controller.Current.FlyoutWidth);
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
         Assert.Null(controller.Current.CloudUserName);
@@ -60,6 +61,25 @@ public sealed class AppSettingsControllerTests
         controller.SetSitemapName("home");
 
         Assert.Equal("home", controller.Current.SitemapName);
+    }
+
+    [Fact]
+    public void CanChangeFlyoutWidth()
+    {
+        var controller = new AppSettingsController();
+
+        controller.SetFlyoutWidth(420);
+
+        Assert.Equal(420, controller.Current.FlyoutWidth);
+    }
+
+    [Fact]
+    public void SetFlyoutWidthRejectsOutOfRangeValues()
+    {
+        var controller = new AppSettingsController();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetFlyoutWidth(200));
+        Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetFlyoutWidth(1200));
     }
 
     [Theory]
