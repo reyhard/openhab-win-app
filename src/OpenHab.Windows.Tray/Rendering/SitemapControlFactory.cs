@@ -15,7 +15,7 @@ public static class SitemapControlFactory
         return row.Control switch
         {
             RenderControlKind.Toggle => CreateToggle(row, activateRow),
-            RenderControlKind.Slider => CreateSlider(row, activateRow),
+            RenderControlKind.Slider => CreateSlider(row, activateRow, sendCommand),
             RenderControlKind.Selection => CreateSelection(row, activateRow, sendCommand),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row)
@@ -43,7 +43,7 @@ public static class SitemapControlFactory
         return toggle;
     }
 
-    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<Task>? activateRow)
+    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand)
     {
         var value = double.TryParse(row.State, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
             ? Math.Clamp(parsed, 0, 100)
@@ -53,9 +53,17 @@ public static class SitemapControlFactory
         {
             Minimum = 0,
             Maximum = 100,
-            Value = value,
-            IsEnabled = false
+            Value = value
         };
+
+        if (sendCommand is not null)
+        {
+            slider.ValueChanged += async (_, args) =>
+            {
+                var newValue = args.NewValue.ToString("F0", CultureInfo.InvariantCulture);
+                await sendCommand(newValue);
+            };
+        }
 
         return new StackPanel
         {
