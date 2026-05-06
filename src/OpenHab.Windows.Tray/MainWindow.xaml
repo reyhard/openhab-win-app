@@ -108,6 +108,13 @@
                                   Header="Use Windows 11 style icons"
                                   OnContent="On" OffContent="Off"
                                   Toggled="UseWin11IconsToggle_Toggled" />
+                    <NumberBox x:Name="FlyoutWidthBox"
+                               Header="Flyout width (px)"
+                               Minimum="360"
+                               Maximum="900"
+                               SmallChange="10"
+                               SpinButtonPlacementMode="Inline"
+                               ValueChanged="FlyoutWidthBox_ValueChanged" />
                 </StackPanel>
             </ScrollViewer>
         </Border>

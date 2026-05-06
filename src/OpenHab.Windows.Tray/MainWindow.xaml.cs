@@ -21,6 +21,7 @@ public sealed partial class MainWindow : Window
     private bool cloudTokenEdited;
     private bool cloudUserNameEdited;
     private bool isHandlingCloseRequest;
+    private bool suppressFlyoutWidthChange;
 
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
@@ -109,6 +110,9 @@ public sealed partial class MainWindow : Window
 
         FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
         UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
+        suppressFlyoutWidthChange = true;
+        FlyoutWidthBox.Value = settingsController.Current.FlyoutWidth;
+        suppressFlyoutWidthChange = false;
 
         LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
             ? "Stored token configured. Type to replace, or leave unchanged."
@@ -406,5 +410,21 @@ public sealed partial class MainWindow : Window
     private void UseWin11IconsToggle_Toggled(object sender, RoutedEventArgs e)
     {
         settingsController.SetUseWindows11Icons(UseWin11IconsToggle.IsOn);
+    }
+
+    private void FlyoutWidthBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (suppressFlyoutWidthChange || double.IsNaN(args.NewValue))
+        {
+            return;
+        }
+
+        var width = (int)Math.Round(args.NewValue);
+        if (width < AppSettingsController.MinFlyoutWidth || width > AppSettingsController.MaxFlyoutWidth)
+        {
+            return;
+        }
+
+        settingsController.SetFlyoutWidth(width);
     }
 }
