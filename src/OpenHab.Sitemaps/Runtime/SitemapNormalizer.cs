@@ -62,6 +62,7 @@ public static class SitemapNormalizer
             children.Length > 0,
             !supported,
             supported ? SitemapFallbackKind.None : SitemapFallbackKind.MainUiOrBrowser,
-            children);
+            children,
+            widget.Icon);
     }
 }

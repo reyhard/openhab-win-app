@@ -117,6 +117,8 @@ public static class OpenHabSitemapJsonParser
             children.Add(ParsePage(linkedPageElement));
         }
 
+        var icon = GetStringOrNull(widgetElement, "icon");
+
         var isVisible = true;
         if (widgetElement.TryGetProperty("visibility", out var visibilityElement) &&
             visibilityElement.ValueKind == JsonValueKind.False)
@@ -131,7 +133,8 @@ public static class OpenHabSitemapJsonParser
             state,
             mappings,
             isVisible,
-            children);
+            children,
+            icon);
     }
 
     private static (string Label, string? State) SplitLabelAndState(string rawLabel)

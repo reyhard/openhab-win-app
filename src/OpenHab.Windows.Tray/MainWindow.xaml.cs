@@ -146,7 +146,8 @@ public sealed partial class MainWindow : Window
             SitemapRows.Children.Add(SitemapControlFactory.Create(
                 row,
                 activateRow,
-                sendCommand));
+                sendCommand,
+                settingsController.Current.LocalEndpoint));
         }
     }
 

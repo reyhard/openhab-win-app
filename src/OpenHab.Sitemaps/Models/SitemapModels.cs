@@ -9,7 +9,8 @@ public sealed record SitemapWidget(
     string? State,
     IReadOnlyList<SitemapMapping> Mappings,
     bool IsVisible,
-    IReadOnlyList<SitemapPage> Children);
+    IReadOnlyList<SitemapPage> Children,
+    string? Icon = null);
 
 public sealed record NormalizedSitemapPage(string Id, string Label, IReadOnlyList<NormalizedSitemapWidget> Widgets);
 
@@ -22,7 +23,8 @@ public sealed record NormalizedSitemapWidget(
     bool CanNavigate,
     bool RequiresFallback,
     SitemapFallbackKind FallbackKind,
-    IReadOnlyList<SitemapPage> Children);
+    IReadOnlyList<SitemapPage> Children,
+    string? Icon = null);
 
 public sealed record SitemapMapping(string Command, string Label);
 

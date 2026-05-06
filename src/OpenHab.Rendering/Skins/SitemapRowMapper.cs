@@ -10,9 +10,10 @@ internal static class SitemapRowMapper
     {
         var control = ControlFor(widget);
         var action = ActionFor(widget, control);
+        var rawState = widget.State;
         var state = TransformState(widget.State, widget.Mappings);
         var options = widget.Mappings.Select(m => new SitemapMapOption(m.Command, m.Label)).ToArray();
-        return new SitemapRowDescriptor(widget.Label, state, control, action, density, options);
+        return new SitemapRowDescriptor(widget.Label, state, control, action, density, options, rawState, widget.Icon);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)

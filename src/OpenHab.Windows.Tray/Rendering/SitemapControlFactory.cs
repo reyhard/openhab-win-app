@@ -2,13 +2,14 @@ using System;
 using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using OpenHab.Rendering.Descriptors;
 
 namespace OpenHab.Windows.Tray.Rendering;
 
 public static class SitemapControlFactory
 {
-    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand = null)
+    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand = null, Uri? baseUri = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -18,16 +19,18 @@ public static class SitemapControlFactory
             RenderControlKind.Slider => CreateSlider(row, activateRow, sendCommand),
             RenderControlKind.Selection => CreateSelection(row, activateRow, sendCommand),
             RenderControlKind.Fallback => CreateFallback(row),
-            _ => CreateText(row, activateRow)
+            _ => CreateText(row, activateRow, baseUri)
         };
     }
 
-    private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null)
+    private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null, Uri? baseUri = null)
     {
-        var grid = CreateRow(row.Label, row.State ?? string.Empty);
+        var grid = CreateRow(row.Label, row.State ?? string.Empty, baseUri, row.IconName);
 
         if (activateRow is not null && row.Action == RenderActionKind.Navigate)
         {
+            var hasIcon = row.IconName is not null && baseUri is not null;
+            var chevronCol = hasIcon ? 3 : 2;
             var chevron = new FontIcon
             {
                 Glyph = "\uE76C",
@@ -35,7 +38,7 @@ public static class SitemapControlFactory
                 VerticalAlignment = VerticalAlignment.Center,
                 Opacity = 0.6
             };
-            Grid.SetColumn(chevron, 2);
+            Grid.SetColumn(chevron, chevronCol);
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.Children.Add(chevron);
 
@@ -123,7 +126,7 @@ public static class SitemapControlFactory
         foreach (var option in row.SelectionOptions)
         {
             comboBox.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Command });
-            if (string.Equals(option.Command, row.State, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(option.Command, row.RawState, StringComparison.OrdinalIgnoreCase))
                 comboBox.SelectedIndex = comboBox.Items.Count - 1;
         }
 
@@ -161,25 +164,45 @@ public static class SitemapControlFactory
         };
     }
 
-    private static Grid CreateRow(string label, string state)
+    private static Grid CreateRow(string label, string state, Uri? baseUri = null, string? iconName = null)
     {
-        var grid = new Grid
-        {
-            ColumnDefinitions =
-            {
-                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = GridLength.Auto }
-            }
-        };
+        var hasIcon = iconName is not null && baseUri is not null;
+        var labelCol = hasIcon ? 1 : 0;
+        var stateCol = hasIcon ? 2 : 1;
 
-        grid.Children.Add(new TextBlock
+        var grid = new Grid();
+
+        if (hasIcon)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+        }
+
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        if (hasIcon)
+        {
+            var image = new Image
+            {
+                Source = new BitmapImage(new Uri(baseUri!, $"icon/{Uri.EscapeDataString(iconName!)}.png")),
+                Width = 20,
+                Height = 20,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(image, 0);
+            grid.Children.Add(image);
+        }
+
+        var labelBlock = new TextBlock
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = TextWrapping.WrapWholeWords,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxLines = 2
-        });
+        };
+        Grid.SetColumn(labelBlock, labelCol);
+        grid.Children.Add(labelBlock);
 
         var stateText = new TextBlock
         {
@@ -189,7 +212,7 @@ public static class SitemapControlFactory
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = 180
         };
-        Grid.SetColumn(stateText, 1);
+        Grid.SetColumn(stateText, stateCol);
         grid.Children.Add(stateText);
 
         return grid;

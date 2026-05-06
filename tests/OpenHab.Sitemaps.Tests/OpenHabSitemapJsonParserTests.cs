@@ -177,6 +177,61 @@ public sealed class OpenHabSitemapJsonParserTests
     }
 
     [Fact]
+    public void ParseWidgetExtractsIcon()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Switch",
+                    "label": "Kitchen Light [ON]",
+                    "icon": "light",
+                    "item": {
+                      "name": "KitchenLight",
+                      "state": "OFF"
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        var widget = Assert.Single(parsed.Widgets);
+        Assert.Equal("light", widget.Icon);
+    }
+
+    [Fact]
+    public void ParseWidgetDefaultsIconToNullWhenAbsent()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Text",
+                    "label": "Temperature [21.5 \u00B0C]",
+                    "item": {
+                      "name": "KitchenTemp",
+                      "state": "21.7 \u00B0C"
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        var widget = Assert.Single(parsed.Widgets);
+        Assert.Null(widget.Icon);
+    }
+
+    [Fact]
     public void ParseHomepageFlattensFrameChildren()
     {
         const string json = """
