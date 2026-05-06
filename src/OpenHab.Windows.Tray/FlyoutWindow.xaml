@@ -20,10 +20,10 @@
                        Opacity="0.8" />
         </StackPanel>
 
-        <TextBox x:Name="SitemapNameText"
-                 Grid.Row="1"
-                 Header="Sitemap name"
-                 LostFocus="SitemapNameText_LostFocus" />
+        <ComboBox x:Name="SitemapCombo"
+                  Grid.Row="1"
+                  Header="Sitemap"
+                  SelectionChanged="SitemapCombo_SelectionChanged" />
 
         <ScrollViewer Grid.Row="2">
             <StackPanel x:Name="SitemapRows" Spacing="8" />

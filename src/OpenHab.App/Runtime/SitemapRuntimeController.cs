@@ -154,6 +154,14 @@ public sealed class SitemapRuntimeController
         return renderController.BuildCurrentDescriptor(normalized);
     }
 
+    public async Task<IReadOnlyList<SitemapInfo>> LoadSitemapListAsync(CancellationToken cancellationToken = default)
+    {
+        var settings = settingsController.Current;
+        var primary = SelectPrimaryTransport(settings);
+        var client = clientFactory(primary.Kind, primary.BaseUri);
+        return await client.GetSitemapsAsync(cancellationToken);
+    }
+
     private static TransportSelection SelectPrimaryTransport(AppSettings settings)
     {
         return settings.EndpointMode switch

@@ -24,6 +24,7 @@ public partial class App : Application
     private DispatcherQueue? uiDispatcherQueue;
     private HttpClient? httpClient;
     private NotificationPoller? notificationPoller;
+    private SitemapRuntimeController? runtimeController;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
     private int isShuttingDown;
 
@@ -47,7 +48,7 @@ public partial class App : Application
         var settingsController = new AppSettingsController(credentialStore);
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
-        var runtimeController = new SitemapRuntimeController(
+        runtimeController = new SitemapRuntimeController(
             settingsController,
             renderController,
             (transportKind, endpoint) =>
@@ -269,6 +270,20 @@ public partial class App : Application
     {
         await InitializeAsync(settingsController);
         await ApplyShellStateAsync();
+
+        try
+        {
+            var sitemaps = await runtimeController!.LoadSitemapListAsync();
+            _ = uiDispatcherQueue?.TryEnqueue(() =>
+            {
+                flyoutWindow?.PopulateSitemaps(sitemaps);
+            });
+        }
+        catch
+        {
+            // Best-effort; dropdown will be empty if server unreachable.
+        }
+
         StartNotificationPolling(settingsController);
     }
 

@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.Core.Api;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
 
@@ -12,6 +14,7 @@ public sealed partial class FlyoutWindow : Window
     private readonly SitemapRuntimeController runtimeController;
     private readonly Action requestOpenMainWindow;
     private bool isRefreshing;
+    private IReadOnlyList<SitemapInfo>? availableSitemaps;
 
     public FlyoutWindow(
         AppSettingsController settingsController,
@@ -35,6 +38,30 @@ public sealed partial class FlyoutWindow : Window
     public async Task RefreshRuntimeAsync()
     {
         await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+    }
+
+    public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
+    {
+        availableSitemaps = sitemaps;
+
+        var currentSitemap = settingsController.Current.SitemapName;
+        SitemapCombo.Items.Clear();
+
+        foreach (var sitemap in sitemaps)
+        {
+            var item = new ComboBoxItem
+            {
+                Content = sitemap.Label,
+                Tag = sitemap.Name
+            };
+
+            SitemapCombo.Items.Add(item);
+
+            if (string.Equals(sitemap.Name, currentSitemap, StringComparison.OrdinalIgnoreCase))
+            {
+                SitemapCombo.SelectedItem = item;
+            }
+        }
     }
 
     private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
@@ -63,7 +90,17 @@ public sealed partial class FlyoutWindow : Window
 
     private void RefreshSettingsBindings()
     {
-        SitemapNameText.Text = settingsController.Current.SitemapName;
+        var currentName = settingsController.Current.SitemapName;
+        foreach (ComboBoxItem item in SitemapCombo.Items)
+        {
+            if (string.Equals(item.Tag as string, currentName, StringComparison.OrdinalIgnoreCase))
+            {
+                SitemapCombo.SelectedItem = item;
+                return;
+            }
+        }
+
+        SitemapCombo.SelectedItem = null;
     }
 
     private void RefreshRuntimeBindings()
@@ -100,21 +137,17 @@ public sealed partial class FlyoutWindow : Window
         await RunRuntimeOperationAsync(async ct => await runtimeController.ActivateRowAsync(rowIndex, ct));
     }
 
-    private async void SitemapNameText_LostFocus(object sender, RoutedEventArgs e)
+    private async void SitemapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (isRefreshing)
         {
             return;
         }
 
-        try
+        if (SitemapCombo.SelectedItem is ComboBoxItem item && item.Tag is string sitemapName)
         {
-            settingsController.SetSitemapName(SitemapNameText.Text);
+            settingsController.SetSitemapName(sitemapName);
             await LoadRuntimeAsync();
-        }
-        catch (ArgumentException)
-        {
-            RefreshSettingsBindings();
         }
     }
 
