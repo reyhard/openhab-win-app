@@ -6,6 +6,7 @@ public static class SitemapNormalizer
 {
     private static readonly HashSet<SitemapWidgetType> NativeTypes =
     [
+        SitemapWidgetType.Frame,
         SitemapWidgetType.Default,
         SitemapWidgetType.Text,
         SitemapWidgetType.Group,

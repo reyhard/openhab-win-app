@@ -16,7 +16,8 @@ public sealed record SitemapRowDescriptor(
     RenderDensity Density,
     IReadOnlyList<SitemapMapOption> SelectionOptions,
     string? RawState = null,
-    string? IconName = null)
+    string? IconName = null,
+    bool IsSectionHeader = false)
 {
     public SitemapRowDescriptor(
         string Label,
@@ -24,7 +25,7 @@ public sealed record SitemapRowDescriptor(
         RenderControlKind Control,
         RenderActionKind Action,
         RenderDensity Density)
-        : this(Label, State, Control, Action, Density, [], null, null)
+        : this(Label, State, Control, Action, Density, [], null, null, false)
     {
     }
 }

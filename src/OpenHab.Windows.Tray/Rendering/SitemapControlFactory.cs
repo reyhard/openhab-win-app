@@ -1,19 +1,29 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using OpenHab.Core;
+using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using Windows.Storage.Streams;
 
 namespace OpenHab.Windows.Tray.Rendering;
 
 public static class SitemapControlFactory
 {
     private const double ValueLaneWidth = 96;
-    private const double ControlLaneWidth = 48;
+    private const double ControlLaneWidth = 56;
+    private static readonly string[] IconFormatsByPreference = ["png", "svg"];
+    private static readonly HttpClient IconHttpClient = new();
+    private static readonly object IconProbeSyncRoot = new();
+    private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -24,7 +34,7 @@ public static class SitemapControlFactory
         ["switchon"] = "\uE7E8", ["switchoff"] = "\uE7E8",
         ["poweron"] = "\uE7E8", ["poweroff"] = "\uE7E8",
         ["rollershutter"] = "\uE7A0", ["blinds"] = "\uE7A0",
-        ["heating"] = "\uE7B2", ["temperature"] = "\uE7B2", ["temp"] = "\uE7B2",
+        ["heating"] = "\uE793", ["temperature"] = "\uE793", ["temp"] = "\uE793",
         ["humidity"] = "\uE7A6", ["moisture"] = "\uE7A6",
         ["contact"] = "\uE8E1", ["door"] = "\uE8E1", ["window"] = "\uE8E1", ["garagedoor"] = "\uE8E1",
         ["motion"] = "\uE7A6", ["presence"] = "\uE716", ["occupancy"] = "\uE716",
@@ -48,6 +58,7 @@ public static class SitemapControlFactory
         ["sun"] = "\uE706", ["sunrise"] = "\uE706", ["sunset"] = "\uE706",
         ["moon"] = "\uE708",
         ["cloud"] = "\uE753", ["weather"] = "\uE753",
+        ["sunclouds"] = "\uE753", ["sun_clouds"] = "\uE753",
         ["rain"] = "\uE7A6", ["wind"] = "\uE7A6", ["snow"] = "\uE7A6",
         ["pressure"] = "\uE976",
         ["groundfloor"] = "\uE831", ["ground_floor"] = "\uE831",
@@ -62,6 +73,10 @@ public static class SitemapControlFactory
         ["player"] = "\uE768", ["music"] = "\uE768",
         ["image"] = "\uE722", ["video"] = "\uE722",
         ["outlet"] = "\uE994", ["plug"] = "\uE994",
+        ["poweroutlet"] = "\uE994", ["power_outlet"] = "\uE994",
+        ["radiator"] = "\uE793", ["climate"] = "\uE793",
+        ["fan_ceiling"] = "\uE785",
+        ["pie"] = "\uE9D2", ["line"] = "\uE9D2",
     };
 
     // Built once: normalized-key → glyph, for fuzzy icon-name matching.
@@ -103,6 +118,11 @@ public static class SitemapControlFactory
     }
 
     private readonly record struct RowLayout(Grid Grid, int LabelColumn, int ValueColumn, int ControlColumn);
+    public readonly record struct IconAuthContext(
+        string? ApiToken,
+        string? BasicUserName,
+        string? BasicPassword,
+        TransportKind? TransportKind = null);
 
     /// <summary>
     /// Collapses separators and digits so common openHAB icon-name variants
@@ -137,21 +157,34 @@ public static class SitemapControlFactory
         return NormalizedWin11IconMap.ContainsKey(normalized);
     }
 
-    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand = null, Uri? baseUri = null, bool useWindowsIcons = false)
+    public static FrameworkElement Create(
+        SitemapRowDescriptor row,
+        Func<Task>? activateRow,
+        Func<string, Task>? sendCommand = null,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
         return row.Control switch
         {
-            RenderControlKind.Toggle => CreateToggle(row, activateRow, baseUri, useWindowsIcons),
-            RenderControlKind.Slider => CreateSlider(row, sendCommand, baseUri, useWindowsIcons),
-            RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons),
+            RenderControlKind.Toggle => CreateToggle(row, activateRow, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.Slider => CreateSlider(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Fallback => CreateFallback(row),
-            _ => CreateText(row, activateRow, baseUri, useWindowsIcons)
+            _ => CreateText(row, activateRow, baseUri, useWindowsIcons, iconAuth)
         };
     }
 
-    private static bool TryAddIcon(Grid grid, int column, string? iconName, Uri? baseUri, bool useWindowsIcons)
+    private static bool TryAddIcon(
+        Grid grid,
+        int column,
+        string? iconName,
+        string? iconState,
+        Uri? baseUri,
+        bool useWindowsIcons,
+        IconAuthContext? iconAuth)
     {
         if (string.IsNullOrWhiteSpace(iconName)) return false;
 
@@ -160,28 +193,287 @@ public static class SitemapControlFactory
             var winIcon = ResolveWin11Icon(iconName);
             if (winIcon is not null)
             {
+                DiagnosticLogger.Info($"Icon render via Win11 glyph: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'");
                 winIcon.VerticalAlignment = VerticalAlignment.Center;
                 Grid.SetColumn(winIcon, column);
                 grid.Children.Add(winIcon);
                 return true;
             }
+
+            DiagnosticLogger.Warn($"Win11 glyph mapping missing: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'; falling back to server icon endpoint");
         }
 
         if (baseUri is not null)
         {
             var image = new Image
             {
-                Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName)}")),
                 Width = 16,
                 Height = 16,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(image, column);
             grid.Children.Add(image);
+
+            if (iconAuth is { } authContext)
+            {
+                StartIconProbeIfNeeded(baseUri, authContext);
+                _ = LoadIconAsync(image, baseUri, iconName, iconState, authContext);
+                return true;
+            }
+
+            _ = LoadIconAsync(image, baseUri, iconName, iconState, null);
             return true;
         }
 
+        DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{iconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
         return false;
+    }
+
+    private static void StartIconProbeIfNeeded(Uri baseUri, IconAuthContext authContext)
+    {
+        var probeKey = $"{baseUri.Scheme}://{baseUri.Authority}|{GetAuthMode(authContext)}|{authContext.TransportKind?.ToString() ?? "unknown"}";
+        lock (IconProbeSyncRoot)
+        {
+            if (!ProbedIconEndpoints.Add(probeKey))
+            {
+                return;
+            }
+        }
+
+        _ = ProbeIconEndpointAsync(baseUri, authContext);
+    }
+
+    private static async Task ProbeIconEndpointAsync(Uri baseUri, IconAuthContext authContext)
+    {
+        var probeUri = BuildOpenHabIconUri(baseUri, "switch", "ON");
+
+        try
+        {
+            using var headRequest = new HttpRequestMessage(HttpMethod.Head, probeUri);
+            ApplyAuthHeaders(headRequest, authContext);
+            using var headResponse = await IconHttpClient.SendAsync(headRequest);
+
+            if (headResponse.IsSuccessStatusCode)
+            {
+                DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+                return;
+            }
+
+            DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+        }
+
+        try
+        {
+            using var getRequest = new HttpRequestMessage(HttpMethod.Get, probeUri);
+            ApplyAuthHeaders(getRequest, authContext);
+            using var getResponse = await IconHttpClient.SendAsync(getRequest, HttpCompletionOption.ResponseHeadersRead);
+
+            if (getResponse.IsSuccessStatusCode)
+            {
+                DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+            }
+            else
+            {
+                DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+        }
+    }
+
+    private static async Task LoadIconAsync(
+        Image image,
+        Uri baseUri,
+        string iconName,
+        string? iconState,
+        IconAuthContext? authContext)
+    {
+        var attempts = new List<string>(IconFormatsByPreference.Length);
+
+        foreach (var format in IconFormatsByPreference)
+        {
+            var iconUri = BuildOpenHabIconUri(baseUri, iconName, iconState, format);
+            DiagnosticLogger.Info($"Icon request: icon='{iconName}', state='{iconState ?? "(none)"}', format='{format}', url='{iconUri.PathAndQuery}'");
+
+            var attemptResult = await TryLoadIconForFormatAsync(image, iconUri, iconName, iconState, format, authContext);
+            if (attemptResult is null)
+            {
+                return;
+            }
+
+            attempts.Add(attemptResult);
+        }
+
+        DiagnosticLogger.Warn($"Icon failed: icon='{iconName}', state='{iconState ?? "(none)"}', formats='{string.Join(",", IconFormatsByPreference)}', attempts='{string.Join("; ", attempts)}', auth='{GetAuthMode(authContext)}'");
+    }
+
+    private static async Task<string?> TryLoadIconForFormatAsync(
+        Image image,
+        Uri iconUri,
+        string iconName,
+        string? iconState,
+        string format,
+        IconAuthContext? authContext)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, iconUri);
+            if (authContext is { } context)
+            {
+                ApplyAuthHeaders(request, context);
+            }
+
+            using var response = await IconHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead);
+            if (!response.IsSuccessStatusCode)
+            {
+                return $"format={format}:status={(int)response.StatusCode}";
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length == 0)
+            {
+                return $"format={format}:empty";
+            }
+
+            var mediaType = response.Content.Headers.ContentType?.MediaType;
+            var source = await CreateImageSourceFromBytesAsync(bytes, mediaType);
+            if (source is null)
+            {
+                return $"format={format}:decode-failed(media={mediaType ?? "unknown"})";
+            }
+
+            image.Source = source;
+            var effectiveFormat = source is SvgImageSource ? "svg" : "bitmap";
+            DiagnosticLogger.Info($"Icon loaded: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{effectiveFormat}', media='{mediaType ?? "unknown"}', bytes={bytes.Length}, auth='{GetAuthMode(authContext)}'");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"format={format}:error={ex.GetType().Name}";
+        }
+    }
+
+    private static async Task<ImageSource?> CreateImageSourceFromBytesAsync(byte[] bytes, string? mediaType)
+    {
+        if (LooksLikeSvg(mediaType, bytes))
+        {
+            var svg = await CreateSvgFromBytesAsync(bytes);
+            if (svg is not null)
+            {
+                return svg;
+            }
+        }
+
+        try
+        {
+            return await CreateBitmapFromBytesAsync(bytes);
+        }
+        catch
+        {
+            var svgFallback = await CreateSvgFromBytesAsync(bytes);
+            return svgFallback;
+        }
+    }
+
+    private static async Task<SvgImageSource?> CreateSvgFromBytesAsync(byte[] bytes)
+    {
+        var svg = new SvgImageSource();
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+        {
+            writer.WriteBytes(bytes);
+            await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
+        }
+
+        stream.Seek(0);
+        var status = await svg.SetSourceAsync(stream);
+        return status == SvgImageSourceLoadStatus.Success ? svg : null;
+    }
+
+    private static bool LooksLikeSvg(string? mediaType, byte[] bytes)
+    {
+        if (!string.IsNullOrWhiteSpace(mediaType) &&
+            mediaType.Contains("svg", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var sampleLength = Math.Min(bytes.Length, 256);
+        if (sampleLength == 0)
+        {
+            return false;
+        }
+
+        var sample = Encoding.UTF8.GetString(bytes, 0, sampleLength).TrimStart('\uFEFF', '\t', '\r', '\n', ' ');
+        return sample.StartsWith("<svg", StringComparison.OrdinalIgnoreCase) ||
+               sample.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task<BitmapImage> CreateBitmapFromBytesAsync(byte[] bytes)
+    {
+        var bitmap = new BitmapImage();
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+        {
+            writer.WriteBytes(bytes);
+            await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
+        }
+
+        stream.Seek(0);
+        await bitmap.SetSourceAsync(stream);
+        return bitmap;
+    }
+
+    private static void ApplyAuthHeaders(HttpRequestMessage request, IconAuthContext authContext)
+    {
+        if (!string.IsNullOrWhiteSpace(authContext.ApiToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authContext.ApiToken);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(authContext.BasicUserName))
+        {
+            var raw = $"{authContext.BasicUserName}:{authContext.BasicPassword ?? string.Empty}";
+            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
+        }
+    }
+
+    private static string GetAuthMode(IconAuthContext? authContext)
+    {
+        if (authContext is null) return "none";
+
+        var context = authContext.Value;
+        if (!string.IsNullOrWhiteSpace(context.ApiToken)) return "bearer";
+        if (!string.IsNullOrWhiteSpace(context.BasicUserName)) return "basic";
+        return "none";
+    }
+
+    internal static Uri BuildOpenHabIconUri(Uri baseUri, string iconName, string? iconState, string format = "png")
+    {
+        ArgumentNullException.ThrowIfNull(baseUri);
+        ArgumentException.ThrowIfNullOrWhiteSpace(iconName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(format);
+
+        // Match openHAB web UI icon requests so dynamic icons resolve by state.
+        // Example: /icon/rollershutter?format=png&state=50
+        var escapedIcon = Uri.EscapeDataString(iconName);
+        var query = string.IsNullOrWhiteSpace(iconState)
+            ? $"format={Uri.EscapeDataString(format)}"
+            : $"format={Uri.EscapeDataString(format)}&state={Uri.EscapeDataString(iconState)}";
+
+        return new Uri(baseUri, $"icon/{escapedIcon}?{query}");
     }
 
     private static bool CanDisplayIcon(string? iconName, Uri? baseUri, bool useWindowsIcons)
@@ -190,7 +482,13 @@ public static class SitemapControlFactory
         return baseUri is not null || (useWindowsIcons && ResolveGlyphForIcon(iconName) is not null);
     }
 
-    private static RowLayout CreateRowLayout(string label, Uri? baseUri, string? iconName, bool useWindowsIcons)
+    private static RowLayout CreateRowLayout(
+        string label,
+        Uri? baseUri,
+        string? iconName,
+        string? iconState,
+        bool useWindowsIcons,
+        IconAuthContext? iconAuth)
     {
         var grid = new Grid { HorizontalAlignment = HorizontalAlignment.Stretch };
         var hasIcon = CanDisplayIcon(iconName, baseUri, useWindowsIcons);
@@ -198,7 +496,7 @@ public static class SitemapControlFactory
         if (hasIcon)
         {
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
-            TryAddIcon(grid, 0, iconName, baseUri, useWindowsIcons);
+            TryAddIcon(grid, 0, iconName, iconState, baseUri, useWindowsIcons, iconAuth);
         }
 
         var labelColumn = hasIcon ? 1 : 0;
@@ -237,14 +535,19 @@ public static class SitemapControlFactory
         };
     }
 
-    private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null, Uri? baseUri = null, bool useWindowsIcons = false)
+    private static FrameworkElement CreateText(
+        SitemapRowDescriptor row,
+        Func<Task>? activateRow = null,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
     {
         if (IsSectionHeader(row))
         {
             return CreateSectionHeader(row.Label);
         }
 
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
         var navigateAction = row.Action == RenderActionKind.Navigate ? activateRow : null;
         var isNavigate = navigateAction is not null;
@@ -285,10 +588,20 @@ public static class SitemapControlFactory
 
     private static bool IsSectionHeader(SitemapRowDescriptor row)
     {
+        if (row.IsSectionHeader)
+        {
+            return true;
+        }
+
+        // Some installations surface section-like rows as plain text/group rows
+        // with icon "none". Treat those as headers too, so they don't look like buttons.
+        var iconIsAbsent = string.IsNullOrWhiteSpace(row.IconName)
+            || string.Equals(row.IconName, "none", StringComparison.OrdinalIgnoreCase);
+
         return row.Control == RenderControlKind.Text
             && row.Action == RenderActionKind.None
             && string.IsNullOrWhiteSpace(row.State)
-            && string.IsNullOrWhiteSpace(row.IconName);
+            && iconIsAbsent;
     }
 
     private static FrameworkElement CreateSectionHeader(string label)
@@ -305,9 +618,14 @@ public static class SitemapControlFactory
         };
     }
 
-    private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow, Uri? baseUri = null, bool useWindowsIcons = false)
+    private static FrameworkElement CreateToggle(
+        SitemapRowDescriptor row,
+        Func<Task>? activateRow,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
         var rawState = row.RawState ?? row.State;
 
@@ -341,9 +659,14 @@ public static class SitemapControlFactory
         return WrapWithBorder(grid);
     }
 
-    private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<string, Task>? sendCommand, Uri? baseUri = null, bool useWindowsIcons = false)
+    private static FrameworkElement CreateSlider(
+        SitemapRowDescriptor row,
+        Func<string, Task>? sendCommand,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
 
         var value = double.TryParse(row.State, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
@@ -374,9 +697,14 @@ public static class SitemapControlFactory
         return WrapWithBorder(grid);
     }
 
-    private static FrameworkElement CreateSelection(SitemapRowDescriptor row, Func<string, Task>? sendCommand, Uri? baseUri = null, bool useWindowsIcons = false)
+    private static FrameworkElement CreateSelection(
+        SitemapRowDescriptor row,
+        Func<string, Task>? sendCommand,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, useWindowsIcons);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
 
         var comboBox = new ComboBox

@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
+using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
 using Windows.Graphics;
@@ -107,6 +108,12 @@ public sealed partial class FlyoutWindow : Window
             return;
         }
 
+        var iconTransport = snapshot.ActiveTransport ?? TransportKind.Local;
+        var iconBaseUri = iconTransport == TransportKind.Local
+            ? settingsController.Current.LocalEndpoint
+            : settingsController.Current.CloudEndpoint;
+        var iconAuth = ResolveIconAuth(iconTransport);
+
         for (var index = 0; index < rows.Count; index++)
         {
             var rowIndex = index;
@@ -123,9 +130,41 @@ public sealed partial class FlyoutWindow : Window
                 row,
                 activateRow,
                 sendCommand,
-                settingsController.Current.LocalEndpoint,
-                settingsController.Current.UseWindows11Icons));
+                iconBaseUri,
+                settingsController.Current.UseWindows11Icons,
+                iconAuth));
         }
+    }
+
+    private SitemapControlFactory.IconAuthContext ResolveIconAuth(TransportKind transportKind)
+    {
+        if (transportKind == TransportKind.Local)
+        {
+            return new SitemapControlFactory.IconAuthContext(
+                ApiToken: GetApiTokenSync(TransportKind.Local),
+                BasicUserName: null,
+                BasicPassword: null,
+                TransportKind: transportKind);
+        }
+
+        var cloudCredentials = GetCloudCredentialsSync();
+        return new SitemapControlFactory.IconAuthContext(
+            ApiToken: null,
+            BasicUserName: cloudCredentials?.UserName,
+            BasicPassword: cloudCredentials?.Password,
+            TransportKind: transportKind);
+    }
+
+    private string? GetApiTokenSync(TransportKind kind)
+    {
+        try { return settingsController.GetApiTokenAsync(kind, CancellationToken.None).GetAwaiter().GetResult(); }
+        catch { return null; }
+    }
+
+    private CloudCredentials? GetCloudCredentialsSync()
+    {
+        try { return settingsController.GetCloudCredentialsAsync(CancellationToken.None).GetAwaiter().GetResult(); }
+        catch { return null; }
     }
 
     private async Task OnRowActivatedAsync(int rowIndex)

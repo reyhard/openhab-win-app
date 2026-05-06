@@ -80,6 +80,12 @@ public class SitemapControlFactoryTests
     [InlineData("chart")]            // exact key
     [InlineData("chart-1")]          // numbered variant
     [InlineData("chart_2")]          // numbered variant
+    [InlineData("sun_clouds")]       // common classic weather icon
+    [InlineData("poweroutlet")]      // common classic thing icon
+    [InlineData("radiator")]         // common classic thing icon
+    [InlineData("fan_ceiling")]      // custom/common alias
+    [InlineData("line")]             // fallback chart-style alias
+    [InlineData("pie")]              // fallback chart-style alias
     public void CanResolveNormalizedIcon_Resolves_KnownIcon(string iconName)
     {
         Assert.True(SitemapControlFactory.CanResolveNormalizedIcon(iconName));
@@ -120,6 +126,24 @@ public class SitemapControlFactoryTests
     }
 
     [Fact]
+    public void BuildOpenHabIconUri_IncludesDefaultFormat_AndState_WhenProvided()
+    {
+        var baseUri = new Uri("https://demo.local/");
+        var uri = SitemapControlFactory.BuildOpenHabIconUri(baseUri, "rollershutter", "50");
+
+        Assert.Equal("https://demo.local/icon/rollershutter?format=png&state=50", uri.ToString());
+    }
+
+    [Fact]
+    public void BuildOpenHabIconUri_IncludesDefaultFormat_WithoutState_WhenNotProvided()
+    {
+        var baseUri = new Uri("https://demo.local/");
+        var uri = SitemapControlFactory.BuildOpenHabIconUri(baseUri, "switch", null);
+
+        Assert.Equal("https://demo.local/icon/switch?format=png", uri.ToString());
+    }
+
+    [Fact]
     public void ToggleRows_DoNotUseCombinedFixedClusterWidth()
     {
         var clusterWidthField = typeof(SitemapControlFactory).GetField(
@@ -137,6 +161,6 @@ public class SitemapControlFactoryTests
             BindingFlags.NonPublic | BindingFlags.Static);
 
         var controlLaneWidth = Assert.IsType<double>(controlLaneWidthField?.GetRawConstantValue());
-        Assert.Equal(48, controlLaneWidth);
+        Assert.Equal(56, controlLaneWidth);
     }
 }
