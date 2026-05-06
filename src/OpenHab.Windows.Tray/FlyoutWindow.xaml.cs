@@ -115,7 +115,8 @@ public sealed partial class FlyoutWindow : Window
                 row,
                 activateRow,
                 sendCommand,
-                settingsController.Current.LocalEndpoint));
+                settingsController.Current.LocalEndpoint,
+                settingsController.Current.UseWindows11Icons));
         }
     }
 
@@ -166,6 +167,11 @@ public sealed partial class FlyoutWindow : Window
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         requestOpenMainWindow();
+    }
+
+    private void TitleText_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        SitemapCombo.IsDropDownOpen = true;
     }
 
     private void OnFlyoutActivated(object sender, WindowActivatedEventArgs args)

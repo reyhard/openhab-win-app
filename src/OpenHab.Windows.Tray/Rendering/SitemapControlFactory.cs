@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,7 +10,46 @@ namespace OpenHab.Windows.Tray.Rendering;
 
 public static class SitemapControlFactory
 {
-    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand = null, Uri? baseUri = null)
+    private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["light"] = "\uE706",
+        ["switch"] = "\uE8A3",
+        ["rollershutter"] = "\uE7A0",
+        ["heating"] = "\uE7B2",
+        ["temperature"] = "\uE7B2",
+        ["contact"] = "\uE8E1",
+        ["motion"] = "\uE7A6",
+        ["alarm"] = "\uE7BA",
+        ["battery"] = "\uEBA0",
+        ["energy"] = "\uE994",
+        ["power"] = "\uE994",
+        ["lock"] = "\uE72E",
+        ["door"] = "\uE8E1",
+        ["window"] = "\uE8E1",
+        ["garagedoor"] = "\uE8E1",
+        ["blinds"] = "\uE7A0",
+        ["dimmer"] = "\uE706",
+        ["colorpicker"] = "\uE790",
+        ["speaker"] = "\uE7F5",
+        ["tv"] = "\uE7F4",
+        ["network"] = "\uE701",
+        ["presence"] = "\uE716",
+        ["smoke"] = "\uE7BA",
+        ["camera"] = "\uE722",
+        ["fan"] = "\uE785",
+        ["water"] = "\uE7A6",
+        ["quality"] = "\uE769",
+    };
+
+    private static FontIcon? ResolveWin11Icon(string? iconName)
+    {
+        if (string.IsNullOrWhiteSpace(iconName)) return null;
+        if (Win11IconMap.TryGetValue(iconName, out var glyph))
+            return new FontIcon { Glyph = glyph, FontSize = 16, Opacity = 0.8 };
+        return null;
+    }
+
+    public static FrameworkElement Create(SitemapRowDescriptor row, Func<Task>? activateRow, Func<string, Task>? sendCommand = null, Uri? baseUri = null, bool useWindowsIcons = false)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -19,13 +59,13 @@ public static class SitemapControlFactory
             RenderControlKind.Slider => CreateSlider(row, sendCommand),
             RenderControlKind.Selection => CreateSelection(row, sendCommand),
             RenderControlKind.Fallback => CreateFallback(row),
-            _ => CreateText(row, activateRow, baseUri)
+            _ => CreateText(row, activateRow, baseUri, useWindowsIcons)
         };
     }
 
-    private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null, Uri? baseUri = null)
+    private static FrameworkElement CreateText(SitemapRowDescriptor row, Func<Task>? activateRow = null, Uri? baseUri = null, bool useWindowsIcons = false)
     {
-        var grid = CreateRow(row.Label, row.State ?? string.Empty, baseUri, row.IconName);
+        var grid = CreateRow(row.Label, row.State ?? string.Empty, baseUri, row.IconName, useWindowsIcons);
 
         if (activateRow is not null && row.Action == RenderActionKind.Navigate)
         {
@@ -58,18 +98,34 @@ public static class SitemapControlFactory
 
     private static FrameworkElement CreateToggle(SitemapRowDescriptor row, Func<Task>? activateRow)
     {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var labelBlock = new TextBlock
+        {
+            Text = row.Label,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.WrapWholeWords,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxLines = 2
+        };
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
         var toggle = new ToggleSwitch
         {
-            Header = row.Label,
             IsOn = string.Equals(row.State, "ON", StringComparison.OrdinalIgnoreCase)
         };
+        Grid.SetColumn(toggle, 1);
+        grid.Children.Add(toggle);
 
         if (row.Action == RenderActionKind.SendCommand && activateRow is not null)
         {
             toggle.Toggled += async (_, _) => await activateRow();
         }
 
-        return toggle;
+        return grid;
     }
 
     private static FrameworkElement CreateSlider(SitemapRowDescriptor row, Func<string, Task>? sendCommand)
@@ -164,9 +220,9 @@ public static class SitemapControlFactory
         };
     }
 
-    private static Grid CreateRow(string label, string state, Uri? baseUri = null, string? iconName = null)
+    private static Grid CreateRow(string label, string state, Uri? baseUri = null, string? iconName = null, bool useWindowsIcons = false)
     {
-        var hasIcon = iconName is not null && baseUri is not null;
+        var hasIcon = iconName is not null && (baseUri is not null || useWindowsIcons);
         var labelCol = hasIcon ? 1 : 0;
         var stateCol = hasIcon ? 2 : 1;
 
@@ -174,7 +230,7 @@ public static class SitemapControlFactory
 
         if (hasIcon)
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            grid.ColumnDefinitions.Insert(0, new ColumnDefinition { Width = new GridLength(24) });
         }
 
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -182,15 +238,40 @@ public static class SitemapControlFactory
 
         if (hasIcon)
         {
-            var image = new Image
+            if (useWindowsIcons)
             {
-                Source = new BitmapImage(new Uri(baseUri!, $"icon/{Uri.EscapeDataString(iconName!)}.png")),
-                Width = 20,
-                Height = 20,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(image, 0);
-            grid.Children.Add(image);
+                var winIcon = ResolveWin11Icon(iconName);
+                if (winIcon is not null)
+                {
+                    winIcon.VerticalAlignment = VerticalAlignment.Center;
+                    Grid.SetColumn(winIcon, 0);
+                    grid.Children.Add(winIcon);
+                }
+                else if (baseUri is not null)
+                {
+                    var image = new Image
+                    {
+                        Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}.png")),
+                        Width = 20,
+                        Height = 20,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    Grid.SetColumn(image, 0);
+                    grid.Children.Add(image);
+                }
+            }
+            else if (baseUri is not null)
+            {
+                var image = new Image
+                {
+                    Source = new BitmapImage(new Uri(baseUri, $"icon/{Uri.EscapeDataString(iconName!)}.png")),
+                    Width = 20,
+                    Height = 20,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(image, 0);
+                grid.Children.Add(image);
+            }
         }
 
         var labelBlock = new TextBlock

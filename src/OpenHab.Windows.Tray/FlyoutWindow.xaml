@@ -6,7 +6,6 @@
     <Grid Margin="12" RowSpacing="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -15,21 +14,21 @@
             <TextBlock x:Name="TitleText"
                        FontSize="18"
                        FontWeight="SemiBold"
-                       Text="openHAB" />
+                       Text="openHAB"
+                       IsTapEnabled="True"
+                       Tapped="TitleText_Tapped" />
             <TextBlock x:Name="StatusText"
                        Opacity="0.8" />
+            <ComboBox x:Name="SitemapCombo"
+                      Visibility="Collapsed"
+                      SelectionChanged="SitemapCombo_SelectionChanged" />
         </StackPanel>
 
-        <ComboBox x:Name="SitemapCombo"
-                  Grid.Row="1"
-                  Header="Sitemap"
-                  SelectionChanged="SitemapCombo_SelectionChanged" />
-
-        <ScrollViewer Grid.Row="2">
+        <ScrollViewer Grid.Row="1">
             <StackPanel x:Name="SitemapRows" Spacing="8" />
         </ScrollViewer>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right">
             <Button Click="RefreshButton_Click" ToolTipService.ToolTip="Refresh" Width="36" Height="36" Padding="4">
                 <FontIcon Glyph="&#xE72C;" FontSize="14" />
             </Button>

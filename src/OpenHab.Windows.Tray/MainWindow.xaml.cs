@@ -150,7 +150,8 @@ public sealed partial class MainWindow : Window
                 row,
                 activateRow,
                 sendCommand,
-                settingsController.Current.LocalEndpoint));
+                settingsController.Current.LocalEndpoint,
+                settingsController.Current.UseWindows11Icons));
         }
     }
 

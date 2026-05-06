@@ -128,12 +128,7 @@ public sealed class SitemapRuntimeController
         if (widget.Children.Count == 0) return false;
 
         var childPage = widget.Children[0];
-        var settings = settingsController.Current;
-        var primary = SelectPrimaryTransport(settings);
-        var client = clientFactory(primary.Kind, primary.BaseUri);
-        var json = await client.GetSitemapJsonAsync(childPage.Id, ct);
-        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
-        var normalized = SitemapNormalizer.Normalize(parsed);
+        var normalized = SitemapNormalizer.Normalize(childPage);
         currentPage = normalized;
 
         var descriptor = renderController.BuildCurrentDescriptor(normalized);
