@@ -14,7 +14,6 @@ public sealed partial class FlyoutWindow : Window
     private readonly SitemapRuntimeController runtimeController;
     private readonly Action requestOpenMainWindow;
     private bool isRefreshing;
-    private IReadOnlyList<SitemapInfo>? availableSitemaps;
 
     public FlyoutWindow(
         AppSettingsController settingsController,
@@ -42,9 +41,8 @@ public sealed partial class FlyoutWindow : Window
 
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
     {
-        availableSitemaps = sitemaps;
-
         var currentSitemap = settingsController.Current.SitemapName;
+        SitemapCombo.SelectionChanged -= SitemapCombo_SelectionChanged;
         SitemapCombo.Items.Clear();
 
         foreach (var sitemap in sitemaps)
@@ -62,6 +60,8 @@ public sealed partial class FlyoutWindow : Window
                 SitemapCombo.SelectedItem = item;
             }
         }
+
+        SitemapCombo.SelectionChanged += SitemapCombo_SelectionChanged;
     }
 
     private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)

@@ -21,7 +21,7 @@ public sealed partial class MainWindow : Window
     private bool cloudTokenEdited;
     private bool cloudUserNameEdited;
     private bool isHandlingCloseRequest;
-    private IReadOnlyList<SitemapInfo>? availableSitemaps;
+
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
         : this(settingsController, runtimeController, () => { })
@@ -336,9 +336,8 @@ public sealed partial class MainWindow : Window
 
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
     {
-        availableSitemaps = sitemaps;
-
         var currentSitemap = settingsController.Current.SitemapName;
+        SitemapCombo.SelectionChanged -= SitemapCombo_SelectionChanged;
         SitemapCombo.Items.Clear();
 
         foreach (var sitemap in sitemaps)
@@ -356,6 +355,8 @@ public sealed partial class MainWindow : Window
                 SitemapCombo.SelectedItem = item;
             }
         }
+
+        SitemapCombo.SelectionChanged += SitemapCombo_SelectionChanged;
     }
 
     private async void SitemapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

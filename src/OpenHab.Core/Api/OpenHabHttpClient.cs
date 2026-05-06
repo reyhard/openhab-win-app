@@ -81,8 +81,17 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         var results = new List<SitemapInfo>();
         foreach (var element in json.RootElement.EnumerateArray())
         {
-            var name = element.GetProperty("name").GetString() ?? string.Empty;
-            var label = element.GetProperty("label").GetString() ?? string.Empty;
+            var name = element.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String
+                ? nameProp.GetString() ?? string.Empty
+                : string.Empty;
+            if (string.IsNullOrEmpty(name))
+            {
+                continue;
+            }
+
+            var label = element.TryGetProperty("label", out var labelProp) && labelProp.ValueKind == JsonValueKind.String
+                ? labelProp.GetString() ?? name
+                : name;
             results.Add(new SitemapInfo(name, label));
         }
 
