@@ -277,6 +277,7 @@ public partial class App : Application
             _ = uiDispatcherQueue?.TryEnqueue(() =>
             {
                 flyoutWindow?.PopulateSitemaps(sitemaps);
+                mainWindow?.PopulateSitemaps(sitemaps);
             });
         }
         catch

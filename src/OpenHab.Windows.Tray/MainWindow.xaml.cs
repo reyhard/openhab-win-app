@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Windowing;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
@@ -20,6 +21,7 @@ public sealed partial class MainWindow : Window
     private bool cloudTokenEdited;
     private bool cloudUserNameEdited;
     private bool isHandlingCloseRequest;
+    private IReadOnlyList<SitemapInfo>? availableSitemaps;
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
         : this(settingsController, runtimeController, () => { })
@@ -88,7 +90,16 @@ public sealed partial class MainWindow : Window
         EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
         LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
         CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
-        SitemapNameText.Text = settingsController.Current.SitemapName;
+
+        var currentName = settingsController.Current.SitemapName;
+        foreach (ComboBoxItem item in SitemapCombo.Items)
+        {
+            if (string.Equals(item.Tag as string, currentName, StringComparison.OrdinalIgnoreCase))
+            {
+                SitemapCombo.SelectedItem = item;
+                break;
+            }
+        }
 
         suppressTokenEditTracking = true;
         LocalTokenBox.Password = string.Empty;
@@ -181,24 +192,6 @@ public sealed partial class MainWindow : Window
         {
             settingsController.SetEndpoints(localEndpoint, cloudEndpoint);
             await RefreshRuntimeAsync();
-        }
-        catch (ArgumentException)
-        {
-            RefreshSettingsBindings();
-        }
-    }
-
-    private async void SitemapNameText_LostFocus(object sender, RoutedEventArgs e)
-    {
-        if (isRefreshing)
-        {
-            return;
-        }
-
-        try
-        {
-            settingsController.SetSitemapName(SitemapNameText.Text);
-            await LoadRuntimeAsync();
         }
         catch (ArgumentException)
         {
@@ -341,6 +334,44 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
+    {
+        availableSitemaps = sitemaps;
+
+        var currentSitemap = settingsController.Current.SitemapName;
+        SitemapCombo.Items.Clear();
+
+        foreach (var sitemap in sitemaps)
+        {
+            var item = new ComboBoxItem
+            {
+                Content = sitemap.Label,
+                Tag = sitemap.Name
+            };
+
+            SitemapCombo.Items.Add(item);
+
+            if (string.Equals(sitemap.Name, currentSitemap, StringComparison.OrdinalIgnoreCase))
+            {
+                SitemapCombo.SelectedItem = item;
+            }
+        }
+    }
+
+    private async void SitemapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        if (SitemapCombo.SelectedItem is ComboBoxItem item && item.Tag is string sitemapName)
+        {
+            settingsController.SetSitemapName(sitemapName);
+            await LoadRuntimeAsync();
+        }
+    }
+
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
         if (isHandlingCloseRequest)
@@ -358,11 +389,6 @@ public sealed partial class MainWindow : Window
         {
             isHandlingCloseRequest = false;
         }
-    }
-
-    private async void LoadButton_Click(object sender, RoutedEventArgs e)
-    {
-        await LoadRuntimeAsync();
     }
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)

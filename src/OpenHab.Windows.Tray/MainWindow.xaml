@@ -26,17 +26,12 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox x:Name="SitemapNameText"
-                     Header="Sitemap name"
-                     MaxWidth="360"
-                     LostFocus="SitemapNameText_LostFocus" />
+            <ComboBox x:Name="SitemapCombo"
+                      Header="Sitemap"
+                      MaxWidth="360"
+                      SelectionChanged="SitemapCombo_SelectionChanged" />
             <Button Grid.Column="1"
-                    Margin="0,24,0,0"
-                    Content="Load"
-                    Click="LoadButton_Click" />
-            <Button Grid.Column="2"
                     Margin="0,24,0,0"
                     Content="Refresh"
                     Click="RefreshButton_Click" />
