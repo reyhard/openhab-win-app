@@ -46,11 +46,8 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
 
     public Task ConnectAsync(Uri sseUri, CancellationToken cancellationToken = default)
     {
-        if (IsConnected)
-            return Task.CompletedTask;
-
-        var existing = Interlocked.Exchange(ref _isConnected, 1);
-        if (existing == 1)
+        var uriChanged = _sseUri is null || _sseUri != sseUri;
+        if (IsConnected && !uriChanged)
             return Task.CompletedTask;
 
         _sseUri = sseUri;
@@ -60,13 +57,15 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         previous?.Cancel();
         previous?.Dispose();
 
-        _ = Task.Run(() => ReadLoopAsync(sseUri, cts.Token), cancellationToken);
+        Interlocked.Exchange(ref _isConnected, 1);
+        _ = Task.Run(() => ReadLoopAsync(sseUri, cts), cancellationToken);
 
         return Task.CompletedTask;
     }
 
-    private async Task ReadLoopAsync(Uri sseUri, CancellationToken ct)
+    private async Task ReadLoopAsync(Uri sseUri, CancellationTokenSource cts)
     {
+        var ct = cts.Token;
         var currentBackoff = _initialBackoff;
 
         while (!ct.IsCancellationRequested)
@@ -157,7 +156,10 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                 currentBackoff = _maxBackoff;
         }
 
-        Interlocked.Exchange(ref _isConnected, 0);
+        if (ReferenceEquals(Interlocked.CompareExchange(ref _internalCts, cts, cts), cts))
+        {
+            Interlocked.Exchange(ref _isConnected, 0);
+        }
     }
 
     public void Dispose()

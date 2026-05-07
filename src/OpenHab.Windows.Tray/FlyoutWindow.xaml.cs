@@ -37,6 +37,10 @@ public sealed partial class FlyoutWindow : Window
         InitializeComponent();
         ConfigureFlyoutWindow();
         this.Activated += OnWindowActivated;
+        runtimeController.SnapshotChanged += (_, _) =>
+        {
+            _ = DispatcherQueue.TryEnqueue(RefreshRuntimeBindings);
+        };
         RefreshSettingsBindings();
         _ = LoadRuntimeAsync();
     }

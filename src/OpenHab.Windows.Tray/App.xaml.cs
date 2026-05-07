@@ -8,6 +8,7 @@ using OpenHab.Core.Api;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Core;
+using OpenHab.Core.Events;
 using OpenHab.Windows.Notifications;
 using OpenHab.Windows.Tray.Tray;
 using System.Linq;
@@ -66,7 +67,9 @@ public partial class App : Application
                     apiToken: auth.ApiToken,
                     basicUserName: auth.BasicUserName,
                     basicPassword: auth.BasicPassword);
-            });
+            },
+            eventStreamClient: CreateEventStreamClient(settingsController, httpClient),
+            sitemapEventStreamClient: CreateEventStreamClient(settingsController, httpClient));
 
         shellController = new TrayShellController();
         shellController.HandleLaunch();
@@ -247,6 +250,20 @@ public partial class App : Application
 
         var cloudCredentials = GetCloudCredentialsSync(controller);
         return new RuntimeAuth(null, cloudCredentials?.UserName, cloudCredentials?.Password);
+    }
+
+    private static OpenHabEventStreamClient CreateEventStreamClient(AppSettingsController settingsController, HttpClient httpClient)
+    {
+        var settings = settingsController.Current;
+        var preferredTransport = settings.EndpointMode == EndpointMode.CloudOnly
+            ? TransportKind.Cloud
+            : TransportKind.Local;
+        var auth = ResolveRuntimeAuthSync(settingsController, preferredTransport);
+        return new OpenHabEventStreamClient(
+            httpClient,
+            apiToken: auth.ApiToken,
+            basicUserName: auth.BasicUserName,
+            basicPassword: auth.BasicPassword);
     }
 
     private readonly record struct RuntimeAuth(string? ApiToken, string? BasicUserName, string? BasicPassword);

@@ -7,6 +7,8 @@ using OpenHab.Core.Profiles;
 using OpenHab.Sitemaps.Models;
 using OpenHab.Sitemaps.Parsing;
 using OpenHab.Sitemaps.Runtime;
+using System.Diagnostics;
+using System.Threading;
 
 namespace OpenHab.App.Runtime;
 
@@ -16,18 +18,32 @@ public sealed class SitemapRuntimeController
     private readonly SitemapRenderController renderController;
     private readonly Func<TransportKind, Uri, IOpenHabClient> clientFactory;
     private readonly IOpenHabEventStreamClient? eventStreamClient;
+    private readonly IOpenHabEventStreamClient? sitemapEventStreamClient;
     private NormalizedSitemapPage? currentPage;
     private readonly Stack<NormalizedSitemapPage> backStack = new();
     private Dictionary<string, int>? itemIndexMap;
     private Dictionary<string, int>? widgetIdMap;
     private string? _subscriptionId;
+    private int _widgetRefreshQueued;
+    private int _widgetRefreshRunning;
+    private bool _eventHandlersAttached;
+    private bool _sitemapEventHandlersAttached;
+    private DateTimeOffset _lastReconcileRefreshUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastWidgetEventUtc = DateTimeOffset.MinValue;
+    private long _refreshSequence;
+    private int _refreshInProgress;
+    private bool _rawEventStreamStarted;
+    private bool _sitemapEventStreamStarted;
+    private string? _sitemapEventStreamSitemapName;
+    private string? _sitemapEventStreamPageId;
     public bool CanGoBack => backStack.Count > 0;
 
     public SitemapRuntimeController(
         AppSettingsController settingsController,
         SitemapRenderController renderController,
         Func<TransportKind, Uri, IOpenHabClient> clientFactory,
-        IOpenHabEventStreamClient? eventStreamClient = null)
+        IOpenHabEventStreamClient? eventStreamClient = null,
+        IOpenHabEventStreamClient? sitemapEventStreamClient = null)
     {
         ArgumentNullException.ThrowIfNull(settingsController);
         ArgumentNullException.ThrowIfNull(renderController);
@@ -37,6 +53,7 @@ public sealed class SitemapRuntimeController
         this.renderController = renderController;
         this.clientFactory = clientFactory;
         this.eventStreamClient = eventStreamClient;
+        this.sitemapEventStreamClient = sitemapEventStreamClient;
     }
 
     public SitemapRuntimeSnapshot Current { get; private set; } = SitemapRuntimeSnapshot.Initial;
@@ -46,11 +63,23 @@ public sealed class SitemapRuntimeController
 
     public Task LoadAsync(CancellationToken cancellationToken = default)
     {
-        return RefreshAsync(cancellationToken);
+        return RefreshAsyncInternal("load", cancellationToken);
     }
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
+        await RefreshAsyncInternal("manual", cancellationToken);
+    }
+
+    private async Task RefreshAsyncInternal(string reason, CancellationToken cancellationToken = default)
+    {
+        var refreshId = Interlocked.Increment(ref _refreshSequence);
+        var inProgress = Interlocked.Increment(ref _refreshInProgress);
+        var sw = Stopwatch.StartNew();
+        DiagnosticLogger.Info(
+            $"Refresh#{refreshId} start reason={reason} inProgress={inProgress} " +
+            $"activeTransport={Current.ActiveTransport?.ToString() ?? "<null>"} currentPage={currentPage?.Id ?? "<null>"}");
+
         Current = Current with { IsBusy = true, StatusText = "Loading homepage...", ChangedRowIndices = [] };
         var settings = settingsController.Current;
         var primary = SelectPrimaryTransport(settings);
@@ -58,6 +87,8 @@ public sealed class SitemapRuntimeController
         try
         {
             var descriptor = await LoadDescriptorAsync(primary, settings.SitemapName, cancellationToken);
+            DiagnosticLogger.Info(
+                $"Refresh#{refreshId} primary success transport={primary.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
             Current = Current with
             {
                 Descriptor = descriptor,
@@ -70,19 +101,24 @@ public sealed class SitemapRuntimeController
                 ChangedRowIndices = []
             };
 
-            // Reconnect event stream on sitemap/page change
+            // Primary live updates use raw rest/events (reliable across servers).
+            StartEventStream(primary.BaseUri, cancellationToken);
             _ = StartSitemapEventStreamAsync(primary.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
         }
         catch (OperationCanceledException)
         {
+            DiagnosticLogger.Warn($"Refresh#{refreshId} canceled reason={reason}");
             throw;
         }
         catch (Exception firstError) when (settings.EndpointMode == EndpointMode.Automatic && primary.Kind == TransportKind.Local)
         {
+            DiagnosticLogger.Warn($"Refresh#{refreshId} local load failed, trying cloud fallback: {firstError.Message}");
             var fallback = new TransportSelection(TransportKind.Cloud, settings.CloudEndpoint);
             try
             {
                 var descriptor = await LoadDescriptorAsync(fallback, settings.SitemapName, cancellationToken);
+                DiagnosticLogger.Info(
+                    $"Refresh#{refreshId} fallback success transport={fallback.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
                 Current = Current with
                 {
                     Descriptor = descriptor,
@@ -95,15 +131,17 @@ public sealed class SitemapRuntimeController
                     ChangedRowIndices = []
                 };
 
-                // Reconnect event stream (cloud mode — no SSE, but keeps method consistent)
+                StartEventStream(fallback.BaseUri, cancellationToken);
                 _ = StartSitemapEventStreamAsync(fallback.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
             }
             catch (OperationCanceledException)
             {
+                DiagnosticLogger.Warn($"Refresh#{refreshId} fallback canceled reason={reason}");
                 throw;
             }
             catch (Exception fallbackError)
             {
+                DiagnosticLogger.Warn($"Refresh#{refreshId} fallback failed: {fallbackError.Message}");
                 Current = Current with
                 {
                     ConnectionState = ConnectionState.Offline,
@@ -116,6 +154,7 @@ public sealed class SitemapRuntimeController
         }
         catch (Exception error)
         {
+            DiagnosticLogger.Warn($"Refresh#{refreshId} failed: {error.Message}");
             Current = Current with
             {
                 ConnectionState = ConnectionState.Offline,
@@ -128,6 +167,11 @@ public sealed class SitemapRuntimeController
         finally
         {
             Current = Current with { IsBusy = false, ChangedRowIndices = [] };
+            sw.Stop();
+            var remaining = Interlocked.Decrement(ref _refreshInProgress);
+            DiagnosticLogger.Info(
+                $"Refresh#{refreshId} done reason={reason} durationMs={sw.ElapsedMilliseconds} " +
+                $"remainingInProgress={remaining} status='{Current.StatusText}' page={Current.Descriptor?.PageId ?? "<null>"}");
         }
     }
 
@@ -142,7 +186,7 @@ public sealed class SitemapRuntimeController
             : settingsController.Current.CloudEndpoint;
         var client = clientFactory(activeTransport, endpoint);
         await client.SendCommandAsync(widget.ItemName, command, ct);
-        await RefreshAsync(ct);
+        await RefreshAsyncInternal($"send-command:{widget.ItemName}", ct);
         return true;
     }
 
@@ -190,7 +234,7 @@ public sealed class SitemapRuntimeController
 
     private void ReconnectForPage(string pageId)
     {
-        if (eventStreamClient is null) return;
+        if (sitemapEventStreamClient is null) return;
         var endpoint = Current.ActiveTransport == TransportKind.Local
             ? settingsController.Current.LocalEndpoint
             : settingsController.Current.CloudEndpoint;
@@ -261,7 +305,7 @@ public sealed class SitemapRuntimeController
         var client = clientFactory(activeTransport, endpoint);
         var command = string.Equals(widget.State, "ON", StringComparison.OrdinalIgnoreCase) ? "OFF" : "ON";
         await client.SendCommandAsync(widget.ItemName, command, cancellationToken);
-        await RefreshAsync(cancellationToken);
+        await RefreshAsyncInternal($"activate-row:{widget.ItemName}", cancellationToken);
         return true;
     }
 
@@ -280,67 +324,69 @@ public sealed class SitemapRuntimeController
         return renderController.BuildCurrentDescriptor(normalized);
     }
 
-    private bool _eventStreamStarted;
-    private string? _eventStreamSitemapName;
-    private string? _eventStreamPageId;
-
     public async Task StartSitemapEventStreamAsync(Uri localBaseUri, string sitemapName, string pageId, CancellationToken ct = default)
     {
-        if (eventStreamClient is null) return;
+        if (sitemapEventStreamClient is null) return;
 
         // If already connected to the same sitemap/page, skip
-        if (_eventStreamStarted && _eventStreamSitemapName == sitemapName && _eventStreamPageId == pageId)
+        if (_sitemapEventStreamStarted && _sitemapEventStreamSitemapName == sitemapName && _sitemapEventStreamPageId == pageId)
             return;
 
-        _eventStreamStarted = true;
-        _eventStreamSitemapName = sitemapName;
-        _eventStreamPageId = pageId;
+        _sitemapEventStreamStarted = true;
+        _sitemapEventStreamSitemapName = sitemapName;
+        _sitemapEventStreamPageId = pageId;
 
         DiagnosticLogger.Info($"Starting sitemap event stream to {localBaseUri} for sitemap '{sitemapName}' page '{pageId}'");
 
-        eventStreamClient.ConnectionStateChanged += OnConnectionStateChanged;
-        eventStreamClient.EventReceived += OnEventReceived;
-        eventStreamClient.WidgetEventReceived += OnWidgetEventReceived;
+        EnsureSitemapEventHandlersAttached();
 
-        _subscriptionId = await eventStreamClient.SubscribeToSitemapEventsAsync(localBaseUri, ct);
+        _subscriptionId = await sitemapEventStreamClient.SubscribeToSitemapEventsAsync(localBaseUri, ct);
         if (_subscriptionId is null)
         {
             DiagnosticLogger.Warn("Failed to subscribe to sitemap events — no subscription ID returned");
-            _eventStreamStarted = false;
+            _sitemapEventStreamStarted = false;
             return;
         }
 
         DiagnosticLogger.Info($"Sitemap event subscription created: {_subscriptionId}");
         var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
-        _ = eventStreamClient.ConnectAsync(sseUrl, ct);
+        _ = sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
     }
 
     public async Task ReconnectSitemapEventStreamAsync(Uri localBaseUri, string sitemapName, string pageId, CancellationToken ct = default)
     {
-        if (eventStreamClient is null || _subscriptionId is null) return;
+        if (sitemapEventStreamClient is null || _subscriptionId is null) return;
 
         DiagnosticLogger.Info($"Reconnecting sitemap event stream for page '{pageId}'");
         var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
-        _ = eventStreamClient.ConnectAsync(sseUrl, ct);
+        _ = sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
     }
 
     // Keep original StartEventStream for backward compat (raw events)
     public void StartEventStream(Uri localBaseUri, CancellationToken ct = default)
     {
         if (eventStreamClient is null) return;
-        if (_eventStreamStarted) return;
-        _eventStreamStarted = true;
+        if (_rawEventStreamStarted)
+        {
+            DiagnosticLogger.Info(
+                $"StartEventStream skipped (already started): base={localBaseUri} connected={eventStreamClient.IsConnected}");
+            return;
+        }
+        _rawEventStreamStarted = true;
 
         DiagnosticLogger.Info($"Starting event stream to {localBaseUri}");
 
-        eventStreamClient.ConnectionStateChanged += OnConnectionStateChanged;
-        eventStreamClient.EventReceived += OnEventReceived;
+        EnsureEventHandlersAttached();
 
         _ = eventStreamClient.ConnectAsync(new Uri(localBaseUri, "rest/events?topics=openhab/items/*/state,openhab/items/*/command"), ct);
     }
 
     private void OnConnectionStateChanged(object? sender, string state)
     {
+        var source = ReferenceEquals(sender, eventStreamClient)
+            ? "raw"
+            : ReferenceEquals(sender, sitemapEventStreamClient) ? "sitemap" : "unknown";
+        DiagnosticLogger.Info($"SSE connection state changed source={source} state={state}");
         Current = Current with
         {
             ConnectionState = state switch
@@ -373,7 +419,15 @@ public sealed class SitemapRuntimeController
     private void OnWidgetEventReceived(object? sender, SitemapWidgetEvent e)
     {
         DiagnosticLogger.Info($"SSE widget event: id={e.WidgetId} item={e.ItemName} state={e.ItemState} vis={e.Visibility}");
+        _lastWidgetEventUtc = DateTimeOffset.UtcNow;
         ApplyWidgetEvent(e);
+
+        // Some servers emit incomplete widget events (e.g. missing item/state) for dependent rows.
+        // Reconcile in background only for ambiguous payloads.
+        if (string.IsNullOrWhiteSpace(e.ItemName) && string.IsNullOrWhiteSpace(e.ItemState))
+        {
+            QueueRefreshFromWidgetEvent();
+        }
     }
 
     private void ApplyItemState(string itemName, string newState)
@@ -389,6 +443,7 @@ public sealed class SitemapRuntimeController
 
         var widget = currentPage.Widgets[index];
         if (string.Equals(widget.State, newState, StringComparison.Ordinal)) return;
+        var oldState = widget.State;
 
         var widgets = currentPage.Widgets.ToList();
         widgets[index] = widget with { State = newState };
@@ -400,7 +455,20 @@ public sealed class SitemapRuntimeController
             ChangedRowIndices = new[] { index }
         };
 
+        DiagnosticLogger.Info(
+            $"ApplyItemState item={itemName} index={index} old='{oldState}' new='{newState}' " +
+            $"widgetType={widget.Type} widgetId={widget.WidgetId ?? "<null>"}");
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
+
+        // If sitemap widget events are stale, reconcile from server as fallback.
+        if (widget.Type == SitemapWidgetType.Switch &&
+            DateTimeOffset.UtcNow - _lastWidgetEventUtc > TimeSpan.FromSeconds(8))
+        {
+            DiagnosticLogger.Info(
+                $"ApplyItemState scheduling reconcile refresh for switch item={itemName} " +
+                $"widgetAgeMs={(DateTimeOffset.UtcNow - _lastWidgetEventUtc).TotalMilliseconds:F0}");
+            QueueRefreshFromWidgetEvent();
+        }
     }
 
     private void ApplyWidgetEvent(SitemapWidgetEvent e)
@@ -462,6 +530,9 @@ public sealed class SitemapRuntimeController
             ChangedRowIndices = new[] { index.Value }
         };
 
+        DiagnosticLogger.Info(
+            $"ApplyWidgetEvent applied id={e.WidgetId} index={index.Value} item={e.ItemName ?? "<null>"} " +
+            $"state={e.ItemState ?? "<null>"} vis={e.Visibility} descChanged={e.DescriptionChanged}");
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -480,6 +551,159 @@ public sealed class SitemapRuntimeController
             if (!string.IsNullOrEmpty(widgetId))
                 widgetIdMap[widgetId] = i;
         }
+    }
+
+    private void EnsureEventHandlersAttached()
+    {
+        if (eventStreamClient is null || _eventHandlersAttached) return;
+        eventStreamClient.ConnectionStateChanged += OnConnectionStateChanged;
+        eventStreamClient.EventReceived += OnEventReceived;
+        _eventHandlersAttached = true;
+    }
+
+    private void EnsureSitemapEventHandlersAttached()
+    {
+        if (sitemapEventStreamClient is null || _sitemapEventHandlersAttached) return;
+        sitemapEventStreamClient.WidgetEventReceived += OnWidgetEventReceived;
+        _sitemapEventHandlersAttached = true;
+    }
+
+    private void QueueRefreshFromWidgetEvent()
+    {
+        var sinceLastRefresh = DateTimeOffset.UtcNow - _lastReconcileRefreshUtc;
+        if (sinceLastRefresh < TimeSpan.FromMilliseconds(1200))
+        {
+            DiagnosticLogger.Info(
+                $"QueueRefreshFromWidgetEvent skipped (cooldown) sinceLastMs={sinceLastRefresh.TotalMilliseconds:F0}");
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _widgetRefreshQueued, 1) == 1)
+        {
+            DiagnosticLogger.Info("QueueRefreshFromWidgetEvent skipped (already queued)");
+            return;
+        }
+        DiagnosticLogger.Info("QueueRefreshFromWidgetEvent queued");
+
+        _ = Task.Run(async () =>
+        {
+            if (Interlocked.CompareExchange(ref _widgetRefreshRunning, 1, 0) != 0)
+            {
+                DiagnosticLogger.Info("QueueRefreshFromWidgetEvent runner already active");
+                return;
+            }
+
+            try
+            {
+                while (Interlocked.Exchange(ref _widgetRefreshQueued, 0) == 1)
+                {
+                    try
+                    {
+                        var now = DateTimeOffset.UtcNow;
+                        var sinceLast = now - _lastReconcileRefreshUtc;
+                        if (sinceLast < TimeSpan.FromMilliseconds(1200))
+                        {
+                            await Task.Delay(TimeSpan.FromMilliseconds(1200) - sinceLast).ConfigureAwait(false);
+                        }
+
+                        DiagnosticLogger.Info("QueueRefreshFromWidgetEvent executing reconcile refresh");
+                        await ReconcileCurrentPageAsync().ConfigureAwait(false);
+                        _lastReconcileRefreshUtc = DateTimeOffset.UtcNow;
+                    }
+                    catch (Exception ex)
+                    {
+                        DiagnosticLogger.Warn($"Widget-event refresh failed: {ex.Message}");
+                    }
+                }
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _widgetRefreshRunning, 0);
+                if (Interlocked.Exchange(ref _widgetRefreshQueued, 0) == 1)
+                {
+                    QueueRefreshFromWidgetEvent();
+                }
+                else
+                {
+                    DiagnosticLogger.Info("QueueRefreshFromWidgetEvent runner idle");
+                }
+            }
+        });
+    }
+
+    private async Task ReconcileCurrentPageAsync(CancellationToken cancellationToken = default)
+    {
+        var activeTransport = Current.ActiveTransport;
+        if (activeTransport is null)
+        {
+            DiagnosticLogger.Info("ReconcileCurrentPageAsync skipped (no active transport)");
+            return;
+        }
+
+        var transport = activeTransport.Value;
+        var settings = settingsController.Current;
+        var endpoint = transport == TransportKind.Local ? settings.LocalEndpoint : settings.CloudEndpoint;
+        var currentPageId = currentPage?.Id;
+
+        DiagnosticLogger.Info(
+            $"ReconcileCurrentPageAsync start transport={transport} sitemap={settings.SitemapName} page={currentPageId ?? "<null>"}");
+
+        var client = clientFactory(transport, endpoint);
+        var json = await client.GetSitemapJsonAsync(settings.SitemapName, cancellationToken).ConfigureAwait(false);
+        var homepage = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        var targetPage = homepage;
+        if (!string.IsNullOrEmpty(currentPageId))
+        {
+            var foundPage = FindPageById(homepage, currentPageId);
+            if (foundPage is not null)
+            {
+                targetPage = foundPage;
+            }
+            else
+            {
+                DiagnosticLogger.Warn(
+                    $"ReconcileCurrentPageAsync page '{currentPageId}' not found in sitemap '{settings.SitemapName}', falling back to homepage");
+                backStack.Clear();
+            }
+        }
+
+        var normalized = SitemapNormalizer.Normalize(targetPage);
+        currentPage = normalized;
+        BuildItemIndexMap();
+
+        Current = Current with
+        {
+            Descriptor = renderController.BuildCurrentDescriptor(normalized),
+            Breadcrumbs = BuildBreadcrumbTrail(),
+            ChangedRowIndices = []
+        };
+
+        DiagnosticLogger.Info(
+            $"ReconcileCurrentPageAsync done page={normalized.Id} rows={normalized.Widgets.Count}");
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static SitemapPage? FindPageById(SitemapPage page, string pageId)
+    {
+        if (string.Equals(page.Id, pageId, StringComparison.Ordinal))
+        {
+            return page;
+        }
+
+        foreach (var widget in page.Widgets)
+        {
+            foreach (var child in widget.Children)
+            {
+                var found = FindPageById(child, pageId);
+                if (found is not null)
+                {
+                    return found;
+                }
+            }
+        }
+
+        return null;
     }
 
     public async Task<IReadOnlyList<SitemapInfo>> LoadSitemapListAsync(CancellationToken cancellationToken = default)

@@ -75,6 +75,10 @@ public sealed partial class MainWindow : Window
             };
             RefreshNotificationList();
         }
+        runtimeController.SnapshotChanged += (_, _) =>
+        {
+            _ = DispatcherQueue.TryEnqueue(RefreshRuntimeBindings);
+        };
         _ = LoadRuntimeAsync();
     }
 

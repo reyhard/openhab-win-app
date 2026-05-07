@@ -341,6 +341,43 @@ public sealed class SitemapRuntimeControllerTests
         Assert.Empty(controller.Current.ChangedRowIndices);
     }
 
+    [Fact]
+    public async Task WidgetEventTriggersSitemapRefreshForCorrectVisibilityAndState()
+    {
+        var settings = new AppSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        localClient.EnqueueSitemapJson(HomepageJson("ON"));
+        var cloudClient = new FakeOpenHabClient();
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient, eventClient);
+
+        await controller.LoadAsync();
+        Assert.Equal("OFF", controller.Current.Descriptor!.Rows[0].State);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "w1",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "LivingRoom_Light",
+            ItemState: "ON",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        for (var i = 0; i < 20 && controller.Current.Descriptor!.Rows[0].State != "ON"; i++)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Equal("ON", controller.Current.Descriptor!.Rows[0].State);
+        Assert.True(localClient.RequestedSitemaps.Count >= 1);
+    }
+
     private static SitemapRuntimeController CreateRuntimeController(
         AppSettingsController settings,
         FakeOpenHabClient localClient,
@@ -352,6 +389,7 @@ public sealed class SitemapRuntimeControllerTests
             settings,
             renderController,
             (kind, _) => kind == TransportKind.Local ? localClient : cloudClient,
+            eventClient,
             eventClient);
     }
 }
