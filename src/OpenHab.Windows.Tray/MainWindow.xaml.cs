@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Windowing;
+using Windows.System;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
@@ -63,6 +64,7 @@ public sealed partial class MainWindow : Window
 
         InitializeComponent();
         AppWindow.Closing += AppWindow_Closing;
+        this.Content.KeyDown += MainContent_KeyDown;
         InitializeSettingsControls();
         RefreshSettingsBindings();
         if (notificationStore is not null)
@@ -368,15 +370,7 @@ public sealed partial class MainWindow : Window
         LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
         CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
 
-        var currentName = settingsController.Current.SitemapName;
-        foreach (ComboBoxItem item in SitemapCombo.Items)
-        {
-            if (string.Equals(item.Tag as string, currentName, StringComparison.OrdinalIgnoreCase))
-            {
-                SitemapCombo.SelectedItem = item;
-                break;
-            }
-        }
+        // Sitemap selection is reflected via title/header tap menu.
 
         suppressTokenEditTracking = true;
         LocalTokenBox.Password = string.Empty;
@@ -406,6 +400,19 @@ public sealed partial class MainWindow : Window
         var snapshot = runtimeController.Current;
         TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
         StatusText.Text = snapshot.StatusText;
+        var rawBreadcrumbs = snapshot.Breadcrumbs.Count > 0
+            ? snapshot.Breadcrumbs
+            : [TitleText.Text];
+        var breadcrumbItems = rawBreadcrumbs
+            .Select((label, index) => index == 0
+                ? BreadcrumbDisplayItem.CreateHomeIcon()
+                : BreadcrumbDisplayItem.CreateText(label))
+            .ToList();
+        BreadcrumbBar.ItemsSource = breadcrumbItems;
+        BreadcrumbBar.Visibility = rawBreadcrumbs.Count > 1
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
         SitemapRows.Children.Clear();
 
         var rows = snapshot.Descriptor?.Rows;
@@ -675,21 +682,100 @@ public sealed partial class MainWindow : Window
 
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
     {
-        SitemapComboHelper.Populate(SitemapCombo, sitemaps, settingsController.Current.SitemapName, SitemapCombo_SelectionChanged);
+        SitemapMenuFlyout.Items.Clear();
+        foreach (var s in sitemaps)
+        {
+            var item = new MenuFlyoutItem { Text = s.Label, Tag = s.Name };
+            item.Click += SitemapMenuItem_Click;
+            SitemapMenuFlyout.Items.Add(item);
+        }
     }
 
-    private async void SitemapCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void SitemapMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (isRefreshing)
         {
             return;
         }
 
-        if (SitemapCombo.SelectedItem is ComboBoxItem item && item.Tag is string sitemapName)
+        if (sender is MenuFlyoutItem item && item.Tag is string sitemapName)
         {
             settingsController.SetSitemapName(sitemapName);
             await LoadRuntimeAsync();
         }
+    }
+
+    private void SitemapHeaderArea_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        ShowSitemapMenuAt(TitleText);
+    }
+
+    private void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
+    {
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        if (runtimeController.NavigateToBreadcrumb(args.Index))
+        {
+            RefreshRuntimeBindings();
+        }
+    }
+
+    private void NavigateBack_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateBackIfPossible();
+    }
+
+    private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.GoBack)
+        {
+            if (NavigateBackIfPossible())
+            {
+                e.Handled = true;
+            }
+        }
+    }
+
+    private bool NavigateBackIfPossible()
+    {
+        if (!runtimeController.CanGoBack || isRefreshing)
+        {
+            return false;
+        }
+
+        isRefreshing = true;
+        try
+        {
+            runtimeController.NavigateBack();
+            RefreshRuntimeBindings();
+            return true;
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
+    }
+
+    private void ShowSitemapMenuAt(FrameworkElement target)
+    {
+        if (SitemapMenuFlyout.Items.Count == 0)
+        {
+            return;
+        }
+
+        SitemapMenuFlyout.ShowAt(target);
+    }
+
+    public sealed record BreadcrumbDisplayItem(string Label, FontFamily FontFamily, double FontSize)
+    {
+        public static BreadcrumbDisplayItem CreateHomeIcon() =>
+            new("\uEA8A", new FontFamily("Segoe MDL2 Assets"), 18);
+
+        public static BreadcrumbDisplayItem CreateText(string label) =>
+            new(label, new FontFamily("Segoe UI"), 14);
     }
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
