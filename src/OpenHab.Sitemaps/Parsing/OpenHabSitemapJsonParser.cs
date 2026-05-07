@@ -91,7 +91,7 @@ public static class OpenHabSitemapJsonParser
             itemState = GetStringOrNull(itemElement, "state");
         }
 
-        var state = !string.IsNullOrWhiteSpace(itemState) ? itemState : stateFromLabel;
+        var state = ResolveWidgetState(itemState, stateFromLabel);
 
         var mappings = new List<SitemapMapping>();
         if (widgetElement.TryGetProperty("mappings", out var mappingsElement) &&
@@ -118,6 +118,9 @@ public static class OpenHabSitemapJsonParser
         }
 
         var icon = GetStringOrNull(widgetElement, "icon");
+        var minValue = GetDoubleOrNull(widgetElement, "minValue");
+        var maxValue = GetDoubleOrNull(widgetElement, "maxValue");
+        var step = GetDoubleOrNull(widgetElement, "step");
 
         var isVisible = true;
         if (widgetElement.TryGetProperty("visibility", out var visibilityElement) &&
@@ -134,7 +137,11 @@ public static class OpenHabSitemapJsonParser
             mappings,
             isVisible,
             children,
-            icon);
+            icon,
+            minValue,
+            maxValue,
+            step,
+            itemState);
     }
 
     private static (string Label, string? State) SplitLabelAndState(string rawLabel)
@@ -144,7 +151,7 @@ public static class OpenHabSitemapJsonParser
             return (string.Empty, null);
         }
 
-        var start = rawLabel.LastIndexOf(" [", StringComparison.Ordinal);
+        var start = rawLabel.IndexOf(" [", StringComparison.Ordinal);
         if (start >= 0 && rawLabel.EndsWith(']'))
         {
             var stateStart = start + 2;
@@ -175,5 +182,60 @@ public static class OpenHabSitemapJsonParser
         return propertyElement.ValueKind == JsonValueKind.String
             ? propertyElement.GetString()
             : null;
+    }
+
+    private static double? GetDoubleOrNull(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var propertyElement))
+        {
+            return null;
+        }
+
+        return propertyElement.ValueKind switch
+        {
+            JsonValueKind.Number when propertyElement.TryGetDouble(out var number) => number,
+            JsonValueKind.String when double.TryParse(
+                propertyElement.GetString(),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed) => parsed,
+            _ => null
+        };
+    }
+
+    private static string? ResolveWidgetState(string? itemState, string? stateFromLabel)
+    {
+        if (string.IsNullOrWhiteSpace(itemState))
+        {
+            return stateFromLabel;
+        }
+
+        if (string.IsNullOrWhiteSpace(stateFromLabel))
+        {
+            return itemState;
+        }
+
+        if (string.Equals(itemState, stateFromLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            return itemState;
+        }
+
+        // If both sides are opposite binary tokens, prefer item state to avoid stale
+        // label snapshots (e.g. label "ON" but current item state "OFF").
+        var itemIsBinary =
+            string.Equals(itemState, "ON", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(itemState, "OFF", StringComparison.OrdinalIgnoreCase);
+        var labelIsBinary =
+            string.Equals(stateFromLabel, "ON", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(stateFromLabel, "OFF", StringComparison.OrdinalIgnoreCase);
+        if (itemIsBinary && labelIsBinary &&
+            !string.Equals(itemState, stateFromLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            return itemState;
+        }
+
+        // Prefer user-facing formatted state from label (MAP transforms, DateTime format,
+        // units, and other sitemap presentation rules).
+        return stateFromLabel;
     }
 }

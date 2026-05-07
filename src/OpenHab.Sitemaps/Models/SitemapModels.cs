@@ -10,7 +10,11 @@ public sealed record SitemapWidget(
     IReadOnlyList<SitemapMapping> Mappings,
     bool IsVisible,
     IReadOnlyList<SitemapPage> Children,
-    string? Icon = null);
+    string? Icon = null,
+    double? MinValue = null,
+    double? MaxValue = null,
+    double? Step = null,
+    string? RawItemState = null);
 
 public sealed record NormalizedSitemapPage(string Id, string Label, IReadOnlyList<NormalizedSitemapWidget> Widgets);
 
@@ -24,7 +28,11 @@ public sealed record NormalizedSitemapWidget(
     bool RequiresFallback,
     SitemapFallbackKind FallbackKind,
     IReadOnlyList<SitemapPage> Children,
-    string? Icon = null);
+    string? Icon = null,
+    double? MinValue = null,
+    double? MaxValue = null,
+    double? Step = null,
+    string? RawItemState = null);
 
 public sealed record SitemapMapping(string Command, string Label);
 

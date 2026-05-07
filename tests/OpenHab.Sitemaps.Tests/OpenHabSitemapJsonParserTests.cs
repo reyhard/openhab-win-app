@@ -59,7 +59,7 @@ public sealed class OpenHabSitemapJsonParserTests
         var childWidget = Assert.Single(childPage.Widgets);
         Assert.Equal(SitemapWidgetType.Text, childWidget.Type);
         Assert.Equal("Temperature", childWidget.Label);
-        Assert.Equal("21.7 \u00B0C", childWidget.State);
+        Assert.Equal("21.5 \u00B0C", childWidget.State);
     }
 
     [Fact]

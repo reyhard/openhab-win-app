@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -21,66 +22,90 @@ public static class SitemapControlFactory
 {
     private const double ValueLaneWidth = 96;
     private const double ControlLaneWidth = 56;
+    private const double NavigateChevronLaneWidth = 20;
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
+    private static readonly Regex FirstNumberRegex = new(@"[-+]?\d+([.,]\d+)?", RegexOptions.Compiled);
     private static readonly ConcurrentDictionary<string, ImageSource> IconSourceCache = new(StringComparer.Ordinal);
     private static readonly object IconProbeSyncRoot = new();
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
-
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["light"] = "\uE706", ["lights"] = "\uE706",
-        ["lighton"] = "\uE706", ["lightoff"] = "\uE706",
-        ["lightson"] = "\uE706", ["lightsoff"] = "\uE706",
-        ["switch"] = "\uE7E8",
+        // --- LIGHTING ---["light"] = "\uEA80", ["lights"] = "\uEA80",          // Lightbulb (Better than \uE706 Brightness)
+        ["lighton"] = "\uEA80", ["lightoff"] = "\uEA80",
+        ["lightson"] = "\uEA80", ["lightsoff"] = "\uEA80",
+        ["dimmer"] = "\uE706",                                // Brightness (Sun shape works well for dimmer)
+        ["colorpicker"] = "\uE790", ["color"] = "\uE790",
+
+        // --- SWITCHES & POWER ---
+        ["switch"] = "\uE7E8",                                // PowerButton
         ["switchon"] = "\uE7E8", ["switchoff"] = "\uE7E8",
         ["poweron"] = "\uE7E8", ["poweroff"] = "\uE7E8",
-        ["rollershutter"] = "\uE7A0", ["blinds"] = "\uE7A0",
-        ["heating"] = "\uE793", ["temperature"] = "\uE793", ["temp"] = "\uE793",
-        ["humidity"] = "\uE7A6", ["moisture"] = "\uE7A6",
-        ["contact"] = "\uE8E1", ["door"] = "\uE8E1", ["window"] = "\uE8E1", ["garagedoor"] = "\uE8E1",
-        ["motion"] = "\uE7A6", ["presence"] = "\uE716", ["occupancy"] = "\uE716",
-        ["alarm"] = "\uE7BA", ["smoke"] = "\uE7BA", ["siren"] = "\uE995",
-        ["battery"] = "\uEBA0", ["batterylevel"] = "\uEBA0",
-        ["energy"] = "\uE994", ["power"] = "\uE994",
+        ["energy"] = "\uE946", ["power"] = "\uE946",          // LightningBolt
+        ["outlet"] = "\uE994", ["plug"] = "\uE994",           // Plug/Connector
+        ["poweroutlet"] = "\uE994",["power_outlet"] = "\uE994",
+        ["battery"] = "\uEBA0",["batterylevel"] = "\uEBA0",  // Battery0
+
+        // --- DOORS, WINDOWS & BLINDS ---
+        ["rollershutter"] = "\uE728", ["blinds"] = "\uE728",  // Hamburger menu mimics horizontal blind slats perfectly
+        ["window"] = "\uE7C4",                                // Windowpane (Distinct from Door)
+        ["door"] = "\uE8E1", ["garagedoor"] = "\uE8E1",
+        ["contact"] = "\uE8E1",
         ["lock"] = "\uE72E",
-        ["dimmer"] = "\uE706",
-        ["colorpicker"] = "\uE790", ["color"] = "\uE790",
-        ["speaker"] = "\uE7F5", ["audio"] = "\uE7F5", ["receiver"] = "\uE7F5",
-        ["tv"] = "\uE7F4", ["screen"] = "\uE7F4",
-        ["network"] = "\uE701", ["wifi"] = "\uE701",
+
+        // --- CLIMATE & HVAC ---
+        ["heating"] = "\uE9CA", ["temp"] = "\uE9CA",          // Thermometer
+        ["temperature"] = "\uE9CA", ["climate"] = "\uE9CA",
+        ["radiator"] = "\uE9CA",
+        ["humidity"] = "\uEB42", ["moisture"] = "\uEB42",     // Drop (Water droplet)
+        ["water"] = "\uEB42",
+        ["gas"] = "\uE825",                                   // Gas pump / generic fuel
+        ["fan"] = "\uE785", ["fan_ceiling"] = "\uE785",       // Sync / Rotating arrows
+        ["pump"] = "\uE785",
+
+        // --- SENSORS & SECURITY ---
+        ["motion"] = "\uE916",                                // Activity (Zig-zag pulse line)
+        ["presence"] = "\uE716", ["occupancy"] = "\uE716",    // Person / Account
+        ["alarm"] = "\uEA8F", ["siren"] = "\uEA8F",           // Ringer / Bell
+        ["smoke"] = "\uE7BA",                                 // Alert Warning Triangle
         ["camera"] = "\uE722",
-        ["fan"] = "\uE785", ["pump"] = "\uE785",
-        ["water"] = "\uE7A6", ["gas"] = "\uE7A6",
-        ["quality"] = "\uE769", ["co2"] = "\uE769", ["airquality"] = "\uE769",
-        ["chart"] = "\uE9D2", ["number"] = "\uE9D2",
-        ["text"] = "\uE8A5", ["string"] = "\uE8A5", ["group"] = "\uE902",
-        ["none"] = "\uE776",
-        ["settings"] = "\uE713", ["setup"] = "\uE713",
+
+        // --- MULTIMEDIA ---
+        ["speaker"] = "\uE7F5",["audio"] = "\uE7F5", ["receiver"] = "\uE7F5",
+        ["tv"] = "\uE7F4", ["screen"] = "\uE7F4",             // TVMonitor
+        ["player"] = "\uE768", ["music"] = "\uE768",
+        ["image"] = "\uE722", ["video"] = "\uE714",           // \uE714 is Video
+
+        // --- WEATHER ---
         ["sun"] = "\uE706", ["sunrise"] = "\uE706", ["sunset"] = "\uE706",
-        ["moon"] = "\uE708",
+        ["moon"] = "\uE708",                                  // QuietHours (Moon shape)
         ["cloud"] = "\uE753", ["weather"] = "\uE753",
         ["sunclouds"] = "\uE753", ["sun_clouds"] = "\uE753",
-        ["rain"] = "\uE7A6", ["wind"] = "\uE7A6", ["snow"] = "\uE7A6",
+        ["rain"] = "\uEB42",                                  // Drop
+        ["wind"] = "\uE743",                                  // Wind/Cloud
+        ["snow"] = "\uE9C8",                                  // Snowflake
         ["pressure"] = "\uE976",
-        ["groundfloor"] = "\uE831", ["ground_floor"] = "\uE831",
-        ["firstfloor"] = "\uE831", ["first_floor"] = "\uE831",
+
+        // --- ROOMS & LOCATIONS ---
+        ["groundfloor"] = "\uE831", ["ground_floor"] = "\uE831",["firstfloor"] = "\uE831", ["first_floor"] = "\uE831",
         ["floorplan"] = "\uE831",
         ["kitchen"] = "\uE7A7", ["bath"] = "\uE7A8", ["bathroom"] = "\uE7A8",
-        ["bedroom"] = "\uE7A9", ["living"] = "\uE7AA", ["office"] = "\uE7AB",
+        ["bedroom"] = "\uE7A9", ["living"] = "\uE7F4",        // Mapped Living Room to TV Monitor
+        ["office"] = "\uE7AB",
         ["garage"] = "\uE83D", ["garden"] = "\uE7A5", ["terrace"] = "\uE7A5",
         ["attic"] = "\uE831", ["cellar"] = "\uE831", ["basement"] = "\uE831",
-        ["time"] = "\uE787", ["datetime"] = "\uE787", ["date"] = "\uE787",
         ["location"] = "\uE707",
-        ["player"] = "\uE768", ["music"] = "\uE768",
-        ["image"] = "\uE722", ["video"] = "\uE722",
-        ["outlet"] = "\uE994", ["plug"] = "\uE994",
-        ["poweroutlet"] = "\uE994", ["power_outlet"] = "\uE994",
-        ["radiator"] = "\uE793", ["climate"] = "\uE793",
-        ["fan_ceiling"] = "\uE785",
-        ["pie"] = "\uE9D2", ["line"] = "\uE9D2",
-    };
 
+        // --- MISC & UI ---
+        ["network"] = "\uE701", ["wifi"] = "\uE701",
+        ["quality"] = "\uE769", ["co2"] = "\uE769", ["airquality"] = "\uE769",
+        ["chart"] = "\uE9D2", ["number"] = "\uE9D2",
+        ["pie"] = "\uE9D2", ["line"] = "\uE9D2",
+        ["text"] = "\uE8A5", ["string"] = "\uE8A5", ["group"] = "\uE902",
+        ["settings"] = "\uE713", ["setup"] = "\uE713",
+        ["time"] = "\uE787", ["datetime"] = "\uE787", ["date"] = "\uE787",
+        ["none"] = "\uE776"
+    };
     // Built once: normalized-key → glyph, for fuzzy icon-name matching.
     // GroupBy handles alias collisions (groundfloor + ground_floor, firstfloor + first_floor)
     // that normalize to the same key but share an identical glyph.
@@ -209,8 +234,8 @@ public static class SitemapControlFactory
         {
             var image = new Image
             {
-                Width = 24,
-                Height = 24,
+                Width = 18,
+                Height = 18,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(image, column);
@@ -329,6 +354,8 @@ public static class SitemapControlFactory
             if (IconSourceCache.TryGetValue(cacheKey, out var cachedSource))
             {
                 image.Source = cachedSource;
+                var cachedFormat = cachedSource is SvgImageSource ? "svg" : "bitmap";
+                DiagnosticLogger.Info($"Icon cache hit: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{cachedFormat}', media='cache', auth='{GetAuthMode(authContext)}'");
                 return null;
             }
 
@@ -341,6 +368,8 @@ public static class SitemapControlFactory
             using var response = await IconHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead);
             if (!response.IsSuccessStatusCode)
             {
+                var failedMediaType = response.Content.Headers.ContentType?.MediaType ?? "unknown";
+                DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', status={(int)response.StatusCode}, media='{failedMediaType}', auth='{GetAuthMode(authContext)}'");
                 return $"format={format}:status={(int)response.StatusCode}";
             }
 
@@ -569,6 +598,7 @@ public static class SitemapControlFactory
 
         if (navigateAction is not null)
         {
+            grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(NavigateChevronLaneWidth);
             Func<Task> navigate = navigateAction;
             var chevron = new FontIcon
             {
@@ -678,16 +708,33 @@ public static class SitemapControlFactory
     {
         var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
+        grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(120);
 
-        var value = double.TryParse(row.State, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-            ? Math.Clamp(parsed, 0, 100)
-            : 0;
+        var min = row.MinValue ?? 0;
+        var max = row.MaxValue ?? 100;
+        if (max < min)
+        {
+            (min, max) = (max, min);
+        }
+
+        var value = TryParseNumericState(row.RawState ?? row.State, out var parsed)
+            ? Math.Clamp(parsed, min, max)
+            : min;
+
+        var stateBlock = CreateStateTextBlock(row.State ?? string.Empty);
+        stateBlock.Margin = new Thickness(0, 0, 8, 0);
+        stateBlock.Opacity = 0.85;
+        Grid.SetColumn(stateBlock, layout.ValueColumn);
+        grid.Children.Add(stateBlock);
 
         var slider = new Slider
         {
-            Minimum = 0,
-            Maximum = 100,
+            Minimum = min,
+            Maximum = max,
             Value = value,
+            SmallChange = row.Step ?? 1,
+            StepFrequency = row.Step ?? 1,
+            MinWidth = 110,
             VerticalAlignment = VerticalAlignment.Center
         };
 
@@ -700,11 +747,33 @@ public static class SitemapControlFactory
             };
         }
 
-        Grid.SetColumn(slider, layout.ValueColumn);
-        Grid.SetColumnSpan(slider, 2);
+        Grid.SetColumn(slider, layout.ControlColumn);
         grid.Children.Add(slider);
 
         return WrapWithBorder(grid);
+    }
+
+    private static bool TryParseNumericState(string? raw, out double value)
+    {
+        value = 0;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        if (double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+        {
+            return true;
+        }
+
+        var match = FirstNumberRegex.Match(raw);
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var normalized = match.Value.Replace(',', '.');
+        return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
     private static FrameworkElement CreateSelection(
@@ -722,11 +791,31 @@ public static class SitemapControlFactory
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Center
         };
+        var selectedIndex = -1;
         foreach (var option in row.SelectionOptions)
         {
             comboBox.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Command });
-            if (string.Equals(option.Command, row.RawState, StringComparison.OrdinalIgnoreCase))
-                comboBox.SelectedIndex = comboBox.Items.Count - 1;
+            var commandSource = row.RawItemState ?? row.RawState;
+            var matchesCommand = SelectionValueMatches(option.Command, commandSource);
+            var matchesLabel = SelectionValueMatches(option.Label, row.State);
+            if (selectedIndex < 0 && (matchesCommand || matchesLabel))
+            {
+                selectedIndex = comboBox.Items.Count - 1;
+            }
+        }
+        comboBox.SelectedIndex = selectedIndex;
+
+        // Fallback: always show current state text in collapsed view even if it does not
+        // match any mapping label/command exactly.
+        if (comboBox.SelectedIndex < 0 && !string.IsNullOrWhiteSpace(row.State))
+        {
+            var displayItem = new ComboBoxItem
+            {
+                Content = row.State!.Trim(),
+                Tag = row.RawItemState ?? row.RawState ?? row.State
+            };
+            comboBox.Items.Insert(0, displayItem);
+            comboBox.SelectedIndex = 0;
         }
 
         if (sendCommand is not null)
@@ -743,6 +832,26 @@ public static class SitemapControlFactory
         grid.Children.Add(comboBox);
 
         return WrapWithBorder(grid);
+    }
+
+    private static bool SelectionValueMatches(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
+        }
+
+        var l = left.Trim();
+        var r = right.Trim();
+        if (string.Equals(l, r, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Handle numeric command/state variants such as "3" vs "3.0".
+        var leftIsNumber = double.TryParse(l, NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber);
+        var rightIsNumber = double.TryParse(r, NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber);
+        return leftIsNumber && rightIsNumber && Math.Abs(leftNumber - rightNumber) < 0.0001;
     }
 
     private static FrameworkElement CreateFallback(SitemapRowDescriptor row)

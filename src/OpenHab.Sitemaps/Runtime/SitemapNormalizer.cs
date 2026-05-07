@@ -64,6 +64,10 @@ public static class SitemapNormalizer
             !supported,
             supported ? SitemapFallbackKind.None : SitemapFallbackKind.MainUiOrBrowser,
             children,
-            widget.Icon);
+            widget.Icon,
+            widget.MinValue,
+            widget.MaxValue,
+            widget.Step,
+            widget.RawItemState);
     }
 }

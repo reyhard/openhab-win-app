@@ -23,7 +23,11 @@ internal static class SitemapRowMapper
             options,
             rawState,
             widget.Icon,
-            isSectionHeader);
+            isSectionHeader,
+            widget.MinValue,
+            widget.MaxValue,
+            widget.Step,
+            widget.RawItemState);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
