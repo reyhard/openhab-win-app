@@ -19,6 +19,8 @@ public sealed class NotificationPoller : IDisposable
     private readonly TimeSpan pollInterval;
     private readonly HashSet<string> seenIds = new();
     private readonly DispatcherQueue? dispatcher;
+    private readonly Func<string, bool>? isDismissedFunc;
+    private readonly Action<CloudNotification>? onNewNotification;
 
     private int isStarted;
     private CancellationTokenSource? cts;
@@ -33,7 +35,10 @@ public sealed class NotificationPoller : IDisposable
         string? basicUserName = null,
         string? basicPassword = null,
         TimeSpan? pollInterval = null,
-        DispatcherQueue? dispatcher = null)
+        DispatcherQueue? dispatcher = null,
+        IReadOnlySet<string>? preSeenIds = null,
+        Func<string, bool>? isDismissedFunc = null,
+        Action<CloudNotification>? onNewNotification = null)
     {
         if (!string.IsNullOrWhiteSpace(apiToken) && !string.IsNullOrWhiteSpace(basicUserName))
         {
@@ -47,6 +52,14 @@ public sealed class NotificationPoller : IDisposable
         this.basicPassword = basicPassword;
         this.pollInterval = pollInterval ?? TimeSpan.FromSeconds(60);
         this.dispatcher = dispatcher;
+        this.isDismissedFunc = isDismissedFunc;
+        this.onNewNotification = onNewNotification;
+
+        if (preSeenIds is not null)
+        {
+            foreach (var id in preSeenIds)
+                seenIds.Add(id);
+        }
     }
 
     public bool IsRunning => pollingTask is not null && !pollingTask.IsCompleted;
@@ -149,9 +162,16 @@ public sealed class NotificationPoller : IDisposable
         {
             if (seenIds.Add(notification.Id))
             {
+                if (isDismissedFunc is not null && isDismissedFunc(notification.Id))
+                {
+                    DiagnosticLogger.Info($"Skipping dismissed notification: Id={notification.Id}");
+                    continue;
+                }
+
                 newCount++;
                 DiagnosticLogger.Info($"New notification: Id={notification.Id}, Severity={notification.Severity}");
                 RaiseNotification(notification);
+                onNewNotification?.Invoke(notification);
             }
         }
 

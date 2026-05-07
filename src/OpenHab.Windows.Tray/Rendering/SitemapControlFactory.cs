@@ -31,9 +31,10 @@ public static class SitemapControlFactory
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
-        // --- LIGHTING ---["light"] = "\uEA80", ["lights"] = "\uEA80",          // Lightbulb (Better than \uE706 Brightness)
-        ["lighton"] = "\uEA80", ["lightoff"] = "\uEA80",
-        ["lightson"] = "\uEA80", ["lightsoff"] = "\uEA80",
+        // --- LIGHTING ---
+        ["light"] = "\uE706", ["lights"] = "\uE706",
+        ["lighton"] = "\uE706", ["lightoff"] = "\uE706",
+        ["lightson"] = "\uE706", ["lightsoff"] = "\uE706",
         ["dimmer"] = "\uE706",                                // Brightness (Sun shape works well for dimmer)
         ["colorpicker"] = "\uE790", ["color"] = "\uE790",
 

@@ -1,0 +1,12 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-06-winui-tray-and-notifications-migration.md",
+  "tasks": [
+    {"id": 1, "subject": "Task 1: Add NuGet packages and remove WinForms FrameworkReference", "status": "pending"},
+    {"id": 2, "subject": "Task 2: Rewrite ToastService with CommunityToolkit.WinUI.Notifications", "status": "pending", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 3: Rewrite TrayIconService with WinUIEx TrayIcon", "status": "pending", "blockedBy": [1]},
+    {"id": 4, "subject": "Task 4: Rewrite TrayFlyoutPositioner without WinForms Screen dependency", "status": "pending", "blockedBy": [1]},
+    {"id": 5, "subject": "Task 5: Update App.xaml.cs tray icon wiring", "status": "pending", "blockedBy": [3]},
+    {"id": 6, "subject": "Task 6: Build, test, and verify", "status": "pending", "blockedBy": [1, 2, 3, 4, 5]}
+  ],
+  "lastUpdated": "2026-05-06T12:00:00Z"
+}

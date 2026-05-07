@@ -53,11 +53,37 @@ public static class ToastService
         ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
     }
 
-    public static event EventHandler? NotificationActivated;
+    public static void Show(string title, string body, IReadOnlyList<NotificationActionButton>? actions)
+    {
+        if (!isAvailable) return;
+
+        EnsureRegistered();
+        if (!isAvailable) return;
+
+        DiagnosticLogger.Info($"Showing toast with actions: \"{title}\" ({actions?.Count ?? 0} buttons)");
+
+        var builder = new ToastContentBuilder()
+            .AddText(title)
+            .AddText(body);
+
+        if (actions is not null)
+        {
+            foreach (var action in actions)
+            {
+                builder.AddButton(action.Title, ToastActivationType.Foreground,
+                    $"{action.Type}:{action.Payload}");
+            }
+        }
+
+        var toast = new ToastNotification(builder.GetXml());
+        ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
+    }
+
+    public static event EventHandler<ToastNotificationActivatedEventArgsCompat>? NotificationActivated;
 
     private static void HandleToastActivated(ToastNotificationActivatedEventArgsCompat args)
     {
         DiagnosticLogger.Info("User activated a toast notification");
-        NotificationActivated?.Invoke(null, EventArgs.Empty);
+        NotificationActivated?.Invoke(null, args);
     }
 }

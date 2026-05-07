@@ -3,6 +3,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
@@ -96,9 +97,19 @@ public sealed partial class FlyoutWindow : Window
         var snapshot = runtimeController.Current;
         TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
         StatusText.Text = snapshot.StatusText;
-        BreadcrumbBar.ItemsSource = snapshot.Breadcrumbs.Count > 0
+        var rawBreadcrumbs = snapshot.Breadcrumbs.Count > 0
             ? snapshot.Breadcrumbs
-            : new[] { TitleText.Text };
+            : [TitleText.Text];
+        var breadcrumbItems = rawBreadcrumbs
+            .Select((label, index) => index == 0
+                ? BreadcrumbDisplayItem.CreateHomeIcon()
+                : BreadcrumbDisplayItem.CreateText(label))
+            .ToList();
+
+        BreadcrumbBar.ItemsSource = breadcrumbItems;
+        BreadcrumbBar.Visibility = rawBreadcrumbs.Count > 1
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
         SitemapRows.Children.Clear();
 
@@ -226,12 +237,9 @@ public sealed partial class FlyoutWindow : Window
         finally { isRefreshing = false; }
     }
 
-    private void SitemapPickerButton_Click(object sender, RoutedEventArgs e)
+    private void MinimizeFlyoutButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is FrameworkElement element)
-        {
-            ShowSitemapMenuAt(element);
-        }
+        requestHideFlyout();
     }
 
     private void SitemapHeaderArea_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
@@ -314,5 +322,14 @@ public sealed partial class FlyoutWindow : Window
             window.Move(new PointInt32(pos.X, y));
             await Task.Delay(delay);
         }
+    }
+
+    public sealed record BreadcrumbDisplayItem(string Label, FontFamily FontFamily, double FontSize)
+    {
+        public static BreadcrumbDisplayItem CreateHomeIcon() =>
+            new("\uEA8A", new FontFamily("Segoe MDL2 Assets"), 18);
+
+        public static BreadcrumbDisplayItem CreateText(string label) =>
+            new(label, new FontFamily("Segoe UI"), 14);
     }
 }
