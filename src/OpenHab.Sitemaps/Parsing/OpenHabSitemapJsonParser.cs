@@ -54,18 +54,10 @@ public static class OpenHabSitemapJsonParser
                 var widget = ParseWidget(widgetElement);
                 widgets.Add(widget);
 
-                // Frames contain inline child widgets that need to be flattened into the page.
-                if (widget.Type == SitemapWidgetType.Frame &&
-                    widgetElement.TryGetProperty("widgets", out var frameWidgetsElement) &&
-                    frameWidgetsElement.ValueKind == JsonValueKind.Array)
+                // Frames and Buttongrids contain inline child widgets that need to be flattened into the page.
+                if (widget.Type == SitemapWidgetType.Frame || widget.Type == SitemapWidgetType.Buttongrid)
                 {
-                    foreach (var childElement in frameWidgetsElement.EnumerateArray())
-                    {
-                        if (childElement.ValueKind == JsonValueKind.Object)
-                        {
-                            widgets.Add(ParseWidget(childElement));
-                        }
-                    }
+                    FlattenInlineChildren(widgetElement, widgets);
                 }
             }
         }
@@ -104,9 +96,9 @@ public static class OpenHabSitemapJsonParser
                     continue;
                 }
 
-                var command = GetStringOrDefault(mappingElement, "command");
+                var mappingCommand = GetStringOrDefault(mappingElement, "command");
                 var mappingLabel = GetStringOrDefault(mappingElement, "label");
-                mappings.Add(new SitemapMapping(command, mappingLabel));
+                mappings.Add(new SitemapMapping(mappingCommand, mappingLabel));
             }
         }
 
@@ -121,6 +113,11 @@ public static class OpenHabSitemapJsonParser
         var minValue = GetDoubleOrNull(widgetElement, "minValue");
         var maxValue = GetDoubleOrNull(widgetElement, "maxValue");
         var step = GetDoubleOrNull(widgetElement, "step");
+        var row = GetIntOrNull(widgetElement, "row");
+        var column = GetIntOrNull(widgetElement, "column");
+        var widgetCommand = GetStringOrNull(widgetElement, "command");
+        var releaseCommand = GetStringOrNull(widgetElement, "releaseCommand");
+        var stateless = GetBoolOrNull(widgetElement, "stateless");
 
         var isVisible = true;
         if (widgetElement.TryGetProperty("visibility", out var visibilityElement) &&
@@ -141,7 +138,49 @@ public static class OpenHabSitemapJsonParser
             minValue,
             maxValue,
             step,
-            itemState);
+            itemState,
+            row,
+            column,
+            widgetCommand,
+            releaseCommand,
+            stateless);
+    }
+
+    private static void FlattenInlineChildren(JsonElement widgetElement, List<SitemapWidget> target)
+    {
+        AddInlineChildrenFromProperty(widgetElement, target, "widgets");
+        AddInlineChildrenFromProperty(widgetElement, target, "buttons");
+    }
+
+    private static void AddInlineChildrenFromProperty(
+        JsonElement widgetElement,
+        List<SitemapWidget> target,
+        string propertyName)
+    {
+        if (!widgetElement.TryGetProperty(propertyName, out var childrenElement) ||
+            childrenElement.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var childElement in childrenElement.EnumerateArray())
+        {
+            if (childElement.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var childWidget = ParseWidget(childElement);
+            target.Add(childWidget);
+
+            // Recursively flatten nested Frame/Buttongrid blocks, matching
+            // openHAB client behavior for second-level widget containers.
+            if (childWidget.Type == SitemapWidgetType.Frame ||
+                childWidget.Type == SitemapWidgetType.Buttongrid)
+            {
+                FlattenInlineChildren(childElement, target);
+            }
+        }
     }
 
     private static (string Label, string? State) SplitLabelAndState(string rawLabel)
@@ -237,5 +276,36 @@ public static class OpenHabSitemapJsonParser
         // Prefer user-facing formatted state from label (MAP transforms, DateTime format,
         // units, and other sitemap presentation rules).
         return stateFromLabel;
+    }
+
+    private static int? GetIntOrNull(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var propertyElement))
+        {
+            return null;
+        }
+
+        return propertyElement.ValueKind switch
+        {
+            JsonValueKind.Number when propertyElement.TryGetInt32(out var number) => number,
+            JsonValueKind.String when int.TryParse(propertyElement.GetString(), out var parsed) => parsed,
+            _ => null
+        };
+    }
+
+    private static bool? GetBoolOrNull(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var propertyElement))
+        {
+            return null;
+        }
+
+        return propertyElement.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String when bool.TryParse(propertyElement.GetString(), out var parsed) => parsed,
+            _ => null
+        };
     }
 }

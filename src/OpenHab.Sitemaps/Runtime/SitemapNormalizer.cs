@@ -68,6 +68,11 @@ public static class SitemapNormalizer
             widget.MinValue,
             widget.MaxValue,
             widget.Step,
-            widget.RawItemState);
+            widget.RawItemState,
+            widget.Row,
+            widget.Column,
+            widget.Command,
+            widget.ReleaseCommand,
+            widget.Stateless);
     }
 }

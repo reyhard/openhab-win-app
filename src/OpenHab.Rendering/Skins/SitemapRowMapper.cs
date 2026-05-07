@@ -17,6 +17,7 @@ internal static class SitemapRowMapper
         return new SitemapRowDescriptor(
             widget.Label,
             state,
+            widget.Type,
             control,
             action,
             density,
@@ -27,7 +28,12 @@ internal static class SitemapRowMapper
             widget.MinValue,
             widget.MaxValue,
             widget.Step,
-            widget.RawItemState);
+            widget.RawItemState,
+            widget.Row,
+            widget.Column,
+            widget.Command,
+            widget.ReleaseCommand,
+            widget.Stateless);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
@@ -50,6 +56,9 @@ internal static class SitemapRowMapper
             SitemapWidgetType.Switch => RenderControlKind.Toggle,
             SitemapWidgetType.Slider or SitemapWidgetType.Setpoint => RenderControlKind.Slider,
             SitemapWidgetType.Selection => RenderControlKind.Selection,
+            SitemapWidgetType.Button => RenderControlKind.Button,
+            SitemapWidgetType.Buttongrid => RenderControlKind.ButtonGrid,
+            SitemapWidgetType.Image => RenderControlKind.Image,
             _ => RenderControlKind.Text
         };
     }
@@ -66,8 +75,16 @@ internal static class SitemapRowMapper
             return RenderActionKind.Navigate;
         }
 
-        return control is RenderControlKind.Toggle or RenderControlKind.Slider or RenderControlKind.Selection
-            ? RenderActionKind.SendCommand
-            : RenderActionKind.None;
+        if (control is RenderControlKind.Toggle or RenderControlKind.Slider or RenderControlKind.Selection)
+        {
+            return RenderActionKind.SendCommand;
+        }
+
+        if (widget.Type == SitemapWidgetType.Button && !string.IsNullOrWhiteSpace(widget.ItemName))
+        {
+            return RenderActionKind.SendCommand;
+        }
+
+        return RenderActionKind.None;
     }
 }

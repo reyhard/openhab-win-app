@@ -1,6 +1,11 @@
 namespace OpenHab.Rendering.Descriptors;
 
-public sealed record SitemapMapOption(string Command, string Label);
+public sealed record SitemapMapOption(
+    string Command,
+    string Label,
+    int? Row = null,
+    int? Column = null,
+    bool IsActive = false);
 
 public sealed record SitemapRenderDescriptor(
     SitemapSkinKind Skin,
@@ -11,6 +16,7 @@ public sealed record SitemapRenderDescriptor(
 public sealed record SitemapRowDescriptor(
     string Label,
     string? State,
+    OpenHab.Sitemaps.Models.SitemapWidgetType WidgetType,
     RenderControlKind Control,
     RenderActionKind Action,
     RenderDensity Density,
@@ -21,15 +27,21 @@ public sealed record SitemapRowDescriptor(
     double? MinValue = null,
     double? MaxValue = null,
     double? Step = null,
-    string? RawItemState = null)
+    string? RawItemState = null,
+    int? GridRow = null,
+    int? GridColumn = null,
+    string? Command = null,
+    string? ReleaseCommand = null,
+    bool? Stateless = null)
 {
     public SitemapRowDescriptor(
         string Label,
         string? State,
+        OpenHab.Sitemaps.Models.SitemapWidgetType WidgetType,
         RenderControlKind Control,
         RenderActionKind Action,
         RenderDensity Density)
-        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null)
+        : this(Label, State, WidgetType, Control, Action, Density, [], null, null, false, null, null, null, null, null, null, null, null, null)
     {
     }
 }
@@ -46,6 +58,9 @@ public enum RenderControlKind
     Toggle,
     Slider,
     Selection,
+    Button,
+    ButtonGrid,
+    Image,
     Fallback
 }
 
