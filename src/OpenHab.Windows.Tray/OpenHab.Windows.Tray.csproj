@@ -16,10 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+    <PackageReference Include="WinUIEx" Version="2.9.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +28,9 @@
 
   <ItemGroup>
     <Content Include="Assets\openhab-icon.svg">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Assets\openhab-icon.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

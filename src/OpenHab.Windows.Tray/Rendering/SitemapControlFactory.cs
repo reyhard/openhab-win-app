@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Collections.Concurrent;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -20,8 +21,9 @@ public static class SitemapControlFactory
 {
     private const double ValueLaneWidth = 96;
     private const double ControlLaneWidth = 56;
-    private static readonly string[] IconFormatsByPreference = ["png", "svg"];
+    private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
+    private static readonly ConcurrentDictionary<string, ImageSource> IconSourceCache = new(StringComparer.Ordinal);
     private static readonly object IconProbeSyncRoot = new();
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
 
@@ -207,8 +209,8 @@ public static class SitemapControlFactory
         {
             var image = new Image
             {
-                Width = 16,
-                Height = 16,
+                Width = 24,
+                Height = 24,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(image, column);
@@ -323,6 +325,13 @@ public static class SitemapControlFactory
     {
         try
         {
+            var cacheKey = $"{iconUri.AbsoluteUri}|{GetAuthMode(authContext)}";
+            if (IconSourceCache.TryGetValue(cacheKey, out var cachedSource))
+            {
+                image.Source = cachedSource;
+                return null;
+            }
+
             using var request = new HttpRequestMessage(HttpMethod.Get, iconUri);
             if (authContext is { } context)
             {
@@ -349,6 +358,7 @@ public static class SitemapControlFactory
             }
 
             image.Source = source;
+            IconSourceCache.TryAdd(cacheKey, source);
             var effectiveFormat = source is SvgImageSource ? "svg" : "bitmap";
             DiagnosticLogger.Info($"Icon loaded: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{effectiveFormat}', media='{mediaType ?? "unknown"}', bytes={bytes.Length}, auth='{GetAuthMode(authContext)}'");
             return null;

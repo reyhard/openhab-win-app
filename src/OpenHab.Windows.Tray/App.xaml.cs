@@ -346,7 +346,7 @@ public partial class App : Application
                 return;
             }
 
-            // Late process shutdown can prevent marshaled cleanup; avoid direct WinForms disposal off the UI thread.
+            // Late process shutdown can prevent marshaled cleanup; force UI-thread disposal.
             return;
         }
 

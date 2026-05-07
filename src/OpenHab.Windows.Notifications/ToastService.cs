@@ -1,35 +1,35 @@
-using System.Runtime.InteropServices;
-using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
+using CommunityToolkit.WinUI.Notifications;
 using OpenHab.Core;
+using Windows.UI.Notifications;
 
 namespace OpenHab.Windows.Notifications;
 
 public static class ToastService
 {
-    private static bool isRegistered;
     private static bool isAvailable;
 
     /// <summary>
-    /// True after a successful <c>AppNotificationManager.Register</c> call.
-    /// When false, <see cref="Show"/> is a no-op (toasts are unavailable
-    /// on this system — e.g. unpackaged app without notification COM registration).
+    /// True when toast notifications are available.
+    /// In unpackaged mode, depends on the Start menu shortcut
+    /// with AppUserModelId being present (via ShortcutRegistrar).
     /// </summary>
     public static bool IsAvailable => isAvailable;
 
     public static void EnsureRegistered()
     {
-        if (isRegistered || !isAvailable) return;
+        if (isAvailable) return;
 
         try
         {
-            AppNotificationManager.Default.NotificationInvoked += OnNotificationInvoked;
-            AppNotificationManager.Default.Register();
-            isRegistered = true;
+            // ToastNotificationManagerCompat auto-registers on first use.
+            // This call forces early registration so we can detect failures.
+            var notifier = ToastNotificationManagerCompat.CreateToastNotifier();
+            _ = notifier.Setting; // validates the notifier is functional
+            ToastNotificationManagerCompat.OnActivated += HandleToastActivated;
             isAvailable = true;
-            DiagnosticLogger.Info("Toast notification system registered");
+            DiagnosticLogger.Info("Toast notification system registered via CommunityToolkit");
         }
-        catch (COMException ex)
+        catch (Exception ex)
         {
             isAvailable = false;
             DiagnosticLogger.Warn($"Toast notifications unavailable — {ex.GetType().Name}: {ex.Message}");
@@ -41,22 +41,21 @@ public static class ToastService
         if (!isAvailable) return;
 
         EnsureRegistered();
-        if (!isRegistered) return;
+        if (!isAvailable) return;
 
         DiagnosticLogger.Info($"Showing toast: \"{title}\"");
 
-        var appNotification = new AppNotificationBuilder()
+        var builder = new ToastContentBuilder()
             .AddText(title)
-            .AddText(body)
-            .BuildNotification();
+            .AddText(body);
 
-        AppNotificationManager.Default.Show(appNotification);
+        var toast = new ToastNotification(builder.GetXml());
+        ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
     }
 
     public static event EventHandler? NotificationActivated;
 
-    private static void OnNotificationInvoked(
-        AppNotificationManager sender, AppNotificationActivatedEventArgs args)
+    private static void HandleToastActivated(ToastNotificationActivatedEventArgsCompat args)
     {
         DiagnosticLogger.Info("User activated a toast notification");
         NotificationActivated?.Invoke(null, EventArgs.Empty);

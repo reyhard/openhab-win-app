@@ -1,14 +1,13 @@
-using System.Drawing;
+using Microsoft.UI.Xaml.Controls;
+using OpenHab.Windows.Notifications;
 using System.Threading;
-using System.Windows.Forms;
+using WinUIEx;
 
 namespace OpenHab.Windows.Tray.Tray;
 
 public sealed class TrayIconService : IDisposable
 {
-    private readonly NotifyIcon notifyIcon;
-    private readonly ContextMenuStrip contextMenu;
-    private readonly MouseEventHandler mouseClickHandler;
+    private readonly TrayIcon trayIcon;
     private int isDisposed;
 
     public TrayIconService(Action toggleFlyout, Action openMainWindow, Action exitApplication)
@@ -17,39 +16,37 @@ public sealed class TrayIconService : IDisposable
         ArgumentNullException.ThrowIfNull(openMainWindow);
         ArgumentNullException.ThrowIfNull(exitApplication);
 
-        contextMenu = new ContextMenuStrip();
-        contextMenu.Items.Add("Open flyout", image: null, (_, _) => toggleFlyout());
-        contextMenu.Items.Add("Open main window", image: null, (_, _) => openMainWindow());
-        contextMenu.Items.Add("Exit", image: null, (_, _) => exitApplication());
+        // WinUIEx TrayIcon requires an .ico file (GDI LoadImage) and a unique uint ID.
+        // The .ico is generated from Assets/openhab-icon.svg and copied to output.
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openhab-icon.ico");
+        trayIcon = new TrayIcon(trayiconId: 1, iconPath, tooltip: "openHAB");
 
-        notifyIcon = new NotifyIcon
+        trayIcon.Selected += (_, _) => toggleFlyout();
+        trayIcon.ContextMenu += (_, e) =>
         {
-            Icon = SystemIcons.Application,
-            Text = "openHAB",
-            ContextMenuStrip = contextMenu,
-            Visible = true
-        };
-
-        notifyIcon.BalloonTipClicked += (_, _) => openMainWindow();
-
-        mouseClickHandler = (_, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
+            e.Flyout = new MenuFlyout
             {
-                toggleFlyout();
-            }
+                Items =
+                {
+                    new MenuFlyoutItem { Text = "Open flyout", Command = new RelayCommand(toggleFlyout) },
+                    new MenuFlyoutItem { Text = "Open main window", Command = new RelayCommand(openMainWindow) },
+                    new MenuFlyoutSeparator(),
+                    new MenuFlyoutItem { Text = "Exit", Command = new RelayCommand(exitApplication) }
+                }
+            };
         };
-        notifyIcon.MouseClick += mouseClickHandler;
+
+        trayIcon.IsVisible = true;
     }
 
     /// <summary>
-    /// Shows a balloon tip notification next to the tray icon.
-    /// Works on all Windows configurations — no MSIX or COM registration required.
+    /// Shows a toast notification. WinUIEx does not provide balloon tips natively;
+    /// this delegates to the CommunityToolkit toast service for proper Action Center toasts.
     /// </summary>
     public void ShowBalloon(string title, string text)
     {
         if (isDisposed != 0) return;
-        notifyIcon.ShowBalloonTip(5000, title, text, ToolTipIcon.None);
+        ToastService.Show(title, text);
     }
 
     public void Dispose()
@@ -59,10 +56,20 @@ public sealed class TrayIconService : IDisposable
             return;
         }
 
-        notifyIcon.MouseClick -= mouseClickHandler;
-        notifyIcon.Visible = false;
-        notifyIcon.ContextMenuStrip = null;
-        notifyIcon.Dispose();
-        contextMenu.Dispose();
+        trayIcon.Dispose();
     }
+}
+
+/// <summary>
+/// Minimal ICommand implementation for MenuFlyout items.
+/// </summary>
+internal sealed class RelayCommand : System.Windows.Input.ICommand
+{
+    private readonly Action execute;
+    public RelayCommand(Action execute) => this.execute = execute;
+#pragma warning disable CS0067
+    public event EventHandler? CanExecuteChanged;
+#pragma warning restore CS0067
+    public bool CanExecute(object? parameter) => true;
+    public void Execute(object? parameter) => execute();
 }

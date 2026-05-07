@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
+    <PackageReference Include="CommunityToolkit.WinUI.Notifications" Version="7.1.2" />
   </ItemGroup>
 
   <ItemGroup>

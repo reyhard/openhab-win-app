@@ -1,5 +1,4 @@
 using Microsoft.UI.Windowing;
-using System.Windows.Forms;
 using Windows.Graphics;
 
 namespace OpenHab.Windows.Tray.Tray;
@@ -24,16 +23,17 @@ public static class TrayFlyoutPositioner
 
     public static TrayFlyoutPlacement CalculatePlacement(int flyoutWidth, int flyoutHeight)
     {
-        var workArea = Screen.PrimaryScreen!.WorkingArea;
+        // DisplayArea.Primary.WorkArea — the WinUI 3 equivalent of Screen.PrimaryScreen.WorkingArea
+        var workArea = DisplayArea.Primary.WorkArea;
 
         var maxWidth = Math.Max(1, workArea.Width - (ScreenPadding * 2));
         var maxHeight = Math.Max(1, workArea.Height - (ScreenPadding * 2));
         var width = Math.Clamp(flyoutWidth, 1, maxWidth);
         var height = Math.Clamp(flyoutHeight, 1, maxHeight);
 
-        // Position flyout at bottom-right of working area, near the taskbar tray area
-        var x = workArea.Right - width - ScreenPadding;
-        var y = workArea.Bottom - height - ScreenPadding;
+        // Position at bottom-right of working area, near the taskbar tray area
+        var x = workArea.X + workArea.Width - width - ScreenPadding;
+        var y = workArea.Y + workArea.Height - height - ScreenPadding;
 
         return new TrayFlyoutPlacement(x, y, width, height);
     }
