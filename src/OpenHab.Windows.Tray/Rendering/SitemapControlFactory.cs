@@ -1058,8 +1058,13 @@ public static class SitemapControlFactory
         var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
         container.Children.Add(layout.Grid);
         var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
-        var maxColumn = Math.Max(1, row.SelectionOptions.Where(o => o.Column.HasValue).Select(o => o.Column!.Value).DefaultIfEmpty(1).Max());
-        var maxRow = Math.Max(1, row.SelectionOptions.Where(o => o.Row.HasValue).Select(o => o.Row!.Value).DefaultIfEmpty(1).Max());
+        var hasExplicitCoordinates = row.SelectionOptions.Any(o => o.Row.HasValue || o.Column.HasValue);
+        var maxColumn = hasExplicitCoordinates
+            ? Math.Max(1, row.SelectionOptions.Where(o => o.Column.HasValue).Select(o => o.Column!.Value).DefaultIfEmpty(1).Max())
+            : Math.Max(1, row.SelectionOptions.Count);
+        var maxRow = hasExplicitCoordinates
+            ? Math.Max(1, row.SelectionOptions.Where(o => o.Row.HasValue).Select(o => o.Row!.Value).DefaultIfEmpty(1).Max())
+            : 1;
         for (var c = 0; c < maxColumn; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var r = 0; r < maxRow; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 

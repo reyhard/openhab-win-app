@@ -3,6 +3,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
@@ -10,7 +11,9 @@ using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
-using Windows.Graphics;
+using System.Numerics;
+using Windows.UI;
+using Windows.UI.ViewManagement;
 
 namespace OpenHab.Windows.Tray;
 
@@ -20,8 +23,11 @@ public sealed partial class FlyoutWindow : Window
     private readonly SitemapRuntimeController runtimeController;
     private readonly Action requestOpenMainWindow;
     private readonly Action requestHideFlyout;
+    private readonly UISettings uiSettings = new();
     private bool isRefreshing;
     private bool suppressNextDeactivationHide;
+    private bool isEntranceAnimationRunning;
+    private bool shouldRunEntranceAnimation;
 
     public FlyoutWindow(
         AppSettingsController settingsController,
@@ -35,8 +41,10 @@ public sealed partial class FlyoutWindow : Window
         this.requestHideFlyout = requestHideFlyout;
 
         InitializeComponent();
+        ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
         this.Activated += OnWindowActivated;
+        uiSettings.ColorValuesChanged += OnColorValuesChanged;
         runtimeController.SnapshotChanged += (_, _) =>
         {
             _ = DispatcherQueue.TryEnqueue(RefreshRuntimeBindings);
@@ -53,6 +61,13 @@ public sealed partial class FlyoutWindow : Window
     public async Task RefreshRuntimeAsync()
     {
         await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+    }
+
+    public void PrepareForShowAnimation()
+    {
+        shouldRunEntranceAnimation = true;
+        ApplyFlyoutTheme();
+        ScheduleNativeDecorationApply();
     }
 
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
@@ -163,9 +178,15 @@ public sealed partial class FlyoutWindow : Window
                     scan++;
                 }
 
-                var mergedRow = row with { SelectionOptions = childOptions };
+                var mergedRow = childOptions.Count > 0 ? row with { SelectionOptions = childOptions } : row;
                 Func<string, Task>? sendGridCommand = async cmd =>
                 {
+                    if (childOptions.Count == 0)
+                    {
+                        await runtimeController.SendCommandForRowAsync(rowIndex, cmd);
+                        return;
+                    }
+
                     for (var childIndex = index + 1; childIndex < scan; childIndex++)
                     {
                         var child = rows[childIndex];
@@ -335,10 +356,28 @@ public sealed partial class FlyoutWindow : Window
             return;
         }
 
-        var currentPos = AppWindow.Position;
-        var startY = currentPos.Y + 34;
-        AppWindow.Move(new PointInt32(currentPos.X, startY));
-        await AnimateSlideUpAsync(AppWindow, currentPos.Y);
+        ApplyFlyoutTheme();
+        ScheduleNativeDecorationApply();
+
+        if (!shouldRunEntranceAnimation)
+        {
+            return;
+        }
+
+        shouldRunEntranceAnimation = false;
+
+        try
+        {
+            await AnimateFlyoutEntranceAsync();
+        }
+        catch (ArgumentException)
+        {
+            // Animation is non-critical; avoid app termination on composition edge cases.
+        }
+        catch (InvalidOperationException)
+        {
+            // Composition state can be transient during startup; ignore.
+        }
     }
 
     private void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
@@ -379,19 +418,45 @@ public sealed partial class FlyoutWindow : Window
         SitemapMenuFlyout.ShowAt(target);
     }
 
-    private static async Task AnimateSlideUpAsync(AppWindow window, int targetY)
+    private async Task AnimateFlyoutEntranceAsync()
     {
-        var pos = window.Position;
-        var startY = pos.Y;
-        var steps = 8;
-        var delay = TimeSpan.FromMilliseconds(12);
-        for (int i = 1; i <= steps; i++)
+        if (isEntranceAnimationRunning)
         {
-            var t = (double)i / steps;
-            var eased = 1.0 - Math.Pow(1.0 - t, 3.0); // ease-out cubic
-            var y = (int)(startY + (targetY - startY) * eased);
-            window.Move(new PointInt32(pos.X, y));
-            await Task.Delay(delay);
+            return;
+        }
+
+        if (Content is not UIElement contentRoot)
+        {
+            return;
+        }
+
+        isEntranceAnimationRunning = true;
+        var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
+        try
+        {
+            var compositor = visual.Compositor;
+
+            visual.Opacity = 0f;
+            visual.Offset = new Vector3(0f, 18f, 0f);
+
+            var opacity = compositor.CreateScalarKeyFrameAnimation();
+            opacity.Duration = TimeSpan.FromMilliseconds(190);
+            opacity.InsertKeyFrame(1f, 1f);
+
+            var offset = compositor.CreateVector3KeyFrameAnimation();
+            offset.Duration = TimeSpan.FromMilliseconds(220);
+            offset.InsertKeyFrame(1f, Vector3.Zero);
+
+            visual.StartAnimation(nameof(visual.Opacity), opacity);
+            visual.StartAnimation(nameof(visual.Offset), offset);
+
+            await Task.Delay(240);
+        }
+        finally
+        {
+            visual.Opacity = 1f;
+            visual.Offset = Vector3.Zero;
+            isEntranceAnimationRunning = false;
         }
     }
 
@@ -402,5 +467,51 @@ public sealed partial class FlyoutWindow : Window
 
         public static BreadcrumbDisplayItem CreateText(string label) =>
             new(label, new FontFamily("Segoe UI"), 14);
+    }
+
+    private void OnColorValuesChanged(UISettings sender, object args)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            ApplyFlyoutTheme();
+            ScheduleNativeDecorationApply();
+        });
+    }
+
+    private void ApplyFlyoutTheme()
+    {
+        var theme = DwmWindowDecorations.ResolveFlyoutTheme(
+            settingsController.Current.FollowSystemTheme,
+            IsSystemBackgroundDark());
+
+        if (Content is FrameworkElement contentRoot)
+        {
+            contentRoot.RequestedTheme = theme == FlyoutTheme.Dark
+                ? ElementTheme.Dark
+                : ElementTheme.Light;
+        }
+    }
+
+    private bool IsSystemBackgroundDark()
+    {
+        var background = uiSettings.GetColorValue(UIColorType.Background);
+        return IsDark(background);
+    }
+
+    private static bool IsDark(Color color)
+    {
+        var brightness = ((color.R * 299) + (color.G * 587) + (color.B * 114)) / 1000;
+        return brightness < 128;
+    }
+
+    private void ScheduleNativeDecorationApply()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        DwmWindowDecorations.TryApply(hwnd);
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            var queuedHwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            DwmWindowDecorations.TryApply(queuedHwnd);
+        });
     }
 }

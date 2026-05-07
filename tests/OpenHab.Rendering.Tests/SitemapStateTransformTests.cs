@@ -73,7 +73,7 @@ public sealed class SitemapStateTransformTests
     }
 
     [Fact]
-    public void ToRow_ToggleWithMappedLabel_PreservesRawStateAndUsesMappedState()
+    public void ToRow_MappedSwitch_UsesButtonGridAndPreservesRawStateAndMappedDisplay()
     {
         var page = new NormalizedSitemapPage("root", "Home", [
             new NormalizedSitemapWidget(
@@ -91,7 +91,11 @@ public sealed class SitemapStateTransformTests
         var descriptor = new Windows11SitemapSkin().Render(page);
         var row = Assert.Single(descriptor.Rows);
 
-        Assert.Equal(RenderControlKind.Toggle, row.Control);
+        Assert.Equal(RenderControlKind.ButtonGrid, row.Control);
+        Assert.Equal(RenderActionKind.SendCommand, row.Action);
+        Assert.Equal(2, row.SelectionOptions.Count);
+        Assert.Contains(row.SelectionOptions, option => option.Command == "ON" && option.Label == "An" && option.IsActive);
+        Assert.Contains(row.SelectionOptions, option => option.Command == "OFF" && option.Label == "Aus" && !option.IsActive);
         Assert.Equal("An", row.State);
         Assert.Equal("ON", row.RawState);
     }

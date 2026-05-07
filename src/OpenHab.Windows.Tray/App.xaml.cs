@@ -311,6 +311,7 @@ public partial class App : Application
                     TrayFlyoutPositioner.PlaceNearTrayArea(
                         flyout,
                         settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
+                    flyout.PrepareForShowAnimation();
                     flyout.Activate();
                     break;
                 default:

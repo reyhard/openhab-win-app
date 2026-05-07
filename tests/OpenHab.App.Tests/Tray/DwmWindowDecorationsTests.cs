@@ -1,0 +1,50 @@
+using OpenHab.Windows.Tray;
+
+namespace OpenHab.App.Tests.Tray;
+
+public sealed class DwmWindowDecorationsTests
+{
+    [Fact]
+    public void BuildRequestsForWindows11IncludesRoundedBorderlessDarkTransientChrome()
+    {
+        var requests = DwmWindowDecorations.BuildRequests(isWindows11OrLater: true).ToList();
+
+        Assert.Contains(requests, r =>
+            r.Attribute == DwmWindowAttribute.WindowCornerPreference &&
+            r.IntValue == (int)DwmWindowCornerPreference.RoundSmall);
+        Assert.Contains(requests, r =>
+            r.Attribute == DwmWindowAttribute.BorderColor &&
+            r.UIntValue == DwmWindowDecorations.ColorNone);
+        Assert.Contains(requests, r =>
+            r.Attribute == DwmWindowAttribute.UseImmersiveDarkMode &&
+            r.IntValue == 1);
+        Assert.Contains(requests, r =>
+            r.Attribute == DwmWindowAttribute.SystemBackdropType &&
+            r.IntValue == (int)DwmSystemBackdropType.TransientWindow);
+    }
+
+    [Fact]
+    public void BuildRequestsForOlderWindowsOnlyUsesBestEffortDarkMode()
+    {
+        var requests = DwmWindowDecorations.BuildRequests(isWindows11OrLater: false).ToList();
+
+        var request = Assert.Single(requests);
+        Assert.Equal(DwmWindowAttribute.UseImmersiveDarkMode, request.Attribute);
+        Assert.Equal(1, request.IntValue);
+    }
+
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, true)]
+    [InlineData(false, false, true)]
+    public void ResolveFlyoutThemeUsesSystemModeOnlyWhenFollowingIsEnabled(
+        bool followSystemTheme,
+        bool isSystemDark,
+        bool expectDark)
+    {
+        var theme = DwmWindowDecorations.ResolveFlyoutTheme(followSystemTheme, isSystemDark);
+
+        Assert.Equal(expectDark ? FlyoutTheme.Dark : FlyoutTheme.Light, theme);
+    }
+}

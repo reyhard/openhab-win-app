@@ -458,9 +458,15 @@ public sealed partial class MainWindow : Window
                     scan++;
                 }
 
-                var mergedRow = row with { SelectionOptions = childOptions };
+                var mergedRow = childOptions.Count > 0 ? row with { SelectionOptions = childOptions } : row;
                 Func<string, Task>? sendGridCommand = async cmd =>
                 {
+                    if (childOptions.Count == 0)
+                    {
+                        await runtimeController.SendCommandForRowAsync(rowIndex, cmd);
+                        return;
+                    }
+
                     for (var childIndex = index + 1; childIndex < scan; childIndex++)
                     {
                         var child = rows[childIndex];
