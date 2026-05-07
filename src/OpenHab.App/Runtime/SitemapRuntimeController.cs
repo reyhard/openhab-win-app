@@ -17,7 +17,6 @@ public sealed class SitemapRuntimeController
     private readonly AppSettingsController settingsController;
     private readonly SitemapRenderController renderController;
     private readonly Func<TransportKind, Uri, IOpenHabClient> clientFactory;
-    private readonly IOpenHabEventStreamClient? eventStreamClient;
     private readonly IOpenHabEventStreamClient? sitemapEventStreamClient;
     private NormalizedSitemapPage? currentPage;
     private readonly Stack<NormalizedSitemapPage> backStack = new();
@@ -26,13 +25,10 @@ public sealed class SitemapRuntimeController
     private string? _subscriptionId;
     private int _widgetRefreshQueued;
     private int _widgetRefreshRunning;
-    private bool _eventHandlersAttached;
     private bool _sitemapEventHandlersAttached;
     private DateTimeOffset _lastReconcileRefreshUtc = DateTimeOffset.MinValue;
-    private DateTimeOffset _lastWidgetEventUtc = DateTimeOffset.MinValue;
     private long _refreshSequence;
     private int _refreshInProgress;
-    private bool _rawEventStreamStarted;
     private bool _sitemapEventStreamStarted;
     private string? _sitemapEventStreamSitemapName;
     private string? _sitemapEventStreamPageId;
@@ -42,7 +38,6 @@ public sealed class SitemapRuntimeController
         AppSettingsController settingsController,
         SitemapRenderController renderController,
         Func<TransportKind, Uri, IOpenHabClient> clientFactory,
-        IOpenHabEventStreamClient? eventStreamClient = null,
         IOpenHabEventStreamClient? sitemapEventStreamClient = null)
     {
         ArgumentNullException.ThrowIfNull(settingsController);
@@ -52,7 +47,6 @@ public sealed class SitemapRuntimeController
         this.settingsController = settingsController;
         this.renderController = renderController;
         this.clientFactory = clientFactory;
-        this.eventStreamClient = eventStreamClient;
         this.sitemapEventStreamClient = sitemapEventStreamClient;
     }
 
@@ -101,8 +95,7 @@ public sealed class SitemapRuntimeController
                 ChangedRowIndices = []
             };
 
-            // Primary live updates use raw rest/events (reliable across servers).
-            StartEventStream(primary.BaseUri, cancellationToken);
+            // Live updates via sitemap events only.
             _ = StartSitemapEventStreamAsync(primary.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
         }
         catch (OperationCanceledException)
@@ -131,7 +124,6 @@ public sealed class SitemapRuntimeController
                     ChangedRowIndices = []
                 };
 
-                StartEventStream(fallback.BaseUri, cancellationToken);
                 _ = StartSitemapEventStreamAsync(fallback.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
             }
             catch (OperationCanceledException)
@@ -186,7 +178,7 @@ public sealed class SitemapRuntimeController
             : settingsController.Current.CloudEndpoint;
         var client = clientFactory(activeTransport, endpoint);
         await client.SendCommandAsync(widget.ItemName, command, ct);
-        await RefreshAsyncInternal($"send-command:{widget.ItemName}", ct);
+        await ReconcileCurrentPageAsync(ct);
         return true;
     }
 
@@ -305,7 +297,7 @@ public sealed class SitemapRuntimeController
         var client = clientFactory(activeTransport, endpoint);
         var command = string.Equals(widget.State, "ON", StringComparison.OrdinalIgnoreCase) ? "OFF" : "ON";
         await client.SendCommandAsync(widget.ItemName, command, cancellationToken);
-        await RefreshAsyncInternal($"activate-row:{widget.ItemName}", cancellationToken);
+        await ReconcileCurrentPageAsync(cancellationToken);
         return true;
     }
 
@@ -362,30 +354,9 @@ public sealed class SitemapRuntimeController
         _ = sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
     }
 
-    // Keep original StartEventStream for backward compat (raw events)
-    public void StartEventStream(Uri localBaseUri, CancellationToken ct = default)
-    {
-        if (eventStreamClient is null) return;
-        if (_rawEventStreamStarted)
-        {
-            DiagnosticLogger.Info(
-                $"StartEventStream skipped (already started): base={localBaseUri} connected={eventStreamClient.IsConnected}");
-            return;
-        }
-        _rawEventStreamStarted = true;
-
-        DiagnosticLogger.Info($"Starting event stream to {localBaseUri}");
-
-        EnsureEventHandlersAttached();
-
-        _ = eventStreamClient.ConnectAsync(new Uri(localBaseUri, "rest/events?topics=openhab/items/*/state,openhab/items/*/command"), ct);
-    }
-
     private void OnConnectionStateChanged(object? sender, string state)
     {
-        var source = ReferenceEquals(sender, eventStreamClient)
-            ? "raw"
-            : ReferenceEquals(sender, sitemapEventStreamClient) ? "sitemap" : "unknown";
+        var source = ReferenceEquals(sender, sitemapEventStreamClient) ? "sitemap" : "unknown";
         DiagnosticLogger.Info($"SSE connection state changed source={source} state={state}");
         Current = Current with
         {
@@ -406,67 +377,15 @@ public sealed class SitemapRuntimeController
         };
     }
 
-    private void OnEventReceived(object? sender, OpenHabEvent e)
-    {
-        if (e is ItemStateChangedEvent stateChanged)
-        {
-            if (DiagnosticLogger.VerboseEventLogging)
-                DiagnosticLogger.Info($"SSE state change: {stateChanged.ItemName} = {stateChanged.State}");
-            ApplyItemState(stateChanged.ItemName, stateChanged.State);
-        }
-    }
-
     private void OnWidgetEventReceived(object? sender, SitemapWidgetEvent e)
     {
         DiagnosticLogger.Info($"SSE widget event: id={e.WidgetId} item={e.ItemName} state={e.ItemState} vis={e.Visibility}");
-        _lastWidgetEventUtc = DateTimeOffset.UtcNow;
         ApplyWidgetEvent(e);
 
         // Some servers emit incomplete widget events (e.g. missing item/state) for dependent rows.
         // Reconcile in background only for ambiguous payloads.
         if (string.IsNullOrWhiteSpace(e.ItemName) && string.IsNullOrWhiteSpace(e.ItemState))
         {
-            QueueRefreshFromWidgetEvent();
-        }
-    }
-
-    private void ApplyItemState(string itemName, string newState)
-    {
-        if (itemIndexMap is null || currentPage is null) return;
-        if (!itemIndexMap.TryGetValue(itemName, out var index))
-        {
-            if (DiagnosticLogger.VerboseEventLogging)
-                DiagnosticLogger.Info($"SSE: item '{itemName}' not on current page, skipping");
-            return;
-        }
-        if (index < 0 || index >= currentPage.Widgets.Count) return;
-
-        var widget = currentPage.Widgets[index];
-        if (string.Equals(widget.State, newState, StringComparison.Ordinal)) return;
-        var oldState = widget.State;
-
-        var widgets = currentPage.Widgets.ToList();
-        widgets[index] = widget with { State = newState };
-        currentPage = currentPage with { Widgets = widgets.AsReadOnly() };
-
-        Current = Current with
-        {
-            Descriptor = renderController.BuildCurrentDescriptor(currentPage),
-            ChangedRowIndices = new[] { index }
-        };
-
-        DiagnosticLogger.Info(
-            $"ApplyItemState item={itemName} index={index} old='{oldState}' new='{newState}' " +
-            $"widgetType={widget.Type} widgetId={widget.WidgetId ?? "<null>"}");
-        SnapshotChanged?.Invoke(this, EventArgs.Empty);
-
-        // If sitemap widget events are stale, reconcile from server as fallback.
-        if (widget.Type == SitemapWidgetType.Switch &&
-            DateTimeOffset.UtcNow - _lastWidgetEventUtc > TimeSpan.FromSeconds(8))
-        {
-            DiagnosticLogger.Info(
-                $"ApplyItemState scheduling reconcile refresh for switch item={itemName} " +
-                $"widgetAgeMs={(DateTimeOffset.UtcNow - _lastWidgetEventUtc).TotalMilliseconds:F0}");
             QueueRefreshFromWidgetEvent();
         }
     }
@@ -553,17 +472,10 @@ public sealed class SitemapRuntimeController
         }
     }
 
-    private void EnsureEventHandlersAttached()
-    {
-        if (eventStreamClient is null || _eventHandlersAttached) return;
-        eventStreamClient.ConnectionStateChanged += OnConnectionStateChanged;
-        eventStreamClient.EventReceived += OnEventReceived;
-        _eventHandlersAttached = true;
-    }
-
     private void EnsureSitemapEventHandlersAttached()
     {
         if (sitemapEventStreamClient is null || _sitemapEventHandlersAttached) return;
+        sitemapEventStreamClient.ConnectionStateChanged += OnConnectionStateChanged;
         sitemapEventStreamClient.WidgetEventReceived += OnWidgetEventReceived;
         _sitemapEventHandlersAttached = true;
     }
@@ -653,6 +565,7 @@ public sealed class SitemapRuntimeController
         var homepage = OpenHabSitemapJsonParser.ParseHomepage(json);
 
         var targetPage = homepage;
+        var shouldReconnectToResolvedPage = false;
         if (!string.IsNullOrEmpty(currentPageId))
         {
             var foundPage = FindPageById(homepage, currentPageId);
@@ -665,6 +578,7 @@ public sealed class SitemapRuntimeController
                 DiagnosticLogger.Warn(
                     $"ReconcileCurrentPageAsync page '{currentPageId}' not found in sitemap '{settings.SitemapName}', falling back to homepage");
                 backStack.Clear();
+                shouldReconnectToResolvedPage = true;
             }
         }
 
@@ -678,6 +592,11 @@ public sealed class SitemapRuntimeController
             Breadcrumbs = BuildBreadcrumbTrail(),
             ChangedRowIndices = []
         };
+
+        if (shouldReconnectToResolvedPage || !string.Equals(currentPageId, normalized.Id, StringComparison.Ordinal))
+        {
+            ReconnectForPage(normalized.Id);
+        }
 
         DiagnosticLogger.Info(
             $"ReconcileCurrentPageAsync done page={normalized.Id} rows={normalized.Widgets.Count}");
