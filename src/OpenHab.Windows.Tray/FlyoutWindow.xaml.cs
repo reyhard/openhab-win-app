@@ -92,7 +92,7 @@ public sealed partial class FlyoutWindow : Window
         // Sitemap selection is now reflected via the title; no ComboBox to update.
     }
 
-    private void RefreshRuntimeBindings()
+    internal void RefreshRuntimeBindings()
     {
         var snapshot = runtimeController.Current;
         TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
@@ -111,9 +111,24 @@ public sealed partial class FlyoutWindow : Window
             ? Visibility.Visible
             : Visibility.Collapsed;
         BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
-        SitemapRows.Children.Clear();
 
         var rows = snapshot.Descriptor?.Rows;
+        var changedIndices = snapshot.ChangedRowIndices;
+
+        if (changedIndices is { Count: > 0 } && rows is not null)
+        {
+            foreach (var index in changedIndices)
+            {
+                if (index < 0 || index >= SitemapRows.Children.Count || index >= rows.Count) continue;
+                var existing = SitemapRows.Children[index] as FrameworkElement;
+                if (existing is null) continue;
+                SitemapControlFactory.UpdateState(existing, rows[index]);
+            }
+
+            return;
+        }
+
+        SitemapRows.Children.Clear();
         if (rows is null)
         {
             return;
@@ -129,54 +144,6 @@ public sealed partial class FlyoutWindow : Window
         {
             var rowIndex = index;
             var row = rows[index];
-
-            if (row.WidgetType == OpenHab.Sitemaps.Models.SitemapWidgetType.Buttongrid)
-            {
-                var childOptions = new List<SitemapMapOption>();
-                var scan = index + 1;
-                while (scan < rows.Count &&
-                       rows[scan].WidgetType == OpenHab.Sitemaps.Models.SitemapWidgetType.Button)
-                {
-                    var child = rows[scan];
-                    var command = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
-                    var isActive = string.Equals(child.RawItemState ?? child.RawState ?? child.State, "ON", StringComparison.OrdinalIgnoreCase) ||
-                                   string.Equals(child.Command, "ON", StringComparison.OrdinalIgnoreCase);
-                    childOptions.Add(new SitemapMapOption(command, child.Label, child.GridRow, child.GridColumn, isActive));
-                    scan++;
-                }
-
-                var mergedRow = row with { SelectionOptions = childOptions };
-                Func<string, Task>? sendGridCommand = async cmd =>
-                {
-                    for (var childIndex = index + 1; childIndex < scan; childIndex++)
-                    {
-                        var child = rows[childIndex];
-                        var childCommand = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
-                        if (string.Equals(childCommand, cmd, StringComparison.Ordinal))
-                        {
-                            await runtimeController.SendCommandForRowAsync(childIndex, cmd);
-                            return;
-                        }
-                    }
-                };
-
-                SitemapRows.Children.Add(SitemapControlFactory.Create(
-                    mergedRow,
-                    activateRow: null,
-                    sendGridCommand,
-                    iconBaseUri,
-                    settingsController.Current.UseWindows11Icons,
-                    iconAuth));
-
-                index = scan - 1;
-                continue;
-            }
-
-            if (row.WidgetType == OpenHab.Sitemaps.Models.SitemapWidgetType.Button)
-            {
-                continue;
-            }
-
             Func<Task>? activateRow = null;
             if (row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand)
                 activateRow = () => OnRowActivatedAsync(rowIndex);
@@ -192,6 +159,13 @@ public sealed partial class FlyoutWindow : Window
                 iconBaseUri,
                 settingsController.Current.UseWindows11Icons,
                 iconAuth));
+
+            // Apply initial visibility
+            var lastIndex = SitemapRows.Children.Count - 1;
+            if (lastIndex >= 0 && SitemapRows.Children[lastIndex] is FrameworkElement element)
+            {
+                SitemapControlFactory.SetVisibility(element, row.IsVisible);
+            }
         }
     }
 

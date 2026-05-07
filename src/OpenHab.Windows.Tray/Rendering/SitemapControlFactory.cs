@@ -117,14 +117,13 @@ public static class SitemapControlFactory
     internal static string? ResolveGlyphForIcon(string? iconName)
     {
         if (string.IsNullOrWhiteSpace(iconName)) return null;
-        var sourceNormalizedIcon = StripIconSourcePrefix(iconName);
 
         // Exact match first (case-insensitive, preserves the original map behaviour).
-        if (Win11IconMap.TryGetValue(sourceNormalizedIcon, out var glyph))
+        if (Win11IconMap.TryGetValue(iconName, out var glyph))
             return glyph;
 
         // Fallback: normalize and try again so common variants still match.
-        var normalized = NormalizeIconName(sourceNormalizedIcon);
+        var normalized = NormalizeIconName(iconName);
         if (NormalizedWin11IconMap.TryGetValue(normalized, out glyph))
             return glyph;
 
@@ -174,18 +173,6 @@ public static class SitemapControlFactory
         return sb.ToString();
     }
 
-    private static string StripIconSourcePrefix(string iconName)
-    {
-        var value = iconName.Trim();
-        var colon = value.IndexOf(':');
-        if (colon <= 0)
-        {
-            return value;
-        }
-
-        return value[(colon + 1)..];
-    }
-
     /// <summary>Pure-logic query: does the normalized icon name resolve
     /// to a known Win11 glyph?  Safe to call in tests without WinUI runtime.</summary>
     internal static bool CanResolveNormalizedIcon(string? iconName)
@@ -213,12 +200,114 @@ public static class SitemapControlFactory
             RenderControlKind.Toggle => CreateToggle(row, activateRow, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Slider => CreateSlider(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
-            RenderControlKind.Button => CreateButton(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
-            RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
-            RenderControlKind.Image => CreateImage(row, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row, activateRow, baseUri, useWindowsIcons, iconAuth)
         };
+    }
+
+    public static void UpdateState(FrameworkElement control, SitemapRowDescriptor updated)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(updated);
+
+        var inner = control;
+        if (control is Border border && border.Child is FrameworkElement child)
+        {
+            inner = child;
+        }
+
+        // Update visibility first
+        control.Visibility = updated.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+
+        var rawState = updated.RawState ?? updated.State;
+
+        switch (updated.Control)
+        {
+            case RenderControlKind.Toggle:
+                var toggle = FindVisualChild<ToggleSwitch>(inner);
+                if (toggle is not null)
+                {
+                    var isOn = string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase);
+                    // Suppress Toggled event to prevent feedback loop
+                    toggle.Tag = "suppress";
+                    toggle.IsOn = isOn;
+                    toggle.Tag = null;
+                }
+                // Also update the state text next to the toggle
+                UpdateStateTextBlock(inner, string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase) ? "ON" : "OFF");
+                break;
+
+            case RenderControlKind.Slider:
+                var slider = FindVisualChild<Slider>(inner);
+                if (slider is not null && double.TryParse(rawState, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
+                {
+                    slider.Value = val;
+                }
+                break;
+
+            case RenderControlKind.Selection:
+            case RenderControlKind.Text:
+            case RenderControlKind.Fallback:
+                UpdateStateTextBlock(inner, updated.State ?? string.Empty);
+                break;
+        }
+    }
+
+    public static void SetVisibility(FrameworkElement control, bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        control.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static void UpdateStateTextBlock(DependencyObject parent, string newState)
+    {
+        _ = TryUpdateStateTextBlock(parent, newState);
+    }
+
+    private static bool TryUpdateStateTextBlock(DependencyObject parent, string newState)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is TextBlock tb && tb.FontSize <= 14 && !string.IsNullOrEmpty(tb.Text) && IsStateTextBlock(tb))
+            {
+                tb.Text = newState;
+                return true;
+            }
+
+            if (TryUpdateStateTextBlock(child, newState))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsStateTextBlock(TextBlock textBlock)
+    {
+        return textBlock.HorizontalAlignment == HorizontalAlignment.Right ||
+               textBlock.TextAlignment == TextAlignment.Right;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typed)
+            {
+                return typed;
+            }
+
+            var found = FindVisualChild<T>(child);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryAddIcon(
@@ -237,14 +326,16 @@ public static class SitemapControlFactory
             var winIcon = ResolveWin11Icon(iconName);
             if (winIcon is not null)
             {
-                DiagnosticLogger.Info($"Icon render via Win11 glyph: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'");
+                if (!DiagnosticLogger.SuppressIconLogging)
+                    DiagnosticLogger.Info($"Icon render via Win11 glyph: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'");
                 winIcon.VerticalAlignment = VerticalAlignment.Center;
                 Grid.SetColumn(winIcon, column);
                 grid.Children.Add(winIcon);
                 return true;
             }
 
-            DiagnosticLogger.Warn($"Win11 glyph mapping missing: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'; falling back to server icon endpoint");
+                if (!DiagnosticLogger.SuppressIconLogging)
+                    DiagnosticLogger.Warn($"Win11 glyph mapping missing: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'; falling back to server icon endpoint");
         }
 
         if (baseUri is not null)
@@ -269,7 +360,8 @@ public static class SitemapControlFactory
             return true;
         }
 
-        DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{iconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
+            if (!DiagnosticLogger.SuppressIconLogging)
+                DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{iconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
         return false;
     }
 
@@ -299,15 +391,18 @@ public static class SitemapControlFactory
 
             if (headResponse.IsSuccessStatusCode)
             {
+                if (!DiagnosticLogger.SuppressIconLogging)
                 DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
                 return;
             }
 
-            DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+            if (!DiagnosticLogger.SuppressIconLogging)
+                DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+            if (!DiagnosticLogger.SuppressIconLogging)
+                DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
         }
 
         try
@@ -318,16 +413,19 @@ public static class SitemapControlFactory
 
             if (getResponse.IsSuccessStatusCode)
             {
+                if (!DiagnosticLogger.SuppressIconLogging)
                 DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
             }
             else
             {
+                if (!DiagnosticLogger.SuppressIconLogging)
                 DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
             }
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+            if (!DiagnosticLogger.SuppressIconLogging)
+                DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
         }
     }
 
@@ -343,7 +441,8 @@ public static class SitemapControlFactory
         foreach (var format in IconFormatsByPreference)
         {
             var iconUri = BuildOpenHabIconUri(baseUri, iconName, iconState, format);
-            DiagnosticLogger.Info($"Icon request: icon='{iconName}', state='{iconState ?? "(none)"}', format='{format}', url='{iconUri.PathAndQuery}'");
+            if (!DiagnosticLogger.SuppressIconLogging)
+                DiagnosticLogger.Info($"Icon request: icon='{iconName}', state='{iconState ?? "(none)"}', format='{format}', url='{iconUri.PathAndQuery}'");
 
             var attemptResult = await TryLoadIconForFormatAsync(image, iconUri, iconName, iconState, format, authContext);
             if (attemptResult is null)
@@ -354,7 +453,8 @@ public static class SitemapControlFactory
             attempts.Add(attemptResult);
         }
 
-        DiagnosticLogger.Warn($"Icon failed: icon='{iconName}', state='{iconState ?? "(none)"}', formats='{string.Join(",", IconFormatsByPreference)}', attempts='{string.Join("; ", attempts)}', auth='{GetAuthMode(authContext)}'");
+            if (!DiagnosticLogger.SuppressIconLogging)
+                DiagnosticLogger.Warn($"Icon failed: icon='{iconName}', state='{iconState ?? "(none)"}', formats='{string.Join(",", IconFormatsByPreference)}', attempts='{string.Join("; ", attempts)}', auth='{GetAuthMode(authContext)}'");
     }
 
     private static async Task<string?> TryLoadIconForFormatAsync(
@@ -372,6 +472,7 @@ public static class SitemapControlFactory
             {
                 image.Source = cachedSource;
                 var cachedFormat = cachedSource is SvgImageSource ? "svg" : "bitmap";
+                if (!DiagnosticLogger.SuppressIconLogging)
                 DiagnosticLogger.Info($"Icon cache hit: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{cachedFormat}', media='cache', auth='{GetAuthMode(authContext)}'");
                 return null;
             }
@@ -386,6 +487,7 @@ public static class SitemapControlFactory
             if (!response.IsSuccessStatusCode)
             {
                 var failedMediaType = response.Content.Headers.ContentType?.MediaType ?? "unknown";
+                if (!DiagnosticLogger.SuppressIconLogging)
                 DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', status={(int)response.StatusCode}, media='{failedMediaType}', auth='{GetAuthMode(authContext)}'");
                 return $"format={format}:status={(int)response.StatusCode}";
             }
@@ -406,7 +508,8 @@ public static class SitemapControlFactory
             image.Source = source;
             IconSourceCache.TryAdd(cacheKey, source);
             var effectiveFormat = source is SvgImageSource ? "svg" : "bitmap";
-            DiagnosticLogger.Info($"Icon loaded: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{effectiveFormat}', media='{mediaType ?? "unknown"}', bytes={bytes.Length}, auth='{GetAuthMode(authContext)}'");
+            if (!DiagnosticLogger.SuppressIconLogging)
+                DiagnosticLogger.Info($"Icon loaded: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{effectiveFormat}', media='{mediaType ?? "unknown"}', bytes={bytes.Length}, auth='{GetAuthMode(authContext)}'");
             return null;
         }
         catch (Exception ex)
@@ -524,46 +627,18 @@ public static class SitemapControlFactory
 
         // Match openHAB web UI icon requests so dynamic icons resolve by state.
         // Example: /icon/rollershutter?format=png&state=50
-        var sourceSplit = iconName.Split(':', 2, StringSplitOptions.TrimEntries);
-        var hasExplicitSource = sourceSplit.Length == 2;
-        var iconSource = hasExplicitSource ? sourceSplit[0] : "oh";
-        if (hasExplicitSource &&
-            (iconSource.Equals("f7", StringComparison.OrdinalIgnoreCase) ||
-             iconSource.Equals("material", StringComparison.OrdinalIgnoreCase) ||
-             iconSource.Equals("if", StringComparison.OrdinalIgnoreCase) ||
-             iconSource.Equals("iconify", StringComparison.OrdinalIgnoreCase)))
-        {
-            var source = iconSource.ToLowerInvariant();
-            var rawName = sourceSplit[1];
-            if (source == "f7")
-            {
-                return new Uri($"https://api.iconify.design/f7/{Uri.EscapeDataString(rawName.Replace('_', '-'))}.svg");
-            }
-
-            if (source == "material")
-            {
-                var materialName = $"baseline-{rawName.Replace('_', '-')}";
-                return new Uri($"https://api.iconify.design/ic/{Uri.EscapeDataString(materialName)}.svg");
-            }
-
-            var iconifyName = rawName.Replace(':', '/');
-            return new Uri($"https://api.iconify.design/{Uri.EscapeDataString(iconifyName)}.svg");
-        }
-
-        var escapedIcon = hasExplicitSource
-            ? $"{Uri.EscapeDataString(iconSource)}:{Uri.EscapeDataString(sourceSplit[1])}"
-            : Uri.EscapeDataString(iconName);
+        var escapedIcon = Uri.EscapeDataString(iconName);
         var query = string.IsNullOrWhiteSpace(iconState)
             ? $"format={Uri.EscapeDataString(format)}"
             : $"format={Uri.EscapeDataString(format)}&state={Uri.EscapeDataString(iconState)}";
+
         return new Uri(baseUri, $"icon/{escapedIcon}?{query}");
     }
 
     private static bool CanDisplayIcon(string? iconName, Uri? baseUri, bool useWindowsIcons)
     {
         if (string.IsNullOrWhiteSpace(iconName)) return false;
-        var hasLocalGlyph = ResolveGlyphForIcon(iconName) is not null;
-        return hasLocalGlyph || baseUri is not null || useWindowsIcons;
+        return baseUri is not null || (useWindowsIcons && ResolveGlyphForIcon(iconName) is not null);
     }
 
     private static RowLayout CreateRowLayout(
@@ -738,7 +813,11 @@ public static class SitemapControlFactory
 
         if (row.Action == RenderActionKind.SendCommand && activateRow is not null)
         {
-            toggle.Toggled += async (_, _) => await activateRow();
+            toggle.Toggled += async (s, _) =>
+            {
+                if (s is ToggleSwitch ts && ts.Tag as string == "suppress") return;
+                await activateRow();
+            };
         }
 
         return WrapWithBorder(grid);
@@ -908,142 +987,6 @@ public static class SitemapControlFactory
             IsEnabled = false,
             BorderThickness = new Thickness(0)
         });
-    }
-
-    private static FrameworkElement CreateButton(
-        SitemapRowDescriptor row,
-        Func<string, Task>? sendCommand,
-        Uri? baseUri = null,
-        bool useWindowsIcons = false,
-        IconAuthContext? iconAuth = null)
-    {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
-        var grid = layout.Grid;
-        var command = row.SelectionOptions?.FirstOrDefault()?.Command ?? row.RawItemState ?? row.RawState ?? row.State;
-        var button = new Button
-        {
-            Content = "Run",
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsEnabled = !string.IsNullOrWhiteSpace(command) && sendCommand is not null
-        };
-        button.Click += async (_, _) =>
-        {
-            if (!string.IsNullOrWhiteSpace(command) && sendCommand is not null)
-            {
-                await sendCommand(command);
-            }
-        };
-        Grid.SetColumn(button, layout.ControlColumn);
-        grid.Children.Add(button);
-        return WrapWithBorder(grid);
-    }
-
-    private static FrameworkElement CreateButtonGrid(
-        SitemapRowDescriptor row,
-        Func<string, Task>? sendCommand,
-        Uri? baseUri = null,
-        bool useWindowsIcons = false,
-        IconAuthContext? iconAuth = null)
-    {
-        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 };
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
-        container.Children.Add(layout.Grid);
-        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
-        var maxColumn = Math.Max(1, row.SelectionOptions.Where(o => o.Column.HasValue).Select(o => o.Column!.Value).DefaultIfEmpty(1).Max());
-        var maxRow = Math.Max(1, row.SelectionOptions.Where(o => o.Row.HasValue).Select(o => o.Row!.Value).DefaultIfEmpty(1).Max());
-        for (var c = 0; c < maxColumn; c++)
-        {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        }
-        for (var r = 0; r < maxRow; r++)
-        {
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        }
-
-        var fallbackIndex = 0;
-        foreach (var option in row.SelectionOptions)
-        {
-            var rowIndex = option.Row.HasValue && option.Row.Value > 0 ? option.Row.Value - 1 : fallbackIndex / maxColumn;
-            var colIndex = option.Column.HasValue && option.Column.Value > 0 ? option.Column.Value - 1 : fallbackIndex % maxColumn;
-            fallbackIndex++;
-
-            var button = new Button
-            {
-                Content = option.Label,
-                IsEnabled = sendCommand is not null,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            if (option.IsActive)
-            {
-                button.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 62, 133));
-                button.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
-            }
-            button.Click += async (_, _) =>
-            {
-                if (sendCommand is not null)
-                {
-                    await sendCommand(option.Command);
-                }
-            };
-            Grid.SetRow(button, rowIndex);
-            Grid.SetColumn(button, colIndex);
-            grid.Children.Add(button);
-        }
-
-        container.Children.Add(grid);
-        return WrapWithBorder(container);
-    }
-
-    private static FrameworkElement CreateImage(
-        SitemapRowDescriptor row,
-        Uri? baseUri = null,
-        bool useWindowsIcons = false,
-        IconAuthContext? iconAuth = null)
-    {
-        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
-        container.Children.Add(layout.Grid);
-        var value = row.RawItemState ?? row.RawState ?? row.State;
-        if (!string.IsNullOrWhiteSpace(value) &&
-            value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
-        {
-            var image = new Image
-            {
-                Stretch = Stretch.Uniform,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            container.SizeChanged += (_, args) =>
-            {
-                var targetWidth = Math.Max(120, args.NewSize.Width * 0.8);
-                image.Width = targetWidth;
-                image.MaxWidth = targetWidth;
-            };
-            var comma = value.IndexOf(',');
-            if (comma > 0 && value.Contains("base64", StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    _ = LoadRawImageBytesAsync(image, Convert.FromBase64String(value[(comma + 1)..]));
-                }
-                catch
-                {
-                }
-            }
-
-            container.Children.Add(image);
-        }
-
-        return WrapWithBorder(container);
-    }
-
-    private static async Task LoadRawImageBytesAsync(Image image, byte[] bytes)
-    {
-        var source = await CreateImageSourceFromBytesAsync(bytes, null);
-        if (source is not null)
-        {
-            image.Source = source;
-        }
     }
 
     private static TextBlock CreateButtonTextBlock(string text)
