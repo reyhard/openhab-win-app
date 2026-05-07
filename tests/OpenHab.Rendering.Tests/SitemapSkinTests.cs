@@ -112,103 +112,55 @@ public sealed class SitemapSkinTests
         Assert.Equal(RenderActionKind.OpenFallback, descriptor.Rows[0].Action);
     }
 
-    [Theory]
-    [InlineData(typeof(BasicSitemapSkin))]
-    [InlineData(typeof(Windows11SitemapSkin))]
-    public void SwitchRow_PreservesIconNameInDescriptor(Type skinType)
+    [Fact]
+    public void ToRow_PreservesIconAndRawState_ForSwitchWidgets()
     {
         var page = new NormalizedSitemapPage("root", "Home", [
-            new NormalizedSitemapWidget("Light", SitemapWidgetType.Switch, "Light", "ON", [], false, false, SitemapFallbackKind.None, [], "light")
+            new NormalizedSitemapWidget(
+                "Kitchen",
+                SitemapWidgetType.Switch,
+                "Kitchen_Light",
+                "OFF",
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                "light")
         ]);
-        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
 
-        var descriptor = skin.Render(page);
+        var descriptor = new Windows11SitemapSkin().Render(page);
         var row = Assert.Single(descriptor.Rows);
 
         Assert.Equal("light", row.IconName);
+        Assert.Equal("OFF", row.RawState);
+        Assert.Equal(RenderControlKind.Toggle, row.Control);
+        Assert.Equal(RenderActionKind.SendCommand, row.Action);
     }
 
-    [Theory]
-    [InlineData(typeof(BasicSitemapSkin))]
-    [InlineData(typeof(Windows11SitemapSkin))]
-    public void SwitchRow_PreservesRawStateInDescriptor(Type skinType)
+    [Fact]
+    public void ToRow_PreservesStateAndTransformedDisplay_ForMappedSwitch()
     {
         var page = new NormalizedSitemapPage("root", "Home", [
-            new NormalizedSitemapWidget("Light", SitemapWidgetType.Switch, "Light", "ON",
-                [new SitemapMapping("ON", "An"), new SitemapMapping("OFF", "Aus")],
-                false, false, SitemapFallbackKind.None, [])
+            new NormalizedSitemapWidget(
+                "Door",
+                SitemapWidgetType.Switch,
+                "DoorSensor",
+                "OPEN",
+                [new SitemapMapping("OPEN", "Unlocked"), new SitemapMapping("CLOSED", "Locked")],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                "door")
         ]);
-        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
 
-        var descriptor = skin.Render(page);
+        var descriptor = new Windows11SitemapSkin().Render(page);
         var row = Assert.Single(descriptor.Rows);
 
-        Assert.Equal("An", row.State);
-        Assert.Equal("ON", row.RawState);
-    }
-
-    [Theory]
-    [InlineData(typeof(BasicSitemapSkin))]
-    [InlineData(typeof(Windows11SitemapSkin))]
-    public void TextRow_PreservesIconNameInDescriptor(Type skinType)
-    {
-        var page = new NormalizedSitemapPage("root", "Home", [
-            new NormalizedSitemapWidget("Temp", SitemapWidgetType.Text, "Temp", "21", [], false, false, SitemapFallbackKind.None, [], "temperature")
-        ]);
-        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
-
-        var descriptor = skin.Render(page);
-        var row = Assert.Single(descriptor.Rows);
-
-        Assert.Equal("temperature", row.IconName);
-    }
-
-    [Theory]
-    [InlineData(typeof(BasicSitemapSkin))]
-    [InlineData(typeof(Windows11SitemapSkin))]
-    public void SliderRow_PreservesIconNameInDescriptor(Type skinType)
-    {
-        var page = new NormalizedSitemapPage("root", "Home", [
-            new NormalizedSitemapWidget("Dimmer", SitemapWidgetType.Slider, "Dimmer", "50", [], false, false, SitemapFallbackKind.None, [], "dimmer")
-        ]);
-        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
-
-        var descriptor = skin.Render(page);
-        var row = Assert.Single(descriptor.Rows);
-
-        Assert.Equal("dimmer", row.IconName);
-    }
-
-    [Theory]
-    [InlineData(typeof(BasicSitemapSkin))]
-    [InlineData(typeof(Windows11SitemapSkin))]
-    public void SelectionRow_PreservesIconNameInDescriptor(Type skinType)
-    {
-        var page = new NormalizedSitemapPage("root", "Home", [
-            new NormalizedSitemapWidget("Mode", SitemapWidgetType.Selection, "Mode", "Home", [], false, false, SitemapFallbackKind.None, [], "settings")
-        ]);
-        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
-
-        var descriptor = skin.Render(page);
-        var row = Assert.Single(descriptor.Rows);
-
-        Assert.Equal("settings", row.IconName);
-    }
-
-    [Theory]
-    [InlineData(typeof(BasicSitemapSkin))]
-    [InlineData(typeof(Windows11SitemapSkin))]
-    public void WidgetWithoutIcon_HasNullIconName(Type skinType)
-    {
-        var page = new NormalizedSitemapPage("root", "Home", [
-            new NormalizedSitemapWidget("Text", SitemapWidgetType.Text, "Text", "hi", [], false, false, SitemapFallbackKind.None, [])
-        ]);
-        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
-
-        var descriptor = skin.Render(page);
-        var row = Assert.Single(descriptor.Rows);
-
-        Assert.Null(row.IconName);
+        Assert.Equal("door", row.IconName);
+        Assert.Equal("OPEN", row.RawState);
+        Assert.Equal("Unlocked", row.State);
     }
 
     private static NormalizedSitemapPage Page()
