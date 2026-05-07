@@ -7,4 +7,11 @@ public sealed record CloudNotification(
     [property: JsonPropertyName("message")] string Message,
     [property: JsonPropertyName("created")] DateTimeOffset Created,
     [property: JsonPropertyName("icon")] string? Icon,
-    [property: JsonPropertyName("severity")] string? Severity);
+    [property: JsonPropertyName("severity")] string? Severity,
+    [property: JsonPropertyName("title")] string? Title,
+    [property: JsonPropertyName("referenceId")] string? ReferenceId,
+    [property: JsonPropertyName("onClickAction")] string? OnClickAction,
+    [property: JsonPropertyName("mediaAttachmentUrl")] string? MediaAttachmentUrl,
+    [property: JsonPropertyName("actionButton1")] string? ActionButton1,
+    [property: JsonPropertyName("actionButton2")] string? ActionButton2,
+    [property: JsonPropertyName("actionButton3")] string? ActionButton3);
