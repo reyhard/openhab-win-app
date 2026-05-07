@@ -32,7 +32,6 @@ public static class SitemapNormalizer
         }
 
         var widgets = page.Widgets
-            .Where(widget => widget.IsVisible)
             .Select(NormalizeWidget)
             .ToArray();
 
@@ -68,11 +67,8 @@ public static class SitemapNormalizer
             widget.MinValue,
             widget.MaxValue,
             widget.Step,
-            widget.RawItemState,
-            widget.Row,
-            widget.Column,
-            widget.Command,
-            widget.ReleaseCommand,
-            widget.Stateless);
+            WidgetId: widget.WidgetId,
+            RawItemState: widget.RawItemState,
+            IsVisible: widget.IsVisible);
     }
 }

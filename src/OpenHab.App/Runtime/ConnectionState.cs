@@ -4,5 +4,6 @@ public enum ConnectionState
 {
     Unknown,
     Online,
-    Offline
+    Offline,
+    Degraded
 }

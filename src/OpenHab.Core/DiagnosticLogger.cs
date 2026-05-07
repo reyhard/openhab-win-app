@@ -22,6 +22,12 @@ public static class DiagnosticLogger
     /// </summary>
     public static string LogPath => LogFilePath;
 
+    /// <summary>When true, suppresses icon-fetch diagnostic messages (default true to reduce noise).</summary>
+    public static bool SuppressIconLogging { get; set; } = true;
+
+    /// <summary>When true, logs every SSE event received (default false — enable for debugging).</summary>
+    public static bool VerboseEventLogging { get; set; }
+
     /// <summary>
     /// Writes an informational message to the log.
     /// </summary>

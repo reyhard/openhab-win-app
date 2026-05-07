@@ -6,7 +6,7 @@ namespace OpenHab.Sitemaps.Tests;
 public sealed class SitemapNormalizerTests
 {
     [Fact]
-    public void RemovesInvisibleWidgets()
+    public void KeepsInvisibleWidgetsWithIsVisibleFalse()
     {
         var page = new SitemapPage("root", "Home", [
             new SitemapWidget("Light", SitemapWidgetType.Switch, "Light", "ON", [], true, []),
@@ -15,8 +15,11 @@ public sealed class SitemapNormalizerTests
 
         var normalized = SitemapNormalizer.Normalize(page);
 
-        Assert.Single(normalized.Widgets);
+        Assert.Equal(2, normalized.Widgets.Count);
         Assert.Equal("Light", normalized.Widgets[0].Label);
+        Assert.True(normalized.Widgets[0].IsVisible);
+        Assert.Equal("Hidden", normalized.Widgets[1].Label);
+        Assert.False(normalized.Widgets[1].IsVisible);
     }
 
     [Fact]

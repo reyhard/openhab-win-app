@@ -13,6 +13,7 @@ public sealed record AppSettings(
     bool FollowSystemTheme = true,
     bool UseWindows11Icons = false,
     int FlyoutWidth = 460,
+    int NotificationPollIntervalSeconds = 30,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
     [property: JsonIgnore] string? CloudUserName = null)
@@ -22,5 +23,6 @@ public sealed record AppSettings(
         EndpointMode.Automatic,
         new Uri("http://openhab:8080"),
         new Uri("https://myopenhab.org"),
-        "default");
+        "default",
+        NotificationPollIntervalSeconds: 30);
 }

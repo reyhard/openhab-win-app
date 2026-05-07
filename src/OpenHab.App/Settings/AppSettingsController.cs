@@ -11,6 +11,8 @@ public sealed class AppSettingsController
 {
     public const int MinFlyoutWidth = 360;
     public const int MaxFlyoutWidth = 900;
+    public const int MinNotificationPollIntervalSeconds = 10;
+    public const int MaxNotificationPollIntervalSeconds = 600;
 
     private static readonly Regex SitemapNamePattern = new("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
     private const string CredentialResource = "OpenHabAuth";
@@ -157,6 +159,21 @@ public sealed class AppSettingsController
         lock (syncRoot)
         {
             Current = Current with { FlyoutWidth = width };
+        }
+        _ = SaveAsync();
+    }
+
+    public void SetNotificationPollInterval(int seconds)
+    {
+        if (seconds < MinNotificationPollIntervalSeconds || seconds > MaxNotificationPollIntervalSeconds)
+        {
+            throw new ArgumentOutOfRangeException(nameof(seconds),
+                $"Notification poll interval must be between {MinNotificationPollIntervalSeconds} and {MaxNotificationPollIntervalSeconds} seconds.");
+        }
+
+        lock (syncRoot)
+        {
+            Current = Current with { NotificationPollIntervalSeconds = seconds };
         }
         _ = SaveAsync();
     }
@@ -373,6 +390,12 @@ public sealed class AppSettingsController
             width = AppSettings.Default.FlyoutWidth;
         }
 
-        return settings with { FlyoutWidth = width };
+        var interval = settings.NotificationPollIntervalSeconds;
+        if (interval < MinNotificationPollIntervalSeconds || interval > MaxNotificationPollIntervalSeconds)
+        {
+            interval = AppSettings.Default.NotificationPollIntervalSeconds;
+        }
+
+        return settings with { FlyoutWidth = width, NotificationPollIntervalSeconds = interval };
     }
 }

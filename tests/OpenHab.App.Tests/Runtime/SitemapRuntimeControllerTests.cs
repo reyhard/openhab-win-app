@@ -1,6 +1,8 @@
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
+using OpenHab.Core.Api;
+using OpenHab.Core.Events;
 using OpenHab.Core.Profiles;
 using System.IO;
 
@@ -273,4 +275,119 @@ public sealed class SitemapRuntimeControllerTests
             }
             """;
     }
+
+    // ── Event stream tests ──────────────────────────────────────────
+
+    [Fact]
+    public async Task StateEventUpdatesWidgetStateInSnapshot()
+    {
+        var settings = new AppSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var cloudClient = new FakeOpenHabClient();
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient, eventClient);
+
+        await controller.LoadAsync();
+
+        // Start event stream (subscribes to events)
+        controller.StartEventStream(new Uri("http://localhost:8080"));
+
+        // Verify initial state
+        Assert.Equal("OFF", controller.Current.Descriptor!.Rows[0].State);
+
+        // Simulate SSE event: LivingRoom_Light changed to ON
+        eventClient.FireEvent(new ItemStateChangedEvent(
+            ItemName: "LivingRoom_Light",
+            State: "ON",
+            Topic: "openhab/items/LivingRoom_Light/state",
+            Type: "ItemStateChangedEvent"));
+
+        // Assert delta indices
+        Assert.Equal(new[] { 0 }, controller.Current.ChangedRowIndices);
+
+        // Assert descriptor shows updated state
+        Assert.Equal("ON", controller.Current.Descriptor!.Rows[0].State);
+
+        // Hallway_Temperature should be unchanged
+        Assert.Equal("21.4 C", controller.Current.Descriptor!.Rows[1].State);
+    }
+
+    [Fact]
+    public async Task StateEventNoChangeIsIgnored()
+    {
+        var settings = new AppSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var cloudClient = new FakeOpenHabClient();
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient, eventClient);
+
+        await controller.LoadAsync();
+        controller.StartEventStream(new Uri("http://localhost:8080"));
+
+        // Fire an event with the same state — no change expected
+        eventClient.FireEvent(new ItemStateChangedEvent(
+            ItemName: "LivingRoom_Light",
+            State: "OFF",
+            Topic: "openhab/items/LivingRoom_Light/state",
+            Type: "ItemStateChangedEvent"));
+
+        // Should be empty (no actual change)
+        Assert.Empty(controller.Current.ChangedRowIndices);
+    }
+
+    private static SitemapRuntimeController CreateRuntimeController(
+        AppSettingsController settings,
+        FakeOpenHabClient localClient,
+        FakeOpenHabClient cloudClient,
+        FakeEventStreamClient? eventClient = null)
+    {
+        var renderController = new SitemapRenderController(settings);
+        return new SitemapRuntimeController(
+            settings,
+            renderController,
+            (kind, _) => kind == TransportKind.Local ? localClient : cloudClient,
+            eventClient);
+    }
+}
+
+public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
+{
+    public event EventHandler<OpenHabEvent>? EventReceived;
+    public event EventHandler<SitemapWidgetEvent>? WidgetEventReceived;
+    public event EventHandler<string>? ConnectionStateChanged;
+    public bool IsConnected { get; private set; }
+
+    public void FireEvent(OpenHabEvent e)
+    {
+        EventReceived?.Invoke(this, e);
+    }
+
+    public void FireWidgetEvent(SitemapWidgetEvent e)
+    {
+        WidgetEventReceived?.Invoke(this, e);
+    }
+
+    public void FireConnectionState(string state)
+    {
+        ConnectionStateChanged?.Invoke(this, state);
+    }
+
+    public Task ConnectAsync(Uri baseUri, CancellationToken cancellationToken = default)
+    {
+        IsConnected = true;
+        return Task.CompletedTask;
+    }
+
+    public Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<string?>("fake-subscription-id");
+    }
+
+    public void Dispose() { }
 }

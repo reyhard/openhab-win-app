@@ -1,4 +1,6 @@
 using OpenHab.Windows.Tray.Rendering;
+using Microsoft.UI.Xaml;
+using OpenHab.Rendering.Descriptors;
 using System.Reflection;
 
 namespace OpenHab.App.Tests;
@@ -162,5 +164,16 @@ public class SitemapControlFactoryTests
 
         var controlLaneWidth = Assert.IsType<double>(controlLaneWidthField?.GetRawConstantValue());
         Assert.Equal(56, controlLaneWidth);
+    }
+
+    [Fact]
+    public void UpdateState_ExposesPartialRowUpdateContract()
+    {
+        var method = typeof(SitemapControlFactory).GetMethod(
+            nameof(SitemapControlFactory.UpdateState),
+            BindingFlags.Public | BindingFlags.Static,
+            [typeof(FrameworkElement), typeof(SitemapRowDescriptor)]);
+
+        Assert.NotNull(method);
     }
 }

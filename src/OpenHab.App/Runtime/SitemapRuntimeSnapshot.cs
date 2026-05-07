@@ -10,7 +10,8 @@ public sealed record SitemapRuntimeSnapshot(
     IReadOnlyList<string> Breadcrumbs,
     string StatusText,
     bool IsBusy,
-    bool HasError)
+    bool HasError,
+    IReadOnlyList<int> ChangedRowIndices)
 {
     public static SitemapRuntimeSnapshot Initial { get; } = new(
         Descriptor: null,
@@ -19,5 +20,6 @@ public sealed record SitemapRuntimeSnapshot(
         Breadcrumbs: [],
         StatusText: "Not connected.",
         IsBusy: false,
-        HasError: false);
+        HasError: false,
+        ChangedRowIndices: []);
 }

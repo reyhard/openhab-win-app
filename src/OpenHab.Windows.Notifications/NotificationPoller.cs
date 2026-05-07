@@ -50,7 +50,7 @@ public sealed class NotificationPoller : IDisposable
         this.apiToken = apiToken;
         this.basicUserName = basicUserName;
         this.basicPassword = basicPassword;
-        this.pollInterval = pollInterval ?? TimeSpan.FromSeconds(60);
+        this.pollInterval = pollInterval ?? TimeSpan.FromSeconds(30);
         this.dispatcher = dispatcher;
         this.isDismissedFunc = isDismissedFunc;
         this.onNewNotification = onNewNotification;
