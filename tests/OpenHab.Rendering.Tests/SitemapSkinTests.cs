@@ -21,6 +21,24 @@ public sealed class SitemapSkinTests
 
         Assert.Equal(RenderControlKind.Slider, row.Control);
         Assert.Equal(RenderActionKind.SendCommand, row.Action);
+        Assert.False(row.SliderUpdateOnMove);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void SliderMapsToUpdateOnMove(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget("Dimmer", SitemapWidgetType.Slider, "Dimmer", "12", [], false, false, SitemapFallbackKind.None, [])
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Slider, row.Control);
+        Assert.True(row.SliderUpdateOnMove);
     }
 
     [Fact]

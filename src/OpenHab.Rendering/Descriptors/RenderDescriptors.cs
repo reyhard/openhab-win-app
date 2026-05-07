@@ -27,7 +27,8 @@ public sealed record SitemapRowDescriptor(
     int? GridColumn = null,
     string? Command = null,
     string? ReleaseCommand = null,
-    bool? Stateless = null)
+    bool? Stateless = null,
+    bool SliderUpdateOnMove = true)
 {
     public SitemapRowDescriptor(
         string Label,
@@ -35,7 +36,7 @@ public sealed record SitemapRowDescriptor(
         RenderControlKind Control,
         RenderActionKind Action,
         RenderDensity Density)
-        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null, true, null, null, null, null, null)
+        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null, true, null, null, null, null, null, true)
     {
     }
 }

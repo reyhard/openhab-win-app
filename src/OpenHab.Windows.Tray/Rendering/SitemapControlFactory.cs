@@ -23,6 +23,7 @@ public static class SitemapControlFactory
     private const double ValueLaneWidth = 96;
     private const double ControlLaneWidth = 56;
     private const double NavigateChevronLaneWidth = 20;
+    private const int SliderMoveDebounceMs = 200;
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
     private static readonly Regex FirstNumberRegex = new(@"[-+]?\d+([.,]\d+)?", RegexOptions.Compiled);
@@ -152,6 +153,14 @@ public static class SitemapControlFactory
         string? BasicPassword,
         TransportKind? TransportKind = null);
 
+    private sealed class SliderCommandState
+    {
+        public bool SuppressValueChanged { get; set; }
+        public bool IsDragging { get; set; }
+        public CancellationTokenSource? DebounceCts { get; set; }
+        public string? LastSentCommand { get; set; }
+    }
+
     /// <summary>
     /// Collapses separators and digits so common openHAB icon-name variants
     /// (e.g. "roller_shutter", "ground-floor", "chart-1") still resolve.
@@ -244,7 +253,25 @@ public static class SitemapControlFactory
                 var slider = FindVisualChild<Slider>(inner);
                 if (slider is not null && double.TryParse(rawState, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
                 {
+                    var sliderState = slider.Tag as SliderCommandState;
+                    if (sliderState is not null)
+                    {
+                        sliderState.SuppressValueChanged = true;
+                    }
+
                     slider.Value = val;
+
+                    if (sliderState is not null)
+                    {
+                        sliderState.SuppressValueChanged = false;
+                    }
+
+                    var currentStateText = FindStateTextBlockText(inner);
+                    UpdateStateTextBlock(inner, FormatSliderStateText(currentStateText, val));
+                }
+                else
+                {
+                    UpdateStateTextBlock(inner, updated.State ?? rawState ?? string.Empty);
                 }
                 break;
 
@@ -265,6 +292,26 @@ public static class SitemapControlFactory
     private static void UpdateStateTextBlock(DependencyObject parent, string newState)
     {
         _ = TryUpdateStateTextBlock(parent, newState);
+    }
+
+    private static string? FindStateTextBlockText(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is TextBlock tb && tb.FontSize <= 14 && IsStateTextBlock(tb))
+            {
+                return tb.Text;
+            }
+
+            var nested = FindStateTextBlockText(child);
+            if (nested is not null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryUpdateStateTextBlock(DependencyObject parent, string newState)
@@ -893,10 +940,95 @@ public static class SitemapControlFactory
 
         if (sendCommand is not null)
         {
+            var commandState = new SliderCommandState();
+            slider.Tag = commandState;
+
+            async Task SendIfChangedAsync(string value)
+            {
+                if (!string.Equals(commandState.LastSentCommand, value, StringComparison.Ordinal))
+                {
+                    await sendCommand(value);
+                    commandState.LastSentCommand = value;
+                }
+            }
+
+            async Task FlushReleaseValueAsync()
+            {
+                if (row.SliderUpdateOnMove)
+                {
+                    return;
+                }
+
+                var releaseValue = slider.Value.ToString("F0", CultureInfo.InvariantCulture);
+                await SendIfChangedAsync(releaseValue);
+            }
+
             slider.ValueChanged += async (_, args) =>
             {
+                if (commandState.SuppressValueChanged)
+                {
+                    return;
+                }
+
                 var newValue = args.NewValue.ToString("F0", CultureInfo.InvariantCulture);
-                await sendCommand(newValue);
+                stateBlock.Text = FormatSliderStateText(stateBlock.Text, args.NewValue);
+
+                if (row.SliderUpdateOnMove)
+                {
+                    commandState.DebounceCts?.Cancel();
+                    commandState.DebounceCts?.Dispose();
+
+                    var cts = new CancellationTokenSource();
+                    commandState.DebounceCts = cts;
+                    try
+                    {
+                        await Task.Delay(SliderMoveDebounceMs, cts.Token);
+                        await sendCommand(newValue);
+                        commandState.LastSentCommand = newValue;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // New move event superseded this one.
+                    }
+
+                    return;
+                }
+
+                if (!commandState.IsDragging)
+                {
+                    await SendIfChangedAsync(newValue);
+                }
+            };
+
+            slider.PointerPressed += (_, _) =>
+            {
+                commandState.IsDragging = true;
+            };
+
+            slider.PointerReleased += async (_, _) =>
+            {
+                commandState.IsDragging = false;
+                await FlushReleaseValueAsync();
+            };
+
+            slider.PointerCaptureLost += async (_, _) =>
+            {
+                commandState.IsDragging = false;
+                await FlushReleaseValueAsync();
+            };
+
+            slider.KeyUp += async (_, _) =>
+            {
+                // Keyboard slider interactions don't produce pointer release events.
+                commandState.IsDragging = false;
+                await FlushReleaseValueAsync();
+            };
+
+            slider.LostFocus += async (_, _) =>
+            {
+                // Ensure final value is sent when interaction ends through focus changes.
+                commandState.IsDragging = false;
+                await FlushReleaseValueAsync();
             };
         }
 
@@ -1016,6 +1148,23 @@ public static class SitemapControlFactory
             IsEnabled = false,
             BorderThickness = new Thickness(0)
         });
+    }
+
+    private static string FormatSliderStateText(string? template, double value)
+    {
+        var numeric = value.ToString("F0", CultureInfo.InvariantCulture);
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return numeric;
+        }
+
+        var match = FirstNumberRegex.Match(template);
+        if (!match.Success)
+        {
+            return numeric;
+        }
+
+        return string.Concat(template.AsSpan(0, match.Index), numeric, template.AsSpan(match.Index + match.Length));
     }
 
     private static FrameworkElement CreateButton(

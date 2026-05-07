@@ -40,7 +40,8 @@ internal static class SitemapRowMapper
             widget.Column,
             widget.Command,
             widget.ReleaseCommand,
-            widget.Stateless);
+            widget.Stateless,
+            SliderUpdateOnMove: widget.Type != SitemapWidgetType.Setpoint);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
