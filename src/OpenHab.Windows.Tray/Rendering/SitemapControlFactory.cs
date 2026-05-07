@@ -200,6 +200,9 @@ public static class SitemapControlFactory
             RenderControlKind.Toggle => CreateToggle(row, activateRow, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Slider => CreateSlider(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.Button => CreateButton(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.Image => CreateImage(row, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row, activateRow, baseUri, useWindowsIcons, iconAuth)
         };
@@ -625,9 +628,35 @@ public static class SitemapControlFactory
         ArgumentException.ThrowIfNullOrWhiteSpace(iconName);
         ArgumentException.ThrowIfNullOrWhiteSpace(format);
 
-        // Match openHAB web UI icon requests so dynamic icons resolve by state.
-        // Example: /icon/rollershutter?format=png&state=50
-        var escapedIcon = Uri.EscapeDataString(iconName);
+        var sourceSplit = iconName.Split(':', 2, StringSplitOptions.TrimEntries);
+        var hasExplicitSource = sourceSplit.Length == 2;
+        var iconSource = hasExplicitSource ? sourceSplit[0] : "oh";
+        if (hasExplicitSource &&
+            (iconSource.Equals("f7", StringComparison.OrdinalIgnoreCase) ||
+             iconSource.Equals("material", StringComparison.OrdinalIgnoreCase) ||
+             iconSource.Equals("if", StringComparison.OrdinalIgnoreCase) ||
+             iconSource.Equals("iconify", StringComparison.OrdinalIgnoreCase)))
+        {
+            var source = iconSource.ToLowerInvariant();
+            var rawName = sourceSplit[1];
+            if (source == "f7")
+            {
+                return new Uri($"https://api.iconify.design/f7/{Uri.EscapeDataString(rawName.Replace('_', '-'))}.svg");
+            }
+
+            if (source == "material")
+            {
+                var materialName = $"baseline-{rawName.Replace('_', '-')}";
+                return new Uri($"https://api.iconify.design/ic/{Uri.EscapeDataString(materialName)}.svg");
+            }
+
+            var iconifyName = rawName.Replace(':', '/');
+            return new Uri($"https://api.iconify.design/{Uri.EscapeDataString(iconifyName)}.svg");
+        }
+
+        var escapedIcon = hasExplicitSource
+            ? $"{Uri.EscapeDataString(iconSource)}:{Uri.EscapeDataString(sourceSplit[1])}"
+            : Uri.EscapeDataString(iconName);
         var query = string.IsNullOrWhiteSpace(iconState)
             ? $"format={Uri.EscapeDataString(format)}"
             : $"format={Uri.EscapeDataString(format)}&state={Uri.EscapeDataString(iconState)}";
@@ -987,6 +1016,107 @@ public static class SitemapControlFactory
             IsEnabled = false,
             BorderThickness = new Thickness(0)
         });
+    }
+
+    private static FrameworkElement CreateButton(
+        SitemapRowDescriptor row,
+        Func<string, Task>? sendCommand,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
+    {
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
+        var grid = layout.Grid;
+        var command = row.Command ?? row.SelectionOptions?.FirstOrDefault()?.Command ?? row.RawItemState ?? row.RawState ?? row.State;
+        var button = new Button
+        {
+            Content = "Run",
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsEnabled = !string.IsNullOrWhiteSpace(command) && sendCommand is not null
+        };
+        button.Click += async (_, _) =>
+        {
+            if (!string.IsNullOrWhiteSpace(command) && sendCommand is not null)
+            {
+                await sendCommand(command);
+            }
+        };
+        Grid.SetColumn(button, layout.ControlColumn);
+        grid.Children.Add(button);
+        return WrapWithBorder(grid);
+    }
+
+    private static FrameworkElement CreateButtonGrid(
+        SitemapRowDescriptor row,
+        Func<string, Task>? sendCommand,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
+    {
+        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 };
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
+        container.Children.Add(layout.Grid);
+        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
+        var maxColumn = Math.Max(1, row.SelectionOptions.Where(o => o.Column.HasValue).Select(o => o.Column!.Value).DefaultIfEmpty(1).Max());
+        var maxRow = Math.Max(1, row.SelectionOptions.Where(o => o.Row.HasValue).Select(o => o.Row!.Value).DefaultIfEmpty(1).Max());
+        for (var c = 0; c < maxColumn; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var r = 0; r < maxRow; r++) grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var fallbackIndex = 0;
+        foreach (var option in row.SelectionOptions)
+        {
+            var rowIndex = option.Row.HasValue && option.Row.Value > 0 ? option.Row.Value - 1 : fallbackIndex / maxColumn;
+            var colIndex = option.Column.HasValue && option.Column.Value > 0 ? option.Column.Value - 1 : fallbackIndex % maxColumn;
+            fallbackIndex++;
+            var button = new Button { Content = option.Label, IsEnabled = sendCommand is not null, HorizontalAlignment = HorizontalAlignment.Stretch };
+            if (option.IsActive)
+            {
+                button.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 62, 133));
+                button.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+            }
+            button.Click += async (_, _) => { if (sendCommand is not null) await sendCommand(option.Command); };
+            Grid.SetRow(button, rowIndex);
+            Grid.SetColumn(button, colIndex);
+            grid.Children.Add(button);
+        }
+        container.Children.Add(grid);
+        return WrapWithBorder(container);
+    }
+
+    private static FrameworkElement CreateImage(
+        SitemapRowDescriptor row,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
+    {
+        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
+        container.Children.Add(layout.Grid);
+        var value = row.RawItemState ?? row.RawState ?? row.State;
+        if (!string.IsNullOrWhiteSpace(value) && value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+        {
+            var image = new Image { Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Stretch };
+            container.SizeChanged += (_, args) =>
+            {
+                var targetWidth = Math.Max(120, args.NewSize.Width * 0.8);
+                image.Width = targetWidth;
+                image.MaxWidth = targetWidth;
+            };
+            var comma = value.IndexOf(',');
+            if (comma > 0 && value.Contains("base64", StringComparison.OrdinalIgnoreCase))
+            {
+                try { _ = LoadRawImageBytesAsync(image, Convert.FromBase64String(value[(comma + 1)..])); } catch { }
+            }
+            container.Children.Add(image);
+        }
+        return WrapWithBorder(container);
+    }
+
+    private static async Task LoadRawImageBytesAsync(Image image, byte[] bytes)
+    {
+        var source = await CreateImageSourceFromBytesAsync(bytes, null);
+        if (source is not null) image.Source = source;
     }
 
     private static TextBlock CreateButtonTextBlock(string text)

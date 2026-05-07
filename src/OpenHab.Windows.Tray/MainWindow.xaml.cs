@@ -439,6 +439,51 @@ public sealed partial class MainWindow : Window
         {
             var rowIndex = index;
             var row = rows[index];
+
+            if (row.Control == RenderControlKind.ButtonGrid)
+            {
+                var childOptions = new List<SitemapMapOption>();
+                var scan = index + 1;
+                while (scan < rows.Count && rows[scan].Control == RenderControlKind.Button)
+                {
+                    var child = rows[scan];
+                    var command = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
+                    var isActive = string.Equals(child.RawItemState ?? child.RawState ?? child.State, "ON", StringComparison.OrdinalIgnoreCase) ||
+                                   string.Equals(child.Command, "ON", StringComparison.OrdinalIgnoreCase);
+                    childOptions.Add(new SitemapMapOption(command, child.Label, child.GridRow, child.GridColumn, isActive));
+                    scan++;
+                }
+
+                var mergedRow = row with { SelectionOptions = childOptions };
+                Func<string, Task>? sendGridCommand = async cmd =>
+                {
+                    for (var childIndex = index + 1; childIndex < scan; childIndex++)
+                    {
+                        var child = rows[childIndex];
+                        var childCommand = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
+                        if (string.Equals(childCommand, cmd, StringComparison.Ordinal))
+                        {
+                            await runtimeController.SendCommandForRowAsync(childIndex, cmd);
+                            return;
+                        }
+                    }
+                };
+
+                SitemapRows.Children.Add(SitemapControlFactory.Create(
+                    mergedRow,
+                    activateRow: null,
+                    sendGridCommand,
+                    iconBaseUri,
+                    settingsController.Current.UseWindows11Icons,
+                    iconAuth));
+                index = scan - 1;
+                continue;
+            }
+
+            if (row.Control == RenderControlKind.Button)
+            {
+                continue;
+            }
             Func<Task>? activateRow = null;
             if (row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand)
                 activateRow = () => OnRowActivatedAsync(rowIndex);

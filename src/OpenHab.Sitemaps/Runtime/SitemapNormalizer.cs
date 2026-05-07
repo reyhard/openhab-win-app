@@ -69,6 +69,11 @@ public static class SitemapNormalizer
             widget.Step,
             WidgetId: widget.WidgetId,
             RawItemState: widget.RawItemState,
-            IsVisible: widget.IsVisible);
+            IsVisible: widget.IsVisible,
+            Row: widget.Row,
+            Column: widget.Column,
+            Command: widget.Command,
+            ReleaseCommand: widget.ReleaseCommand,
+            Stateless: widget.Stateless);
     }
 }

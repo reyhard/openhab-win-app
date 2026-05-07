@@ -15,7 +15,12 @@ public sealed record SitemapWidget(
     double? MaxValue = null,
     double? Step = null,
     string WidgetId = "",
-    string? RawItemState = null);
+    string? RawItemState = null,
+    int? Row = null,
+    int? Column = null,
+    string? Command = null,
+    string? ReleaseCommand = null,
+    bool? Stateless = null);
 
 public sealed record NormalizedSitemapPage(string Id, string Label, IReadOnlyList<NormalizedSitemapWidget> Widgets);
 
@@ -35,7 +40,12 @@ public sealed record NormalizedSitemapWidget(
     double? Step = null,
     string WidgetId = "",
     string? RawItemState = null,
-    bool IsVisible = true);
+    bool IsVisible = true,
+    int? Row = null,
+    int? Column = null,
+    string? Command = null,
+    string? ReleaseCommand = null,
+    bool? Stateless = null);
 
 public sealed record SitemapMapping(string Command, string Label);
 
