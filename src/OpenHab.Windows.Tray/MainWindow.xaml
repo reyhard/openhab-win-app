@@ -4,8 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="openHAB">
     <Grid Margin="20" RowSpacing="12" ColumnSpacing="20">
+        <Grid.Resources>
+            <MenuFlyout x:Name="SitemapMenuFlyout" />
+        </Grid.Resources>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -15,14 +17,58 @@
             <ColumnDefinition Width="3*" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.ColumnSpan="2" Spacing="4">
-            <TextBlock x:Name="TitleText"
-                       FontSize="24"
-                       FontWeight="SemiBold" />
-            <TextBlock x:Name="StatusText"
-                       Opacity="0.6"
-                       Style="{StaticResource CaptionTextBlockStyle}" />
-        </StackPanel>
+        <Grid Grid.ColumnSpan="2" ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="BackButton"
+                    Width="34"
+                    Height="34"
+                    Padding="0"
+                    Click="NavigateBack_Click"
+                    ToolTipService.ToolTip="Back"
+                    Visibility="Collapsed"
+                    VerticalAlignment="Top">
+                <FontIcon Glyph="&#xE72B;" FontSize="13" />
+            </Button>
+
+            <Image Width="22"
+                   Height="22"
+                   Grid.Column="1"
+                   VerticalAlignment="Top"
+                   Margin="0,2,0,0">
+                <Image.Source>
+                    <SvgImageSource UriSource="ms-appx:///Assets/openhab-icon.svg" />
+                </Image.Source>
+            </Image>
+
+            <StackPanel x:Name="SitemapHeaderArea"
+                        Grid.Column="2"
+                        Spacing="4"
+                        Background="Transparent"
+                        HorizontalAlignment="Left"
+                        IsTapEnabled="True"
+                        Tapped="SitemapHeaderArea_Tapped">
+                <TextBlock x:Name="TitleText"
+                           FontSize="24"
+                           FontWeight="SemiBold" />
+                <TextBlock x:Name="StatusText"
+                           Opacity="0.6"
+                           Style="{StaticResource CaptionTextBlockStyle}" />
+            </StackPanel>
+
+            <Button Grid.Column="3"
+                    VerticalAlignment="Center"
+                    Click="RefreshButton_Click"
+                    ToolTipService.ToolTip="Refresh"
+                    Width="36" Height="36" Padding="4">
+                <FontIcon Glyph="&#xE72C;" FontSize="14" />
+            </Button>
+        </Grid>
 
         <Border Grid.Row="1"
                 Grid.ColumnSpan="2"
@@ -31,23 +77,19 @@
                 Background="{ThemeResource CardStrokeColorDefaultBrush}"
                 Opacity="0.3" />
 
-        <Grid Grid.Row="2" Grid.ColumnSpan="2" ColumnSpacing="8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <ComboBox x:Name="SitemapCombo"
-                      Header="Sitemap"
-                      MaxWidth="360"
-                      SelectionChanged="SitemapCombo_SelectionChanged" />
-            <Button Grid.Column="1"
-                    Margin="0,24,0,0"
-                    Click="RefreshButton_Click"
-                    ToolTipService.ToolTip="Refresh"
-                    Width="36" Height="36" Padding="4">
-                <FontIcon Glyph="&#xE72C;" FontSize="14" />
-            </Button>
-        </Grid>
+        <BreadcrumbBar Grid.Row="2"
+                       Grid.ColumnSpan="2"
+                       x:Name="BreadcrumbBar"
+                       ItemClicked="BreadcrumbBar_ItemClicked"
+                       Margin="0,0,0,2">
+            <BreadcrumbBar.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding Label}"
+                               FontFamily="{Binding FontFamily}"
+                               FontSize="{Binding FontSize}" />
+                </DataTemplate>
+            </BreadcrumbBar.ItemTemplate>
+        </BreadcrumbBar>
 
         <Border Grid.Row="3"
                 Grid.Column="0"
