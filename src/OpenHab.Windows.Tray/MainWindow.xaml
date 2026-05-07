@@ -77,21 +77,7 @@
                 Background="{ThemeResource CardStrokeColorDefaultBrush}"
                 Opacity="0.3" />
 
-        <BreadcrumbBar Grid.Row="2"
-                       Grid.ColumnSpan="2"
-                       x:Name="BreadcrumbBar"
-                       ItemClicked="BreadcrumbBar_ItemClicked"
-                       Margin="0,0,0,2">
-            <BreadcrumbBar.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Label}"
-                               FontFamily="{Binding FontFamily}"
-                               FontSize="{Binding FontSize}" />
-                </DataTemplate>
-            </BreadcrumbBar.ItemTemplate>
-        </BreadcrumbBar>
-
-        <Border Grid.Row="3"
+        <Border Grid.Row="2"
                 Grid.Column="0"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
@@ -102,7 +88,7 @@
             </ScrollViewer>
         </Border>
 
-        <Pivot Grid.Row="3" Grid.Column="1" x:Name="SidePanelPivot">
+        <Pivot Grid.Row="2" Grid.Column="1" x:Name="SidePanelPivot">
             <PivotItem Header="Notifications">
                 <Border BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"

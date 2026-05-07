@@ -400,18 +400,6 @@ public sealed partial class MainWindow : Window
         var snapshot = runtimeController.Current;
         TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
         StatusText.Text = snapshot.StatusText;
-        var rawBreadcrumbs = snapshot.Breadcrumbs.Count > 0
-            ? snapshot.Breadcrumbs
-            : [TitleText.Text];
-        var breadcrumbItems = rawBreadcrumbs
-            .Select((label, index) => index == 0
-                ? BreadcrumbDisplayItem.CreateHomeIcon()
-                : BreadcrumbDisplayItem.CreateText(label))
-            .ToList();
-        BreadcrumbBar.ItemsSource = breadcrumbItems;
-        BreadcrumbBar.Visibility = rawBreadcrumbs.Count > 1
-            ? Visibility.Visible
-            : Visibility.Collapsed;
         BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
         SitemapRows.Children.Clear();
 
@@ -710,19 +698,6 @@ public sealed partial class MainWindow : Window
         ShowSitemapMenuAt(TitleText);
     }
 
-    private void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
-    {
-        if (isRefreshing)
-        {
-            return;
-        }
-
-        if (runtimeController.NavigateToBreadcrumb(args.Index))
-        {
-            RefreshRuntimeBindings();
-        }
-    }
-
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
     {
         NavigateBackIfPossible();
@@ -767,15 +742,6 @@ public sealed partial class MainWindow : Window
         }
 
         SitemapMenuFlyout.ShowAt(target);
-    }
-
-    public sealed record BreadcrumbDisplayItem(string Label, FontFamily FontFamily, double FontSize)
-    {
-        public static BreadcrumbDisplayItem CreateHomeIcon() =>
-            new("\uEA8A", new FontFamily("Segoe MDL2 Assets"), 18);
-
-        public static BreadcrumbDisplayItem CreateText(string label) =>
-            new(label, new FontFamily("Segoe UI"), 14);
     }
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
