@@ -320,6 +320,7 @@ public partial class App : Application
                         flyout,
                         settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
                     flyout.PrepareForShowAnimation();
+                    FlyoutWindow.GrantForegroundPermission();
                     flyout.Activate();
                     flyout.StartEntranceAnimationIfPending();
                     break;

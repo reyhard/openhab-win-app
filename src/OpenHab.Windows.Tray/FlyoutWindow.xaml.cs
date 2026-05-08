@@ -1,6 +1,7 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Composition;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -29,11 +30,10 @@ public sealed partial class FlyoutWindow : Window
     private readonly Action requestHideFlyout;
     private readonly UISettings uiSettings = new();
     private bool isRefreshing;
-    private bool suppressNextDeactivationHide;
     private bool isEntranceAnimationRunning;
     private bool isExitAnimationRunning;
     private bool shouldRunEntranceAnimation;
-    private int deactivationCloseGeneration;
+    private InputLightDismissAction? _lightDismissAction;
 
     public FlyoutWindow(
         AppSettingsController settingsController,
@@ -49,7 +49,8 @@ public sealed partial class FlyoutWindow : Window
         InitializeComponent();
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
-        this.Activated += OnWindowActivated;
+        _lightDismissAction = InputLightDismissAction.GetForWindowId(AppWindow.Id);
+        _lightDismissAction.Dismissed += (_, _) => { _ = CloseFlyoutWithAnimationAsync(); };
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
         runtimeController.SnapshotChanged += (_, _) =>
         {
@@ -72,7 +73,7 @@ public sealed partial class FlyoutWindow : Window
     public void PrepareForShowAnimation()
     {
         shouldRunEntranceAnimation = true;
-        // Keep content visible if Activated does not fire on this show cycle.
+        // Content is set to visible; entrance animation runs via StartEntranceAnimationIfPending.
         var visual = GetFlyoutChromeVisual();
         visual.Opacity = 1f;
         visual.Offset = Vector3.Zero;
@@ -381,67 +382,6 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    private async void OnWindowActivated(object sender, WindowActivatedEventArgs args)
-    {
-        if (args.WindowActivationState == WindowActivationState.Deactivated)
-        {
-            if (isEntranceAnimationRunning)
-            {
-                return;
-            }
-
-            if (suppressNextDeactivationHide)
-            {
-                suppressNextDeactivationHide = false;
-                return;
-            }
-
-            if (isExitAnimationRunning)
-            {
-                return;
-            }
-
-            // Ignore stale deactivation events when a newer activation state already happened.
-            var closeGeneration = Interlocked.Increment(ref deactivationCloseGeneration);
-
-            // Run exit animation before hiding
-            await AnimateFlyoutExitAndHideAsync();
-            if (closeGeneration != Volatile.Read(ref deactivationCloseGeneration))
-            {
-                return;
-            }
-
-            requestHideFlyout();
-            return;
-        }
-
-        // Any non-deactivated activation invalidates older close requests.
-        Interlocked.Increment(ref deactivationCloseGeneration);
-
-        ApplyFlyoutTheme();
-        ScheduleNativeDecorationApply();
-
-        if (!shouldRunEntranceAnimation)
-        {
-            return;
-        }
-
-        shouldRunEntranceAnimation = false;
-
-        try
-        {
-            await AnimateFlyoutEntranceAsync();
-        }
-        catch (ArgumentException)
-        {
-            // Animation is non-critical; avoid app termination on composition edge cases.
-        }
-        catch (InvalidOperationException)
-        {
-            // Composition state can be transient during startup; ignore.
-        }
-    }
-
     private void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
     {
         if (isRefreshing)
@@ -560,15 +500,7 @@ public sealed partial class FlyoutWindow : Window
     {
         isEntranceAnimationRunning = false;
         isExitAnimationRunning = false;
-        Interlocked.Increment(ref deactivationCloseGeneration);
     }
-
-    /// <summary>
-    /// Prevents the deactivation handler from running the exit animation
-    /// on the next hide. Use before programmatic AppWindow.Hide() to avoid
-    /// orphaned exit animations that interfere with subsequent show cycles.
-    /// </summary>
-    public void SuppressNextDeactivation() => suppressNextDeactivationHide = true;
 
     /// <summary>
     /// Hides the content visual before positioning to prevent flicker.
@@ -858,6 +790,12 @@ public sealed partial class FlyoutWindow : Window
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AllowSetForegroundWindow(uint dwProcessId);
+
+    public static void GrantForegroundPermission() => AllowSetForegroundWindow(0xFFFFFFFF);
 
     private bool IsSystemBackgroundDark()
     {
