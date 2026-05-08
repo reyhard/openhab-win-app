@@ -37,14 +37,17 @@ internal static class AcrylicBlurHelper
         IntPtr hwnd,
         ref WindowCompositionAttributeData data);
 
-    public static void Apply(IntPtr hwnd)
+    public static void Apply(IntPtr hwnd, FlyoutTheme theme)
     {
         if (hwnd == IntPtr.Zero)
         {
             return;
         }
 
-        TrySetAccent(hwnd, AccentState.EnableAcrylicBlurBehind, 0x00000000);
+        var opacity = theme == FlyoutTheme.Dark ? 0xB0u : 0xA8u;
+        var bgrBackground = theme == FlyoutTheme.Dark ? 0x000000u : 0xFFFFFFu;
+        var gradientColor = (opacity << 24) | (bgrBackground & 0xFFFFFFu);
+        TrySetAccent(hwnd, AccentState.EnableAcrylicBlurBehind, gradientColor);
     }
 
     public static void Remove(IntPtr hwnd)

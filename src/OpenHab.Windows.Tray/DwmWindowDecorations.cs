@@ -5,6 +5,8 @@ namespace OpenHab.Windows.Tray;
 internal static class DwmWindowDecorations
 {
     internal const uint ColorNone = 0xFFFFFFFE;
+    private const uint ColorBlack = 0x00000000;
+    private const uint ColorWhite = 0x00FFFFFF;
 
     internal static FlyoutTheme ResolveFlyoutTheme(bool followSystemTheme, bool isSystemDark)
     {
@@ -16,7 +18,7 @@ internal static class DwmWindowDecorations
         return isSystemDark ? FlyoutTheme.Dark : FlyoutTheme.Light;
     }
 
-    internal static IReadOnlyList<DwmAttributeRequest> BuildRequests(bool isWindows11OrLater)
+    internal static IReadOnlyList<DwmAttributeRequest> BuildRequests(bool isWindows11OrLater, FlyoutTheme theme = FlyoutTheme.Dark)
     {
         var requests = new List<DwmAttributeRequest>();
 
@@ -27,7 +29,7 @@ internal static class DwmWindowDecorations
                 (int)DwmWindowCornerPreference.Round));
             requests.Add(DwmAttributeRequest.FromUInt(
                 DwmWindowAttribute.BorderColor,
-                ColorNone));
+                theme == FlyoutTheme.Dark ? ColorBlack : ColorWhite));
         }
 
         requests.Add(DwmAttributeRequest.FromInt(
@@ -44,7 +46,7 @@ internal static class DwmWindowDecorations
         return requests;
     }
 
-    internal static void TryApply(IntPtr hwnd)
+    internal static void TryApply(IntPtr hwnd, FlyoutTheme theme = FlyoutTheme.Dark)
     {
         if (hwnd == IntPtr.Zero)
         {
@@ -53,7 +55,7 @@ internal static class DwmWindowDecorations
 
         try
         {
-            foreach (var request in BuildRequests(OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)))
+            foreach (var request in BuildRequests(OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000), theme))
             {
                 if (request.UIntValue is uint uintValue)
                 {

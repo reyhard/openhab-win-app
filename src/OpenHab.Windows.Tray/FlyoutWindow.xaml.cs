@@ -13,8 +13,11 @@ using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
 using System.Numerics;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Windows.UI;
 using Windows.UI.ViewManagement;
+using Windows.Graphics;
 
 namespace OpenHab.Windows.Tray;
 
@@ -410,8 +413,12 @@ public sealed partial class FlyoutWindow : Window
         }
 
         appWindow.IsShownInSwitchers = false;
+        var theme = DwmWindowDecorations.ResolveFlyoutTheme(
+            settingsController.Current.FollowSystemTheme,
+            IsSystemBackgroundDark());
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        AcrylicBlurHelper.Apply(hwnd);
+        StripNonClientFrame(hwnd);
+        ApplySurfaceStyle(theme);
     }
 
     private void ShowSitemapMenuAt(FrameworkElement target)
@@ -427,23 +434,28 @@ public sealed partial class FlyoutWindow : Window
     private async Task AnimateFlyoutEntranceAsync()
     {
         if (isEntranceAnimationRunning) return;
-        if (Content is not UIElement contentRoot) return;
+        if (FlyoutChrome is not UIElement) return;
 
         // Cancel any concurrent exit animation so it won't
         // call AppWindow.Hide() or blank the visual after we show.
         isExitAnimationRunning = false;
 
         isEntranceAnimationRunning = true;
-        var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
+        var visual = GetFlyoutChromeVisual();
         var compositor = visual.Compositor;
         var duration = CompositionAnimationHelper.ResolveDuration(
             settingsController.GetFlyoutAnimationDurationMs());
 
         try
         {
-            // Pre-position: hidden, slightly below final position, slightly scaled down
+            UpdateFlyoutChromeCenterPoint(visual);
+            var targetPos = AppWindow.Position;
+            var startPos = new PointInt32(targetPos.X, targetPos.Y + 12);
+            AppWindow.Move(startPos);
+
+            // Pre-position: hidden and slightly scaled down.
             visual.Opacity = 0f;
-            visual.Offset = new Vector3(0f, 12f, 0f);
+            visual.Offset = Vector3.Zero;
             visual.Scale = new Vector3(0.97f, 0.97f, 1f);
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
@@ -453,26 +465,24 @@ public sealed partial class FlyoutWindow : Window
                 compositor, 0f, 1f, duration);
             visual.StartAnimation(nameof(visual.Opacity), opacityAnim);
 
-            // Offset: Y=12 → Y=0 with EaseOut
-            var offsetAnim = CompositionAnimationHelper.BuildOffsetEntrance(
-                compositor,
-                new Vector3(0f, 12f, 0f),
-                Vector3.Zero,
-                duration);
-            visual.StartAnimation(nameof(visual.Offset), offsetAnim);
-
             // Scale: 0.97 → 1.0 with EaseOut (the subtle "Fluent pop")
             var scaleAnim = CompositionAnimationHelper.BuildScalarEntrance(
                 compositor, 0.97f, 1f, duration);
             visual.StartAnimation("Scale.X", scaleAnim);
             visual.StartAnimation("Scale.Y", scaleAnim);
 
+            var moveTask = AnimateWindowYAsync(
+                startPos.Y,
+                targetPos.Y,
+                duration,
+                () => isEntranceAnimationRunning);
+
             batch.End();
 
             // Wait for batch completion instead of Task.Delay
             var tcs = new TaskCompletionSource<bool>();
             batch.Completed += (_, _) => tcs.TrySetResult(true);
-            await tcs.Task;
+            await Task.WhenAll(tcs.Task, moveTask);
         }
         finally
         {
@@ -507,22 +517,19 @@ public sealed partial class FlyoutWindow : Window
     /// </summary>
     public void PrepareForHideVisual()
     {
-        if (Content is UIElement contentRoot)
-        {
-            var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
-            visual.Opacity = 0f;
-            visual.Offset = Vector3.Zero;
-            visual.Scale = new Vector3(1f, 1f, 1f);
-        }
+        var visual = GetFlyoutChromeVisual();
+        visual.Opacity = 0f;
+        visual.Offset = Vector3.Zero;
+        visual.Scale = new Vector3(1f, 1f, 1f);
     }
 
     public async Task AnimateFlyoutExitAndHideAsync()
     {
         if (isExitAnimationRunning) return;
-        if (Content is not UIElement contentRoot) return;
+        if (FlyoutChrome is not UIElement) return;
 
         isExitAnimationRunning = true;
-        var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
+        var visual = GetFlyoutChromeVisual();
         var compositor = visual.Compositor;
         var duration = CompositionAnimationHelper.ResolveDuration(
             settingsController.GetFlyoutAnimationDurationMs());
@@ -537,6 +544,10 @@ public sealed partial class FlyoutWindow : Window
 
         try
         {
+            UpdateFlyoutChromeCenterPoint(visual);
+            var startPos = AppWindow.Position;
+            var endPos = new PointInt32(startPos.X, startPos.Y + 12);
+
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
 
             // Opacity: current → 0 with EaseIn
@@ -544,25 +555,23 @@ public sealed partial class FlyoutWindow : Window
                 compositor, 1f, 0f, duration);
             visual.StartAnimation(nameof(visual.Opacity), opacityAnim);
 
-            // Offset: slide down 12px with EaseIn
-            var offsetAnim = CompositionAnimationHelper.BuildOffsetExit(
-                compositor,
-                visual.Offset,
-                new Vector3(0f, 12f, 0f),
-                duration);
-            visual.StartAnimation(nameof(visual.Offset), offsetAnim);
-
             // Scale: slight shrink with EaseIn
             var scaleAnim = CompositionAnimationHelper.BuildScalarExit(
                 compositor, 1f, 0.97f, duration);
             visual.StartAnimation("Scale.X", scaleAnim);
             visual.StartAnimation("Scale.Y", scaleAnim);
 
+            var moveTask = AnimateWindowYAsync(
+                startPos.Y,
+                endPos.Y,
+                duration,
+                () => isExitAnimationRunning);
+
             batch.End();
 
             var tcs = new TaskCompletionSource<bool>();
             batch.Completed += (_, _) => tcs.TrySetResult(true);
-            await tcs.Task;
+            await Task.WhenAll(tcs.Task, moveTask);
 
             // Only hide if not cancelled by a concurrent entrance animation
             if (isExitAnimationRunning)
@@ -598,8 +607,6 @@ public sealed partial class FlyoutWindow : Window
         {
             ApplyFlyoutTheme();
             ScheduleNativeDecorationApply();
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            AcrylicBlurHelper.Apply(hwnd);
         });
     }
 
@@ -615,7 +622,129 @@ public sealed partial class FlyoutWindow : Window
                 ? ElementTheme.Dark
                 : ElementTheme.Light;
         }
+
+        ApplySurfaceStyle(theme);
     }
+
+    private void ApplySurfaceStyle(FlyoutTheme theme)
+    {
+        // Keep the root surface theme-aware while avoiding bright halo borders in dark mode.
+        if (Application.Current.Resources["LayerFillColorAltBrush"] is Brush backgroundBrush)
+        {
+            FlyoutChrome.Background = backgroundBrush;
+        }
+        FlyoutChrome.BorderBrush = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
+        FlyoutChrome.BorderThickness = new Thickness(0);
+
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        AcrylicBlurHelper.Apply(hwnd, theme);
+    }
+
+    private Visual GetFlyoutChromeVisual() => ElementCompositionPreview.GetElementVisual(FlyoutChrome);
+
+    private void UpdateFlyoutChromeCenterPoint(Visual visual)
+    {
+        var width = (float)Math.Max(0d, FlyoutChrome.ActualWidth);
+        var height = (float)Math.Max(0d, FlyoutChrome.ActualHeight);
+        visual.CenterPoint = new Vector3(width / 2f, height / 2f, 0f);
+    }
+
+    private async Task AnimateWindowYAsync(int startY, int endY, TimeSpan duration, Func<bool> shouldContinue)
+    {
+        if (duration.TotalMilliseconds <= 1 || startY == endY)
+        {
+            if (shouldContinue())
+            {
+                var pos = AppWindow.Position;
+                AppWindow.Move(new PointInt32(pos.X, endY));
+            }
+            return;
+        }
+
+        var sw = Stopwatch.StartNew();
+        var posX = AppWindow.Position.X;
+        var totalMs = duration.TotalMilliseconds;
+        while (sw.Elapsed.TotalMilliseconds < totalMs)
+        {
+            if (!shouldContinue())
+            {
+                return;
+            }
+
+            var t = Math.Clamp(sw.Elapsed.TotalMilliseconds / totalMs, 0d, 1d);
+            var eased = 1d - Math.Pow(1d - t, 3d); // cubic ease-out
+            var y = (int)Math.Round(startY + ((endY - startY) * eased));
+            AppWindow.Move(new PointInt32(posX, y));
+            await Task.Delay(16);
+        }
+
+        if (shouldContinue())
+        {
+            AppWindow.Move(new PointInt32(posX, endY));
+        }
+    }
+
+    private static void StripNonClientFrame(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        const int GWL_STYLE = -16;
+        const int GWL_EXSTYLE = -20;
+
+        const int WS_BORDER = 0x00800000;
+        const int WS_DLGFRAME = 0x00400000;
+        const int WS_CAPTION = 0x00C00000;
+        const int WS_THICKFRAME = 0x00040000;
+        const int WS_SYSMENU = 0x00080000;
+
+        const int WS_EX_DLGMODALFRAME = 0x00000001;
+        const int WS_EX_CLIENTEDGE = 0x00000200;
+        const int WS_EX_STATICEDGE = 0x00020000;
+        const int WS_EX_WINDOWEDGE = 0x00000100;
+
+        const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOSIZE = 0x0001;
+        const uint SWP_NOZORDER = 0x0004;
+        const uint SWP_NOACTIVATE = 0x0010;
+        const uint SWP_FRAMECHANGED = 0x0020;
+
+        var style = GetWindowLong(hwnd, GWL_STYLE);
+        style &= ~(WS_BORDER | WS_DLGFRAME | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU);
+        SetWindowLong(hwnd, GWL_STYLE, style);
+
+        var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_WINDOWEDGE);
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+
+        _ = SetWindowPos(
+            hwnd,
+            IntPtr.Zero,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    }
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        IntPtr hWnd,
+        IntPtr hWndInsertAfter,
+        int X,
+        int Y,
+        int cx,
+        int cy,
+        uint uFlags);
 
     private bool IsSystemBackgroundDark()
     {
@@ -631,12 +760,15 @@ public sealed partial class FlyoutWindow : Window
 
     private void ScheduleNativeDecorationApply()
     {
+        var theme = DwmWindowDecorations.ResolveFlyoutTheme(
+            settingsController.Current.FollowSystemTheme,
+            IsSystemBackgroundDark());
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        DwmWindowDecorations.TryApply(hwnd);
+        DwmWindowDecorations.TryApply(hwnd, theme);
         _ = DispatcherQueue.TryEnqueue(() =>
         {
             var queuedHwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            DwmWindowDecorations.TryApply(queuedHwnd);
+            DwmWindowDecorations.TryApply(queuedHwnd, theme);
         });
     }
 }

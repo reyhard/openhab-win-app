@@ -14,7 +14,7 @@ public sealed class DwmWindowDecorationsTests
             r.IntValue == (int)DwmWindowCornerPreference.Round);
         Assert.Contains(requests, r =>
             r.Attribute == DwmWindowAttribute.BorderColor &&
-            r.UIntValue == DwmWindowDecorations.ColorNone);
+            r.UIntValue == 0x00000000);
         Assert.Contains(requests, r =>
             r.Attribute == DwmWindowAttribute.UseImmersiveDarkMode &&
             r.IntValue == 1);
