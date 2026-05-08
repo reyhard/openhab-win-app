@@ -945,7 +945,15 @@ public sealed partial class FlyoutWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool AllowSetForegroundWindow(uint dwProcessId);
 
-    public static void GrantForegroundPermission() => AllowSetForegroundWindow(0xFFFFFFFF);
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    public static void GrantForegroundPermission(IntPtr hwnd)
+    {
+        AllowSetForegroundWindow(0xFFFFFFFF);
+        SetForegroundWindow(hwnd);
+    }
 
     private bool IsSystemBackgroundDark()
     {
