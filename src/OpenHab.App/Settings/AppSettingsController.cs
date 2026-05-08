@@ -159,6 +159,15 @@ public sealed class AppSettingsController
         };
     }
 
+    public void SetAnimationSpeed(FlyoutAnimationSpeed speed)
+    {
+        lock (syncRoot)
+        {
+            Current = Current with { AnimationSpeed = speed };
+        }
+        _ = SaveAsync();
+    }
+
     public void SetFlyoutWidth(int width)
     {
         if (width < MinFlyoutWidth || width > MaxFlyoutWidth)

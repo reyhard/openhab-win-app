@@ -367,18 +367,19 @@ public sealed class AppSettingsControllerTests
     public void GetFlyoutAnimationDurationMs_ReturnsCorrectDurations()
     {
         var controller = new AppSettingsController();
-        Assert.Equal(0, controller.GetFlyoutAnimationDurationMs()); // Default: Default = 300ms
+        Assert.Equal(300, controller.GetFlyoutAnimationDurationMs()); // Default = 300ms
 
-        // Test each value by creating with specific settings
-        var settings = AppSettings.Default with { AnimationSpeed = FlyoutAnimationSpeed.Off };
-        Assert.Equal(0, settings.AnimationSpeed switch
-        {
-            FlyoutAnimationSpeed.Off => 0,
-            FlyoutAnimationSpeed.Fast => 150,
-            FlyoutAnimationSpeed.Default => 300,
-            FlyoutAnimationSpeed.Slow => 450,
-            _ => 300
-        });
+        controller.SetAnimationSpeed(FlyoutAnimationSpeed.Off);
+        Assert.Equal(0, controller.GetFlyoutAnimationDurationMs());
+
+        controller.SetAnimationSpeed(FlyoutAnimationSpeed.Fast);
+        Assert.Equal(150, controller.GetFlyoutAnimationDurationMs());
+
+        controller.SetAnimationSpeed(FlyoutAnimationSpeed.Slow);
+        Assert.Equal(450, controller.GetFlyoutAnimationDurationMs());
+
+        controller.SetAnimationSpeed(FlyoutAnimationSpeed.Default);
+        Assert.Equal(300, controller.GetFlyoutAnimationDurationMs());
     }
 
     [Fact]
