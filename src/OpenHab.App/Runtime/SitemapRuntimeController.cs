@@ -70,17 +70,18 @@ public sealed class SitemapRuntimeController
         var refreshId = Interlocked.Increment(ref _refreshSequence);
         var inProgress = Interlocked.Increment(ref _refreshInProgress);
         var sw = Stopwatch.StartNew();
+        var previousPageId = currentPage?.Id;
         DiagnosticLogger.Info(
             $"Refresh#{refreshId} start reason={reason} inProgress={inProgress} " +
-            $"activeTransport={Current.ActiveTransport?.ToString() ?? "<null>"} currentPage={currentPage?.Id ?? "<null>"}");
+            $"activeTransport={Current.ActiveTransport?.ToString() ?? "<null>"} currentPage={previousPageId ?? "<null>"}");
 
-        Current = Current with { IsBusy = true, StatusText = "Loading homepage...", ChangedRowIndices = [] };
+        Current = Current with { IsBusy = true, StatusText = "Loading...", ChangedRowIndices = [] };
         var settings = settingsController.Current;
         var primary = SelectPrimaryTransport(settings);
 
         try
         {
-            var descriptor = await LoadDescriptorAsync(primary, settings.SitemapName, cancellationToken);
+            var descriptor = await LoadDescriptorAsync(primary, settings.SitemapName, cancellationToken, previousPageId);
             DiagnosticLogger.Info(
                 $"Refresh#{refreshId} primary success transport={primary.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
             Current = Current with
@@ -109,7 +110,7 @@ public sealed class SitemapRuntimeController
             var fallback = new TransportSelection(TransportKind.Cloud, settings.CloudEndpoint);
             try
             {
-                var descriptor = await LoadDescriptorAsync(fallback, settings.SitemapName, cancellationToken);
+                var descriptor = await LoadDescriptorAsync(fallback, settings.SitemapName, cancellationToken, previousPageId);
                 DiagnosticLogger.Info(
                     $"Refresh#{refreshId} fallback success transport={fallback.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
                 Current = Current with
@@ -304,16 +305,43 @@ public sealed class SitemapRuntimeController
     private async Task<OpenHab.Rendering.Descriptors.SitemapRenderDescriptor> LoadDescriptorAsync(
         TransportSelection transport,
         string sitemapName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? resumePageId = null)
     {
         var client = clientFactory(transport.Kind, transport.BaseUri);
         var json = await client.GetSitemapJsonAsync(sitemapName, cancellationToken);
-        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
-        var normalized = SitemapNormalizer.Normalize(parsed);
+        var homepage = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        if (!string.IsNullOrEmpty(resumePageId) &&
+            !string.Equals(homepage.Id, resumePageId, StringComparison.Ordinal))
+        {
+            var chain = FindPageChain(homepage, resumePageId);
+            if (chain is { Count: > 1 })
+            {
+                // chain[0] = homepage, ..., chain[^1] = resume target
+                // Rebuild backStack: clear old entries, then push ancestors
+                // in order so reverse yields the trail.
+                backStack.Clear();
+                for (var i = 0; i < chain.Count - 1; i++)
+                {
+                    backStack.Push(SitemapNormalizer.Normalize(chain[i]));
+                }
+
+                currentPage = SitemapNormalizer.Normalize(chain[^1]);
+                BuildItemIndexMap();
+                DiagnosticLogger.Info(
+                    $"LoadDescriptorAsync resumed to page '{resumePageId}' from chain depth {chain.Count}");
+                return renderController.BuildCurrentDescriptor(currentPage);
+            }
+
+            DiagnosticLogger.Warn(
+                $"LoadDescriptorAsync could not resume page '{resumePageId}', falling back to homepage");
+        }
+
         backStack.Clear();
-        currentPage = normalized;
+        currentPage = SitemapNormalizer.Normalize(homepage);
         BuildItemIndexMap();
-        return renderController.BuildCurrentDescriptor(normalized);
+        return renderController.BuildCurrentDescriptor(currentPage);
     }
 
     public async Task StartSitemapEventStreamAsync(Uri localBaseUri, string sitemapName, string pageId, CancellationToken ct = default)
@@ -623,6 +651,35 @@ public sealed class SitemapRuntimeController
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Returns the chain of pages from <paramref name="root"/> to the page with
+    /// <paramref name="targetId"/>, inclusive. Returns <c>null</c> if not found.
+    /// </summary>
+    private static List<SitemapPage>? FindPageChain(SitemapPage root, string targetId)
+    {
+        var path = new List<SitemapPage>();
+        return FindPageChainWalk(root, targetId, path) ? path : null;
+    }
+
+    private static bool FindPageChainWalk(SitemapPage current, string targetId, List<SitemapPage> path)
+    {
+        path.Add(current);
+        if (string.Equals(current.Id, targetId, StringComparison.Ordinal))
+            return true;
+
+        foreach (var widget in current.Widgets)
+        {
+            foreach (var child in widget.Children)
+            {
+                if (FindPageChainWalk(child, targetId, path))
+                    return true;
+            }
+        }
+
+        path.RemoveAt(path.Count - 1);
+        return false;
     }
 
     public async Task<IReadOnlyList<SitemapInfo>> LoadSitemapListAsync(CancellationToken cancellationToken = default)
