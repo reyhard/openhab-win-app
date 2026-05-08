@@ -237,6 +237,10 @@
                                     Content="View diagnostic logs"
                                     Margin="0,8,0,0"
                                     Click="ViewLogsButton_Click" />
+                            <TextBlock x:Name="VersionText"
+                                       Margin="0,12,0,0"
+                                       Opacity="0.5"
+                                       Style="{StaticResource CaptionTextBlockStyle}" />
                         </StackPanel>
                     </ScrollViewer>
                 </Border>

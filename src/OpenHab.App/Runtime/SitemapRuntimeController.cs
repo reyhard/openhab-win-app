@@ -385,7 +385,7 @@ public sealed class SitemapRuntimeController
     private void OnConnectionStateChanged(object? sender, string state)
     {
         var source = ReferenceEquals(sender, sitemapEventStreamClient) ? "sitemap" : "unknown";
-        DiagnosticLogger.Info($"SSE connection state changed source={source} state={state}");
+        DiagnosticLogger.Info($"SSE connection state changed source={source} state={state} threadId={Environment.CurrentManagedThreadId}");
         Current = Current with
         {
             ConnectionState = state switch
@@ -479,7 +479,8 @@ public sealed class SitemapRuntimeController
 
         DiagnosticLogger.Info(
             $"ApplyWidgetEvent applied id={e.WidgetId} index={index.Value} item={e.ItemName ?? "<null>"} " +
-            $"state={e.ItemState ?? "<null>"} vis={e.Visibility} descChanged={e.DescriptionChanged}");
+            $"state={e.ItemState ?? "<null>"} vis={e.Visibility} descChanged={e.DescriptionChanged} " +
+            $"threadId={Environment.CurrentManagedThreadId}");
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -627,7 +628,8 @@ public sealed class SitemapRuntimeController
         }
 
         DiagnosticLogger.Info(
-            $"ReconcileCurrentPageAsync done page={normalized.Id} rows={normalized.Widgets.Count}");
+            $"ReconcileCurrentPageAsync done page={normalized.Id} rows={normalized.Widgets.Count} " +
+            $"threadId={Environment.CurrentManagedThreadId}");
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 

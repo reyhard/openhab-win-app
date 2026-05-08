@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Microsoft.UI.Xaml;
+using Microsoft.Windows.AppLifecycle;
 using OpenHab.App.Tray;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
@@ -21,6 +23,8 @@ namespace OpenHab.Windows.Tray;
 
 public partial class App : Application
 {
+    private static Mutex? instanceMutex;
+
     private MainWindow? mainWindow;
     private FlyoutWindow? flyoutWindow;
     private TrayIconService? trayIcon;
@@ -40,11 +44,24 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        instanceMutex = new Mutex(initiallyOwned: true, name: "OpenHab.Windows.Tray.SingleInstance", out bool createdNew);
+        if (!createdNew)
+        {
+            instanceMutex.Dispose();
+            instanceMutex = null;
+            Environment.Exit(0);
+            return;
+        }
+
         RegisterCrashHandlers();
+
+        DiagnosticLogger.Info($"openHAB Windows App v{typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown"} starting");
 
         SetCurrentProcessExplicitAppUserModelID("openHAB.openHABWinApp");
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
+
+        var activatedEventArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
 
         ICredentialStore? credentialStore;
         try
@@ -140,7 +157,7 @@ public partial class App : Application
                 _ = ApplyShellStateAsync();
             });
 
-        _ = CompleteStartupAsync(settingsController);
+        _ = CompleteStartupAsync(settingsController, activatedEventArgs);
     }
 
     private static async Task InitializeAsync(AppSettingsController settingsController)
@@ -326,6 +343,7 @@ public partial class App : Application
                     {
                         await flyout.AnimateFlyoutExitAndHideAsync();
                     }
+                    main.CenterOnCurrentScreen();
                     main.Activate();
                     break;
                 case TrayShellSurface.Flyout:
@@ -368,7 +386,7 @@ public partial class App : Application
         }
     }
 
-    private async Task CompleteStartupAsync(AppSettingsController settingsController)
+    private async Task CompleteStartupAsync(AppSettingsController settingsController, AppActivationArguments? activatedEventArgs)
     {
         await InitializeAsync(settingsController);
         await ApplyShellStateAsync();
@@ -399,6 +417,7 @@ public partial class App : Application
 
         DiagnosticLogger.Info("Completing startup — starting notification polling");
         StartNotificationPolling(settingsController);
+        HandleStartupActivation(activatedEventArgs);
     }
 
     private void ShutdownTrayResources()
@@ -573,6 +592,26 @@ public partial class App : Application
         {
             DiagnosticLogger.Error($"Failed to open URL: {url}", ex);
         }
+    }
+
+    private void HandleStartupActivation(AppActivationArguments? activatedEventArgs)
+    {
+        if (activatedEventArgs?.Kind != ExtendedActivationKind.ToastNotification)
+        {
+            return;
+        }
+
+        _ = uiDispatcherQueue?.TryEnqueue(() =>
+        {
+            if (shellController is null)
+            {
+                return;
+            }
+
+            DiagnosticLogger.Info("Processing startup toast activation");
+            shellController.HandleNotificationActivated();
+            _ = ApplyShellStateAsync();
+        });
     }
 
     // ── Crash diagnostics ──────────────────────────────────────────

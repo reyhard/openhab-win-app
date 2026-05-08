@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
@@ -20,6 +21,7 @@ using System.Runtime.InteropServices;
 using Windows.UI;
 using Windows.UI.ViewManagement;
 using Windows.Graphics;
+using Microsoft.UI.Dispatching;
 
 namespace OpenHab.Windows.Tray;
 
@@ -37,6 +39,7 @@ public sealed partial class FlyoutWindow : Window
     private bool isExitAnimationRunning;
     private bool shouldRunEntranceAnimation;
     private InputLightDismissAction? _lightDismissAction;
+    private bool _lightDismissInitialized;
     private bool _activeSlotIsA = true;
     private bool _suppressNextSnapshotRefresh;
 
@@ -64,8 +67,7 @@ public sealed partial class FlyoutWindow : Window
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
         FlyoutChrome.PointerPressed += OnFlyoutChromePointerPressed;
-        _lightDismissAction = InputLightDismissAction.GetForWindowId(AppWindow.Id);
-        _lightDismissAction.Dismissed += (_, _) => { _ = CloseFlyoutWithAnimationAsync(); };
+        EnsureLightDismissInitialized();
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
         runtimeController.SnapshotChanged += (_, _) =>
         {
@@ -74,13 +76,19 @@ public sealed partial class FlyoutWindow : Window
                 _suppressNextSnapshotRefresh = false;
                 return;
             }
-            _ = DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null));
+            if (!DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null)))
+            {
+                DiagnosticLogger.Warn("FlyoutWindow SnapshotChanged: DispatcherQueue.TryEnqueue returned false — UI update lost");
+            }
         };
         if (notificationStore is not null)
         {
             notificationStore.Changed += (_, _) =>
             {
-                _ = DispatcherQueue.TryEnqueue(RefreshNotificationBadge);
+                if (!DispatcherQueue.TryEnqueue(RefreshNotificationBadge))
+                {
+                    DiagnosticLogger.Warn("FlyoutWindow NotificationStore.Changed: DispatcherQueue.TryEnqueue returned false — badge update lost");
+                }
             };
         }
         RefreshSettingsBindings();
@@ -101,6 +109,7 @@ public sealed partial class FlyoutWindow : Window
     public void PrepareForShowAnimation()
     {
         shouldRunEntranceAnimation = true;
+        EnsureLightDismissInitialized();
         // Content is set to visible; entrance animation runs via StartEntranceAnimationIfPending.
         var visual = GetFlyoutChromeVisual();
         visual.Opacity = 1f;
@@ -458,6 +467,29 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
+    private void EnsureLightDismissInitialized()
+    {
+        if (_lightDismissInitialized) return;
+
+        try
+        {
+            _lightDismissAction = InputLightDismissAction.GetForWindowId(AppWindow.Id);
+            _lightDismissAction.Dismissed += (_, _) =>
+            {
+                _ = CloseFlyoutWithAnimationAsync();
+            };
+            _lightDismissInitialized = true;
+            DiagnosticLogger.Info("Flyout InputLightDismissAction initialized successfully");
+        }
+        catch (Exception ex)
+        {
+            _lightDismissInitialized = false;
+            DiagnosticLogger.Warn(
+                $"Failed to initialize InputLightDismissAction — light-dismiss unavailable. " +
+                $"Exception: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     private void ConfigureFlyoutWindow()
     {
         var appWindow = AppWindow;
@@ -718,6 +750,11 @@ public sealed partial class FlyoutWindow : Window
         var sw = Stopwatch.StartNew();
         var posX = AppWindow.Position.X;
         var totalMs = duration.TotalMilliseconds;
+        var lastY = startY;
+
+        // Poll at ~120 Hz for smoother animation on high-refresh-rate displays.
+        var frameBudgetMs = 8;
+
         while (sw.Elapsed.TotalMilliseconds < totalMs)
         {
             if (!shouldContinue())
@@ -728,8 +765,15 @@ public sealed partial class FlyoutWindow : Window
             var t = Math.Clamp(sw.Elapsed.TotalMilliseconds / totalMs, 0d, 1d);
             var eased = 1d - Math.Pow(1d - t, 3d); // cubic ease-out
             var y = (int)Math.Round(startY + ((endY - startY) * eased));
-            AppWindow.Move(new PointInt32(posX, y));
-            await Task.Delay(16);
+
+            // Skip redundant Move calls when the pixel position hasn't changed.
+            if (y != lastY)
+            {
+                AppWindow.Move(new PointInt32(posX, y));
+                lastY = y;
+            }
+
+            await Task.Delay(frameBudgetMs);
         }
 
         if (shouldContinue())

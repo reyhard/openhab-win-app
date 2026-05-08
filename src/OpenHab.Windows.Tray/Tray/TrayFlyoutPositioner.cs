@@ -16,15 +16,16 @@ public static class TrayFlyoutPositioner
         var appWindow = flyoutWindow.AppWindow;
         var width = preferredWidth > 0 ? preferredWidth : DefaultFlyoutWidth;
         var height = appWindow.Size.Height > 0 ? appWindow.Size.Height : DefaultFlyoutHeight;
-        var placement = CalculatePlacement(width, height);
+        var placement = CalculatePlacement(appWindow, width, height);
 
         appWindow.MoveAndResize(new RectInt32(placement.X, placement.Y, placement.Width, placement.Height));
     }
 
-    public static TrayFlyoutPlacement CalculatePlacement(int flyoutWidth, int flyoutHeight)
+    public static TrayFlyoutPlacement CalculatePlacement(AppWindow appWindow, int flyoutWidth, int flyoutHeight)
     {
-        // DisplayArea.Primary.WorkArea — the WinUI 3 equivalent of Screen.PrimaryScreen.WorkingArea
-        var workArea = DisplayArea.Primary.WorkArea;
+        // Use the display area that actually contains this window
+        // instead of always defaulting to the primary monitor.
+        var workArea = DisplayArea.GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary).WorkArea;
 
         var maxWidth = Math.Max(1, workArea.Width - (ScreenPadding * 2));
         var maxHeight = Math.Max(1, workArea.Height - (ScreenPadding * 2));

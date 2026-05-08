@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Graphics;
 using Windows.System;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
@@ -77,6 +78,11 @@ public sealed partial class MainWindow : Window
         this.requestHideToTray = requestHideToTray;
 
         InitializeComponent();
+
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openhab-icon.ico");
+        if (File.Exists(iconPath))
+            AppWindow.SetIcon(iconPath);
+
         AppWindow.Closing += AppWindow_Closing;
         this.Content.KeyDown += MainContent_KeyDown;
         this.Content.PointerPressed += MainContent_PointerPressed;
@@ -86,7 +92,10 @@ public sealed partial class MainWindow : Window
         {
             notificationStore.Changed += (_, _) =>
             {
-                _ = DispatcherQueue.TryEnqueue(RefreshNotificationList);
+                if (!DispatcherQueue.TryEnqueue(RefreshNotificationList))
+                {
+                    DiagnosticLogger.Warn("MainWindow NotificationStore.Changed: DispatcherQueue.TryEnqueue returned false — notification list update lost");
+                }
             };
             RefreshNotificationList();
         }
@@ -102,9 +111,36 @@ public sealed partial class MainWindow : Window
                 _pendingSnapshotRefresh = true;
                 return;
             }
-            _ = DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null));
+            if (!DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null)))
+            {
+                DiagnosticLogger.Warn("MainWindow SnapshotChanged: DispatcherQueue.TryEnqueue returned false — UI update lost");
+            }
         };
         _ = LoadRuntimeAsync();
+    }
+
+    /// <summary>
+    /// Positions the main window in the center of its current display's work area
+    /// so it appears consistently regardless of screen resolution or monitor configuration.
+    /// </summary>
+    public void CenterOnCurrentScreen()
+    {
+        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        var size = AppWindow.Size;
+
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            return; // Window hasn't been sized yet — let the OS default placement handle it.
+        }
+
+        var x = workArea.X + ((workArea.Width - size.Width) / 2);
+        var y = workArea.Y + ((workArea.Height - size.Height) / 2);
+
+        // Clamp so the window is never partially off-screen.
+        x = Math.Max(workArea.X, x);
+        y = Math.Max(workArea.Y, y);
+
+        AppWindow.Move(new PointInt32(x, y));
     }
 
     public async Task LoadRuntimeAsync()
@@ -126,6 +162,9 @@ public sealed partial class MainWindow : Window
     {
         SkinCombo.ItemsSource = Enum.GetValues<SitemapSkinKind>();
         EndpointModeCombo.ItemsSource = Enum.GetValues<EndpointMode>();
+
+        var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        VersionText.Text = $"openHAB Windows App v{version}";
     }
 
     private static readonly HttpClient IconHttpClient = new();

@@ -12,6 +12,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>openHAB</AssemblyName>
     <ApplicationIcon>Assets\openhab-icon.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

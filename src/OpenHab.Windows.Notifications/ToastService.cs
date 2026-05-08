@@ -1,5 +1,8 @@
 using CommunityToolkit.WinUI.Notifications;
 using OpenHab.Core;
+using System.Runtime.InteropServices;
+using System.Threading;
+using Windows.ApplicationModel;
 using Windows.UI.Notifications;
 
 namespace OpenHab.Windows.Notifications;
@@ -7,83 +10,161 @@ namespace OpenHab.Windows.Notifications;
 public static class ToastService
 {
     private static bool isAvailable;
+    private static bool isPackaged;
+    private static bool isInitialized;
+    private static int _toastSequence;
 
-    /// <summary>
-    /// True when toast notifications are available.
-    /// In unpackaged mode, depends on the Start menu shortcut
-    /// with AppUserModelId being present (via ShortcutRegistrar).
-    /// </summary>
     public static bool IsAvailable => isAvailable;
+
+    private static bool IsRunningPackaged()
+    {
+        try
+        {
+            // Package.Current throws if the app is not running in a package context.
+            // In unpackaged mode, this property access fails.
+            _ = Package.Current;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     public static void EnsureRegistered()
     {
-        if (isAvailable) return;
+        if (isInitialized) return;
+        isInitialized = true;
 
+        isPackaged = IsRunningPackaged();
+        DiagnosticLogger.Info($"ToastService.EnsureRegistered — packaged={isPackaged} threadId={Environment.CurrentManagedThreadId}");
+
+        if (isPackaged)
+        {
+            // In a packaged (MSIX) app, use the native ToastNotificationManager.
+            // The package manifest provides identity and COM activation via
+            // desktop:toastNotificationActivation extension — no compat layer needed.
+            try
+            {
+                _ = ToastNotificationManager.CreateToastNotifier();
+                isAvailable = true;
+                DiagnosticLogger.Info("Toast notification system registered via native API (packaged)");
+                return;
+            }
+            catch (Exception ex)
+            {
+                isAvailable = false;
+                DiagnosticLogger.Error(
+                    $"ToastService.EnsureRegistered (packaged) FAILED — {ex.GetType().FullName}: {ex.Message}", ex);
+                return;
+            }
+        }
+
+        // Unpackaged: use CommunityToolkit compat layer
         try
         {
-            // ToastNotificationManagerCompat auto-registers on first use.
-            // This call forces early registration so we can detect failures.
             var notifier = ToastNotificationManagerCompat.CreateToastNotifier();
-            _ = notifier.Setting; // validates the notifier is functional
+            _ = notifier.Setting;
             ToastNotificationManagerCompat.OnActivated += HandleToastActivated;
             isAvailable = true;
-            DiagnosticLogger.Info("Toast notification system registered via CommunityToolkit");
+            DiagnosticLogger.Info("Toast notification system registered via CommunityToolkit (unpackaged)");
         }
         catch (Exception ex)
         {
             isAvailable = false;
-            DiagnosticLogger.Warn($"Toast notifications unavailable — {ex.GetType().Name}: {ex.Message}");
+            DiagnosticLogger.Error(
+                $"ToastService.EnsureRegistered (unpackaged) FAILED — {ex.GetType().FullName}: {ex.Message}", ex);
         }
     }
 
     public static void Show(string title, string body)
     {
-        if (!isAvailable) return;
-
-        EnsureRegistered();
-        if (!isAvailable) return;
-
-        DiagnosticLogger.Info($"Showing toast: \"{title}\"");
-
-        var builder = new ToastContentBuilder()
-            .AddText(title)
-            .AddText(body);
-
-        var toast = new ToastNotification(builder.GetXml());
-        ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
+        if (!isAvailable || !isInitialized) return;
+        ShowInternal(title, body, null);
     }
 
     public static void Show(string title, string body, IReadOnlyList<NotificationActionButton>? actions)
     {
-        if (!isAvailable) return;
+        if (!isAvailable || !isInitialized) return;
+        ShowInternal(title, body, actions);
+    }
 
-        EnsureRegistered();
-        if (!isAvailable) return;
+    private static void ShowInternal(string title, string body, IReadOnlyList<NotificationActionButton>? actions)
+    {
+        var seq = Interlocked.Increment(ref _toastSequence);
+        var actionCount = actions?.Count ?? 0;
+        DiagnosticLogger.Info(
+            $"Toast.Show#{seq} begin title=\"{title}\" actions={actionCount} " +
+            $"packaged={isPackaged} threadId={Environment.CurrentManagedThreadId}");
 
-        DiagnosticLogger.Info($"Showing toast with actions: \"{title}\" ({actions?.Count ?? 0} buttons)");
-
-        var builder = new ToastContentBuilder()
-            .AddText(title)
-            .AddText(body);
-
-        if (actions is not null)
+        try
         {
-            foreach (var action in actions)
+            var builder = new ToastContentBuilder()
+                .AddText(title)
+                .AddText(body);
+
+            if (actions is not null)
             {
-                builder.AddButton(action.Title, ToastActivationType.Foreground,
-                    $"{action.Type}:{action.Payload}");
+                foreach (var action in actions)
+                {
+                    builder.AddButton(action.Title, ToastActivationType.Foreground,
+                        $"{action.Type}:{action.Payload}");
+                }
+            }
+
+            var toast = new ToastNotification(builder.GetXml());
+
+            if (isPackaged)
+            {
+                ToastNotificationManager.CreateToastNotifier().Show(toast);
+            }
+            else
+            {
+                ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
+            }
+
+            DiagnosticLogger.Info($"Toast.Show#{seq} done");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Error(
+                $"Toast.Show#{seq} FAILED — {ex.GetType().FullName}: {ex.Message}{Environment.NewLine}{ex.StackTrace}",
+                ex);
+            // Mark as unavailable on persistent failures so we don't keep crashing
+            if (ex is InvalidOperationException || ex is COMException)
+            {
+                isAvailable = false;
+                DiagnosticLogger.Warn("ToastService disabled due to persistent failure");
             }
         }
-
-        var toast = new ToastNotification(builder.GetXml());
-        ToastNotificationManagerCompat.CreateToastNotifier().Show(toast);
     }
 
     public static event EventHandler<ToastNotificationActivatedEventArgsCompat>? NotificationActivated;
 
+    /// <summary>
+    /// Raised when a toast notification is activated in packaged (MSIX) mode.
+    /// The string argument is the activation payload from the COM server.
+    /// </summary>
+    public static event Action<string>? PackagedActivated;
+
+    /// <summary>
+    /// Called by the COM notification activator (registered via Package.appxmanifest)
+    /// when the user interacts with a toast notification in packaged mode.
+    /// </summary>
+    public static void HandlePackagedActivation(string arguments)
+    {
+        DiagnosticLogger.Info(
+            $"Packaged toast activated — arguments=\"{arguments}\" threadId={Environment.CurrentManagedThreadId}");
+        PackagedActivated?.Invoke(arguments);
+    }
+
+    /// <summary>
+    /// Called by CommunityToolkit for unpackaged toast activation.
+    /// </summary>
     private static void HandleToastActivated(ToastNotificationActivatedEventArgsCompat args)
     {
-        DiagnosticLogger.Info("User activated a toast notification");
+        DiagnosticLogger.Info(
+            $"Toast activated (unpackaged) — threadId={Environment.CurrentManagedThreadId}");
         NotificationActivated?.Invoke(null, args);
     }
 }
