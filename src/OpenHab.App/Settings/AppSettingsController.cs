@@ -147,6 +147,18 @@ public sealed class AppSettingsController
         _ = SaveAsync();
     }
 
+    public int GetFlyoutAnimationDurationMs()
+    {
+        return Current.AnimationSpeed switch
+        {
+            FlyoutAnimationSpeed.Off => 0,
+            FlyoutAnimationSpeed.Fast => 150,
+            FlyoutAnimationSpeed.Default => 300,
+            FlyoutAnimationSpeed.Slow => 450,
+            _ => 300
+        };
+    }
+
     public void SetFlyoutWidth(int width)
     {
         if (width < MinFlyoutWidth || width > MaxFlyoutWidth)

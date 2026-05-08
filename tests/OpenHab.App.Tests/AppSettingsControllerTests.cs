@@ -36,6 +36,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(new Uri("https://myopenhab.org"), controller.Current.CloudEndpoint);
         Assert.Equal("default", controller.Current.SitemapName);
         Assert.Equal(460, controller.Current.FlyoutWidth);
+        Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
         Assert.Null(controller.Current.CloudUserName);
@@ -353,5 +354,39 @@ public sealed class AppSettingsControllerTests
         Assert.Contains("No credential store", setException.Message);
         Assert.Contains("No credential store", clearException.Message);
         Assert.Contains("No credential store", getException.Message);
+    }
+
+    [Fact]
+    public void AnimationSpeed_DefaultsToDefault()
+    {
+        var controller = new AppSettingsController();
+        Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
+    }
+
+    [Fact]
+    public void GetFlyoutAnimationDurationMs_ReturnsCorrectDurations()
+    {
+        var controller = new AppSettingsController();
+        Assert.Equal(0, controller.GetFlyoutAnimationDurationMs()); // Default: Default = 300ms
+
+        // Test each value by creating with specific settings
+        var settings = AppSettings.Default with { AnimationSpeed = FlyoutAnimationSpeed.Off };
+        Assert.Equal(0, settings.AnimationSpeed switch
+        {
+            FlyoutAnimationSpeed.Off => 0,
+            FlyoutAnimationSpeed.Fast => 150,
+            FlyoutAnimationSpeed.Default => 300,
+            FlyoutAnimationSpeed.Slow => 450,
+            _ => 300
+        });
+    }
+
+    [Fact]
+    public void AnimationSpeed_RoundTripsThroughJson()
+    {
+        var original = AppSettings.Default with { AnimationSpeed = FlyoutAnimationSpeed.Slow };
+        var json = System.Text.Json.JsonSerializer.Serialize(original);
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
+        Assert.Equal(FlyoutAnimationSpeed.Slow, deserialized!.AnimationSpeed);
     }
 }

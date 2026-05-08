@@ -4,6 +4,14 @@ using OpenHab.Rendering.Descriptors;
 
 namespace OpenHab.App.Settings;
 
+public enum FlyoutAnimationSpeed
+{
+    Off = 0,     // Instant (no animation)
+    Fast = 1,    // 150ms
+    Default = 2, // 300ms
+    Slow = 3,    // 450ms
+}
+
 public sealed record AppSettings(
     SitemapSkinKind Skin,
     EndpointMode EndpointMode,
@@ -13,6 +21,7 @@ public sealed record AppSettings(
     bool FollowSystemTheme = true,
     bool UseWindows11Icons = false,
     int FlyoutWidth = 460,
+    FlyoutAnimationSpeed AnimationSpeed = FlyoutAnimationSpeed.Default,
     int NotificationPollIntervalSeconds = 30,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
@@ -24,5 +33,6 @@ public sealed record AppSettings(
         new Uri("http://openhab:8080"),
         new Uri("https://myopenhab.org"),
         "default",
+        AnimationSpeed: FlyoutAnimationSpeed.Default,
         NotificationPollIntervalSeconds: 30);
 }
