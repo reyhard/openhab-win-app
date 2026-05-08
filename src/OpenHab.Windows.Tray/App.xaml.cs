@@ -309,12 +309,12 @@ public partial class App : Application
             {
                 case TrayShellSurface.MainWindow:
                     flyout.CancelRunningAnimations();
+                    flyout.SuppressNextDeactivation();
                     flyout.AppWindow.Hide();
                     main.Activate();
                     break;
                 case TrayShellSurface.Flyout:
                     main.AppWindow.Hide();
-                    flyout.PrepareForHideVisual();  // hide visual before repositioning
                     TrayFlyoutPositioner.PlaceNearTrayArea(
                         flyout,
                         settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
@@ -326,6 +326,7 @@ public partial class App : Application
                     if (flyout.AppWindow.IsVisible)
                     {
                         flyout.CancelRunningAnimations();
+                        flyout.SuppressNextDeactivation();
                         flyout.AppWindow.Hide();
                     }
                     break;

@@ -5,13 +5,13 @@ namespace OpenHab.App.Tests.Tray;
 public sealed class DwmWindowDecorationsTests
 {
     [Fact]
-    public void BuildRequestsForWindows11IncludesRoundedBorderlessDarkTransientChrome()
+    public void BuildRequestsForWindows11IncludesRoundedBorderlessDarkMicaChrome()
     {
         var requests = DwmWindowDecorations.BuildRequests(isWindows11OrLater: true).ToList();
 
         Assert.Contains(requests, r =>
             r.Attribute == DwmWindowAttribute.WindowCornerPreference &&
-            r.IntValue == (int)DwmWindowCornerPreference.RoundSmall);
+            r.IntValue == (int)DwmWindowCornerPreference.Round);
         Assert.Contains(requests, r =>
             r.Attribute == DwmWindowAttribute.BorderColor &&
             r.UIntValue == DwmWindowDecorations.ColorNone);
@@ -20,7 +20,7 @@ public sealed class DwmWindowDecorationsTests
             r.IntValue == 1);
         Assert.Contains(requests, r =>
             r.Attribute == DwmWindowAttribute.SystemBackdropType &&
-            r.IntValue == (int)DwmSystemBackdropType.TransientWindow);
+            r.IntValue == (int)DwmSystemBackdropType.MainWindow);
     }
 
     [Fact]

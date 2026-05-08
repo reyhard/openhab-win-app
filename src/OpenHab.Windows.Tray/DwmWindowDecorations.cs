@@ -24,7 +24,7 @@ internal static class DwmWindowDecorations
         {
             requests.Add(DwmAttributeRequest.FromInt(
                 DwmWindowAttribute.WindowCornerPreference,
-                (int)DwmWindowCornerPreference.RoundSmall));
+                (int)DwmWindowCornerPreference.Round));
             requests.Add(DwmAttributeRequest.FromUInt(
                 DwmWindowAttribute.BorderColor,
                 ColorNone));
@@ -38,7 +38,7 @@ internal static class DwmWindowDecorations
         {
             requests.Add(DwmAttributeRequest.FromInt(
                 DwmWindowAttribute.SystemBackdropType,
-                (int)DwmSystemBackdropType.TransientWindow));
+                (int)DwmSystemBackdropType.MainWindow));
         }
 
         return requests;

@@ -410,6 +410,8 @@ public sealed partial class FlyoutWindow : Window
         }
 
         appWindow.IsShownInSwitchers = false;
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        AcrylicBlurHelper.Apply(hwnd);
     }
 
     private void ShowSitemapMenuAt(FrameworkElement target)
@@ -596,6 +598,8 @@ public sealed partial class FlyoutWindow : Window
         {
             ApplyFlyoutTheme();
             ScheduleNativeDecorationApply();
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            AcrylicBlurHelper.Apply(hwnd);
         });
     }
 
