@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using OpenHab.App.Tray;
 using OpenHab.App.Runtime;
@@ -34,8 +35,13 @@ public partial class App : Application
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
     private int isShuttingDown;
 
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern void SetCurrentProcessExplicitAppUserModelID(
+        [MarshalAs(UnmanagedType.LPWStr)] string appId);
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        SetCurrentProcessExplicitAppUserModelID("openHAB.openHABWinApp");
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
 

@@ -8,6 +8,8 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+    <AssemblyName>openHAB</AssemblyName>
+    <ApplicationIcon>Assets\openhab-icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
