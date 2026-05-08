@@ -39,7 +39,7 @@ public sealed class NotificationStore
         {
             lock (syncRoot)
             {
-                return notifications.Values.Count(n => !n.IsRead);
+                return notifications.Values.Count(n => !n.IsRead && !n.IsDismissed);
             }
         }
     }

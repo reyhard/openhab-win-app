@@ -193,6 +193,35 @@ public sealed class NotificationStoreTests
         Assert.Equal(2, store.UnreadCount);
     }
 
+    [Fact]
+    public void UnreadCount_ExcludesDismissedNotifications()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow);
+        store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow);
+
+        Assert.Equal(2, store.UnreadCount);
+
+        store.Dismiss("n1");
+
+        Assert.Equal(1, store.UnreadCount);
+    }
+
+    [Fact]
+    public void UnreadCount_IsZeroAfterDismissAll()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow);
+        store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow);
+        store.MarkRead("n2");
+
+        Assert.Equal(1, store.UnreadCount);
+
+        store.DismissAll();
+
+        Assert.Equal(0, store.UnreadCount);
+    }
+
     // ─────────────────────── GetSeenUndismissedIds ───────────────────────
 
     [Fact]

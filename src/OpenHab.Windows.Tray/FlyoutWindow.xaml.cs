@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
+using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
@@ -26,7 +27,9 @@ public sealed partial class FlyoutWindow : Window
 {
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
+    private readonly NotificationStore? notificationStore;
     private readonly Action requestOpenMainWindow;
+    private readonly Action requestOpenNotifications;
     private readonly Action requestHideFlyout;
     private readonly UISettings uiSettings = new();
     private bool isRefreshing;
@@ -45,12 +48,16 @@ public sealed partial class FlyoutWindow : Window
     public FlyoutWindow(
         AppSettingsController settingsController,
         SitemapRuntimeController runtimeController,
+        NotificationStore? notificationStore,
         Action requestOpenMainWindow,
+        Action requestOpenNotifications,
         Action requestHideFlyout)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
+        this.notificationStore = notificationStore;
         this.requestOpenMainWindow = requestOpenMainWindow;
+        this.requestOpenNotifications = requestOpenNotifications;
         this.requestHideFlyout = requestHideFlyout;
 
         InitializeComponent();
@@ -69,7 +76,15 @@ public sealed partial class FlyoutWindow : Window
             }
             _ = DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null));
         };
+        if (notificationStore is not null)
+        {
+            notificationStore.Changed += (_, _) =>
+            {
+                _ = DispatcherQueue.TryEnqueue(RefreshNotificationBadge);
+            };
+        }
         RefreshSettingsBindings();
+        RefreshNotificationBadge();
         _ = LoadRuntimeAsync();
     }
 
@@ -397,6 +412,11 @@ public sealed partial class FlyoutWindow : Window
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
         requestOpenMainWindow();
+    }
+
+    private void OpenNotificationsButton_Click(object sender, RoutedEventArgs e)
+    {
+        requestOpenNotifications();
     }
 
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
@@ -838,6 +858,25 @@ public sealed partial class FlyoutWindow : Window
         var flyoutMs = settingsController.GetFlyoutAnimationDurationMs();
         if (flyoutMs <= 0) return 0;
         return Math.Max(150, (int)(flyoutMs * 0.8));
+    }
+
+    private void RefreshNotificationBadge()
+    {
+        if (notificationStore is null)
+        {
+            UnreadBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var unread = notificationStore.UnreadCount;
+        if (unread <= 0)
+        {
+            UnreadBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        UnreadBadgeText.Text = unread > 99 ? "99+" : unread.ToString();
+        UnreadBadge.Visibility = Visibility.Visible;
     }
 
     private int ResolveOffscreenStartY()

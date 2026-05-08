@@ -85,8 +85,15 @@ public partial class App : Application
         flyoutWindow = new FlyoutWindow(
             settingsController,
             runtimeController,
+            notificationStore,
             requestOpenMainWindow: () =>
             {
+                shellController.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
+            },
+            requestOpenNotifications: () =>
+            {
+                mainWindow?.ShowNotificationsTab();
                 shellController.HandleOpenMainWindow();
                 _ = ApplyShellStateAsync();
             },

@@ -116,6 +116,11 @@ public sealed partial class MainWindow : Window
         await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
     }
 
+    public void ShowNotificationsTab()
+    {
+        SidePanelPivot.SelectedIndex = 0;
+    }
+
     private void InitializeSettingsControls()
     {
         SkinCombo.ItemsSource = Enum.GetValues<SitemapSkinKind>();
