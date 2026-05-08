@@ -479,6 +479,17 @@ public sealed partial class FlyoutWindow : Window
     }
 
     /// <summary>
+    /// Cancels any running animations and resets state.
+    /// Must be called before programmatic AppWindow.Hide() to prevent
+    /// stale animation flags from blocking subsequent show cycles.
+    /// </summary>
+    public void CancelRunningAnimations()
+    {
+        isEntranceAnimationRunning = false;
+        isExitAnimationRunning = false;
+    }
+
+    /// <summary>
     /// Hides the content visual before positioning to prevent flicker.
     /// </summary>
     public void PrepareForHideVisual()

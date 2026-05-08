@@ -308,6 +308,7 @@ public partial class App : Application
             switch (state.VisibleSurface)
             {
                 case TrayShellSurface.MainWindow:
+                    flyout.CancelRunningAnimations();
                     flyout.AppWindow.Hide();
                     main.Activate();
                     break;
@@ -323,7 +324,10 @@ public partial class App : Application
                 default:
                     main.AppWindow.Hide();
                     if (flyout.AppWindow.IsVisible)
+                    {
+                        flyout.CancelRunningAnimations();
                         flyout.AppWindow.Hide();
+                    }
                     break;
             }
 
