@@ -336,7 +336,7 @@ public sealed partial class FlyoutWindow : Window
 
     private void MinimizeFlyoutButton_Click(object sender, RoutedEventArgs e)
     {
-        requestHideFlyout();
+        _ = CloseFlyoutWithAnimationAsync();
     }
 
     private void SitemapHeaderArea_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
@@ -448,9 +448,10 @@ public sealed partial class FlyoutWindow : Window
 
         try
         {
+            SetFlyoutAlwaysOnTop(false);
             UpdateFlyoutChromeCenterPoint(visual);
             var targetPos = AppWindow.Position;
-            var startPos = new PointInt32(targetPos.X, targetPos.Y + 12);
+            var startPos = new PointInt32(targetPos.X, ResolveOffscreenStartY());
             AppWindow.Move(startPos);
 
             // Pre-position: hidden and slightly scaled down.
@@ -490,6 +491,7 @@ public sealed partial class FlyoutWindow : Window
             visual.Opacity = 1f;
             visual.Offset = Vector3.Zero;
             visual.Scale = new Vector3(1f, 1f, 1f);
+            SetFlyoutAlwaysOnTop(true);
             isEntranceAnimationRunning = false;
         }
     }
@@ -544,9 +546,10 @@ public sealed partial class FlyoutWindow : Window
 
         try
         {
+            SetFlyoutAlwaysOnTop(false);
             UpdateFlyoutChromeCenterPoint(visual);
             var startPos = AppWindow.Position;
-            var endPos = new PointInt32(startPos.X, startPos.Y + 12);
+            var endPos = new PointInt32(startPos.X, ResolveOffscreenEndY());
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
 
@@ -681,6 +684,61 @@ public sealed partial class FlyoutWindow : Window
         if (shouldContinue())
         {
             AppWindow.Move(new PointInt32(posX, endY));
+        }
+    }
+
+    private async Task CloseFlyoutWithAnimationAsync()
+    {
+        if (isExitAnimationRunning)
+        {
+            return;
+        }
+
+        suppressNextDeactivationHide = true;
+        await AnimateFlyoutExitAndHideAsync();
+        requestHideFlyout();
+    }
+
+    private int ResolveOffscreenStartY()
+    {
+        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        var size = AppWindow.Size;
+        var isTopAnchored = IsTopAnchored(workArea);
+        var margin = 8;
+
+        // Top-anchored flyouts enter from above; bottom-anchored enter from below.
+        return isTopAnchored
+            ? workArea.Y - size.Height - margin
+            : workArea.Y + workArea.Height + margin;
+    }
+
+    private int ResolveOffscreenEndY()
+    {
+        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        var size = AppWindow.Size;
+        var isTopAnchored = IsTopAnchored(workArea);
+        var margin = 8;
+
+        // Exit in the same direction as entrance.
+        return isTopAnchored
+            ? workArea.Y - size.Height - margin
+            : workArea.Y + workArea.Height + margin;
+    }
+
+    private bool IsTopAnchored(RectInt32 workArea)
+    {
+        var position = AppWindow.Position;
+        var size = AppWindow.Size;
+        var windowCenterY = position.Y + (size.Height / 2);
+        var workAreaCenterY = workArea.Y + (workArea.Height / 2);
+        return windowCenterY <= workAreaCenterY;
+    }
+
+    private void SetFlyoutAlwaysOnTop(bool isAlwaysOnTop)
+    {
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsAlwaysOnTop = isAlwaysOnTop;
         }
     }
 
