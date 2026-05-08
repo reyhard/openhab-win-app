@@ -1,5 +1,6 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -420,43 +421,71 @@ public sealed partial class FlyoutWindow : Window
 
     private async Task AnimateFlyoutEntranceAsync()
     {
-        if (isEntranceAnimationRunning)
-        {
-            return;
-        }
-
-        if (Content is not UIElement contentRoot)
-        {
-            return;
-        }
+        if (isEntranceAnimationRunning) return;
+        if (Content is not UIElement contentRoot) return;
 
         isEntranceAnimationRunning = true;
         var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
+        var compositor = visual.Compositor;
+        var duration = CompositionAnimationHelper.ResolveDuration(
+            settingsController.GetFlyoutAnimationDurationMs());
+
         try
         {
-            var compositor = visual.Compositor;
-
+            // Pre-position: hidden, slightly below final position, slightly scaled down
             visual.Opacity = 0f;
-            visual.Offset = new Vector3(0f, 18f, 0f);
+            visual.Offset = new Vector3(0f, 12f, 0f);
+            visual.Scale = new Vector3(0.97f, 0.97f, 1f);
 
-            var opacity = compositor.CreateScalarKeyFrameAnimation();
-            opacity.Duration = TimeSpan.FromMilliseconds(190);
-            opacity.InsertKeyFrame(1f, 1f);
+            var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
 
-            var offset = compositor.CreateVector3KeyFrameAnimation();
-            offset.Duration = TimeSpan.FromMilliseconds(220);
-            offset.InsertKeyFrame(1f, Vector3.Zero);
+            // Opacity: 0 → 1 with EaseOut
+            var opacityAnim = CompositionAnimationHelper.BuildScalarEntrance(
+                compositor, 0f, 1f, duration);
+            visual.StartAnimation(nameof(visual.Opacity), opacityAnim);
 
-            visual.StartAnimation(nameof(visual.Opacity), opacity);
-            visual.StartAnimation(nameof(visual.Offset), offset);
+            // Offset: Y=12 → Y=0 with EaseOut
+            var offsetAnim = CompositionAnimationHelper.BuildOffsetEntrance(
+                compositor,
+                new Vector3(0f, 12f, 0f),
+                Vector3.Zero,
+                duration);
+            visual.StartAnimation(nameof(visual.Offset), offsetAnim);
 
-            await Task.Delay(240);
+            // Scale: 0.97 → 1.0 with EaseOut (the subtle "Fluent pop")
+            var scaleAnim = CompositionAnimationHelper.BuildScalarEntrance(
+                compositor, 0.97f, 1f, duration);
+            visual.StartAnimation("Scale.X", scaleAnim);
+            visual.StartAnimation("Scale.Y", scaleAnim);
+
+            batch.End();
+
+            // Wait for batch completion instead of Task.Delay
+            var tcs = new TaskCompletionSource<bool>();
+            batch.Completed += (_, _) => tcs.TrySetResult(true);
+            await tcs.Task;
         }
         finally
         {
+            // Snap to final values to prevent sub-pixel drift
             visual.Opacity = 1f;
             visual.Offset = Vector3.Zero;
+            visual.Scale = new Vector3(1f, 1f, 1f);
             isEntranceAnimationRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Hides the content visual before positioning to prevent flicker.
+    /// </summary>
+    public void PrepareForHideVisual()
+    {
+        if (Content is UIElement contentRoot)
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
+            visual.Opacity = 0f;
+            visual.Offset = Vector3.Zero;
+            visual.Scale = new Vector3(1f, 1f, 1f);
         }
     }
 

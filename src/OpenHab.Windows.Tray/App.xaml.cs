@@ -307,6 +307,7 @@ public partial class App : Application
                     break;
                 case TrayShellSurface.Flyout:
                     main.AppWindow.Hide();
+                    flyout.PrepareForHideVisual();  // hide visual before repositioning
                     TrayFlyoutPositioner.PlaceNearTrayArea(
                         flyout,
                         settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
