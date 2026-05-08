@@ -490,6 +490,13 @@ public sealed partial class FlyoutWindow : Window
     }
 
     /// <summary>
+    /// Prevents the deactivation handler from running the exit animation
+    /// on the next hide. Use before programmatic AppWindow.Hide() to avoid
+    /// orphaned exit animations that interfere with subsequent show cycles.
+    /// </summary>
+    public void SuppressNextDeactivation() => suppressNextDeactivationHide = true;
+
+    /// <summary>
     /// Hides the content visual before positioning to prevent flicker.
     /// </summary>
     public void PrepareForHideVisual()
