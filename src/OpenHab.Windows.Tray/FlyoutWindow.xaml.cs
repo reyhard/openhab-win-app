@@ -427,6 +427,10 @@ public sealed partial class FlyoutWindow : Window
         if (isEntranceAnimationRunning) return;
         if (Content is not UIElement contentRoot) return;
 
+        // Cancel any concurrent exit animation so it won't
+        // call AppWindow.Hide() or blank the visual after we show.
+        isExitAnimationRunning = false;
+
         isEntranceAnimationRunning = true;
         var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
         var compositor = visual.Compositor;
@@ -558,15 +562,21 @@ public sealed partial class FlyoutWindow : Window
             batch.Completed += (_, _) => tcs.TrySetResult(true);
             await tcs.Task;
 
-            // Only hide after animation completes
-            AppWindow.Hide();
+            // Only hide if not cancelled by a concurrent entrance animation
+            if (isExitAnimationRunning)
+            {
+                AppWindow.Hide();
+            }
         }
         finally
         {
-            // Reset visual state for next show
-            visual.Opacity = 0f;
-            visual.Offset = Vector3.Zero;
-            visual.Scale = new Vector3(1f, 1f, 1f);
+            // Reset visual state for next show, but only if not cancelled
+            if (isExitAnimationRunning)
+            {
+                visual.Opacity = 0f;
+                visual.Offset = Vector3.Zero;
+                visual.Scale = new Vector3(1f, 1f, 1f);
+            }
             isExitAnimationRunning = false;
         }
     }
