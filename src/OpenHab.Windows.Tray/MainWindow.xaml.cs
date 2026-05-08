@@ -42,6 +42,8 @@ public sealed partial class MainWindow : Window
     private bool suppressFlyoutWidthChange;
     private bool _activeSlotIsA = true;
     private bool _suppressNextSnapshotRefresh;
+    private bool _isPageTransitionRunning;
+    private bool _pendingSnapshotRefresh;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -92,6 +94,11 @@ public sealed partial class MainWindow : Window
             if (_suppressNextSnapshotRefresh)
             {
                 _suppressNextSnapshotRefresh = false;
+                return;
+            }
+            if (_isPageTransitionRunning)
+            {
+                _pendingSnapshotRefresh = true;
                 return;
             }
             _ = DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null));
@@ -583,6 +590,7 @@ public sealed partial class MainWindow : Window
     {
         if (isRefreshing) return;
         isRefreshing = true;
+        _isPageTransitionRunning = true;
         try
         {
             _suppressNextSnapshotRefresh = true;
@@ -604,6 +612,12 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            _isPageTransitionRunning = false;
+            if (_pendingSnapshotRefresh)
+            {
+                _pendingSnapshotRefresh = false;
+                RefreshRuntimeBindings(targetRows: null);
+            }
             isRefreshing = false;
         }
     }
@@ -843,6 +857,7 @@ public sealed partial class MainWindow : Window
     {
         if (!runtimeController.CanGoBack || isRefreshing) return;
         isRefreshing = true;
+        _isPageTransitionRunning = true;
         try
         {
             _suppressNextSnapshotRefresh = true;
@@ -857,7 +872,16 @@ public sealed partial class MainWindow : Window
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
             _activeSlotIsA = !_activeSlotIsA;
         }
-        finally { isRefreshing = false; }
+        finally
+        {
+            _isPageTransitionRunning = false;
+            if (_pendingSnapshotRefresh)
+            {
+                _pendingSnapshotRefresh = false;
+                RefreshRuntimeBindings(targetRows: null);
+            }
+            isRefreshing = false;
+        }
     }
 
     private void ShowSitemapMenuAt(FrameworkElement target)
@@ -1009,15 +1033,18 @@ public sealed partial class MainWindow : Window
             inactiveVisual.Offset = inactiveLayout + new Vector3(-slideX, 0, 0);
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
-            activeVisual.StartAnimation(nameof(activeVisual.Offset),
-                CompositionAnimationHelper.BuildOffsetExit(
-                    compositor, activeLayout, activeLayout + new Vector3(slideX, 0, 0), duration));
-            inactiveVisual.StartAnimation(nameof(inactiveVisual.Offset),
-                CompositionAnimationHelper.BuildOffsetEntrance(
-                    compositor,
-                    inactiveLayout + new Vector3(-slideX, 0, 0),
-                    inactiveLayout,
-                    duration));
+            var activeAnim = compositor.CreateVector3KeyFrameAnimation();
+            activeAnim.Duration = duration;
+            activeAnim.InsertKeyFrame(0f, activeLayout);
+            activeAnim.InsertKeyFrame(1f, activeLayout + new Vector3(slideX, 0, 0));
+
+            var inactiveAnim = compositor.CreateVector3KeyFrameAnimation();
+            inactiveAnim.Duration = duration;
+            inactiveAnim.InsertKeyFrame(0f, inactiveLayout + new Vector3(-slideX, 0, 0));
+            inactiveAnim.InsertKeyFrame(1f, inactiveLayout);
+
+            activeVisual.StartAnimation(nameof(activeVisual.Offset), activeAnim);
+            inactiveVisual.StartAnimation(nameof(inactiveVisual.Offset), inactiveAnim);
             batch.End();
 
             var tcs = new TaskCompletionSource<bool>();

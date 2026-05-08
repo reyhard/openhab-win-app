@@ -80,6 +80,7 @@
         <Border x:Name="SitemapContentRoot"
                 Grid.Row="2"
                 Grid.Column="0"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
@@ -89,14 +90,14 @@
                  off-screen peer populated before crossfade animation. -->
             <Grid>
                 <Grid x:Name="SitemapPageSlotA"
-                      Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                      Background="Transparent">
                     <ScrollViewer>
                         <StackPanel x:Name="SitemapRows" Spacing="4" />
                     </ScrollViewer>
                 </Grid>
                 <Grid x:Name="SitemapPageSlotB"
                       Visibility="Collapsed"
-                      Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                      Background="Transparent">
                     <ScrollViewer>
                         <StackPanel x:Name="SitemapRowsB" Spacing="4" />
                     </ScrollViewer>

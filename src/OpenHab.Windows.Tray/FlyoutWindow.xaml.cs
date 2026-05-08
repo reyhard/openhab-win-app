@@ -168,7 +168,10 @@ public sealed partial class FlyoutWindow : Window
 
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
     {
-        TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
+        // Keep title pinned to the root/main sitemap name instead of the current subpage.
+        TitleText.Text = snapshot.Breadcrumbs.Count > 0
+            ? snapshot.Breadcrumbs[0]
+            : settingsController.Current.SitemapName;
         StatusText.Text = snapshot.StatusText;
         var rawBreadcrumbs = snapshot.Breadcrumbs.Count > 0
             ? snapshot.Breadcrumbs
@@ -183,7 +186,6 @@ public sealed partial class FlyoutWindow : Window
         BreadcrumbBar.Visibility = rawBreadcrumbs.Count > 1
             ? Visibility.Visible
             : Visibility.Collapsed;
-        BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
     }
 
     internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
@@ -266,7 +268,8 @@ public sealed partial class FlyoutWindow : Window
                     sendGridCommand,
                     iconBaseUri,
                     settingsController.Current.UseWindows11Icons,
-                    iconAuth));
+                    iconAuth,
+                    chartDpi: (int)settingsController.Current.ChartQuality));
                 index = scan - 1;
                 continue;
             }
@@ -289,7 +292,8 @@ public sealed partial class FlyoutWindow : Window
                 sendCommand,
                 iconBaseUri,
                 settingsController.Current.UseWindows11Icons,
-                iconAuth));
+                iconAuth,
+                chartDpi: (int)settingsController.Current.ChartQuality));
 
             // Apply initial visibility
             var lastIndex = rowsPanel.Children.Count - 1;

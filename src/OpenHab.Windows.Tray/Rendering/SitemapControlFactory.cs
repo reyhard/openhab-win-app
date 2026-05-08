@@ -15,6 +15,7 @@ using OpenHab.Core;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using Windows.Storage.Streams;
+using Windows.UI.Text;
 
 namespace OpenHab.Windows.Tray.Rendering;
 
@@ -200,7 +201,8 @@ public static class SitemapControlFactory
         Func<string, Task>? sendCommand = null,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
-        IconAuthContext? iconAuth = null)
+        IconAuthContext? iconAuth = null,
+        int chartDpi = 192)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -212,6 +214,8 @@ public static class SitemapControlFactory
             RenderControlKind.Button => CreateButton(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Image => CreateImage(row, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.Webview => CreateWebview(row, baseUri),
+            RenderControlKind.Chart => CreateChart(row, baseUri, chartDpi, iconAuth),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row, activateRow, baseUri, useWindowsIcons, iconAuth)
         };
@@ -277,6 +281,8 @@ public static class SitemapControlFactory
 
             case RenderControlKind.Selection:
             case RenderControlKind.Text:
+            case RenderControlKind.Webview:
+            case RenderControlKind.Chart:
             case RenderControlKind.Fallback:
                 UpdateStateTextBlock(inner, updated.State ?? string.Empty);
                 break;
@@ -812,7 +818,9 @@ public static class SitemapControlFactory
                 Content = grid,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Padding = new Thickness(0, 4, 0, 4),
+                MinHeight = 36,
                 BorderThickness = new Thickness(0)
             };
             button.Click += async (_, _) => await navigate();
@@ -1271,6 +1279,160 @@ public static class SitemapControlFactory
     {
         var source = await CreateImageSourceFromBytesAsync(bytes, null);
         if (source is not null) image.Source = source;
+    }
+
+    private static FrameworkElement CreateWebview(SitemapRowDescriptor row, Uri? baseUri)
+    {
+        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons: false, iconAuth: null);
+        container.Children.Add(layout.Grid);
+
+        var url = row.Url ?? row.RawItemState ?? row.RawState ?? row.State;
+        if (!string.IsNullOrWhiteSpace(url) && ResolveWebviewUrl(url, baseUri, out var resolvedUri))
+        {
+            var webview = new WebView2
+            {
+                Height = 300,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+            _ = InitializeWebViewAsync(webview, resolvedUri);
+            container.Children.Add(webview);
+        }
+
+        return WrapWithBorder(container);
+    }
+
+    private static bool ResolveWebviewUrl(string url, Uri? baseUri, out Uri resolvedUri)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var absoluteUri))
+        {
+            resolvedUri = absoluteUri;
+            return true;
+        }
+
+        if (baseUri is not null && Uri.TryCreate(baseUri, url, out var relativeUri))
+        {
+            resolvedUri = relativeUri;
+            return true;
+        }
+
+        resolvedUri = null!;
+        return false;
+    }
+
+    private static async Task InitializeWebViewAsync(WebView2 webview, Uri uri)
+    {
+        try
+        {
+            await webview.EnsureCoreWebView2Async();
+            webview.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            webview.CoreWebView2.Settings.IsScriptEnabled = true;
+            webview.Source = uri;
+        }
+        catch
+        {
+            // WebView2 runtime may not be installed — silently degrade.
+        }
+    }
+
+    private static FrameworkElement CreateChart(SitemapRowDescriptor row, Uri? baseUri, int chartDpi, IconAuthContext? iconAuth)
+    {
+        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons: false, iconAuth: null);
+        container.Children.Add(layout.Grid);
+
+        var chartUrl = BuildChartUrl(row, baseUri, chartDpi);
+        if (chartUrl is not null)
+        {
+            var image = new Image
+            {
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+
+            // Store the chart URL as tag for potential refresh
+            image.Tag = chartUrl.AbsoluteUri;
+
+            // Set width relative to container on load
+            container.SizeChanged += (_, args) =>
+            {
+                var targetWidth = Math.Max(120, args.NewSize.Width * 0.95);
+                image.Width = targetWidth;
+                image.MaxWidth = targetWidth;
+            };
+
+            _ = LoadChartImageWithAuthAsync(image, chartUrl, iconAuth);
+            container.Children.Add(image);
+        }
+        else
+        {
+            container.Children.Add(new TextBlock
+            {
+                Text = "Chart requires an item",
+                Opacity = 0.4,
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic
+            });
+        }
+
+        return WrapWithBorder(container);
+    }
+
+    /// <summary>Builds an openHAB chart image URL from the row descriptor and base URI.</summary>
+    internal static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi)
+    {
+        var itemName = row.ItemName ?? row.RawItemState ?? row.RawState ?? row.State;
+        if (string.IsNullOrWhiteSpace(itemName) && string.IsNullOrWhiteSpace(row.Command))
+        {
+            return null;
+        }
+
+        if (baseUri is null)
+        {
+            return null;
+        }
+
+        var items = Uri.EscapeDataString(itemName ?? row.Command ?? string.Empty);
+        var period = row.Period ?? "D";
+        var random = Random.Shared.Next();
+
+        var query = $"items={items}&period={Uri.EscapeDataString(period)}&dpi={chartDpi}&random={random}";
+        return new Uri(baseUri, $"chart?{query}");
+    }
+
+    private static async Task LoadChartImageWithAuthAsync(Image image, Uri chartUrl, IconAuthContext? iconAuth)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, chartUrl);
+            if (iconAuth is { } context)
+            {
+                ApplyAuthHeaders(request, context);
+            }
+
+            using var response = await IconHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead);
+            if (!response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            if (bytes.Length == 0)
+            {
+                return;
+            }
+
+            var source = await CreateImageSourceFromBytesAsync(bytes, response.Content.Headers.ContentType?.MediaType);
+            if (source is not null)
+            {
+                image.Source = source;
+            }
+        }
+        catch
+        {
+            // Silently degrade if chart image can't be loaded from authenticated endpoint.
+        }
     }
 
     private static TextBlock CreateButtonTextBlock(string text)
