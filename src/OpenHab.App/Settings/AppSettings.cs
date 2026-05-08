@@ -29,6 +29,7 @@ public sealed record AppSettings(
     int FlyoutWidth = 460,
     FlyoutAnimationSpeed AnimationSpeed = FlyoutAnimationSpeed.Default,
     int NotificationPollIntervalSeconds = 30,
+    bool LaunchAtStartup = true,
     ChartQuality ChartQuality = ChartQuality.High,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,

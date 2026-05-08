@@ -9,3 +9,5 @@ obj/
 .vs/
 publish/
 /.dotnethome
+/.dotnethome/
+/.dotnet-home/

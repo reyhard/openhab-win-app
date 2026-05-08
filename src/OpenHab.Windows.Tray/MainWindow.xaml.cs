@@ -24,6 +24,7 @@ using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
+using OpenHab.Windows.Tray.Startup;
 using Windows.Storage.Streams;
 namespace OpenHab.Windows.Tray;
 
@@ -417,6 +418,7 @@ public sealed partial class MainWindow : Window
 
         FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
         UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
+        LaunchAtStartupToggle.IsOn = settingsController.Current.LaunchAtStartup;
         suppressFlyoutWidthChange = true;
         FlyoutWidthBox.Value = settingsController.Current.FlyoutWidth;
         NotificationPollBox.Value = settingsController.Current.NotificationPollIntervalSeconds;
@@ -936,6 +938,13 @@ public sealed partial class MainWindow : Window
     private void UseWin11IconsToggle_Toggled(object sender, RoutedEventArgs e)
     {
         settingsController.SetUseWindows11Icons(UseWin11IconsToggle.IsOn);
+    }
+
+    private async void LaunchAtStartupToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        var enabled = LaunchAtStartupToggle.IsOn;
+        settingsController.SetLaunchAtStartup(enabled);
+        await Startup.StartupManager.SetEnabledAsync(enabled);
     }
 
     private void FlyoutWidthBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

@@ -193,6 +193,15 @@ public sealed class AppSettingsController
         _ = SaveAsync();
     }
 
+    public void SetLaunchAtStartup(bool launch)
+    {
+        lock (syncRoot)
+        {
+            Current = Current with { LaunchAtStartup = launch };
+        }
+        _ = SaveAsync();
+    }
+
     public void SetNotificationPollInterval(int seconds)
     {
         if (seconds < MinNotificationPollIntervalSeconds || seconds > MaxNotificationPollIntervalSeconds)

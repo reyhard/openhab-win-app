@@ -215,6 +215,10 @@
                                           Header="Use Windows 11 style icons"
                                           OnContent="On" OffContent="Off"
                                           Toggled="UseWin11IconsToggle_Toggled" />
+                            <ToggleSwitch x:Name="LaunchAtStartupToggle"
+                                          Header="Launch at startup"
+                                          OnContent="On" OffContent="Off"
+                                          Toggled="LaunchAtStartupToggle_Toggled" />
                             <NumberBox x:Name="FlyoutWidthBox"
                                        Header="Flyout width (px)"
                                        Minimum="360"

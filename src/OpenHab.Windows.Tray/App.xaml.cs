@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using OpenHab.App.Tray;
@@ -12,11 +13,9 @@ using OpenHab.Core;
 using OpenHab.Core.Events;
 using OpenHab.Windows.Notifications;
 using OpenHab.Windows.Tray.Tray;
-using System.Linq;
-using System.Threading;
+using OpenHab.Windows.Tray.Startup;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
-using System.Threading.Tasks;
 
 namespace OpenHab.Windows.Tray;
 
@@ -41,6 +40,8 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        RegisterCrashHandlers();
+
         SetCurrentProcessExplicitAppUserModelID("openHAB.openHABWinApp");
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
@@ -372,6 +373,9 @@ public partial class App : Application
         await InitializeAsync(settingsController);
         await ApplyShellStateAsync();
 
+        // Sync autostart state with saved preference.
+        _ = StartupManager.SetEnabledAsync(settingsController.Current.LaunchAtStartup);
+
         try
         {
             var sitemaps = await runtimeController!.LoadSitemapListAsync();
@@ -569,5 +573,48 @@ public partial class App : Application
         {
             DiagnosticLogger.Error($"Failed to open URL: {url}", ex);
         }
+    }
+
+    // ── Crash diagnostics ──────────────────────────────────────────
+
+    private static readonly string CrashLogDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "OpenHab.WinApp");
+
+    private static void RegisterCrashHandlers()
+    {
+        Directory.CreateDirectory(CrashLogDir);
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            var crashPath = Path.Combine(CrashLogDir, "crash.log");
+            try
+            {
+                var text = args.ExceptionObject?.ToString() ?? "Unknown unhandled exception (null ExceptionObject)";
+                var entry = $"[{DateTime.UtcNow:O}] FATAL — AppDomain.UnhandledException{Environment.NewLine}{text}{Environment.NewLine}---{Environment.NewLine}";
+                File.AppendAllText(crashPath, entry);
+            }
+            catch
+            {
+                // Best-effort; we're crashing anyway.
+            }
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            // Observe the exception so it doesn't crash the finalizer thread.
+            args.SetObserved();
+            var crashPath = Path.Combine(CrashLogDir, "task-crash.log");
+            try
+            {
+                var text = args.Exception?.ToString() ?? "Unknown unobserved task exception";
+                var entry = $"[{DateTime.UtcNow:O}] UnobservedTaskException{Environment.NewLine}{text}{Environment.NewLine}---{Environment.NewLine}";
+                File.AppendAllText(crashPath, entry);
+            }
+            catch
+            {
+                // Best-effort.
+            }
+        };
     }
 }
