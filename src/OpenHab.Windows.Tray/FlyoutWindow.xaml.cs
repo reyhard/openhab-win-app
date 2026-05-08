@@ -28,6 +28,7 @@ public sealed partial class FlyoutWindow : Window
     private bool isRefreshing;
     private bool suppressNextDeactivationHide;
     private bool isEntranceAnimationRunning;
+    private bool isExitAnimationRunning;
     private bool shouldRunEntranceAnimation;
 
     public FlyoutWindow(
@@ -353,6 +354,8 @@ public sealed partial class FlyoutWindow : Window
                 return;
             }
 
+            // Run exit animation before hiding
+            await AnimateFlyoutExitAndHideAsync();
             requestHideFlyout();
             return;
         }
@@ -486,6 +489,67 @@ public sealed partial class FlyoutWindow : Window
             visual.Opacity = 0f;
             visual.Offset = Vector3.Zero;
             visual.Scale = new Vector3(1f, 1f, 1f);
+        }
+    }
+
+    public async Task AnimateFlyoutExitAndHideAsync()
+    {
+        if (isExitAnimationRunning) return;
+        if (Content is not UIElement contentRoot) return;
+
+        isExitAnimationRunning = true;
+        var visual = ElementCompositionPreview.GetElementVisual(contentRoot);
+        var compositor = visual.Compositor;
+        var duration = CompositionAnimationHelper.ResolveDuration(
+            settingsController.GetFlyoutAnimationDurationMs());
+
+        // If animation disabled, hide instantly
+        if (duration.TotalMilliseconds <= 1)
+        {
+            AppWindow.Hide();
+            isExitAnimationRunning = false;
+            return;
+        }
+
+        try
+        {
+            var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+
+            // Opacity: current → 0 with EaseIn
+            var opacityAnim = CompositionAnimationHelper.BuildScalarExit(
+                compositor, 1f, 0f, duration);
+            visual.StartAnimation(nameof(visual.Opacity), opacityAnim);
+
+            // Offset: slide down 12px with EaseIn
+            var offsetAnim = CompositionAnimationHelper.BuildOffsetExit(
+                compositor,
+                visual.Offset,
+                new Vector3(0f, 12f, 0f),
+                duration);
+            visual.StartAnimation(nameof(visual.Offset), offsetAnim);
+
+            // Scale: slight shrink with EaseIn
+            var scaleAnim = CompositionAnimationHelper.BuildScalarExit(
+                compositor, 1f, 0.97f, duration);
+            visual.StartAnimation("Scale.X", scaleAnim);
+            visual.StartAnimation("Scale.Y", scaleAnim);
+
+            batch.End();
+
+            var tcs = new TaskCompletionSource<bool>();
+            batch.Completed += (_, _) => tcs.TrySetResult(true);
+            await tcs.Task;
+
+            // Only hide after animation completes
+            AppWindow.Hide();
+        }
+        finally
+        {
+            // Reset visual state for next show
+            visual.Opacity = 0f;
+            visual.Offset = Vector3.Zero;
+            visual.Scale = new Vector3(1f, 1f, 1f);
+            isExitAnimationRunning = false;
         }
     }
 

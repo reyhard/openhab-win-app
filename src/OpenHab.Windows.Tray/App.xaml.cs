@@ -98,6 +98,12 @@ public partial class App : Application
 
         flyoutWindow.AppWindow.Closing += (sender, args) =>
         {
+            // If the window is already hidden (by exit animation), just cancel
+            if (!flyoutWindow.AppWindow.IsVisible)
+            {
+                args.Cancel = true;
+                return;
+            }
             args.Cancel = true;
             shellController.HandleWindowCloseRequested(TrayShellSurface.Flyout);
             _ = ApplyShellStateAsync();
@@ -316,7 +322,8 @@ public partial class App : Application
                     break;
                 default:
                     main.AppWindow.Hide();
-                    flyout.AppWindow.Hide();
+                    if (flyout.AppWindow.IsVisible)
+                        flyout.AppWindow.Hide();
                     break;
             }
 
