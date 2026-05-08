@@ -96,4 +96,27 @@ internal static class CompositionAnimationHelper
     /// </summary>
     public static TimeSpan ResolveDuration(int configuredMs) =>
         configuredMs <= 0 ? TimeSpan.FromMilliseconds(1) : TimeSpan.FromMilliseconds(configuredMs);
+
+    /// <summary>
+    /// Resolves page transition duration as 60% of the configured flyout animation
+    /// duration, with a minimum floor of 100 ms. Returns <see cref="TimeSpan.Zero"/>
+    /// when animations are disabled (configuredMs ≤ 0).
+    /// </summary>
+    public static TimeSpan ResolvePageTransitionDuration(int configuredFlyoutMs)
+    {
+        if (configuredFlyoutMs <= 0) return TimeSpan.Zero;
+        return TimeSpan.FromMilliseconds(Math.Max(100, (int)(configuredFlyoutMs * 0.6)));
+    }
+}
+
+/// <summary>
+/// Direction of a sitemap page transition used to pick the slide axis.
+/// </summary>
+internal enum NavigationDirection
+{
+    /// <summary>Navigating deeper (child page). Content slides left.</summary>
+    Forward,
+
+    /// <summary>Navigating shallower (parent page). Content slides right.</summary>
+    Back
 }

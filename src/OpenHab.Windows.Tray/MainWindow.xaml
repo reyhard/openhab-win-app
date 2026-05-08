@@ -77,15 +77,31 @@
                 Background="{ThemeResource CardStrokeColorDefaultBrush}"
                 Opacity="0.3" />
 
-        <Border Grid.Row="2"
+        <Border x:Name="SitemapContentRoot"
+                Grid.Row="2"
                 Grid.Column="0"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="12">
-            <ScrollViewer>
-                <StackPanel x:Name="SitemapRows" Spacing="4" />
-            </ScrollViewer>
+            <!-- Dual-slot layout for simultaneous page transitions.
+                 Slot A is the active rendering surface; Slot B is the
+                 off-screen peer populated before crossfade animation. -->
+            <Grid>
+                <Grid x:Name="SitemapPageSlotA"
+                      Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                    <ScrollViewer>
+                        <StackPanel x:Name="SitemapRows" Spacing="4" />
+                    </ScrollViewer>
+                </Grid>
+                <Grid x:Name="SitemapPageSlotB"
+                      Visibility="Collapsed"
+                      Background="{ThemeResource SolidBackgroundFillColorBaseBrush}">
+                    <ScrollViewer>
+                        <StackPanel x:Name="SitemapRowsB" Spacing="4" />
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
         </Border>
 
         <Pivot Grid.Row="2" Grid.Column="1" x:Name="SidePanelPivot">

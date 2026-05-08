@@ -4,13 +4,17 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Numerics;
 using System.Text;
+using Microsoft.UI.Composition;
+using Microsoft.UI.Input;
 using Microsoft.UI.Text;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Microsoft.UI.Windowing;
 using Windows.System;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
@@ -36,6 +40,13 @@ public sealed partial class MainWindow : Window
     private bool cloudUserNameEdited;
     private bool isHandlingCloseRequest;
     private bool suppressFlyoutWidthChange;
+    private bool _activeSlotIsA = true;
+    private bool _suppressNextSnapshotRefresh;
+
+    private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
+    private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
+    private Grid ActiveSlotContainer => _activeSlotIsA ? SitemapPageSlotA : SitemapPageSlotB;
+    private Grid InactiveSlotContainer => _activeSlotIsA ? SitemapPageSlotB : SitemapPageSlotA;
 
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
@@ -65,6 +76,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         AppWindow.Closing += AppWindow_Closing;
         this.Content.KeyDown += MainContent_KeyDown;
+        this.Content.PointerPressed += MainContent_PointerPressed;
         InitializeSettingsControls();
         RefreshSettingsBindings();
         if (notificationStore is not null)
@@ -77,7 +89,12 @@ public sealed partial class MainWindow : Window
         }
         runtimeController.SnapshotChanged += (_, _) =>
         {
-            _ = DispatcherQueue.TryEnqueue(RefreshRuntimeBindings);
+            if (_suppressNextSnapshotRefresh)
+            {
+                _suppressNextSnapshotRefresh = false;
+                return;
+            }
+            _ = DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null));
         };
         _ = LoadRuntimeAsync();
     }
@@ -404,12 +421,11 @@ public sealed partial class MainWindow : Window
         cloudUserNameEdited = false;
     }
 
-    internal void RefreshRuntimeBindings()
+    internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
     {
+        var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
-        TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
-        StatusText.Text = snapshot.StatusText;
-        BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
+        RefreshChromeBindings(snapshot);
 
         var rows = snapshot.Descriptor?.Rows;
         var changedIndices = snapshot.ChangedRowIndices;
@@ -418,8 +434,8 @@ public sealed partial class MainWindow : Window
         {
             foreach (var index in changedIndices)
             {
-                if (index < 0 || index >= SitemapRows.Children.Count || index >= rows.Count) continue;
-                var existing = SitemapRows.Children[index] as FrameworkElement;
+                if (index < 0 || index >= rowsPanel.Children.Count || index >= rows.Count) continue;
+                var existing = rowsPanel.Children[index] as FrameworkElement;
                 if (existing is null) continue;
                 SitemapControlFactory.UpdateState(existing, rows[index]);
             }
@@ -427,7 +443,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        SitemapRows.Children.Clear();
+        rowsPanel.Children.Clear();
         if (rows is null)
         {
             return;
@@ -479,7 +495,7 @@ public sealed partial class MainWindow : Window
                     }
                 };
 
-                SitemapRows.Children.Add(SitemapControlFactory.Create(
+                rowsPanel.Children.Add(SitemapControlFactory.Create(
                     mergedRow,
                     activateRow: null,
                     sendGridCommand,
@@ -502,7 +518,7 @@ public sealed partial class MainWindow : Window
             Func<string, Task>? sendCommand = row.Action == RenderActionKind.SendCommand
                 ? cmd => runtimeController.SendCommandForRowAsync(rowIndex, cmd)
                 : null;
-            SitemapRows.Children.Add(SitemapControlFactory.Create(
+            rowsPanel.Children.Add(SitemapControlFactory.Create(
                 row,
                 activateRow,
                 sendCommand,
@@ -511,8 +527,8 @@ public sealed partial class MainWindow : Window
                 iconAuth));
 
             // Apply initial visibility
-            var lastIndex = SitemapRows.Children.Count - 1;
-            if (lastIndex >= 0 && SitemapRows.Children[lastIndex] is FrameworkElement element)
+            var lastIndex = rowsPanel.Children.Count - 1;
+            if (lastIndex >= 0 && rowsPanel.Children[lastIndex] is FrameworkElement element)
             {
                 SitemapControlFactory.SetVisibility(element, row.IsVisible);
             }
@@ -565,12 +581,31 @@ public sealed partial class MainWindow : Window
 
     private async Task OnRowNavigateAsync(int rowIndex)
     {
-        if (isRefreshing)
+        if (isRefreshing) return;
+        isRefreshing = true;
+        try
         {
-            return;
-        }
+            _suppressNextSnapshotRefresh = true;
+            await runtimeController.NavigateToChildAsync(rowIndex, CancellationToken.None);
 
-        await RunRuntimeOperationAsync(async ct => await runtimeController.NavigateToChildAsync(rowIndex, ct));
+            InactiveSlotContainer.Visibility = Visibility.Visible;
+            RefreshRuntimeBindings(InactiveRows);
+            RefreshSettingsBindings();
+
+            await AnimatePageTransitionOverlapAsync(NavigationDirection.Forward);
+
+            ActiveRows.Children.Clear();
+            ActiveSlotContainer.Visibility = Visibility.Collapsed;
+            _activeSlotIsA = !_activeSlotIsA;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     private async void SkinCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -782,38 +817,47 @@ public sealed partial class MainWindow : Window
 
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
     {
-        NavigateBackIfPossible();
+        _ = NavigateBackWithAnimationAsync();
     }
 
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.GoBack)
+        if (e.Key == VirtualKey.GoBack && runtimeController.CanGoBack && !isRefreshing)
         {
-            if (NavigateBackIfPossible())
-            {
-                e.Handled = true;
-            }
+            e.Handled = true;
+            _ = NavigateBackWithAnimationAsync();
         }
     }
 
-    private bool NavigateBackIfPossible()
+    private void MainContent_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        if (!runtimeController.CanGoBack || isRefreshing)
+        var props = e.GetCurrentPoint(sender as UIElement).Properties;
+        if (props.IsXButton1Pressed && runtimeController.CanGoBack && !isRefreshing)
         {
-            return false;
+            e.Handled = true;
+            _ = NavigateBackWithAnimationAsync();
         }
+    }
 
+    private async Task NavigateBackWithAnimationAsync()
+    {
+        if (!runtimeController.CanGoBack || isRefreshing) return;
         isRefreshing = true;
         try
         {
+            _suppressNextSnapshotRefresh = true;
             runtimeController.NavigateBack();
-            RefreshRuntimeBindings();
-            return true;
+
+            InactiveSlotContainer.Visibility = Visibility.Visible;
+            RefreshRuntimeBindings(InactiveRows);
+
+            await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
+
+            ActiveRows.Children.Clear();
+            ActiveSlotContainer.Visibility = Visibility.Collapsed;
+            _activeSlotIsA = !_activeSlotIsA;
         }
-        finally
-        {
-            isRefreshing = false;
-        }
+        finally { isRefreshing = false; }
     }
 
     private void ShowSitemapMenuAt(FrameworkElement target)
@@ -916,5 +960,96 @@ public sealed partial class MainWindow : Window
         {
             StatusText.Text = $"Could not open logs: {ex.Message}";
         }
+    }
+
+    /// <summary>Updates header chrome independently of sitemap rows.</summary>
+    private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
+    {
+        TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
+        StatusText.Text = snapshot.StatusText;
+        BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Slides the active slot out and the inactive slot in simultaneously,
+    /// matching the Android openHAB horizontal-push transition.
+    /// </summary>
+    private async Task AnimatePageTransitionOverlapAsync(NavigationDirection direction)
+    {
+        var durationMs = ResolvePageTransitionDurationMs();
+        if (durationMs <= 0) return;
+
+        // Force layout so the visual offset reflects the element's actual position
+        // (the slot was Collapsed until just before this call).
+        InactiveSlotContainer.UpdateLayout();
+
+        var activeVisual = GetSlotVisual(ActiveSlotContainer);
+        var inactiveVisual = GetSlotVisual(InactiveSlotContainer);
+        if (activeVisual is null || inactiveVisual is null) return;
+
+        // The entering slot must render on top regardless of document order.
+        Canvas.SetZIndex(InactiveSlotContainer, 1);
+        Canvas.SetZIndex(ActiveSlotContainer, 0);
+
+        var compositor = activeVisual.Compositor;
+        var duration = TimeSpan.FromMilliseconds(durationMs);
+
+        // Full-width slide matching Android's 100%p — the old page's edge
+        // stays connected to the new page's edge throughout the transition.
+        float slideX = (float)SitemapContentRoot.ActualWidth;
+        if (slideX <= 0) slideX = 400f; // fallback if not yet laid out
+        if (direction == NavigationDirection.Forward) slideX = -slideX;
+
+        var activeLayout = activeVisual.Offset;
+        var inactiveLayout = inactiveVisual.Offset;
+
+        try
+        {
+            inactiveVisual.Opacity = 1f;
+            inactiveVisual.Offset = inactiveLayout + new Vector3(-slideX, 0, 0);
+
+            var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+            activeVisual.StartAnimation(nameof(activeVisual.Offset),
+                CompositionAnimationHelper.BuildOffsetExit(
+                    compositor, activeLayout, activeLayout + new Vector3(slideX, 0, 0), duration));
+            inactiveVisual.StartAnimation(nameof(inactiveVisual.Offset),
+                CompositionAnimationHelper.BuildOffsetEntrance(
+                    compositor,
+                    inactiveLayout + new Vector3(-slideX, 0, 0),
+                    inactiveLayout,
+                    duration));
+            batch.End();
+
+            var tcs = new TaskCompletionSource<bool>();
+            batch.Completed += (_, _) => tcs.TrySetResult(true);
+            await tcs.Task;
+        }
+        finally
+        {
+            if (activeVisual is not null)
+            {
+                activeVisual.Opacity = 1f;
+                activeVisual.Offset = activeLayout;
+            }
+            if (inactiveVisual is not null)
+            {
+                inactiveVisual.Opacity = 1f;
+                inactiveVisual.Offset = inactiveLayout;
+            }
+        }
+    }
+
+    private Visual? GetSlotVisual(Grid slot)
+    {
+        if (slot is not UIElement) return null;
+        try { return ElementCompositionPreview.GetElementVisual(slot); }
+        catch { return null; }
+    }
+
+    private int ResolvePageTransitionDurationMs()
+    {
+        var flyoutMs = settingsController.GetFlyoutAnimationDurationMs();
+        if (flyoutMs <= 0) return 0;
+        return Math.Max(150, (int)(flyoutMs * 0.8));
     }
 }
