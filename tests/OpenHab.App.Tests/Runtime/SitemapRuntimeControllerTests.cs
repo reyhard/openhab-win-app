@@ -279,7 +279,7 @@ public sealed class SitemapRuntimeControllerTests
     // ── Event stream tests ──────────────────────────────────────────
 
     [Fact]
-    public async Task StateEventUpdatesWidgetStateInSnapshot()
+    public async Task WidgetEventUpdatesWidgetStateInSnapshot()
     {
         var settings = new AppSettingsController();
         settings.SetSitemapName("default");
@@ -292,18 +292,22 @@ public sealed class SitemapRuntimeControllerTests
 
         await controller.LoadAsync();
 
-        // Start event stream (subscribes to events)
-        controller.StartEventStream(new Uri("http://localhost:8080"));
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
 
         // Verify initial state
         Assert.Equal("OFF", controller.Current.Descriptor!.Rows[0].State);
 
-        // Simulate SSE event: LivingRoom_Light changed to ON
-        eventClient.FireEvent(new ItemStateChangedEvent(
+        // Simulate sitemap widget SSE event: LivingRoom_Light changed to ON
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "w1",
+            Label: null,
+            Icon: null,
+            Visibility: true,
             ItemName: "LivingRoom_Light",
-            State: "ON",
-            Topic: "openhab/items/LivingRoom_Light/state",
-            Type: "ItemStateChangedEvent"));
+            ItemState: "ON",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
 
         // Assert delta indices
         Assert.Equal(new[] { 0 }, controller.Current.ChangedRowIndices);
@@ -316,7 +320,7 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
-    public async Task StateEventNoChangeIsIgnored()
+    public async Task WidgetEventNoChangeIsIgnored()
     {
         var settings = new AppSettingsController();
         settings.SetSitemapName("default");
@@ -328,14 +332,19 @@ public sealed class SitemapRuntimeControllerTests
         var controller = CreateRuntimeController(settings, localClient, cloudClient, eventClient);
 
         await controller.LoadAsync();
-        controller.StartEventStream(new Uri("http://localhost:8080"));
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
 
-        // Fire an event with the same state — no change expected
-        eventClient.FireEvent(new ItemStateChangedEvent(
+        // Fire a widget event with the same state — no change expected
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "w1",
+            Label: null,
+            Icon: null,
+            Visibility: true,
             ItemName: "LivingRoom_Light",
-            State: "OFF",
-            Topic: "openhab/items/LivingRoom_Light/state",
-            Type: "ItemStateChangedEvent"));
+            ItemState: "OFF",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
 
         // Should be empty (no actual change)
         Assert.Empty(controller.Current.ChangedRowIndices);
@@ -389,7 +398,6 @@ public sealed class SitemapRuntimeControllerTests
             settings,
             renderController,
             (kind, _) => kind == TransportKind.Local ? localClient : cloudClient,
-            eventClient,
             eventClient);
     }
 }

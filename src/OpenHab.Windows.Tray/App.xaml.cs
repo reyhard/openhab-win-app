@@ -68,7 +68,6 @@ public partial class App : Application
                     basicUserName: auth.BasicUserName,
                     basicPassword: auth.BasicPassword);
             },
-            eventStreamClient: CreateEventStreamClient(settingsController, httpClient),
             sitemapEventStreamClient: CreateEventStreamClient(settingsController, httpClient));
 
         shellController = new TrayShellController();
