@@ -19,7 +19,9 @@ public static class SitemapNormalizer
         SitemapWidgetType.Input,
         SitemapWidgetType.Buttongrid,
         SitemapWidgetType.Button,
-        SitemapWidgetType.Image
+        SitemapWidgetType.Image,
+        SitemapWidgetType.Webview,
+        SitemapWidgetType.Chart
     ];
 
     public static NormalizedSitemapPage Normalize(SitemapPage page)
@@ -74,6 +76,9 @@ public static class SitemapNormalizer
             Column: widget.Column,
             Command: widget.Command,
             ReleaseCommand: widget.ReleaseCommand,
-            Stateless: widget.Stateless);
+            Stateless: widget.Stateless,
+            Url: widget.Url,
+            Period: widget.Period,
+            Service: widget.Service);
     }
 }

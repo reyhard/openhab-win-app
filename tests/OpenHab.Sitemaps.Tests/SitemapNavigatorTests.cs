@@ -87,13 +87,26 @@ public sealed class SitemapNavigatorTests
     public void FallbackWidgetCreatesOpenFallbackIntent()
     {
         var root = new SitemapPage("root", "Home", [
+            new SitemapWidget("Video", SitemapWidgetType.Video, null, null, [], true, [])
+        ]);
+        var navigator = new SitemapNavigator(root);
+
+        var intent = navigator.ActivateWidget(0);
+
+        Assert.Equal(new OpenFallbackIntent("Video"), intent);
+    }
+
+    [Fact]
+    public void SupportedNativeWidgetCreatesNoOpIntent()
+    {
+        var root = new SitemapPage("root", "Home", [
             new SitemapWidget("Chart", SitemapWidgetType.Chart, null, null, [], true, [])
         ]);
         var navigator = new SitemapNavigator(root);
 
         var intent = navigator.ActivateWidget(0);
 
-        Assert.Equal(new OpenFallbackIntent("Chart"), intent);
+        Assert.Equal(new NoOpIntent(), intent);
     }
 
     [Fact]

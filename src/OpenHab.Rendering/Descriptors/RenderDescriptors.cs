@@ -28,7 +28,10 @@ public sealed record SitemapRowDescriptor(
     string? Command = null,
     string? ReleaseCommand = null,
     bool? Stateless = null,
-    bool SliderUpdateOnMove = true)
+    bool SliderUpdateOnMove = true,
+    string? Url = null,
+    string? Period = null,
+    string? ItemName = null)
 {
     public SitemapRowDescriptor(
         string Label,
@@ -36,7 +39,7 @@ public sealed record SitemapRowDescriptor(
         RenderControlKind Control,
         RenderActionKind Action,
         RenderDensity Density)
-        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null, true, null, null, null, null, null, true)
+        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null, true, null, null, null, null, null, true, null, null, null)
     {
     }
 }
@@ -56,6 +59,8 @@ public enum RenderControlKind
     Button,
     ButtonGrid,
     Image,
+    Webview,
+    Chart,
     Fallback
 }
 

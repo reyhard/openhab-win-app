@@ -147,6 +147,15 @@ public sealed class AppSettingsController
         _ = SaveAsync();
     }
 
+    public void SetChartQuality(ChartQuality quality)
+    {
+        lock (syncRoot)
+        {
+            Current = Current with { ChartQuality = quality };
+        }
+        _ = SaveAsync();
+    }
+
     public int GetFlyoutAnimationDurationMs()
     {
         return Current.AnimationSpeed switch

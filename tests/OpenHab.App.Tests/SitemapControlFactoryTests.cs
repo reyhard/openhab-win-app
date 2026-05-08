@@ -146,6 +146,47 @@ public class SitemapControlFactoryTests
     }
 
     [Fact]
+    public void BuildChartUrl_UsesItemNamePeriodAndDpi()
+    {
+        var row = new SitemapRowDescriptor(
+            "Power", "12", RenderControlKind.Chart, RenderActionKind.None, RenderDensity.Compact,
+            [], ItemName: "Weather_Temperature", Period: "D");
+        var baseUri = new Uri("http://localhost:8080/");
+
+        var uri = SitemapControlFactory.BuildChartUrl(row, baseUri, chartDpi: 192);
+
+        Assert.NotNull(uri);
+        Assert.Contains("items=Weather_Temperature", uri!.ToString());
+        Assert.Contains("period=D", uri.ToString());
+        Assert.Contains("dpi=192", uri.ToString());
+        Assert.Contains("random=", uri.ToString());
+    }
+
+    [Fact]
+    public void BuildChartUrl_ReturnsNull_WhenNoItemName()
+    {
+        var row = new SitemapRowDescriptor(
+            "Power", null, RenderControlKind.Chart, RenderActionKind.None, RenderDensity.Compact, []);
+        var baseUri = new Uri("http://localhost:8080/");
+
+        var uri = SitemapControlFactory.BuildChartUrl(row, baseUri, chartDpi: 96);
+
+        Assert.Null(uri);
+    }
+
+    [Fact]
+    public void BuildChartUrl_ReturnsNull_WhenNoBaseUri()
+    {
+        var row = new SitemapRowDescriptor(
+            "Power", "12", RenderControlKind.Chart, RenderActionKind.None, RenderDensity.Compact,
+            [], ItemName: "Weather_Temperature", Period: "D");
+
+        var uri = SitemapControlFactory.BuildChartUrl(row, null, chartDpi: 96);
+
+        Assert.Null(uri);
+    }
+
+    [Fact]
     public void ToggleRows_DoNotUseCombinedFixedClusterWidth()
     {
         var clusterWidthField = typeof(SitemapControlFactory).GetField(

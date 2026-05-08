@@ -1,0 +1,12 @@
+{
+  "planPath": "docs/superpowers/plans/2026-05-07-openhab-windows-flyout-animation.md",
+  "tasks": [
+    {"id": 0, "subject": "Task 1: Add FlyoutAnimationSpeed Setting", "status": "completed"},
+    {"id": 1, "subject": "Task 2: Extract Composition Animation Helpers", "status": "completed", "blockedBy": []},
+    {"id": 2, "subject": "Task 3: Upgrade Entrance Animation (Easing + Scale + Flicker Fix)", "status": "completed", "blockedBy": [1]},
+    {"id": 3, "subject": "Task 4: Add Exit Animation", "status": "completed", "blockedBy": [2]},
+    {"id": 4, "subject": "Task 5: LSP Diagnostics and Solution Build", "status": "completed", "blockedBy": [3]},
+    {"id": 5, "subject": "Task 6: Full Solution Verification", "status": "completed", "blockedBy": [4]}
+  ],
+  "lastUpdated": "2026-05-08T00:00:00+02:00"
+}

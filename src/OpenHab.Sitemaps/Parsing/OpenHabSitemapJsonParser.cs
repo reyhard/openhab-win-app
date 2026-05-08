@@ -118,6 +118,9 @@ public static class OpenHabSitemapJsonParser
         var widgetCommand = GetStringOrNull(widgetElement, "command");
         var releaseCommand = GetStringOrNull(widgetElement, "releaseCommand");
         var stateless = GetBoolOrNull(widgetElement, "stateless");
+        var url = GetStringOrNull(widgetElement, "url");
+        var period = GetStringOrNull(widgetElement, "period");
+        var service = GetStringOrNull(widgetElement, "service");
 
         var isVisible = true;
         if (widgetElement.TryGetProperty("visibility", out var visibilityElement) &&
@@ -144,7 +147,10 @@ public static class OpenHabSitemapJsonParser
             Column: column,
             Command: widgetCommand,
             ReleaseCommand: releaseCommand,
-            Stateless: stateless);
+            Stateless: stateless,
+            Url: url,
+            Period: period,
+            Service: service);
     }
 
     private static void FlattenInlineChildren(JsonElement widgetElement, List<SitemapWidget> target)

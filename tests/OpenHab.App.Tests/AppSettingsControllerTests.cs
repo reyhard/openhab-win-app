@@ -37,6 +37,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal("default", controller.Current.SitemapName);
         Assert.Equal(460, controller.Current.FlyoutWidth);
         Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
+        Assert.Equal(ChartQuality.High, controller.Current.ChartQuality);
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
         Assert.Null(controller.Current.CloudUserName);
@@ -380,6 +381,27 @@ public sealed class AppSettingsControllerTests
 
         controller.SetAnimationSpeed(FlyoutAnimationSpeed.Default);
         Assert.Equal(300, controller.GetFlyoutAnimationDurationMs());
+    }
+
+    [Fact]
+    public void CanSetChartQuality()
+    {
+        var controller = new AppSettingsController();
+
+        Assert.Equal(ChartQuality.High, controller.Current.ChartQuality);
+
+        controller.SetChartQuality(ChartQuality.Normal);
+
+        Assert.Equal(ChartQuality.Normal, controller.Current.ChartQuality);
+    }
+
+    [Fact]
+    public void ChartQuality_RoundTripsThroughJson()
+    {
+        var original = AppSettings.Default with { ChartQuality = ChartQuality.Normal };
+        var json = System.Text.Json.JsonSerializer.Serialize(original);
+        var deserialized = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
+        Assert.Equal(ChartQuality.Normal, deserialized!.ChartQuality);
     }
 
     [Fact]

@@ -20,7 +20,10 @@ public sealed record SitemapWidget(
     int? Column = null,
     string? Command = null,
     string? ReleaseCommand = null,
-    bool? Stateless = null);
+    bool? Stateless = null,
+    string? Url = null,
+    string? Period = null,
+    string? Service = null);
 
 public sealed record NormalizedSitemapPage(string Id, string Label, IReadOnlyList<NormalizedSitemapWidget> Widgets);
 
@@ -45,7 +48,10 @@ public sealed record NormalizedSitemapWidget(
     int? Column = null,
     string? Command = null,
     string? ReleaseCommand = null,
-    bool? Stateless = null);
+    bool? Stateless = null,
+    string? Url = null,
+    string? Period = null,
+    string? Service = null);
 
 public sealed record SitemapMapping(string Command, string Label);
 

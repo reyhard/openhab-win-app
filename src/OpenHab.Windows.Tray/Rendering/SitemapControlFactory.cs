@@ -398,8 +398,8 @@ public static class SitemapControlFactory
         {
             var image = new Image
             {
-                Width = 18,
-                Height = 18,
+                Width = 26,
+                Height = 26,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(image, column);
@@ -598,7 +598,11 @@ public static class SitemapControlFactory
 
     private static async Task<SvgImageSource?> CreateSvgFromBytesAsync(byte[] bytes)
     {
-        var svg = new SvgImageSource();
+        var svg = new SvgImageSource
+        {
+            RasterizePixelWidth = 96,
+            RasterizePixelHeight = 96
+        };
         using var stream = new InMemoryRandomAccessStream();
         using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
         {
@@ -736,7 +740,7 @@ public static class SitemapControlFactory
 
         if (hasIcon)
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
             TryAddIcon(grid, 0, iconName, iconState, baseUri, useWindowsIcons, iconAuth);
         }
 
@@ -1288,22 +1292,54 @@ public static class SitemapControlFactory
         container.Children.Add(layout.Grid);
 
         var url = row.Url ?? row.RawItemState ?? row.RawState ?? row.State;
-        if (!string.IsNullOrWhiteSpace(url) && ResolveWebviewUrl(url, baseUri, out var resolvedUri))
+        if (string.IsNullOrWhiteSpace(url))
         {
-            var webview = new WebView2
+            container.Children.Add(new TextBlock
             {
-                Height = 300,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Top
-            };
-            _ = InitializeWebViewAsync(webview, resolvedUri);
-            container.Children.Add(webview);
+                Text = "No URL configured",
+                Opacity = 0.4,
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic
+            });
+            return WrapWithBorder(container);
         }
+
+        if (!TryResolveWebviewUrl(url, baseUri, out var resolvedUri))
+        {
+            container.Children.Add(new TextBlock
+            {
+                Text = $"Invalid URL: {url}",
+                Opacity = 0.6,
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic
+            });
+            return WrapWithBorder(container);
+        }
+
+        // Reliable fallback: always show an "Open in browser" button
+        var fallbackPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        var openButton = new Button
+        {
+            Content = "Open in browser",
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            MinHeight = 36
+        };
+        openButton.Click += (_, _) => OpenUrlInBrowser(resolvedUri!);
+        fallbackPanel.Children.Add(openButton);
+        container.Children.Add(fallbackPanel);
+
+        // Try WebView2 for inline display; WebView2 runtime may be missing
+        var webview = new WebView2
+        {
+            Height = 300,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        _ = InitializeWebViewAsync(webview, resolvedUri!, container, openButton);
+        container.Children.Add(webview);
 
         return WrapWithBorder(container);
     }
 
-    private static bool ResolveWebviewUrl(string url, Uri? baseUri, out Uri resolvedUri)
+    private static bool TryResolveWebviewUrl(string url, Uri? baseUri, out Uri? resolvedUri)
     {
         if (Uri.TryCreate(url, UriKind.Absolute, out var absoluteUri))
         {
@@ -1317,11 +1353,28 @@ public static class SitemapControlFactory
             return true;
         }
 
-        resolvedUri = null!;
+        resolvedUri = null;
         return false;
     }
 
-    private static async Task InitializeWebViewAsync(WebView2 webview, Uri uri)
+    private static void OpenUrlInBrowser(Uri uri)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = uri.AbsoluteUri,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch
+        {
+            // Best-effort browser launch.
+        }
+    }
+
+    private static async Task InitializeWebViewAsync(WebView2 webview, Uri uri, StackPanel container, Button fallbackButton)
     {
         try
         {
@@ -1332,7 +1385,10 @@ public static class SitemapControlFactory
         }
         catch
         {
-            // WebView2 runtime may not be installed — silently degrade.
+            // WebView2 runtime not available — hide the WebView2 control,
+            // the "Open in browser" button remains as fallback.
+            webview.Visibility = Visibility.Collapsed;
+            webview.Height = 0;
         }
     }
 

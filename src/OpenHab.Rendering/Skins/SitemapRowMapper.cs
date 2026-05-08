@@ -41,7 +41,10 @@ internal static class SitemapRowMapper
             widget.Command,
             widget.ReleaseCommand,
             widget.Stateless,
-            SliderUpdateOnMove: widget.Type != SitemapWidgetType.Setpoint);
+            SliderUpdateOnMove: widget.Type != SitemapWidgetType.Setpoint,
+            Url: widget.Url,
+            Period: widget.Period,
+            ItemName: widget.ItemName);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
@@ -68,6 +71,8 @@ internal static class SitemapRowMapper
             SitemapWidgetType.Button => RenderControlKind.Button,
             SitemapWidgetType.Buttongrid => RenderControlKind.ButtonGrid,
             SitemapWidgetType.Image => RenderControlKind.Image,
+            SitemapWidgetType.Webview => RenderControlKind.Webview,
+            SitemapWidgetType.Chart => RenderControlKind.Chart,
             _ => RenderControlKind.Text
         };
     }

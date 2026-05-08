@@ -12,6 +12,12 @@ public enum FlyoutAnimationSpeed
     Slow = 3,    // 450ms
 }
 
+public enum ChartQuality
+{
+    Normal = 96,
+    High = 192
+}
+
 public sealed record AppSettings(
     SitemapSkinKind Skin,
     EndpointMode EndpointMode,
@@ -23,6 +29,7 @@ public sealed record AppSettings(
     int FlyoutWidth = 460,
     FlyoutAnimationSpeed AnimationSpeed = FlyoutAnimationSpeed.Default,
     int NotificationPollIntervalSeconds = 30,
+    ChartQuality ChartQuality = ChartQuality.High,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
     [property: JsonIgnore] string? CloudUserName = null)
