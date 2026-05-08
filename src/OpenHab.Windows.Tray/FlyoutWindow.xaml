@@ -84,14 +84,18 @@
                      off-screen peer populated before crossfade animation. -->
                 <Grid x:Name="SitemapPageSlotA"
                       Background="{ThemeResource LayerFillColorAltBrush}">
-                    <ScrollViewer>
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                  HorizontalScrollMode="Disabled"
+                                  HorizontalAlignment="Stretch">
                         <StackPanel x:Name="SitemapRows" Spacing="4" />
                     </ScrollViewer>
                 </Grid>
                 <Grid x:Name="SitemapPageSlotB"
                       Visibility="Collapsed"
                       Background="{ThemeResource LayerFillColorAltBrush}">
-                    <ScrollViewer>
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                                  HorizontalScrollMode="Disabled"
+                                  HorizontalAlignment="Stretch">
                         <StackPanel x:Name="SitemapRowsB" Spacing="4" />
                     </ScrollViewer>
                 </Grid>

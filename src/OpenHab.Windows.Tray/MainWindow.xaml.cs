@@ -1071,9 +1071,10 @@ public sealed partial class MainWindow : Window
         var compositor = activeVisual.Compositor;
         var duration = TimeSpan.FromMilliseconds(durationMs);
 
-        // Full-width slide matching Android's 100%p — the old page's edge
-        // stays connected to the new page's edge throughout the transition.
-        float slideX = (float)SitemapContentRoot.ActualWidth;
+        // Use the slot container's actual width so the two pages
+        // slide exactly edge-to-edge with no visible gap between them.
+        float slideX = (float)ActiveSlotContainer.ActualWidth;
+        if (slideX <= 0) slideX = (float)SitemapContentRoot.ActualWidth;
         if (slideX <= 0) slideX = 400f; // fallback if not yet laid out
         if (direction == NavigationDirection.Forward) slideX = -slideX;
 

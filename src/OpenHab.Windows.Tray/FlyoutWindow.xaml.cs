@@ -379,6 +379,7 @@ public sealed partial class FlyoutWindow : Window
             await runtimeController.NavigateToChildAsync(rowIndex, CancellationToken.None);
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
+            InactiveSlotContainer.Opacity = 1d;
             RefreshRuntimeBindings(InactiveRows);
             RefreshChromeBindings(runtimeController.Current);
 
@@ -386,7 +387,10 @@ public sealed partial class FlyoutWindow : Window
 
             ActiveRows.Children.Clear();
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
+            ActiveSlotContainer.Opacity = 1d;
             _activeSlotIsA = !_activeSlotIsA;
+            Canvas.SetZIndex(ActiveSlotContainer, 0);
+            Canvas.SetZIndex(InactiveSlotContainer, 0);
         }
         catch (Exception ex)
         {
@@ -813,6 +817,7 @@ public sealed partial class FlyoutWindow : Window
             runtimeController.NavigateBack();
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
+            InactiveSlotContainer.Opacity = 1d;
             RefreshRuntimeBindings(InactiveRows);
             RefreshChromeBindings(runtimeController.Current);
 
@@ -820,7 +825,10 @@ public sealed partial class FlyoutWindow : Window
 
             ActiveRows.Children.Clear();
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
+            ActiveSlotContainer.Opacity = 1d;
             _activeSlotIsA = !_activeSlotIsA;
+            Canvas.SetZIndex(ActiveSlotContainer, 0);
+            Canvas.SetZIndex(InactiveSlotContainer, 0);
         }
         finally { isRefreshing = false; }
     }
@@ -830,44 +838,50 @@ public sealed partial class FlyoutWindow : Window
         var durationMs = ResolvePageTransitionDurationMs();
         if (durationMs <= 0) return;
 
-        // Force layout so the visual offset reflects the element's actual position
-        // (the slot was Collapsed until just before this call).
+        SitemapContentRoot.UpdateLayout();
+        ActiveSlotContainer.UpdateLayout();
         InactiveSlotContainer.UpdateLayout();
 
         var activeVisual = GetSlotVisual(ActiveSlotContainer);
         var inactiveVisual = GetSlotVisual(InactiveSlotContainer);
         if (activeVisual is null || inactiveVisual is null) return;
 
-        // The entering slot must render on top regardless of document order.
-        Canvas.SetZIndex(InactiveSlotContainer, 1);
-        Canvas.SetZIndex(ActiveSlotContainer, 0);
+        var enteringFromRight = direction == NavigationDirection.Back;
+        Canvas.SetZIndex(InactiveSlotContainer, enteringFromRight ? 0 : 1);
+        Canvas.SetZIndex(ActiveSlotContainer, enteringFromRight ? 1 : 0);
 
         var compositor = activeVisual.Compositor;
         var duration = TimeSpan.FromMilliseconds(durationMs);
 
-        // Full-width slide matching Android's 100%p — the old page's edge
-        // stays connected to the new page's edge throughout the transition.
-        float slideX = (float)SitemapContentRoot.ActualWidth;
-        if (slideX <= 0) slideX = 360f; // fallback if not yet laid out
-        if (direction == NavigationDirection.Forward) slideX = -slideX;
+        float slotWidth = (float)Math.Max(ActiveSlotContainer.ActualWidth, InactiveSlotContainer.ActualWidth);
+        if (slotWidth <= 0) slotWidth = (float)SitemapContentRoot.ActualWidth;
+        if (slotWidth <= 0) slotWidth = 360f;
 
-        var activeLayout = activeVisual.Offset;
-        var inactiveLayout = inactiveVisual.Offset;
+        var activeStartX = 0f;
+        var inactiveStartX = enteringFromRight ? slotWidth : -slotWidth;
+        var travelX = -inactiveStartX;
 
         try
         {
+            ActiveSlotContainer.Opacity = 1d;
+            InactiveSlotContainer.Opacity = 1d;
+            activeVisual.Opacity = 1f;
             inactiveVisual.Opacity = 1f;
-            inactiveVisual.Offset = inactiveLayout + new Vector3(-slideX, 0, 0);
+            activeVisual.Offset = new Vector3(activeStartX, 0, 0);
+            inactiveVisual.Offset = new Vector3(inactiveStartX, 0, 0);
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
             activeVisual.StartAnimation(nameof(activeVisual.Offset),
-                CompositionAnimationHelper.BuildOffsetExit(
-                    compositor, activeLayout, activeLayout + new Vector3(slideX, 0, 0), duration));
+                CompositionAnimationHelper.BuildOffsetEntrance(
+                    compositor,
+                    new Vector3(activeStartX, 0, 0),
+                    new Vector3(activeStartX + travelX, 0, 0),
+                    duration));
             inactiveVisual.StartAnimation(nameof(inactiveVisual.Offset),
                 CompositionAnimationHelper.BuildOffsetEntrance(
                     compositor,
-                    inactiveLayout + new Vector3(-slideX, 0, 0),
-                    inactiveLayout,
+                    new Vector3(inactiveStartX, 0, 0),
+                    new Vector3(inactiveStartX + travelX, 0, 0),
                     duration));
             batch.End();
 
@@ -877,16 +891,12 @@ public sealed partial class FlyoutWindow : Window
         }
         finally
         {
-            if (activeVisual is not null)
-            {
-                activeVisual.Opacity = 1f;
-                activeVisual.Offset = activeLayout;
-            }
-            if (inactiveVisual is not null)
-            {
-                inactiveVisual.Opacity = 1f;
-                inactiveVisual.Offset = inactiveLayout;
-            }
+            activeVisual.Opacity = 1f;
+            activeVisual.Offset = Vector3.Zero;
+            inactiveVisual.Opacity = 1f;
+            inactiveVisual.Offset = Vector3.Zero;
+            ActiveSlotContainer.Opacity = 1d;
+            InactiveSlotContainer.Opacity = 1d;
         }
     }
 

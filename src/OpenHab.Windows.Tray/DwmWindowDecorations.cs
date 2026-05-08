@@ -34,7 +34,7 @@ internal static class DwmWindowDecorations
 
         requests.Add(DwmAttributeRequest.FromInt(
             DwmWindowAttribute.UseImmersiveDarkMode,
-            1));
+            theme == FlyoutTheme.Dark ? 1 : 0));
 
         if (isWindows11OrLater)
         {

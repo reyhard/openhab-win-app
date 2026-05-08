@@ -33,6 +33,21 @@ public sealed class DwmWindowDecorationsTests
         Assert.Equal(1, request.IntValue);
     }
 
+    [Fact]
+    public void BuildRequestsForLightThemeDisablesImmersiveDarkMode()
+    {
+        var requests = DwmWindowDecorations.BuildRequests(
+            isWindows11OrLater: true,
+            theme: FlyoutTheme.Light).ToList();
+
+        Assert.Contains(requests, r =>
+            r.Attribute == DwmWindowAttribute.BorderColor &&
+            r.UIntValue == 0x00FFFFFF);
+        Assert.Contains(requests, r =>
+            r.Attribute == DwmWindowAttribute.UseImmersiveDarkMode &&
+            r.IntValue == 0);
+    }
+
     [Theory]
     [InlineData(true, true, true)]
     [InlineData(true, false, false)]
