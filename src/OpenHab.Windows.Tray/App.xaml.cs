@@ -308,9 +308,10 @@ public partial class App : Application
             switch (state.VisibleSurface)
             {
                 case TrayShellSurface.MainWindow:
-                    flyout.CancelRunningAnimations();
-                    flyout.SuppressNextDeactivation();
-                    flyout.AppWindow.Hide();
+                    if (flyout.AppWindow.IsVisible)
+                    {
+                        await flyout.AnimateFlyoutExitAndHideAsync();
+                    }
                     main.Activate();
                     break;
                 case TrayShellSurface.Flyout:
@@ -320,14 +321,13 @@ public partial class App : Application
                         settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
                     flyout.PrepareForShowAnimation();
                     flyout.Activate();
+                    flyout.StartEntranceAnimationIfPending();
                     break;
                 default:
                     main.AppWindow.Hide();
                     if (flyout.AppWindow.IsVisible)
                     {
-                        flyout.CancelRunningAnimations();
-                        flyout.SuppressNextDeactivation();
-                        flyout.AppWindow.Hide();
+                        await flyout.AnimateFlyoutExitAndHideAsync();
                     }
                     break;
             }

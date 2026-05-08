@@ -33,6 +33,7 @@ public sealed partial class FlyoutWindow : Window
     private bool isEntranceAnimationRunning;
     private bool isExitAnimationRunning;
     private bool shouldRunEntranceAnimation;
+    private int deactivationCloseGeneration;
 
     public FlyoutWindow(
         AppSettingsController settingsController,
@@ -71,8 +72,43 @@ public sealed partial class FlyoutWindow : Window
     public void PrepareForShowAnimation()
     {
         shouldRunEntranceAnimation = true;
+        // Keep content visible if Activated does not fire on this show cycle.
+        var visual = GetFlyoutChromeVisual();
+        visual.Opacity = 1f;
+        visual.Offset = Vector3.Zero;
+        visual.Scale = new Vector3(1f, 1f, 1f);
         ApplyFlyoutTheme();
         ScheduleNativeDecorationApply();
+    }
+
+    public void StartEntranceAnimationIfPending()
+    {
+        if (!shouldRunEntranceAnimation)
+        {
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (!shouldRunEntranceAnimation)
+            {
+                return;
+            }
+
+            shouldRunEntranceAnimation = false;
+            try
+            {
+                await AnimateFlyoutEntranceAsync();
+            }
+            catch (ArgumentException)
+            {
+                // Animation is non-critical.
+            }
+            catch (InvalidOperationException)
+            {
+                // Composition can be transient during activation.
+            }
+        });
     }
 
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
@@ -312,13 +348,11 @@ public sealed partial class FlyoutWindow : Window
 
     private void OpenAppButton_Click(object sender, RoutedEventArgs e)
     {
-        suppressNextDeactivationHide = true;
         requestOpenMainWindow();
     }
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        suppressNextDeactivationHide = true;
         requestOpenMainWindow();
     }
 
@@ -351,17 +385,38 @@ public sealed partial class FlyoutWindow : Window
     {
         if (args.WindowActivationState == WindowActivationState.Deactivated)
         {
+            if (isEntranceAnimationRunning)
+            {
+                return;
+            }
+
             if (suppressNextDeactivationHide)
             {
                 suppressNextDeactivationHide = false;
                 return;
             }
 
+            if (isExitAnimationRunning)
+            {
+                return;
+            }
+
+            // Ignore stale deactivation events when a newer activation state already happened.
+            var closeGeneration = Interlocked.Increment(ref deactivationCloseGeneration);
+
             // Run exit animation before hiding
             await AnimateFlyoutExitAndHideAsync();
+            if (closeGeneration != Volatile.Read(ref deactivationCloseGeneration))
+            {
+                return;
+            }
+
             requestHideFlyout();
             return;
         }
+
+        // Any non-deactivated activation invalidates older close requests.
+        Interlocked.Increment(ref deactivationCloseGeneration);
 
         ApplyFlyoutTheme();
         ScheduleNativeDecorationApply();
@@ -505,6 +560,7 @@ public sealed partial class FlyoutWindow : Window
     {
         isEntranceAnimationRunning = false;
         isExitAnimationRunning = false;
+        Interlocked.Increment(ref deactivationCloseGeneration);
     }
 
     /// <summary>
@@ -694,7 +750,6 @@ public sealed partial class FlyoutWindow : Window
             return;
         }
 
-        suppressNextDeactivationHide = true;
         await AnimateFlyoutExitAndHideAsync();
         requestHideFlyout();
     }
