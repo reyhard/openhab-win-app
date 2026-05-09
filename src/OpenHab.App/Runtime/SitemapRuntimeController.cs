@@ -77,6 +77,17 @@ public sealed class SitemapRuntimeController
 
         Current = Current with { IsBusy = true, StatusText = "Loading...", ChangedRowIndices = [] };
         var settings = settingsController.Current;
+
+        if (string.IsNullOrWhiteSpace(settings.SitemapName))
+        {
+            DiagnosticLogger.Warn($"Refresh#{refreshId} skipped — no sitemap selected");
+            SetBannerStatus("No sitemap selected");
+            var remaining = Interlocked.Decrement(ref _refreshInProgress);
+            DiagnosticLogger.Info(
+                $"Refresh#{refreshId} done (no sitemap) reason={reason} remainingInProgress={remaining}");
+            return;
+        }
+
         var primary = SelectPrimaryTransport(settings);
 
         try
@@ -708,6 +719,26 @@ public sealed class SitemapRuntimeController
         return BuildBreadcrumbPages()
             .Select(page => page.Label)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Sets a banner/selector state without attempting to load a sitemap.
+    /// Used when no sitemap is selected or available.
+    /// </summary>
+    public void SetBannerStatus(string statusText)
+    {
+        DiagnosticLogger.Info($"SetBannerStatus: {statusText}");
+        Current = Current with
+        {
+            Descriptor = null,
+            StatusText = statusText,
+            IsBusy = false,
+            HasError = false,
+            ConnectionState = ConnectionState.Unknown,
+            Breadcrumbs = [],
+            ChangedRowIndices = []
+        };
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private List<NormalizedSitemapPage> BuildBreadcrumbPages()

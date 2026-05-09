@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.UI.Xaml;
@@ -403,11 +404,50 @@ public partial class App : Application
                 mainWindow?.PopulateSitemaps(sitemaps);
             });
 
-            // Auto-select first available sitemap if current doesn't exist
             var settings = settingsController.Current;
-            if (sitemaps.Count > 0 && !sitemaps.Any(s => string.Equals(s.Name, settings.SitemapName, StringComparison.OrdinalIgnoreCase)))
+
+            // Preserve user's previously selected sitemap if it still exists.
+            if (!string.IsNullOrWhiteSpace(settings.SitemapName) &&
+                sitemaps.Any(s => string.Equals(s.Name, settings.SitemapName, StringComparison.OrdinalIgnoreCase)))
+            {
+                _ = uiDispatcherQueue?.TryEnqueue(() =>
+                {
+                    flyoutWindow?.LoadRuntimeAsync();
+                    mainWindow?.LoadRuntimeAsync();
+                });
+            }
+            else if (sitemaps.Count == 0)
+            {
+                runtimeController!.SetBannerStatus("No sitemaps were detected");
+                settingsController.SetSitemapName(string.Empty);
+            }
+            else if (sitemaps.Count == 1)
             {
                 settingsController.SetSitemapName(sitemaps[0].Name);
+                _ = uiDispatcherQueue?.TryEnqueue(() =>
+                {
+                    flyoutWindow?.LoadRuntimeAsync();
+                    mainWindow?.LoadRuntimeAsync();
+                });
+            }
+            else // Multiple sitemaps
+            {
+                var defaultSitemap = sitemaps.FirstOrDefault(
+                    s => string.Equals(s.Name, "default", StringComparison.OrdinalIgnoreCase));
+                if (defaultSitemap is not null)
+                {
+                    settingsController.SetSitemapName(defaultSitemap.Name);
+                    _ = uiDispatcherQueue?.TryEnqueue(() =>
+                    {
+                        flyoutWindow?.LoadRuntimeAsync();
+                        mainWindow?.LoadRuntimeAsync();
+                    });
+                }
+                else
+                {
+                    runtimeController!.SetBannerStatus("Multiple sitemaps detected — choose one");
+                    settingsController.SetSitemapName(string.Empty);
+                }
             }
         }
         catch

@@ -116,7 +116,7 @@ public sealed partial class MainWindow : Window
                 DiagnosticLogger.Warn("MainWindow SnapshotChanged: DispatcherQueue.TryEnqueue returned false — UI update lost");
             }
         };
-        _ = LoadRuntimeAsync();
+        // Initial load is deferred until sitemaps are resolved in CompleteStartupAsync.
     }
 
     /// <summary>

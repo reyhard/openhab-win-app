@@ -93,7 +93,7 @@ public sealed partial class FlyoutWindow : Window
         }
         RefreshSettingsBindings();
         RefreshNotificationBadge();
-        _ = LoadRuntimeAsync();
+        // Initial load is deferred until sitemaps are resolved in CompleteStartupAsync.
     }
 
     public async Task LoadRuntimeAsync()
@@ -195,7 +195,9 @@ public sealed partial class FlyoutWindow : Window
         // Keep title pinned to the root/main sitemap name instead of the current subpage.
         TitleText.Text = snapshot.Breadcrumbs.Count > 0
             ? snapshot.Breadcrumbs[0]
-            : settingsController.Current.SitemapName;
+            : string.IsNullOrWhiteSpace(settingsController.Current.SitemapName)
+                ? "openHAB"
+                : settingsController.Current.SitemapName;
         StatusText.Text = snapshot.StatusText;
         var rawBreadcrumbs = snapshot.Breadcrumbs.Count > 0
             ? snapshot.Breadcrumbs
