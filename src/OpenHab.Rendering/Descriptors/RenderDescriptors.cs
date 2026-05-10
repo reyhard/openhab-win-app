@@ -19,6 +19,9 @@ public sealed record SitemapRowDescriptor(
     IReadOnlyList<SitemapMapOption> SelectionOptions,
     string? RawState = null,
     string? IconName = null,
+    string? LabelColor = null,
+    string? ValueColor = null,
+    string? IconColor = null,
     bool IsSectionHeader = false,
     double? MinValue = null,
     double? MaxValue = null,
@@ -42,7 +45,7 @@ public sealed record SitemapRowDescriptor(
         RenderControlKind Control,
         RenderActionKind Action,
         RenderDensity Density)
-        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null, true, null, null, null, null, null, true, null, null, null, SitemapInputHint.Auto)
+        : this(Label, State, Control, Action, Density, [], null, null, null, null, null, false, null, null, null, null, true, null, null, null, null, null, true, null, null, null, SitemapInputHint.Auto)
     {
     }
 }

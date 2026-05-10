@@ -109,6 +109,9 @@ public static class OpenHabSitemapJsonParser
         }
 
         var icon = GetStringOrNull(widgetElement, "icon");
+        var labelColor = ParseResolvedColor(widgetElement, "labelcolor");
+        var valueColor = ParseResolvedColor(widgetElement, "valuecolor");
+        var iconColor = ParseResolvedColor(widgetElement, "iconcolor");
         var minValue = GetDoubleOrNull(widgetElement, "minValue");
         var maxValue = GetDoubleOrNull(widgetElement, "maxValue");
         var step = GetDoubleOrNull(widgetElement, "step");
@@ -139,6 +142,9 @@ public static class OpenHabSitemapJsonParser
             isVisible,
             children,
             icon,
+            labelColor,
+            valueColor,
+            iconColor,
             minValue,
             maxValue,
             step,
@@ -153,6 +159,46 @@ public static class OpenHabSitemapJsonParser
             Period: period,
             Service: service,
             InputHint: inputHint);
+    }
+
+    private static string? ParseResolvedColor(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var propertyElement))
+        {
+            return null;
+        }
+
+        if (propertyElement.ValueKind == JsonValueKind.String)
+        {
+            return propertyElement.GetString();
+        }
+
+        if (propertyElement.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var entry in propertyElement.EnumerateArray())
+        {
+            if (entry.ValueKind == JsonValueKind.String)
+            {
+                var color = entry.GetString();
+                if (!string.IsNullOrWhiteSpace(color))
+                {
+                    return color;
+                }
+            }
+            else if (entry.ValueKind == JsonValueKind.Object)
+            {
+                var color = GetStringOrNull(entry, "color");
+                if (!string.IsNullOrWhiteSpace(color))
+                {
+                    return color;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static void FlattenInlineChildren(JsonElement widgetElement, List<SitemapWidget> target)

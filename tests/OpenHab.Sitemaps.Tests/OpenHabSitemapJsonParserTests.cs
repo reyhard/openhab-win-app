@@ -303,4 +303,32 @@ public sealed class OpenHabSitemapJsonParserTests
         Assert.Equal(SitemapWidgetType.Input, widget.Type);
         Assert.Equal(SitemapInputHint.Number, widget.InputHint);
     }
+
+    [Fact]
+    public void ParseWidgetParsesResolvedColors()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Text",
+                    "label": "Gas [3.5 m3]",
+                    "labelcolor": ["orange"],
+                    "valuecolor": "green",
+                    "iconcolor": [{ "color": "blue" }]
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+        var widget = Assert.Single(parsed.Widgets);
+
+        Assert.Equal("orange", widget.LabelColor);
+        Assert.Equal("green", widget.ValueColor);
+        Assert.Equal("blue", widget.IconColor);
+    }
 }

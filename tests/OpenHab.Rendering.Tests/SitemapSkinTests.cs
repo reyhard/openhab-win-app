@@ -209,6 +209,34 @@ public sealed class SitemapSkinTests
         Assert.Equal("Unlocked", row.State);
     }
 
+    [Fact]
+    public void ToRow_PreservesLabelValueAndIconColors()
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Gas",
+                SitemapWidgetType.Text,
+                "Energy_Daily_Gas",
+                "3.5 m3",
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                "material:electric_meter",
+                LabelColor: "orange",
+                ValueColor: "green",
+                IconColor: "blue")
+        ]);
+
+        var descriptor = new Windows11SitemapSkin().Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal("orange", row.LabelColor);
+        Assert.Equal("green", row.ValueColor);
+        Assert.Equal("blue", row.IconColor);
+    }
+
     private static NormalizedSitemapPage Page()
     {
         return new NormalizedSitemapPage("root", "Home", [
