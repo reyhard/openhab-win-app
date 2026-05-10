@@ -58,7 +58,7 @@ public partial class App : Application
 
         DiagnosticLogger.Info($"openHAB Windows App v{typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown"} starting");
 
-        SetCurrentProcessExplicitAppUserModelID("openHAB.openHABWinApp");
+        SetCurrentProcessExplicitAppUserModelID("OpenHab.OpenHabWinApp");
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
 
