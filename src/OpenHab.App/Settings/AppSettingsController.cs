@@ -115,7 +115,12 @@ public sealed class AppSettingsController
     {
         if (string.IsNullOrWhiteSpace(sitemapName))
         {
-            throw new ArgumentException("Sitemap name cannot be blank.", nameof(sitemapName));
+            lock (syncRoot)
+            {
+                Current = Current with { SitemapName = string.Empty };
+            }
+            _ = SaveAsync();
+            return;
         }
         if (!SitemapNamePattern.IsMatch(sitemapName))
         {

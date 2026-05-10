@@ -34,7 +34,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(EndpointMode.Automatic, controller.Current.EndpointMode);
         Assert.Equal(new Uri("http://openhab:8080"), controller.Current.LocalEndpoint);
         Assert.Equal(new Uri("https://myopenhab.org"), controller.Current.CloudEndpoint);
-        Assert.Equal("default", controller.Current.SitemapName);
+        Assert.Equal(string.Empty, controller.Current.SitemapName);
         Assert.Equal(460, controller.Current.FlyoutWidth);
         Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
         Assert.Equal(ChartQuality.High, controller.Current.ChartQuality);
@@ -87,13 +87,14 @@ public sealed class AppSettingsControllerTests
     [Theory]
     [InlineData("")]
     [InlineData("  ")]
-    public void SetSitemapNameRejectsBlankInput(string sitemapName)
+    public void SetSitemapNameClearsSelectionForBlankInput(string sitemapName)
     {
         var controller = new AppSettingsController();
+        controller.SetSitemapName("home");
 
-        var exception = Assert.Throws<ArgumentException>(() => controller.SetSitemapName(sitemapName));
+        controller.SetSitemapName(sitemapName);
 
-        Assert.Equal("sitemapName", exception.ParamName);
+        Assert.Equal(string.Empty, controller.Current.SitemapName);
     }
 
     [Fact]

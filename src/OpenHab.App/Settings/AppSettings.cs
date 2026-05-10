@@ -40,7 +40,7 @@ public sealed record AppSettings(
         EndpointMode.Automatic,
         new Uri("http://openhab:8080"),
         new Uri("https://myopenhab.org"),
-        "default",
+        string.Empty,
         AnimationSpeed: FlyoutAnimationSpeed.Default,
         NotificationPollIntervalSeconds: 30);
 }
