@@ -485,6 +485,7 @@ public sealed partial class FlyoutWindow : Window
     private async void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
     {
         if (isRefreshing) return;
+        var previousDepth = runtimeController.Current.Breadcrumbs.Count;
 
         if (runtimeController.NavigateToBreadcrumb(args.Index))
         {
@@ -492,8 +493,25 @@ public sealed partial class FlyoutWindow : Window
             try
             {
                 _suppressNextSnapshotRefresh = true;
-                RefreshRuntimeBindings(ActiveRows);
+                var currentDepth = runtimeController.Current.Breadcrumbs.Count;
+                if (currentDepth == previousDepth)
+                {
+                    RefreshRuntimeBindings(ActiveRows);
+                    RefreshChromeBindings(runtimeController.Current);
+                    return;
+                }
+
+                InactiveSlotContainer.Visibility = Visibility.Visible;
+                InactiveSlotContainer.Opacity = 1d;
+                RefreshRuntimeBindings(InactiveRows);
                 RefreshChromeBindings(runtimeController.Current);
+
+                await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
+
+                ActiveRows.Children.Clear();
+                ActiveSlotContainer.Visibility = Visibility.Collapsed;
+                ActiveSlotContainer.Opacity = 1d;
+                _activeSlotIsA = !_activeSlotIsA;
             }
             finally
             {
@@ -866,83 +884,13 @@ public sealed partial class FlyoutWindow : Window
 
     private async Task AnimatePageTransitionOverlapAsync(NavigationDirection direction)
     {
-        var durationMs = ResolvePageTransitionDurationMs();
-        if (durationMs <= 0) return;
-
-        SitemapContentRoot.UpdateLayout();
-        ActiveSlotContainer.UpdateLayout();
-        InactiveSlotContainer.UpdateLayout();
-
-        var activeVisual = GetSlotVisual(ActiveSlotContainer);
-        var inactiveVisual = GetSlotVisual(InactiveSlotContainer);
-        if (activeVisual is null || inactiveVisual is null) return;
-
-        var enteringFromRight = direction == NavigationDirection.Back;
-        Canvas.SetZIndex(InactiveSlotContainer, enteringFromRight ? 0 : 1);
-        Canvas.SetZIndex(ActiveSlotContainer, enteringFromRight ? 1 : 0);
-
-        var compositor = activeVisual.Compositor;
-        var duration = TimeSpan.FromMilliseconds(durationMs);
-
-        float slotWidth = (float)Math.Max(ActiveSlotContainer.ActualWidth, InactiveSlotContainer.ActualWidth);
-        if (slotWidth <= 0) slotWidth = (float)SitemapContentRoot.ActualWidth;
-        if (slotWidth <= 0) slotWidth = 360f;
-
-        var activeStartX = 0f;
-        var inactiveStartX = enteringFromRight ? slotWidth : -slotWidth;
-        var travelX = -inactiveStartX;
-
-        try
-        {
-            ActiveSlotContainer.Opacity = 1d;
-            InactiveSlotContainer.Opacity = 1d;
-            activeVisual.Opacity = 1f;
-            inactiveVisual.Opacity = 1f;
-            activeVisual.Offset = new Vector3(activeStartX, 0, 0);
-            inactiveVisual.Offset = new Vector3(inactiveStartX, 0, 0);
-
-            var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
-            activeVisual.StartAnimation(nameof(activeVisual.Offset),
-                CompositionAnimationHelper.BuildOffsetEntrance(
-                    compositor,
-                    new Vector3(activeStartX, 0, 0),
-                    new Vector3(activeStartX + travelX, 0, 0),
-                    duration));
-            inactiveVisual.StartAnimation(nameof(inactiveVisual.Offset),
-                CompositionAnimationHelper.BuildOffsetEntrance(
-                    compositor,
-                    new Vector3(inactiveStartX, 0, 0),
-                    new Vector3(inactiveStartX + travelX, 0, 0),
-                    duration));
-            batch.End();
-
-            var tcs = new TaskCompletionSource<bool>();
-            batch.Completed += (_, _) => tcs.TrySetResult(true);
-            await tcs.Task;
-        }
-        finally
-        {
-            activeVisual.Opacity = 1f;
-            activeVisual.Offset = Vector3.Zero;
-            inactiveVisual.Opacity = 1f;
-            inactiveVisual.Offset = Vector3.Zero;
-            ActiveSlotContainer.Opacity = 1d;
-            InactiveSlotContainer.Opacity = 1d;
-        }
-    }
-
-    private Visual? GetSlotVisual(Grid slot)
-    {
-        if (slot is not UIElement) return null;
-        try { return ElementCompositionPreview.GetElementVisual(slot); }
-        catch { return null; }
-    }
-
-    private int ResolvePageTransitionDurationMs()
-    {
-        var flyoutMs = settingsController.GetFlyoutAnimationDurationMs();
-        if (flyoutMs <= 0) return 0;
-        return Math.Max(150, (int)(flyoutMs * 0.8));
+        var durationMs = SitemapPageTransitionAnimator.ResolveDurationMs(settingsController.GetFlyoutAnimationDurationMs());
+        await SitemapPageTransitionAnimator.AnimateOverlapAsync(
+            SitemapContentRoot,
+            ActiveSlotContainer,
+            InactiveSlotContainer,
+            direction,
+            durationMs);
     }
 
     private void RefreshNotificationBadge()

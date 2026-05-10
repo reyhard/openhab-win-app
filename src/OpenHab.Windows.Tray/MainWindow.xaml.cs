@@ -4,15 +4,13 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Numerics;
+using System.Threading;
 using System.Text;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Input;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
@@ -1082,84 +1080,12 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task AnimatePageTransitionOverlapAsync(NavigationDirection direction)
     {
-        var durationMs = ResolvePageTransitionDurationMs();
-        if (durationMs <= 0) return;
-
-        // Force layout so the visual offset reflects the element's actual position
-        // (the slot was Collapsed until just before this call).
-        InactiveSlotContainer.UpdateLayout();
-
-        var activeVisual = GetSlotVisual(ActiveSlotContainer);
-        var inactiveVisual = GetSlotVisual(InactiveSlotContainer);
-        if (activeVisual is null || inactiveVisual is null) return;
-
-        // The entering slot must render on top regardless of document order.
-        Canvas.SetZIndex(InactiveSlotContainer, 1);
-        Canvas.SetZIndex(ActiveSlotContainer, 0);
-
-        var compositor = activeVisual.Compositor;
-        var duration = TimeSpan.FromMilliseconds(durationMs);
-
-        // Use the slot container's actual width so the two pages
-        // slide exactly edge-to-edge with no visible gap between them.
-        float slideX = (float)ActiveSlotContainer.ActualWidth;
-        if (slideX <= 0) slideX = (float)SitemapContentRoot.ActualWidth;
-        if (slideX <= 0) slideX = 400f; // fallback if not yet laid out
-        if (direction == NavigationDirection.Forward) slideX = -slideX;
-
-        var activeLayout = activeVisual.Offset;
-        var inactiveLayout = inactiveVisual.Offset;
-
-        try
-        {
-            inactiveVisual.Opacity = 1f;
-            inactiveVisual.Offset = inactiveLayout + new Vector3(-slideX, 0, 0);
-
-            var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
-            var activeAnim = compositor.CreateVector3KeyFrameAnimation();
-            activeAnim.Duration = duration;
-            activeAnim.InsertKeyFrame(0f, activeLayout);
-            activeAnim.InsertKeyFrame(1f, activeLayout + new Vector3(slideX, 0, 0));
-
-            var inactiveAnim = compositor.CreateVector3KeyFrameAnimation();
-            inactiveAnim.Duration = duration;
-            inactiveAnim.InsertKeyFrame(0f, inactiveLayout + new Vector3(-slideX, 0, 0));
-            inactiveAnim.InsertKeyFrame(1f, inactiveLayout);
-
-            activeVisual.StartAnimation(nameof(activeVisual.Offset), activeAnim);
-            inactiveVisual.StartAnimation(nameof(inactiveVisual.Offset), inactiveAnim);
-            batch.End();
-
-            var tcs = new TaskCompletionSource<bool>();
-            batch.Completed += (_, _) => tcs.TrySetResult(true);
-            await tcs.Task;
-        }
-        finally
-        {
-            if (activeVisual is not null)
-            {
-                activeVisual.Opacity = 1f;
-                activeVisual.Offset = activeLayout;
-            }
-            if (inactiveVisual is not null)
-            {
-                inactiveVisual.Opacity = 1f;
-                inactiveVisual.Offset = inactiveLayout;
-            }
-        }
-    }
-
-    private Visual? GetSlotVisual(Grid slot)
-    {
-        if (slot is not UIElement) return null;
-        try { return ElementCompositionPreview.GetElementVisual(slot); }
-        catch { return null; }
-    }
-
-    private int ResolvePageTransitionDurationMs()
-    {
-        var flyoutMs = settingsController.GetFlyoutAnimationDurationMs();
-        if (flyoutMs <= 0) return 0;
-        return Math.Max(150, (int)(flyoutMs * 0.8));
+        var durationMs = SitemapPageTransitionAnimator.ResolveDurationMs(settingsController.GetFlyoutAnimationDurationMs());
+        await SitemapPageTransitionAnimator.AnimateOverlapAsync(
+            SitemapContentRoot,
+            ActiveSlotContainer,
+            InactiveSlotContainer,
+            direction,
+            durationMs);
     }
 }
