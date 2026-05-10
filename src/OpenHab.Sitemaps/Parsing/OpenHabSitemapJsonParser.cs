@@ -121,6 +121,7 @@ public static class OpenHabSitemapJsonParser
         var url = GetStringOrNull(widgetElement, "url");
         var period = GetStringOrNull(widgetElement, "period");
         var service = GetStringOrNull(widgetElement, "service");
+        var inputHint = ParseInputHint(GetStringOrNull(widgetElement, "inputHint"));
 
         var isVisible = true;
         if (widgetElement.TryGetProperty("visibility", out var visibilityElement) &&
@@ -150,7 +151,8 @@ public static class OpenHabSitemapJsonParser
             Stateless: stateless,
             Url: url,
             Period: period,
-            Service: service);
+            Service: service,
+            InputHint: inputHint);
     }
 
     private static void FlattenInlineChildren(JsonElement widgetElement, List<SitemapWidget> target)
@@ -306,6 +308,24 @@ public static class OpenHabSitemapJsonParser
             JsonValueKind.False => false,
             JsonValueKind.String when bool.TryParse(propertyElement.GetString(), out var parsed) => parsed,
             _ => null
+        };
+    }
+
+    private static SitemapInputHint ParseInputHint(string? rawHint)
+    {
+        if (string.IsNullOrWhiteSpace(rawHint))
+        {
+            return SitemapInputHint.Auto;
+        }
+
+        return rawHint.Trim().ToLowerInvariant() switch
+        {
+            "text" => SitemapInputHint.Text,
+            "number" => SitemapInputHint.Number,
+            "date" => SitemapInputHint.Date,
+            "time" => SitemapInputHint.Time,
+            "datetime" => SitemapInputHint.DateTime,
+            _ => SitemapInputHint.Auto
         };
     }
 }

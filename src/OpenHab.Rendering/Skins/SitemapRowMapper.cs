@@ -44,7 +44,8 @@ internal static class SitemapRowMapper
             SliderUpdateOnMove: widget.Type != SitemapWidgetType.Setpoint,
             Url: widget.Url,
             Period: widget.Period,
-            ItemName: widget.ItemName);
+            ItemName: widget.ItemName,
+            InputHint: widget.InputHint);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
@@ -73,6 +74,7 @@ internal static class SitemapRowMapper
             SitemapWidgetType.Image => RenderControlKind.Image,
             SitemapWidgetType.Webview => RenderControlKind.Webview,
             SitemapWidgetType.Chart => RenderControlKind.Chart,
+            SitemapWidgetType.Input => RenderControlKind.Input,
             _ => RenderControlKind.Text
         };
     }
@@ -89,7 +91,7 @@ internal static class SitemapRowMapper
             return RenderActionKind.Navigate;
         }
 
-        if (control is RenderControlKind.Toggle or RenderControlKind.Slider or RenderControlKind.Selection or RenderControlKind.ButtonGrid)
+        if (control is RenderControlKind.Toggle or RenderControlKind.Slider or RenderControlKind.Selection or RenderControlKind.ButtonGrid or RenderControlKind.Input)
         {
             return RenderActionKind.SendCommand;
         }

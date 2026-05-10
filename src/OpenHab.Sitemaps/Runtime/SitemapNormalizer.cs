@@ -79,6 +79,7 @@ public static class SitemapNormalizer
             Stateless: widget.Stateless,
             Url: widget.Url,
             Period: widget.Period,
-            Service: widget.Service);
+            Service: widget.Service,
+            InputHint: widget.InputHint);
     }
 }

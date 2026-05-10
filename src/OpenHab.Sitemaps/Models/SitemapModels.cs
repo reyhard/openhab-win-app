@@ -23,7 +23,8 @@ public sealed record SitemapWidget(
     bool? Stateless = null,
     string? Url = null,
     string? Period = null,
-    string? Service = null);
+    string? Service = null,
+    SitemapInputHint InputHint = SitemapInputHint.Auto);
 
 public sealed record NormalizedSitemapPage(string Id, string Label, IReadOnlyList<NormalizedSitemapWidget> Widgets);
 
@@ -51,7 +52,8 @@ public sealed record NormalizedSitemapWidget(
     bool? Stateless = null,
     string? Url = null,
     string? Period = null,
-    string? Service = null);
+    string? Service = null,
+    SitemapInputHint InputHint = SitemapInputHint.Auto);
 
 public sealed record SitemapMapping(string Command, string Label);
 
@@ -81,4 +83,14 @@ public enum SitemapFallbackKind
 {
     None,
     MainUiOrBrowser
+}
+
+public enum SitemapInputHint
+{
+    Auto,
+    Text,
+    Number,
+    Date,
+    Time,
+    DateTime
 }

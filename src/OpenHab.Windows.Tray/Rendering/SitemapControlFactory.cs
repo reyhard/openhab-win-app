@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using OpenHab.Core;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Sitemaps.Models;
 using Windows.Storage.Streams;
 using Windows.UI.Text;
 
@@ -211,6 +212,7 @@ public static class SitemapControlFactory
             RenderControlKind.Toggle => CreateToggle(row, activateRow, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Slider => CreateSlider(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.Input => CreateInput(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Button => CreateButton(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Image => CreateImage(row, baseUri, useWindowsIcons, iconAuth),
@@ -280,6 +282,7 @@ public static class SitemapControlFactory
                 break;
 
             case RenderControlKind.Selection:
+            case RenderControlKind.Input:
             case RenderControlKind.Text:
             case RenderControlKind.Webview:
             case RenderControlKind.Chart:
@@ -1129,6 +1132,325 @@ public static class SitemapControlFactory
         grid.Children.Add(comboBox);
 
         return WrapWithBorder(grid);
+    }
+
+    private static FrameworkElement CreateInput(
+        SitemapRowDescriptor row,
+        Func<string, Task>? sendCommand,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
+    {
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, useWindowsIcons, iconAuth);
+        var grid = layout.Grid;
+        grid.ColumnDefinitions[layout.ValueColumn].Width = new GridLength(0);
+        grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(220);
+
+        var inferredHint = ResolveInputHint(row);
+        var rawValue = row.RawItemState ?? row.RawState ?? row.State ?? string.Empty;
+
+        async Task SubmitAsync(string value)
+        {
+            if (sendCommand is not null && !string.IsNullOrWhiteSpace(value))
+            {
+                await sendCommand(value.Trim());
+            }
+        }
+
+        if (inferredHint == SitemapInputHint.Date)
+        {
+            var button = CreateCompactInputTrigger(FormatInputDisplayValue(rawValue, SitemapInputHint.Date), "\uE787", 160);
+            var picker = new DatePicker
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            if (TryParseDateOnly(rawValue, out var date))
+            {
+                picker.Date = date;
+            }
+
+            if (sendCommand is not null)
+            {
+                picker.DateChanged += async (_, _) => await SubmitAsync($"{picker.Date:yyyy-MM-dd}");
+            }
+
+            button.Flyout = new Flyout { Content = picker };
+            Grid.SetColumn(button, layout.ControlColumn);
+            grid.Children.Add(button);
+            return WrapWithBorder(grid);
+        }
+
+        if (inferredHint == SitemapInputHint.Time)
+        {
+            var button = CreateCompactInputTrigger(FormatInputDisplayValue(rawValue, SitemapInputHint.Time), "\uE121", 120);
+            var picker = new TimePicker
+            {
+                ClockIdentifier = "24HourClock",
+                MinuteIncrement = 1,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            if (TryParseTimeOnly(rawValue, out var time))
+            {
+                picker.Time = time;
+            }
+
+            if (sendCommand is not null)
+            {
+                picker.TimeChanged += async (_, _) => await SubmitAsync($"{picker.Time:hh\\:mm\\:ss}");
+            }
+
+            button.Flyout = new Flyout { Content = picker };
+            Grid.SetColumn(button, layout.ControlColumn);
+            grid.Children.Add(button);
+            return WrapWithBorder(grid);
+        }
+
+        if (inferredHint == SitemapInputHint.DateTime)
+        {
+            var button = CreateCompactInputTrigger(FormatInputDisplayValue(rawValue, SitemapInputHint.DateTime), "\uE787", 190);
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Spacing = 8,
+                MinWidth = 260,
+                MaxWidth = 320
+            };
+            var datePicker = new DatePicker
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                MinWidth = 0
+            };
+            var timePicker = new TimePicker
+            {
+                ClockIdentifier = "24HourClock",
+                MinuteIncrement = 1,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                MinWidth = 0
+            };
+
+            if (TryParseDateTime(rawValue, out var dateTime))
+            {
+                datePicker.Date = dateTime;
+                timePicker.Time = dateTime.TimeOfDay;
+            }
+
+            if (sendCommand is not null)
+            {
+                Func<Task> sendComposedAsync = async () =>
+                {
+                    var composed = datePicker.Date.Date + timePicker.Time;
+                    await SubmitAsync(composed.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture));
+                };
+                datePicker.DateChanged += async (_, _) => await sendComposedAsync();
+                timePicker.TimeChanged += async (_, _) => await sendComposedAsync();
+            }
+
+            panel.Children.Add(datePicker);
+            panel.Children.Add(timePicker);
+            button.Flyout = new Flyout { Content = panel };
+            Grid.SetColumn(button, layout.ControlColumn);
+            grid.Children.Add(button);
+            return WrapWithBorder(grid);
+        }
+
+        var input = new TextBox
+        {
+            Text = rawValue,
+            PlaceholderText = inferredHint switch
+            {
+                SitemapInputHint.Number => "number",
+                _ => "value"
+            },
+            HorizontalAlignment = HorizontalAlignment.Right,
+            TextAlignment = TextAlignment.Right,
+            MinWidth = 120,
+            MaxWidth = 180
+        };
+        if (inferredHint == SitemapInputHint.Number)
+        {
+            input.InputScope = new Microsoft.UI.Xaml.Input.InputScope
+            {
+                Names = { new Microsoft.UI.Xaml.Input.InputScopeName(Microsoft.UI.Xaml.Input.InputScopeNameValue.Number) }
+            };
+        }
+
+        var textPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        input.KeyDown += async (_, args) =>
+        {
+            if (args.Key == global::Windows.System.VirtualKey.Enter)
+            {
+                var normalized = NormalizeInputByHint(input.Text, inferredHint);
+                if (!string.IsNullOrWhiteSpace(normalized))
+                {
+                    input.Text = normalized;
+                    await SubmitAsync(normalized);
+                }
+            }
+        };
+
+        textPanel.Children.Add(input);
+        Grid.SetColumn(textPanel, layout.ControlColumn);
+        grid.Children.Add(textPanel);
+        return WrapWithBorder(grid);
+    }
+
+    private static Button CreateCompactInputTrigger(string displayValue, string glyph, double width)
+    {
+        var content = new Grid { ColumnSpacing = 6 };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var text = new TextBlock
+        {
+            Text = displayValue,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            TextAlignment = TextAlignment.Right,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.NoWrap,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(text, 0);
+        content.Children.Add(text);
+
+        var icon = new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 12,
+            Opacity = 0.65,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(icon, 1);
+        content.Children.Add(icon);
+
+        return new Button
+        {
+            Content = content,
+            Width = width,
+            MinWidth = 0,
+            MinHeight = 30,
+            Padding = new Thickness(8, 2, 8, 2),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
+    private static SitemapInputHint ResolveInputHint(SitemapRowDescriptor row)
+    {
+        if (row.InputHint != SitemapInputHint.Auto)
+        {
+            return row.InputHint;
+        }
+
+        var raw = row.RawItemState ?? row.RawState ?? row.State;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return SitemapInputHint.Text;
+        }
+
+        if (TryParseDateTime(raw, out _))
+        {
+            return raw.Contains('T', StringComparison.OrdinalIgnoreCase)
+                ? SitemapInputHint.DateTime
+                : SitemapInputHint.Date;
+        }
+
+        if (TryParseDateOnly(raw, out _))
+        {
+            return SitemapInputHint.Date;
+        }
+
+        if (TryParseTimeOnly(raw, out _))
+        {
+            return SitemapInputHint.Time;
+        }
+
+        return TryParseNumericState(raw, out _) ? SitemapInputHint.Number : SitemapInputHint.Text;
+    }
+
+    private static bool TryParseDateOnly(string? raw, out DateTimeOffset date)
+    {
+        date = default;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
+        {
+            date = parsed;
+            return true;
+        }
+
+        return DateTimeOffset.TryParse(raw, CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal, out date);
+    }
+
+    private static bool TryParseTimeOnly(string? raw, out TimeSpan time)
+    {
+        time = default;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        if (TimeSpan.TryParse(raw, CultureInfo.InvariantCulture, out var parsed))
+        {
+            time = parsed;
+            return true;
+        }
+
+        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dateTime))
+        {
+            time = dateTime.TimeOfDay;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseDateTime(string? raw, out DateTimeOffset dateTime)
+    {
+        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out dateTime))
+        {
+            return true;
+        }
+
+        return DateTimeOffset.TryParse(raw, CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal, out dateTime);
+    }
+
+    private static string? NormalizeInputByHint(string? raw, SitemapInputHint hint)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var value = raw.Trim();
+        return hint switch
+        {
+            SitemapInputHint.Date when TryParseDateOnly(value, out var date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            SitemapInputHint.Time when TryParseTimeOnly(value, out var time) => time.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
+            SitemapInputHint.DateTime when TryParseDateTime(value, out var dateTime) => dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
+            SitemapInputHint.Number when TryParseNumericState(value, out var number) => number.ToString(CultureInfo.InvariantCulture),
+            _ => value
+        };
+    }
+
+    private static string FormatInputDisplayValue(string? raw, SitemapInputHint hint)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return string.Empty;
+        }
+
+        return hint switch
+        {
+            SitemapInputHint.Date when TryParseDateOnly(raw, out var date) => date.ToString("d", CultureInfo.CurrentCulture),
+            SitemapInputHint.Time when TryParseTimeOnly(raw, out var time) => time.ToString(@"hh\:mm", CultureInfo.CurrentCulture),
+            SitemapInputHint.DateTime when TryParseDateTime(raw, out var dateTime) => dateTime.ToString("g", CultureInfo.CurrentCulture),
+            _ => raw.Trim()
+        };
     }
 
     private static bool SelectionValueMatches(string? left, string? right)

@@ -1,3 +1,5 @@
+using OpenHab.Sitemaps.Models;
+
 namespace OpenHab.Rendering.Descriptors;
 
 public sealed record SitemapMapOption(string Command, string Label, int? Row = null, int? Column = null, bool IsActive = false);
@@ -31,7 +33,8 @@ public sealed record SitemapRowDescriptor(
     bool SliderUpdateOnMove = true,
     string? Url = null,
     string? Period = null,
-    string? ItemName = null)
+    string? ItemName = null,
+    SitemapInputHint InputHint = SitemapInputHint.Auto)
 {
     public SitemapRowDescriptor(
         string Label,
@@ -39,7 +42,7 @@ public sealed record SitemapRowDescriptor(
         RenderControlKind Control,
         RenderActionKind Action,
         RenderDensity Density)
-        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null, true, null, null, null, null, null, true, null, null, null)
+        : this(Label, State, Control, Action, Density, [], null, null, false, null, null, null, null, true, null, null, null, null, null, true, null, null, null, SitemapInputHint.Auto)
     {
     }
 }
@@ -61,6 +64,7 @@ public enum RenderControlKind
     Image,
     Webview,
     Chart,
+    Input,
     Fallback
 }
 

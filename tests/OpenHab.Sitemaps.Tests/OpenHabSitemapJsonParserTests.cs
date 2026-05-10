@@ -274,4 +274,33 @@ public sealed class OpenHabSitemapJsonParserTests
         Assert.Equal("Temperature", page.Widgets[2].Label);
         Assert.Equal("22.5", page.Widgets[2].State);
     }
+
+    [Fact]
+    public void ParseWidgetParsesInputHint()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Input",
+                    "label": "PIN []",
+                    "inputHint": "number",
+                    "item": {
+                      "name": "SmartLock_01_PIN",
+                      "state": ""
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+        var widget = Assert.Single(parsed.Widgets);
+
+        Assert.Equal(SitemapWidgetType.Input, widget.Type);
+        Assert.Equal(SitemapInputHint.Number, widget.InputHint);
+    }
 }

@@ -41,6 +41,34 @@ public sealed class SitemapSkinTests
         Assert.True(row.SliderUpdateOnMove);
     }
 
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void InputMapsToInputControlWithSendCommand(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "PIN",
+                SitemapWidgetType.Input,
+                "SmartLock_01_PIN",
+                null,
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                InputHint: SitemapInputHint.Number)
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Input, row.Control);
+        Assert.Equal(RenderActionKind.SendCommand, row.Action);
+        Assert.Equal(SitemapInputHint.Number, row.InputHint);
+    }
+
     [Fact]
     public void BasicAndWindows11UseSameNonDensityMappings()
     {
