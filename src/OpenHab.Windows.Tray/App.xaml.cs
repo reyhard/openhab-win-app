@@ -19,6 +19,7 @@ using OpenHab.Windows.Tray.Tray;
 using OpenHab.Windows.Tray.Startup;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 
 namespace OpenHab.Windows.Tray;
 
@@ -228,8 +229,10 @@ public partial class App : Application
                 isDismissedFunc: id => notificationStore?.IsDismissed(id) ?? false,
                 onNewNotification: n =>
                 {
+                    var tag = ResolveNotificationTag(n);
+                    var body = BuildNotificationBody(n);
                     notificationStore?.AddOrUpdate(
-                        n.Id, n.Message, n.Created, n.Title, n.Icon, n.Severity,
+                        n.Id, body, n.Created, n.Title, n.Icon, tag,
                         n.ReferenceId, n.OnClickAction, n.MediaAttachmentUrl,
                         n.ActionButton1, n.ActionButton2, n.ActionButton3);
                 });
@@ -239,12 +242,8 @@ public partial class App : Application
             notificationPoller.NotificationReceived += (_, notification) =>
             {
                 DiagnosticLogger.Info($"Notification received — severity: {notification.Severity ?? "none"}");
-                var title = notification.Title ?? (notification.Severity is not null
-                    ? $"[{notification.Severity}] openHAB"
-                    : "openHAB");
-                var body = notification.Message.Length > 200
-                    ? notification.Message[..197] + "..."
-                    : notification.Message;
+                var title = BuildNotificationHeader(notification);
+                var body = BuildNotificationBody(notification);
 
                 // Parse action buttons from the notification data
                 var actionButtons = new List<NotificationActionButton>();
@@ -500,6 +499,56 @@ public partial class App : Application
         var parsed = NotificationActionParser.TryParseButton(rawButton);
         if (parsed is not null)
             buttons.Add(parsed);
+    }
+
+    private static string BuildNotificationHeader(CloudNotification notification)
+    {
+        if (!string.IsNullOrWhiteSpace(notification.Title))
+        {
+            return notification.Title;
+        }
+
+        var tag = ResolveNotificationTag(notification);
+        return !string.IsNullOrWhiteSpace(tag)
+            ? $"[{tag}] openHAB"
+            : "openHAB";
+    }
+
+    private static string BuildNotificationBody(CloudNotification notification)
+    {
+        var body = notification.Message ?? string.Empty;
+        var tag = ResolveNotificationTag(notification);
+        if (!string.IsNullOrWhiteSpace(tag))
+        {
+            body = StripLeadingBracketToken(body, tag);
+        }
+
+        body = body.Trim();
+        if (body.Length > 200)
+        {
+            return body[..197] + "...";
+        }
+
+        return body;
+    }
+
+    private static string StripLeadingBracketToken(string text, string token)
+    {
+        var escapedToken = Regex.Escape(token.Trim());
+        return Regex.Replace(
+            text,
+            $"^\\s*\\[{escapedToken}\\]\\s*",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+    }
+
+    // openHAB Cloud docs: "tag" supersedes/semsame as legacy "severity".
+    // Keep it in-memory (store severity slot) for future important-notification policy.
+    private static string? ResolveNotificationTag(CloudNotification notification)
+    {
+        return string.IsNullOrWhiteSpace(notification.Tag)
+            ? notification.Severity
+            : notification.Tag;
     }
 
     private async Task HandleNotificationActionAsync(string actionArg)
