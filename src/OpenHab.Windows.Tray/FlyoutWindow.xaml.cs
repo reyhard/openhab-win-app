@@ -263,26 +263,54 @@ public sealed partial class FlyoutWindow : Window
                     var command = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
                     var isActive = string.Equals(child.RawItemState ?? child.RawState ?? child.State, "ON", StringComparison.OrdinalIgnoreCase) ||
                                    string.Equals(child.Command, "ON", StringComparison.OrdinalIgnoreCase);
-                    childOptions.Add(new SitemapMapOption(command, child.Label, child.GridRow, child.GridColumn, isActive));
+                    childOptions.Add(new SitemapMapOption(
+                        command,
+                        child.Label,
+                        child.GridRow,
+                        child.GridColumn,
+                        isActive,
+                        child.Command,
+                        child.ReleaseCommand,
+                        child.Stateless,
+                        scan));
                     scan++;
                 }
 
-                var mergedRow = childOptions.Count > 0 ? row with { SelectionOptions = childOptions } : row;
-                Func<string, Task>? sendGridCommand = async cmd =>
+                var visibleChildOptions = childOptions.Where(o => o.SourceRowIndex.HasValue && rows[o.SourceRowIndex.Value].IsVisible).ToList();
+                if (visibleChildOptions.Count > 0)
                 {
+                    childOptions = visibleChildOptions;
+                }
+
+                var mergedRow = childOptions.Count > 0 ? row with { SelectionOptions = childOptions } : row;
+                Func<SitemapMapOption, bool, Task>? sendGridCommand = async (option, isRelease) =>
+                {
+                    var expectedCommand = isRelease ? option.ReleaseCommand : option.ClickCommand ?? option.Command;
+                    if (string.IsNullOrWhiteSpace(expectedCommand) ||
+                        string.Equals(expectedCommand, "NULL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
                     if (childOptions.Count == 0)
                     {
-                        await runtimeController.SendCommandForRowAsync(rowIndex, cmd);
+                        await runtimeController.SendCommandForRowAsync(rowIndex, expectedCommand);
+                        return;
+                    }
+
+                    if (option.SourceRowIndex.HasValue)
+                    {
+                        await runtimeController.SendCommandForRowAsync(option.SourceRowIndex.Value, expectedCommand);
                         return;
                     }
 
                     for (var childIndex = index + 1; childIndex < scan; childIndex++)
                     {
                         var child = rows[childIndex];
-                        var childCommand = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
-                        if (string.Equals(childCommand, cmd, StringComparison.Ordinal))
+                        var childCommand = isRelease ? child.ReleaseCommand : child.Command;
+                        if (string.Equals(childCommand, expectedCommand, StringComparison.Ordinal))
                         {
-                            await runtimeController.SendCommandForRowAsync(childIndex, cmd);
+                            await runtimeController.SendCommandForRowAsync(childIndex, expectedCommand);
                             return;
                         }
                     }
@@ -291,11 +319,12 @@ public sealed partial class FlyoutWindow : Window
                 rowsPanel.Children.Add(SitemapControlFactory.Create(
                     mergedRow,
                     activateRow: null,
-                    sendGridCommand,
+                    sendCommand: null,
                     iconBaseUri,
                     settingsController.Current.UseWindows11Icons,
                     iconAuth,
-                    chartDpi: (int)settingsController.Current.ChartQuality));
+                    chartDpi: (int)settingsController.Current.ChartQuality,
+                    sendButtonGridCommand: sendGridCommand));
                 index = scan - 1;
                 continue;
             }

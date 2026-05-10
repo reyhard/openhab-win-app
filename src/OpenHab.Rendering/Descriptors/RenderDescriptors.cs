@@ -2,7 +2,16 @@ using OpenHab.Sitemaps.Models;
 
 namespace OpenHab.Rendering.Descriptors;
 
-public sealed record SitemapMapOption(string Command, string Label, int? Row = null, int? Column = null, bool IsActive = false);
+public sealed record SitemapMapOption(
+    string Command,
+    string Label,
+    int? Row = null,
+    int? Column = null,
+    bool IsActive = false,
+    string? ClickCommand = null,
+    string? ReleaseCommand = null,
+    bool? Stateless = null,
+    int? SourceRowIndex = null);
 
 public sealed record SitemapRenderDescriptor(
     SitemapSkinKind Skin,

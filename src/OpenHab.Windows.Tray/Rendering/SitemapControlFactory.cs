@@ -204,7 +204,8 @@ public static class SitemapControlFactory
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null,
-        int chartDpi = 192)
+        int chartDpi = 192,
+        Func<SitemapMapOption, bool, Task>? sendButtonGridCommand = null)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -215,7 +216,7 @@ public static class SitemapControlFactory
             RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Input => CreateInput(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Button => CreateButton(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
-            RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, sendButtonGridCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Image => CreateImage(row, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Webview => CreateWebview(row, baseUri),
             RenderControlKind.Chart => CreateChart(row, baseUri, chartDpi, iconAuth),
@@ -1734,6 +1735,7 @@ public static class SitemapControlFactory
     private static FrameworkElement CreateButtonGrid(
         SitemapRowDescriptor row,
         Func<string, Task>? sendCommand,
+        Func<SitemapMapOption, bool, Task>? sendButtonGridCommand,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
@@ -1758,19 +1760,89 @@ public static class SitemapControlFactory
             var rowIndex = option.Row.HasValue && option.Row.Value > 0 ? option.Row.Value - 1 : fallbackIndex / maxColumn;
             var colIndex = option.Column.HasValue && option.Column.Value > 0 ? option.Column.Value - 1 : fallbackIndex % maxColumn;
             fallbackIndex++;
-            var button = new Button { Content = option.Label, IsEnabled = sendCommand is not null, HorizontalAlignment = HorizontalAlignment.Stretch };
-            if (option.IsActive)
+            var button = new Button
             {
-                button.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 255, 62, 133));
-                button.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
-            }
-            button.Click += async (_, _) => { if (sendCommand is not null) await sendCommand(option.Command); };
+                Content = option.Label,
+                IsEnabled = sendCommand is not null || sendButtonGridCommand is not null,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            ApplyButtonGridColors(button, option.IsActive, isHovered: false, isPressed: false);
+
+            button.PointerEntered += (_, _) => ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: false);
+            button.PointerExited += (_, _) => ApplyButtonGridColors(button, option.IsActive, isHovered: false, isPressed: false);
+
+            button.PointerPressed += (_, _) =>
+            {
+                ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: true);
+            };
+
+            button.PointerReleased += (_, _) =>
+            {
+                ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: false);
+            };
+            button.Click += async (_, _) =>
+            {
+                var releaseCommand = option.ReleaseCommand;
+                var clickCommand = option.ClickCommand ?? option.Command;
+                var hasReleaseCommand = !string.IsNullOrWhiteSpace(releaseCommand)
+                                        && !string.Equals(releaseCommand, "NULL", StringComparison.OrdinalIgnoreCase);
+                var hasClickCommand = !string.IsNullOrWhiteSpace(clickCommand)
+                                      && !string.Equals(clickCommand, "NULL", StringComparison.OrdinalIgnoreCase);
+
+                if (sendButtonGridCommand is not null)
+                {
+                    if (hasReleaseCommand)
+                    {
+                        await sendButtonGridCommand(option, true);
+                    }
+                    else if (hasClickCommand)
+                    {
+                        await sendButtonGridCommand(option, false);
+                    }
+
+                    return;
+                }
+
+                if (sendCommand is not null)
+                {
+                    if (hasReleaseCommand)
+                    {
+                        await sendCommand(releaseCommand!);
+                    }
+                    else if (hasClickCommand)
+                    {
+                        await sendCommand(clickCommand!);
+                    }
+                }
+            };
             Grid.SetRow(button, rowIndex);
             Grid.SetColumn(button, colIndex);
             grid.Children.Add(button);
         }
         container.Children.Add(grid);
         return WrapWithBorder(container);
+    }
+
+    private static void ApplyButtonGridColors(Button button, bool isActive, bool isHovered, bool isPressed)
+    {
+        var inactiveBackground = Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 245);
+        var inactiveHoverBackground = Microsoft.UI.ColorHelper.FromArgb(255, 237, 237, 237);
+        var inactivePressedBackground = Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 226);
+        var activeBackground = Microsoft.UI.ColorHelper.FromArgb(255, 255, 62, 133);
+        var activeHoverBackground = Microsoft.UI.ColorHelper.FromArgb(255, 250, 45, 120);
+        var activePressedBackground = Microsoft.UI.ColorHelper.FromArgb(255, 230, 30, 108);
+
+        var background = isActive
+            ? (isPressed ? activePressedBackground : isHovered ? activeHoverBackground : activeBackground)
+            : (isPressed ? inactivePressedBackground : isHovered ? inactiveHoverBackground : inactiveBackground);
+        var foreground = isActive ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+
+        button.Background = new SolidColorBrush(background);
+        button.Foreground = new SolidColorBrush(foreground);
+        button.Resources["ButtonForegroundPointerOver"] = new SolidColorBrush(foreground);
+        button.Resources["ButtonForegroundPressed"] = new SolidColorBrush(foreground);
+        button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(isActive ? activeHoverBackground : inactiveHoverBackground);
+        button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(isActive ? activePressedBackground : inactivePressedBackground);
     }
 
     private static FrameworkElement CreateImage(
