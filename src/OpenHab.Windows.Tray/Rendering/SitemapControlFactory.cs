@@ -17,11 +17,10 @@ using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Sitemaps.Models;
 using Windows.Storage.Streams;
-using Windows.UI.Text;
 
 namespace OpenHab.Windows.Tray.Rendering;
 
-public static class SitemapControlFactory
+public static partial class SitemapControlFactory
 {
     private const double ValueLaneWidth = 96;
     private const double ControlLaneWidth = 56;
@@ -29,9 +28,9 @@ public static class SitemapControlFactory
     private const int SliderMoveDebounceMs = 200;
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
-    private static readonly Regex FirstNumberRegex = new(@"[-+]?\d+([.,]\d+)?", RegexOptions.Compiled);
+    private static readonly Regex FirstNumberRegex = FirstNumberRegexFactory();
     private static readonly ConcurrentDictionary<string, ImageSource> IconSourceCache = new(StringComparer.Ordinal);
-    private static readonly object IconProbeSyncRoot = new();
+    private static readonly System.Threading.Lock IconProbeSyncRoot = new();
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -164,6 +163,12 @@ public static class SitemapControlFactory
         public string? LastSentCommand { get; set; }
     }
 
+    [GeneratedRegex(@"[-+]?\d+([.,]\d+)?", RegexOptions.Compiled)]
+    private static partial Regex FirstNumberRegexFactory();
+
+    [GeneratedRegex("<svg\\b", RegexOptions.IgnoreCase)]
+    private static partial Regex SvgOpenTagRegex();
+
     /// <summary>
     /// Collapses separators and digits so common openHAB icon-name variants
     /// (e.g. "roller_shutter", "ground-floor", "chart-1") still resolve.
@@ -262,17 +267,11 @@ public static class SitemapControlFactory
                 if (slider is not null && double.TryParse(rawState, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
                 {
                     var sliderState = slider.Tag as SliderCommandState;
-                    if (sliderState is not null)
-                    {
-                        sliderState.SuppressValueChanged = true;
-                    }
+                    sliderState?.SuppressValueChanged = true;
 
                     slider.Value = val;
 
-                    if (sliderState is not null)
-                    {
-                        sliderState.SuppressValueChanged = false;
-                    }
+                    sliderState?.SuppressValueChanged = false;
 
                     var currentStateText = FindStateTextBlockText(inner);
                     UpdateStateTextBlock(inner, FormatSliderStateText(currentStateText, val));
@@ -756,7 +755,7 @@ public static class SitemapControlFactory
 
             // Many modern icon packs (including f7/iconify) use currentColor.
             // Adding a root style color enables tinting without raster conversion.
-            var match = Regex.Match(svgText, "<svg\\b", RegexOptions.IgnoreCase);
+            var match = SvgOpenTagRegex().Match(svgText);
             if (!match.Success)
             {
                 return null;
@@ -921,7 +920,6 @@ public static class SitemapControlFactory
         string? iconName,
         string? iconState,
         string? labelColor,
-        string? valueColor,
         string? iconColor,
         bool useWindowsIcons,
         IconAuthContext? iconAuth)
@@ -996,7 +994,7 @@ public static class SitemapControlFactory
             return CreateSectionHeader(row.Label);
         }
 
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
         var navigateAction = row.Action == RenderActionKind.Navigate ? activateRow : null;
         var isNavigate = navigateAction is not null;
@@ -1056,7 +1054,7 @@ public static class SitemapControlFactory
             && iconIsAbsent;
     }
 
-    private static FrameworkElement CreateSectionHeader(string label)
+    private static TextBlock CreateSectionHeader(string label)
     {
         return new TextBlock
         {
@@ -1070,14 +1068,14 @@ public static class SitemapControlFactory
         };
     }
 
-    private static FrameworkElement CreateToggle(
+    private static Border CreateToggle(
         SitemapRowDescriptor row,
         Func<Task>? activateRow,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
         var rawState = row.RawState ?? row.State;
 
@@ -1116,14 +1114,14 @@ public static class SitemapControlFactory
         return WrapWithBorder(grid);
     }
 
-    private static FrameworkElement CreateSlider(
+    private static Border CreateSlider(
         SitemapRowDescriptor row,
         Func<string, Task>? sendCommand,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
         grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(120);
 
@@ -1278,14 +1276,14 @@ public static class SitemapControlFactory
         return double.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
     }
 
-    private static FrameworkElement CreateSelection(
+    private static Border CreateSelection(
         SitemapRowDescriptor row,
         Func<string, Task>? sendCommand,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
 
         var comboBox = new ComboBox
@@ -1336,14 +1334,14 @@ public static class SitemapControlFactory
         return WrapWithBorder(grid);
     }
 
-    private static FrameworkElement CreateInput(
+    private static Border CreateInput(
         SitemapRowDescriptor row,
         Func<string, Task>? sendCommand,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
         grid.ColumnDefinitions[layout.ValueColumn].Width = new GridLength(0);
         grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(220);
@@ -1438,13 +1436,14 @@ public static class SitemapControlFactory
 
             if (sendCommand is not null)
             {
-                Func<Task> sendComposedAsync = async () =>
+                async Task SendComposedAsync()
                 {
                     var composed = datePicker.Date.Date + timePicker.Time;
                     await SubmitAsync(composed.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture));
-                };
-                datePicker.DateChanged += async (_, _) => await sendComposedAsync();
-                timePicker.TimeChanged += async (_, _) => await sendComposedAsync();
+                }
+
+                datePicker.DateChanged += async (_, _) => await SendComposedAsync();
+                timePicker.TimeChanged += async (_, _) => await SendComposedAsync();
             }
 
             panel.Children.Add(datePicker);
@@ -1675,7 +1674,7 @@ public static class SitemapControlFactory
         return leftIsNumber && rightIsNumber && Math.Abs(leftNumber - rightNumber) < 0.0001;
     }
 
-    private static FrameworkElement CreateFallback(SitemapRowDescriptor row)
+    private static Border CreateFallback(SitemapRowDescriptor row)
     {
         return WrapWithBorder(new Button
         {
@@ -1703,16 +1702,20 @@ public static class SitemapControlFactory
         return string.Concat(template.AsSpan(0, match.Index), numeric, template.AsSpan(match.Index + match.Length));
     }
 
-    private static FrameworkElement CreateButton(
+    private static Border CreateButton(
         SitemapRowDescriptor row,
         Func<string, Task>? sendCommand,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
     {
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
-        var command = row.Command ?? row.SelectionOptions?.FirstOrDefault()?.Command ?? row.RawItemState ?? row.RawState ?? row.State;
+        var command = row.Command
+            ?? (row.SelectionOptions.Count > 0 ? row.SelectionOptions[0].Command : null)
+            ?? row.RawItemState
+            ?? row.RawState
+            ?? row.State;
         var button = new Button
         {
             Content = "Run",
@@ -1732,7 +1735,7 @@ public static class SitemapControlFactory
         return WrapWithBorder(grid);
     }
 
-    private static FrameworkElement CreateButtonGrid(
+    private static Border CreateButtonGrid(
         SitemapRowDescriptor row,
         Func<string, Task>? sendCommand,
         Func<SitemapMapOption, bool, Task>? sendButtonGridCommand,
@@ -1741,7 +1744,7 @@ public static class SitemapControlFactory
         IconAuthContext? iconAuth = null)
     {
         var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 };
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         container.Children.Add(layout.Grid);
         var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
         var hasExplicitCoordinates = row.SelectionOptions.Any(o => o.Row.HasValue || o.Column.HasValue);
@@ -1845,14 +1848,14 @@ public static class SitemapControlFactory
         button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(isActive ? activePressedBackground : inactivePressedBackground);
     }
 
-    private static FrameworkElement CreateImage(
+    private static Border CreateImage(
         SitemapRowDescriptor row,
         Uri? baseUri = null,
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
     {
         var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons, iconAuth);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         container.Children.Add(layout.Grid);
         var value = row.RawItemState ?? row.RawState ?? row.State;
         if (!string.IsNullOrWhiteSpace(value) && value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
@@ -1880,10 +1883,10 @@ public static class SitemapControlFactory
         if (source is not null) image.Source = source;
     }
 
-    private static FrameworkElement CreateWebview(SitemapRowDescriptor row, Uri? baseUri)
+    private static Border CreateWebview(SitemapRowDescriptor row, Uri? baseUri)
     {
         var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons: false, iconAuth: null);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons: false, iconAuth: null);
         container.Children.Add(layout.Grid);
 
         var url = row.Url ?? row.RawItemState ?? row.RawState ?? row.State;
@@ -1928,7 +1931,7 @@ public static class SitemapControlFactory
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
         };
-        _ = InitializeWebViewAsync(webview, resolvedUri!, container, openButton);
+        _ = InitializeWebViewAsync(webview, resolvedUri!);
         container.Children.Add(webview);
 
         return WrapWithBorder(container);
@@ -1969,7 +1972,7 @@ public static class SitemapControlFactory
         }
     }
 
-    private static async Task InitializeWebViewAsync(WebView2 webview, Uri uri, StackPanel container, Button fallbackButton)
+    private static async Task InitializeWebViewAsync(WebView2 webview, Uri uri)
     {
         try
         {
@@ -1987,16 +1990,16 @@ public static class SitemapControlFactory
         }
     }
 
-    private static FrameworkElement CreateChart(SitemapRowDescriptor row, Uri? baseUri, int chartDpi, IconAuthContext? iconAuth)
+    private static Border CreateChart(SitemapRowDescriptor row, Uri? baseUri, int chartDpi, IconAuthContext? iconAuth)
     {
         var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
-        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.ValueColor, row.IconColor, useWindowsIcons: false, iconAuth: null);
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons: false, iconAuth: null);
         container.Children.Add(layout.Grid);
 
         var chartUrl = BuildChartUrl(row, baseUri, chartDpi);
         if (chartUrl is not null)
         {
-            var image = new Image
+            Image image = new()
             {
                 Stretch = Stretch.Uniform,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -2110,4 +2113,5 @@ public static class SitemapControlFactory
         };
     }
 }
+
 
