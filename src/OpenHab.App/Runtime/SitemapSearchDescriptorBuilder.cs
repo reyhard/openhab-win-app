@@ -37,7 +37,10 @@ public static class SitemapSearchDescriptorBuilder
         var sources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
         var resultCount = 0;
 
-        rows.Add(CreateHeaderRow(SearchTitle, "Searching current section and child pages"));
+        rows.Add(CreateHeaderRow(
+            BuildHeaderKey(currentPage.Id),
+            SearchTitle,
+            "Searching current section and child pages"));
 
         for (var index = 0; index < currentPage.Widgets.Count; index++)
         {
@@ -63,7 +66,10 @@ public static class SitemapSearchDescriptorBuilder
 
         if (resultCount == 0)
         {
-            rows[0] = CreateHeaderRow(SearchTitle, "0 results in current section and child pages");
+            rows[0] = CreateHeaderRow(
+                BuildHeaderKey(currentPage.Id),
+                SearchTitle,
+                "0 results in current section and child pages");
             rows.Add(new SitemapRowDescriptor(
                 EmptyLabel,
                 null,
@@ -76,6 +82,7 @@ public static class SitemapSearchDescriptorBuilder
         else
         {
             rows[0] = CreateHeaderRow(
+                BuildHeaderKey(currentPage.Id),
                 SearchTitle,
                 string.Create(CultureInfo.InvariantCulture, $"{resultCount} results in current section and child pages"));
         }
@@ -111,14 +118,14 @@ public static class SitemapSearchDescriptorBuilder
         var labelMatches = LabelMatches(widget.Label, query);
         var frameMatch = widget.Type == SitemapWidgetType.Frame && labelMatches;
         var includeSelf = forcedChildInclusion || labelMatches || inheritedFrameMatch;
-        var sourceWidgetPath = BuildWidgetPath(widgetPathPrefix, widget, widgetIndex);
+        var sourceWidgetPath = BuildWidgetPath(widgetPathPrefix, widgetIndex);
         var hasAnyDescendantIncluded = false;
         var insertedGroupHeader = false;
 
         if (includeSelf)
         {
             var baseRow = pageDescriptor.Rows[widgetIndex];
-            var resultKey = BuildResultKey(page, widget, widgetIndex, sourceWidgetPath);
+            var resultKey = BuildResultKey(widget, sourceWidgetPath);
             var source = BuildSource(
                 resultKey,
                 widget,
@@ -182,7 +189,10 @@ public static class SitemapSearchDescriptorBuilder
 
             if (!frameMatch && !inheritedFrameMatch && !insertedGroupHeader)
             {
-                rows.Insert(childRowsStart, CreateHeaderRow(parentNavigationLabel ?? widget.Label, null));
+                rows.Insert(childRowsStart, CreateHeaderRow(
+                    BuildHeaderKey(sourceWidgetPath),
+                    parentNavigationLabel ?? widget.Label,
+                    null));
                 insertedGroupHeader = true;
             }
         }
@@ -213,9 +223,7 @@ public static class SitemapSearchDescriptorBuilder
     }
 
     private static string BuildResultKey(
-        NormalizedSitemapPage page,
         NormalizedSitemapWidget widget,
-        int index,
         string sourceWidgetPath)
     {
         if (!string.IsNullOrWhiteSpace(widget.WidgetId))
@@ -223,41 +231,18 @@ public static class SitemapSearchDescriptorBuilder
             return "search:widget:" + sourceWidgetPath + ":id:" + widget.WidgetId;
         }
 
-        var fallback = string.Join(
-            "|",
-            "page=" + page.Id,
-            "type=" + widget.Type,
-            "label=" + (widget.Label ?? string.Empty),
-            "item=" + (widget.ItemName ?? string.Empty),
-            "sig=" + BuildActionSignature(widget),
-            "index=" + index.ToString(CultureInfo.InvariantCulture));
-
-        return "search:path:" + fallback;
+        return "search:path:" + sourceWidgetPath;
     }
 
-    private static string BuildWidgetPath(string prefix, NormalizedSitemapWidget widget, int index)
+    private static string BuildWidgetPath(string prefix, int index)
     {
         return string.Join(
             "/",
             prefix,
-            "idx:" + index.ToString(CultureInfo.InvariantCulture),
-            "type:" + widget.Type,
-            "label:" + (widget.Label ?? string.Empty));
+            "idx:" + index.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static string BuildActionSignature(NormalizedSitemapWidget widget)
-    {
-        return string.Join(
-            ";",
-            widget.Command ?? string.Empty,
-            widget.ReleaseCommand ?? string.Empty,
-            widget.Url ?? string.Empty,
-            widget.Period ?? string.Empty,
-            widget.Service ?? string.Empty,
-            widget.InputHint.ToString());
-    }
-
-    private static SitemapRowDescriptor CreateHeaderRow(string label, string? state)
+    private static SitemapRowDescriptor CreateHeaderRow(string searchResultKey, string label, string? state)
     {
         return new SitemapRowDescriptor(
             label,
@@ -267,7 +252,13 @@ public static class SitemapSearchDescriptorBuilder
             RenderDensity.Comfortable,
             [],
             IsSectionHeader: true,
-            IsVisible: true);
+            IsVisible: true,
+            SearchResultKey: searchResultKey);
+    }
+
+    private static string BuildHeaderKey(string scopePath)
+    {
+        return "search:header:" + scopePath;
     }
 
     private static bool LabelMatches(string label, string query)

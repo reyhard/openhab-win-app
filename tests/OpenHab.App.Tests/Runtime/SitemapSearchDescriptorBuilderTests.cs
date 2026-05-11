@@ -118,6 +118,32 @@ public sealed class SitemapSearchDescriptorBuilderTests
     }
 
     [Fact]
+    public void ResultKeysIgnoreLabelDelimitersWhileKeepingSourceLabels()
+    {
+        var page = CreateDelimitedLabelSearchPage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Lamp", renderController);
+        var matchingRows = result.Descriptor.Rows
+            .Where(row => row.Label is "Lamp / Hall" or "Lamp:Hall")
+            .ToArray();
+
+        Assert.Equal(2, result.ResultCount);
+        Assert.Equal(2, matchingRows.Length);
+        Assert.All(matchingRows, row => Assert.NotNull(row.SearchResultKey));
+        Assert.Equal(2, matchingRows.Select(row => row.SearchResultKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(matchingRows, row =>
+        {
+            Assert.Equal(row.Label, result.SourcesByResultKey[row.SearchResultKey!].SourceWidgetLabel);
+        });
+        Assert.All(matchingRows, row =>
+        {
+            Assert.DoesNotContain("Lamp / Hall", row.SearchResultKey!);
+            Assert.DoesNotContain("Lamp:Hall", row.SearchResultKey!);
+        });
+    }
+
+    [Fact]
     public void RecomputedResultsFollowLatestSitemapOrder()
     {
         var first = CreateSearchPage(lampsReversed: false);
@@ -156,6 +182,28 @@ public sealed class SitemapSearchDescriptorBuilderTests
         Assert.Equal(2, timerRows.Select(row => row.SearchResultKey).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(result.ResultCount, result.SourcesByResultKey.Count);
         Assert.All(timerRows, row => Assert.True(result.SourcesByResultKey.ContainsKey(row.SearchResultKey!)));
+    }
+
+    [Fact]
+    public void DuplicateGroupLabelsAssignDistinctSearchResultKeysToSyntheticHeaders()
+    {
+        var page = CreateDuplicateGroupLabelPage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Timer", renderController);
+        var sectionHeaders = result.Descriptor.Rows
+            .Where(row => row.IsSectionHeader)
+            .ToArray();
+        var duplicateGroupHeaders = sectionHeaders
+            .Where(row => row.Label == "Shared group")
+            .ToArray();
+
+        Assert.Equal(2, result.ResultCount);
+        Assert.Equal(3, sectionHeaders.Length);
+        Assert.All(sectionHeaders, row => Assert.NotNull(row.SearchResultKey));
+        Assert.Equal(3, sectionHeaders.Select(row => row.SearchResultKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(duplicateGroupHeaders, row => Assert.False(result.SourcesByResultKey.ContainsKey(row.SearchResultKey!)));
+        Assert.Equal(result.ResultCount, result.SourcesByResultKey.Count);
     }
 
     private static NormalizedSitemapPage CreateSearchPage(bool lampsReversed = false)
@@ -293,6 +341,84 @@ public sealed class SitemapSearchDescriptorBuilderTests
                                 true,
                                 [],
                                 WidgetId: "timer-widget")
+                        ])
+                    ],
+                    WidgetId: "second-group")
+            ]));
+    }
+
+    private static NormalizedSitemapPage CreateDelimitedLabelSearchPage()
+    {
+        return SitemapNormalizer.Normalize(new SitemapPage(
+            "home",
+            "Home",
+            [
+                new SitemapWidget(
+                    "Lamp / Hall",
+                    SitemapWidgetType.Text,
+                    "Hall_Lamp",
+                    "ON",
+                    [],
+                    true,
+                    [],
+                    WidgetId: "lamp-slash"),
+                new SitemapWidget(
+                    "Lamp:Hall",
+                    SitemapWidgetType.Text,
+                    "Hall_Lamp_2",
+                    "ON",
+                    [],
+                    true,
+                    [],
+                    WidgetId: "lamp-colon")
+            ]));
+    }
+
+    private static NormalizedSitemapPage CreateDuplicateGroupLabelPage()
+    {
+        return SitemapNormalizer.Normalize(new SitemapPage(
+            "home",
+            "Home",
+            [
+                new SitemapWidget(
+                    "Shared group",
+                    SitemapWidgetType.Group,
+                    null,
+                    null,
+                    [],
+                    true,
+                    [
+                        new SitemapPage("first", "First", [
+                            new SitemapWidget(
+                                "Timer",
+                                SitemapWidgetType.Text,
+                                "First_Timer",
+                                "10",
+                                [],
+                                true,
+                                [],
+                                WidgetId: "timer-first")
+                        ])
+                    ],
+                    WidgetId: "first-group"),
+                new SitemapWidget(
+                    "Shared group",
+                    SitemapWidgetType.Group,
+                    null,
+                    null,
+                    [],
+                    true,
+                    [
+                        new SitemapPage("second", "Second", [
+                            new SitemapWidget(
+                                "Timer",
+                                SitemapWidgetType.Text,
+                                "Second_Timer",
+                                "20",
+                                [],
+                                true,
+                                [],
+                                WidgetId: "timer-second")
                         ])
                     ],
                     WidgetId: "second-group")
