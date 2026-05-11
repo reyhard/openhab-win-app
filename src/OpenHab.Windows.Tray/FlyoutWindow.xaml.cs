@@ -83,7 +83,10 @@ public sealed partial class FlyoutWindow : Window
         InitializeComponent();
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
-        this.Content.KeyDown += MainContent_KeyDown;
+        this.Content.AddHandler(
+            UIElement.KeyDownEvent,
+            new Microsoft.UI.Xaml.Input.KeyEventHandler(MainContent_KeyDown),
+            handledEventsToo: true);
         FlyoutChrome.PointerPressed += OnFlyoutChromePointerPressed;
         EnsureLightDismissInitialized();
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
@@ -347,19 +350,25 @@ public sealed partial class FlyoutWindow : Window
         return runtimeController.SendCommandForRowKeyAsync(rowKey, command);
     }
 
+    private bool HasVisibleSearchChrome => isSearchChromeOpen || runtimeController.Current.IsSearchActive;
+
+    private void CloseSearchChrome()
+    {
+        isSearchChromeOpen = false;
+        runtimeController.ClearSearch();
+    }
+
     private void SearchButton_Click(object sender, RoutedEventArgs e)
     {
-        if (isSearchChromeOpen || runtimeController.Current.IsSearchActive)
+        if (HasVisibleSearchChrome)
         {
-            isSearchChromeOpen = false;
-            runtimeController.ClearSearch();
-            RefreshRuntimeBindings(ActiveRows);
+            CloseSearchChrome();
             return;
         }
 
         isSearchChromeOpen = true;
         runtimeController.ApplySearchQuery(SitemapSearchBox.Text);
-        RefreshRuntimeBindings(ActiveRows);
+        RefreshChromeBindings(runtimeController.Current);
         SitemapSearchBox.Focus(FocusState.Programmatic);
     }
 
@@ -372,14 +381,12 @@ public sealed partial class FlyoutWindow : Window
 
         runtimeController.ApplySearchQuery(sender.Text);
         isSearchChromeOpen = true;
-        RefreshRuntimeBindings(ActiveRows);
     }
 
     private void SitemapSearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
     {
         runtimeController.ApplySearchQuery(sender.Text);
         isSearchChromeOpen = true;
-        RefreshRuntimeBindings(ActiveRows);
     }
 
     private async void SitemapMenuItem_Click(object sender, RoutedEventArgs e)
@@ -387,7 +394,11 @@ public sealed partial class FlyoutWindow : Window
         if (sender is MenuFlyoutItem item && item.Tag is string name)
         {
             if (isRefreshing) return;
-            isSearchChromeOpen = false;
+            if (HasVisibleSearchChrome)
+            {
+                CloseSearchChrome();
+            }
+
             settingsController.SetSitemapName(name);
             await LoadRuntimeAsync();
         }
@@ -796,7 +807,19 @@ public sealed partial class FlyoutWindow : Window
     private void OnFlyoutChromePointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         var props = e.GetCurrentPoint(sender as UIElement).Properties;
-        if (props.IsXButton1Pressed && runtimeController.CanGoBack && !isRefreshing)
+        if (!props.IsXButton1Pressed || isRefreshing)
+        {
+            return;
+        }
+
+        if (HasVisibleSearchChrome)
+        {
+            e.Handled = true;
+            CloseSearchChrome();
+            return;
+        }
+
+        if (runtimeController.CanGoBack)
         {
             e.Handled = true;
             _ = NavigateBackWithAnimationAsync();
@@ -805,12 +828,17 @@ public sealed partial class FlyoutWindow : Window
 
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Escape && (isSearchChromeOpen || runtimeController.Current.IsSearchActive))
+        if (e.Key == VirtualKey.Escape && HasVisibleSearchChrome)
         {
             e.Handled = true;
-            isSearchChromeOpen = false;
-            runtimeController.ClearSearch();
-            RefreshRuntimeBindings(ActiveRows);
+            CloseSearchChrome();
+            return;
+        }
+
+        if (e.Key == VirtualKey.GoBack && HasVisibleSearchChrome && !isRefreshing)
+        {
+            e.Handled = true;
+            CloseSearchChrome();
             return;
         }
 
