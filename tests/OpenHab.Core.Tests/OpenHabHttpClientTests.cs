@@ -62,6 +62,28 @@ public sealed class OpenHabHttpClientTests
         Assert.DoesNotContain("secret", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("Authorization: Bearer oh.secret.token", "oh.secret.token")]
+    [InlineData("{\"password\":\"p@ssw0rd\",\"error\":\"bad\"}", "p@ssw0rd")]
+    [InlineData("{\"token\":\"abc123\",\"message\":\"bad token\"}", "abc123")]
+    [InlineData("https://user:pass@example.org/rest/items", "user:pass@example.org")]
+    [InlineData("Basic dXNlcjpwYXNz", "dXNlcjpwYXNz")]
+    public async Task FailedRequestRedactsSensitiveResponseBodies(string responseBody, string sensitiveText)
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            ReasonPhrase = "Bad Request",
+            Content = new StringContent(responseBody)
+        });
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var error = await Assert.ThrowsAsync<OpenHabRequestException>(
+            () => client.GetSitemapJsonAsync("default", CancellationToken.None));
+
+        Assert.DoesNotContain(sensitiveText, error.Message, StringComparison.Ordinal);
+        Assert.Contains("[redacted]", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task SendCommandPreservesConfiguredBasePath()
     {
@@ -86,5 +108,13 @@ public sealed class OpenHabHttpClientTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.SendCommandAsync("Light", "ON", cts.Token));
         Assert.Empty(handler.Requests);
+    }
+
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> handler) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(handler(request));
+        }
     }
 }

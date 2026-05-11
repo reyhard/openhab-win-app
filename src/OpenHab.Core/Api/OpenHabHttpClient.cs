@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using OpenHab.Core;
 
 namespace OpenHab.Core.Api;
 
@@ -146,7 +147,8 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         }
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        var safeBody = body.Length > 120 ? body[..120] : body;
+        var safeBody = SensitiveTextRedactor.Redact(body);
         throw new OpenHabRequestException(response.StatusCode, $"openHAB request failed with {(int)response.StatusCode} {response.ReasonPhrase}: {safeBody}");
     }
 }
+
