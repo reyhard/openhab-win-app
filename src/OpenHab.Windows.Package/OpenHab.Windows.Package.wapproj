@@ -26,6 +26,7 @@
     <HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
     <ProjectPriIndexName>App</ProjectPriIndexName>
     <NoWarn>$(NoWarn);NU1701;NU1702</NoWarn>
+    <GenerateAppInstallerFile>False</GenerateAppInstallerFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectConfiguration Include="Debug|x64">
