@@ -144,7 +144,13 @@ public static class ToastService
                 }
             }
 
-            var toast = new ToastNotification(builder.GetXml());
+            var xml = builder.GetXml();
+            if (important)
+            {
+                xml.DocumentElement.SetAttribute("scenario", "urgent");
+            }
+
+            var toast = new ToastNotification(xml);
             if (!string.IsNullOrWhiteSpace(tag))
             {
                 toast.Tag = tag.Trim();
