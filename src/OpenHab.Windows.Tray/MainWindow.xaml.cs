@@ -451,7 +451,11 @@ public sealed partial class MainWindow : Window
     private void BuildDeviceInfoSyncSettingsPage()
     {
         AddSettingsSectionTitle("Sync settings");
-        var syncContent = new StackPanel { Spacing = 10 };
+        var syncContent = new StackPanel
+        {
+            Spacing = 10,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
 
         DeviceInfoSyncEnabledToggle = new ToggleSwitch
         {
@@ -459,10 +463,7 @@ public sealed partial class MainWindow : Window
             OffContent = string.Empty
         };
         DeviceInfoSyncEnabledToggle.Toggled += DeviceInfoSyncEnabledToggle_Toggled;
-        syncContent.Children.Add(CreateSettingsToggleRow(
-            "Enable Device Info Sync",
-            "Send selected Windows device state to openHAB Items",
-            DeviceInfoSyncEnabledToggle));
+        var enabledAction = CreateSettingsToggleAction(DeviceInfoSyncEnabledToggle);
 
         var current = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
         if (!current.IsEnabled)
@@ -477,7 +478,8 @@ public sealed partial class MainWindow : Window
             SettingsContent.Children.Add(CreateSettingsExpander(
                 "Device Info Sync",
                 "Send selected Windows device state to openHAB Items",
-                syncContent));
+                syncContent,
+                enabledAction));
             return;
         }
 
@@ -502,10 +504,15 @@ public sealed partial class MainWindow : Window
         SettingsContent.Children.Add(CreateSettingsExpander(
             "Device Info Sync",
             "Send selected Windows device state to openHAB Items",
-            syncContent));
+            syncContent,
+            enabledAction));
 
         AddSettingsSectionTitle("openHAB Item mappings");
-        var mappingContent = new StackPanel { Spacing = 8 };
+        var mappingContent = new StackPanel
+        {
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
         AddDeviceInfoSyncMappingTextBox(mappingContent, "BatteryLevelItem", "Battery level", "BatteryLevel");
         AddDeviceInfoSyncMappingTextBox(mappingContent, "ChargingStateItem", "Charging state", "ChargingState");
         AddDeviceInfoSyncMappingTextBox(mappingContent, "LockedStateItem", "Locked state", "LockedState");
@@ -522,29 +529,15 @@ public sealed partial class MainWindow : Window
 
     private void AddDeviceInfoSyncMappingTextBox(StackPanel target, string key, string title, string placeholder)
     {
-        var row = new Grid { ColumnSpacing = 8 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var prefix = new TextBlock
-        {
-            Text = GetDeviceInfoSyncIdentifier(),
-            Opacity = 0.68,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 0, 0, 8)
-        };
-        row.Children.Add(prefix);
-
         var textBox = new TextBox
         {
             Header = title,
-            PlaceholderText = placeholder
+            PlaceholderText = placeholder,
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
         textBox.LostFocus += DeviceInfoSyncField_LostFocus;
         deviceInfoSyncItemMappingTexts[key] = textBox;
-        Grid.SetColumn(textBox, 1);
-        row.Children.Add(textBox);
-        target.Children.Add(row);
+        target.Children.Add(textBox);
     }
 
     private static Grid CreateSettingsToggleRow(string title, string subtitle, ToggleSwitch toggle)
@@ -573,6 +566,15 @@ public sealed partial class MainWindow : Window
         });
         row.Children.Add(textPanel);
 
+        var actionPanel = CreateSettingsToggleAction(toggle);
+        Grid.SetColumn(actionPanel, 1);
+        row.Children.Add(actionPanel);
+
+        return row;
+    }
+
+    private static StackPanel CreateSettingsToggleAction(ToggleSwitch toggle)
+    {
         var stateText = new TextBlock
         {
             Text = toggle.IsOn ? "On" : "Off",
@@ -590,10 +592,7 @@ public sealed partial class MainWindow : Window
         };
         actionPanel.Children.Add(stateText);
         actionPanel.Children.Add(toggle);
-        Grid.SetColumn(actionPanel, 1);
-        row.Children.Add(actionPanel);
-
-        return row;
+        return actionPanel;
     }
 
     private void BuildAboutSettingsPage()
@@ -615,28 +614,66 @@ public sealed partial class MainWindow : Window
         SettingsContent.Children.Add(VersionText);
     }
 
-    private Expander CreateSettingsExpander(string title, string subtitle, UIElement content)
+    private Expander CreateSettingsExpander(string title, string subtitle, UIElement content, UIElement? action = null)
     {
-        return new Expander
+        if (content is FrameworkElement contentElement)
         {
-            Header = CreateSettingsHeader(title, subtitle),
-            Content = content,
+            contentElement.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+
+        var contentHost = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        contentHost.Children.Add(content);
+
+        var expander = new Expander
+        {
+            Header = CreateSettingsHeader(title, subtitle, action),
+            Content = contentHost,
             IsExpanded = true,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+
+        expander.SizeChanged += (_, _) =>
+        {
+            contentHost.Width = Math.Max(0, expander.ActualWidth - 2);
+        };
+
+        return expander;
     }
 
-    private static StackPanel CreateSettingsHeader(string title, string subtitle)
+    private static Grid CreateSettingsHeader(string title, string subtitle, UIElement? action)
     {
-        var header = new StackPanel { Spacing = 2 };
-        header.Children.Add(new TextBlock { Text = title });
-        header.Children.Add(new TextBlock
+        var header = new Grid
+        {
+            ColumnSpacing = 16,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var textPanel = new StackPanel { Spacing = 2 };
+        textPanel.Children.Add(new TextBlock { Text = title });
+        textPanel.Children.Add(new TextBlock
         {
             Text = subtitle,
             Opacity = 0.68,
             Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
             TextWrapping = TextWrapping.Wrap
         });
+        header.Children.Add(textPanel);
+
+        if (action is not null)
+        {
+            if (action is FrameworkElement actionElement)
+            {
+                actionElement.Margin = new Thickness(0, 0, 24, 0);
+                Grid.SetColumn(actionElement, 1);
+                header.Children.Add(actionElement);
+            }
+        }
+
         return header;
     }
 
@@ -1765,7 +1802,9 @@ public sealed partial class MainWindow : Window
     private string GetDeviceInfoSyncIdentifier()
     {
         var current = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
-        return DeviceInfoSyncSettings.SanitizeDeviceIdentifier(DeviceInfoSyncIdentifierText?.Text ?? current.DeviceIdentifier);
+        var textValue = DeviceInfoSyncIdentifierText?.Text;
+        var value = string.IsNullOrWhiteSpace(textValue) ? current.DeviceIdentifier : textValue;
+        return DeviceInfoSyncSettings.SanitizeDeviceIdentifier(value);
     }
 
     private static string ToDeviceInfoSyncItemSuffix(string? itemName, string identifier)
