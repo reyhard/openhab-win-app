@@ -198,6 +198,149 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task ApplySearchQueryBuildsVirtualDescriptorWithoutChangingBreadcrumbs()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var breadcrumbsBefore = controller.Current.Breadcrumbs.ToArray();
+        var descriptorBefore = controller.Current.Descriptor;
+        var snapshotChangedCount = 0;
+        controller.SnapshotChanged += (_, _) => snapshotChangedCount++;
+
+        controller.ApplySearchQuery("Temperature");
+
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.NotEqual(descriptorBefore, controller.Current.Descriptor);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+        Assert.Equal(breadcrumbsBefore, controller.Current.Breadcrumbs);
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Temperature", controller.Current.SearchQuery);
+        Assert.True(controller.Current.SearchResultCount > 0);
+        Assert.True(snapshotChangedCount > 0);
+    }
+
+    [Fact]
+    public async Task ClearSearchRestoresNormalDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var normalDescriptor = controller.Current.Descriptor;
+        controller.ApplySearchQuery("Temperature");
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+
+        var snapshotChangedCount = 0;
+        controller.SnapshotChanged += (_, _) => snapshotChangedCount++;
+        controller.ClearSearch();
+
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.Equal(normalDescriptor!.PageId, controller.Current.Descriptor!.PageId);
+        Assert.Equal(normalDescriptor.Rows.Count, controller.Current.Descriptor.Rows.Count);
+        Assert.NotEqual("__search__", controller.Current.Descriptor.PageId);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+        Assert.Equal(0, controller.Current.SearchResultCount);
+        Assert.True(snapshotChangedCount > 0);
+    }
+
+    [Fact]
+    public async Task EmptySearchQueryRestoresNormalDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var normalDescriptor = controller.Current.Descriptor;
+        controller.ApplySearchQuery("Temperature");
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+
+        controller.ApplySearchQuery("   ");
+
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.Equal(normalDescriptor!.PageId, controller.Current.Descriptor!.PageId);
+        Assert.Equal(normalDescriptor.Rows.Count, controller.Current.Descriptor.Rows.Count);
+        Assert.NotEqual("__search__", controller.Current.Descriptor.PageId);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+        Assert.Equal(0, controller.Current.SearchResultCount);
+    }
+
+    [Fact]
+    public async Task NavigationClearsActiveSearch()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Kitchen");
+        Assert.True(controller.Current.IsSearchActive);
+
+        var navigated = await controller.NavigateToChildAsync(0);
+        Assert.True(navigated);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+        Assert.Equal(0, controller.Current.SearchResultCount);
+
+        controller.ApplySearchQuery("Temperature");
+        Assert.True(controller.Current.IsSearchActive);
+
+        var navigatedBack = controller.NavigateBack();
+        Assert.True(navigatedBack);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+
+        controller.ApplySearchQuery("Kitchen");
+        var jumped = controller.NavigateToBreadcrumb(0);
+        Assert.True(jumped);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+    }
+
+    [Fact]
+    public async Task RefreshWhileSearchActiveKeepsQueryAndRecomputesDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        localClient.EnqueueSitemapJson(HomepageJson("ON"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Living Room Light");
+        var searchDescriptorBeforeRefresh = controller.Current.Descriptor;
+
+        await controller.RefreshAsync();
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Living Room Light", controller.Current.SearchQuery);
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+        Assert.NotEqual(searchDescriptorBeforeRefresh, controller.Current.Descriptor);
+        Assert.Equal("ON", controller.Current.Descriptor.Rows[1].State);
+    }
+
+    [Fact]
     public void ChangedRowsIncludeSearchMetadataChanges()
     {
         var oldDescriptor = new SitemapRenderDescriptor(

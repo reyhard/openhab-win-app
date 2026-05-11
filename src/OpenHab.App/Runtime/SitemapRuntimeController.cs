@@ -37,6 +37,8 @@ public sealed class SitemapRuntimeController
     private string? _sitemapEventStreamSitemapName;
     private string? _sitemapEventStreamPageId;
     private long _sitemapEventStreamAttempt;
+    private string _activeSearchQuery = string.Empty;
+    private IReadOnlyDictionary<string, SitemapSearchSource> _activeSearchSources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
     private static readonly TimeSpan WidgetEventReconcileDebounce = TimeSpan.FromMilliseconds(250);
     public bool CanGoBack => backStack.Count > 0;
 
@@ -71,6 +73,27 @@ public sealed class SitemapRuntimeController
         await RefreshAsyncInternal("manual", cancellationToken);
     }
 
+    public void ApplySearchQuery(string? query)
+    {
+        var descriptor = BuildDescriptorForQuery(query, out var normalizedQuery, out var resultCount, out var sources);
+        _activeSearchQuery = normalizedQuery;
+        _activeSearchSources = sources;
+        Current = Current with
+        {
+            Descriptor = descriptor,
+            IsSearchActive = normalizedQuery.Length > 0,
+            SearchQuery = normalizedQuery,
+            SearchResultCount = resultCount,
+            ChangedRowIndices = []
+        };
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ClearSearch()
+    {
+        ApplySearchQuery(null);
+    }
+
     private async Task RefreshAsyncInternal(string reason, CancellationToken cancellationToken = default)
     {
         var refreshId = Interlocked.Increment(ref _refreshSequence);
@@ -99,19 +122,23 @@ public sealed class SitemapRuntimeController
         try
         {
             var descriptor = await LoadDescriptorAsync(primary, settings.SitemapName, cancellationToken, previousPageId);
-            var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, descriptor);
             DiagnosticLogger.Info(
                 $"Refresh#{refreshId} primary success transport={primary.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
+            var effectiveDescriptor = BuildEffectiveDescriptor(descriptor);
+            var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, effectiveDescriptor);
             Current = Current with
             {
-                Descriptor = descriptor,
+                Descriptor = effectiveDescriptor,
                 ActiveTransport = primary.Kind,
                 ConnectionState = ConnectionState.Online,
                 Breadcrumbs = BuildBreadcrumbTrail(),
                 StatusText = $"Connected via {primary.Kind.ToString().ToLowerInvariant()}.",
                 IsBusy = false,
                 HasError = false,
-                ChangedRowIndices = changedRowIndices
+                ChangedRowIndices = changedRowIndices,
+                IsSearchActive = _activeSearchQuery.Length > 0,
+                SearchQuery = _activeSearchQuery,
+                SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
             };
 
             // Live updates via sitemap events only.
@@ -129,19 +156,23 @@ public sealed class SitemapRuntimeController
             try
             {
                 var descriptor = await LoadDescriptorAsync(fallback, settings.SitemapName, cancellationToken, previousPageId);
-                var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, descriptor);
                 DiagnosticLogger.Info(
                     $"Refresh#{refreshId} fallback success transport={fallback.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
+                var effectiveDescriptor = BuildEffectiveDescriptor(descriptor);
+                var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, effectiveDescriptor);
                 Current = Current with
                 {
-                    Descriptor = descriptor,
+                    Descriptor = effectiveDescriptor,
                     ActiveTransport = fallback.Kind,
                     ConnectionState = ConnectionState.Online,
                     Breadcrumbs = BuildBreadcrumbTrail(),
                     StatusText = "Connected via cloud (local failed).",
                     IsBusy = false,
                     HasError = false,
-                    ChangedRowIndices = changedRowIndices
+                    ChangedRowIndices = changedRowIndices,
+                    IsSearchActive = _activeSearchQuery.Length > 0,
+                    SearchQuery = _activeSearchQuery,
+                    SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
                 };
 
                 _ = StartSitemapEventStreamAsync(fallback.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
@@ -215,12 +246,16 @@ public sealed class SitemapRuntimeController
         BuildItemIndexMap();
 
         var descriptor = renderController.BuildCurrentDescriptor(normalized);
+        ClearSearchState();
         Current = Current with
         {
             Descriptor = descriptor,
             Breadcrumbs = BuildBreadcrumbTrail(),
             StatusText = $"Navigated to: {normalized.Label}",
-            ChangedRowIndices = []
+            ChangedRowIndices = [],
+            IsSearchActive = false,
+            SearchQuery = string.Empty,
+            SearchResultCount = 0
         };
 
         ReconnectForPage(normalized.Id);
@@ -233,12 +268,16 @@ public sealed class SitemapRuntimeController
         currentPage = backStack.Pop();
         BuildItemIndexMap();
         var descriptor = renderController.BuildCurrentDescriptor(currentPage);
+        ClearSearchState();
         Current = Current with
         {
             Descriptor = descriptor,
             Breadcrumbs = BuildBreadcrumbTrail(),
             StatusText = currentPage.Label,
-            ChangedRowIndices = []
+            ChangedRowIndices = [],
+            IsSearchActive = false,
+            SearchQuery = string.Empty,
+            SearchResultCount = 0
         };
         ReconnectForPage(currentPage.Id);
         return true;
@@ -263,6 +302,22 @@ public sealed class SitemapRuntimeController
 
         if (breadcrumbIndex == trail.Count - 1)
         {
+            if (_activeSearchQuery.Length > 0 && currentPage is not null)
+            {
+                var currentDescriptor = renderController.BuildCurrentDescriptor(currentPage);
+                ClearSearchState();
+                Current = Current with
+                {
+                    Descriptor = currentDescriptor,
+                    Breadcrumbs = BuildBreadcrumbTrail(),
+                    StatusText = currentPage.Label,
+                    ChangedRowIndices = [],
+                    IsSearchActive = false,
+                    SearchQuery = string.Empty,
+                    SearchResultCount = 0
+                };
+            }
+
             return true;
         }
 
@@ -275,12 +330,16 @@ public sealed class SitemapRuntimeController
 
         BuildItemIndexMap();
         var descriptor = renderController.BuildCurrentDescriptor(currentPage);
+        ClearSearchState();
         Current = Current with
         {
             Descriptor = descriptor,
             Breadcrumbs = BuildBreadcrumbTrail(),
             StatusText = currentPage.Label,
-            ChangedRowIndices = []
+            ChangedRowIndices = [],
+            IsSearchActive = false,
+            SearchQuery = string.Empty,
+            SearchResultCount = 0
         };
         ReconnectForPage(currentPage.Id);
         return true;
@@ -755,7 +814,8 @@ public sealed class SitemapRuntimeController
 
         var normalized = SitemapNormalizer.Normalize(targetPage);
         var descriptor = renderController.BuildCurrentDescriptor(normalized);
-        var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, descriptor);
+        var effectiveDescriptor = BuildEffectiveDescriptor(descriptor);
+        var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, effectiveDescriptor);
         var previousPageId = currentPage?.Id;
 
         currentPage = normalized;
@@ -770,9 +830,12 @@ public sealed class SitemapRuntimeController
         {
             Current = Current with
             {
-                Descriptor = descriptor,
+                Descriptor = effectiveDescriptor,
                 Breadcrumbs = breadcrumbs,
-                ChangedRowIndices = changedRowIndices
+                ChangedRowIndices = changedRowIndices,
+                IsSearchActive = _activeSearchQuery.Length > 0,
+                SearchQuery = _activeSearchQuery,
+                SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
             };
         }
 
@@ -967,7 +1030,10 @@ public sealed class SitemapRuntimeController
             HasError = false,
             ConnectionState = ConnectionState.Unknown,
             Breadcrumbs = [],
-            ChangedRowIndices = []
+            ChangedRowIndices = [],
+            IsSearchActive = false,
+            SearchQuery = string.Empty,
+            SearchResultCount = 0
         };
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -981,5 +1047,52 @@ public sealed class SitemapRuntimeController
         }
 
         return trail;
+    }
+
+    private void ClearSearchState()
+    {
+        _activeSearchQuery = string.Empty;
+        _activeSearchSources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
+    }
+
+    private SitemapRenderDescriptor? BuildDescriptorForQuery(
+        string? query,
+        out string normalizedQuery,
+        out int resultCount,
+        out IReadOnlyDictionary<string, SitemapSearchSource> sources)
+    {
+        normalizedQuery = (query ?? string.Empty).Trim();
+        resultCount = 0;
+        sources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
+
+        if (currentPage is null)
+        {
+            normalizedQuery = string.Empty;
+            return null;
+        }
+
+        var normalDescriptor = renderController.BuildCurrentDescriptor(currentPage);
+        if (normalizedQuery.Length == 0)
+        {
+            return normalDescriptor;
+        }
+
+        var search = SitemapSearchDescriptorBuilder.Build(currentPage, normalDescriptor, normalizedQuery, renderController);
+        resultCount = search.ResultCount;
+        sources = new Dictionary<string, SitemapSearchSource>(search.SourcesByResultKey, StringComparer.Ordinal);
+        return search.Descriptor;
+    }
+
+    private SitemapRenderDescriptor BuildEffectiveDescriptor(SitemapRenderDescriptor normalDescriptor)
+    {
+        if (_activeSearchQuery.Length == 0 || currentPage is null)
+        {
+            return normalDescriptor;
+        }
+
+        var search = SitemapSearchDescriptorBuilder.Build(currentPage, normalDescriptor, _activeSearchQuery, renderController);
+        _activeSearchQuery = search.Query;
+        _activeSearchSources = new Dictionary<string, SitemapSearchSource>(search.SourcesByResultKey, StringComparer.Ordinal);
+        return search.Descriptor;
     }
 }
