@@ -9,26 +9,21 @@ namespace OpenHab.App.Tests;
 
 public sealed class AppSettingsControllerTests
 {
-    private static readonly string SettingsFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "OpenHab.WinApp",
+    private readonly string settingsFilePath = Path.Combine(
+        Path.GetTempPath(),
+        "OpenHab.App.Tests",
+        Guid.NewGuid().ToString("N"),
         "settings.json");
 
-    public AppSettingsControllerTests()
+    private AppSettingsController CreateController(ICredentialStore? credentialStore = null)
     {
-        // Retry deletion — fire-and-forget SaveAsync from a previous test may still be writing.
-        for (int i = 0; i < 5; i++)
-        {
-            try { File.Delete(SettingsFilePath); } catch { }
-            if (!File.Exists(SettingsFilePath)) break;
-            Thread.Sleep(10);
-        }
+        return new AppSettingsController(credentialStore, settingsFilePath);
     }
 
     [Fact]
     public void DefaultsUseWindows11SkinAndAutomaticEndpointMode()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         Assert.Equal(SitemapSkinKind.Windows11, controller.Current.Skin);
         Assert.Equal(EndpointMode.Automatic, controller.Current.EndpointMode);
@@ -46,7 +41,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void CanChangeSkinAndEndpointMode()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         controller.SetSkin(SitemapSkinKind.Basic);
         controller.SetEndpointMode(EndpointMode.CloudOnly);
@@ -58,7 +53,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void CanChangeSitemapName()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         controller.SetSitemapName("home");
 
@@ -66,9 +61,45 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public async Task FlushAsyncPersistsLatestQueuedSetting()
+    {
+        var controller = CreateController();
+
+        controller.SetSitemapName("first");
+        controller.SetSitemapName("second");
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        Assert.Equal("second", reloaded.Current.SitemapName);
+    }
+
+    [Fact]
+    public async Task FlushAsyncWaitsForSavesQueuedByPriorControllerInstances()
+    {
+        var first = CreateController();
+
+        first.SetSitemapName("from-prior-controller");
+        var second = CreateController();
+        await second.FlushAsync();
+
+        var reloaded = CreateController();
+        Assert.Equal("from-prior-controller", reloaded.Current.SitemapName);
+    }
+
+    [Fact]
+    public async Task FlushAsyncCompletesWhenNoSaveIsQueued()
+    {
+        var controller = CreateController();
+
+        await controller.FlushAsync();
+
+        Assert.NotNull(controller.Current);
+    }
+
+    [Fact]
     public void CanChangeFlyoutWidth()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         controller.SetFlyoutWidth(420);
 
@@ -78,7 +109,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void SetFlyoutWidthRejectsOutOfRangeValues()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetFlyoutWidth(200));
         Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetFlyoutWidth(1200));
@@ -89,7 +120,7 @@ public sealed class AppSettingsControllerTests
     [InlineData("  ")]
     public void SetSitemapNameClearsSelectionForBlankInput(string sitemapName)
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
         controller.SetSitemapName("home");
 
         controller.SetSitemapName(sitemapName);
@@ -100,7 +131,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void SetSitemapNameRejectsInvalidCharacters()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = Assert.Throws<ArgumentException>(() => controller.SetSitemapName("home/main"));
 
@@ -110,7 +141,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void RejectsRelativeEndpointUris()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = Assert.Throws<ArgumentException>(() =>
             controller.SetEndpoints(new Uri("/rest", UriKind.Relative), new Uri("https://myopenhab.org")));
@@ -121,7 +152,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void SetEndpointsThrowsWhenLocalEndpointIsNull()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = Assert.Throws<ArgumentNullException>(() =>
             controller.SetEndpoints(null!, new Uri("https://myopenhab.org")));
@@ -132,7 +163,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void SetEndpointsThrowsWhenCloudEndpointIsNull()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = Assert.Throws<ArgumentNullException>(() =>
             controller.SetEndpoints(new Uri("http://openhab:8080"), null!));
@@ -143,7 +174,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void SetEndpointsRejectsNonHttpAbsoluteUris()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = Assert.Throws<ArgumentException>(() =>
             controller.SetEndpoints(new Uri("ftp://openhab.local:21"), new Uri("https://myopenhab.org")));
@@ -154,7 +185,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void SetEndpointsRejectsNonHttpAbsoluteCloudUri()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = Assert.Throws<ArgumentException>(() =>
             controller.SetEndpoints(new Uri("http://openhab:8080"), new Uri("ftp://myopenhab.org")));
@@ -165,7 +196,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void DefaultsHaveNoTokensOrCloudCredentials()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
@@ -179,7 +210,7 @@ public sealed class AppSettingsControllerTests
         await store.StoreAsync("OpenHabAuth", "local-token", "local", CancellationToken.None);
         await store.StoreAsync("OpenHabAuth", "cloud-username", "cloud-user", CancellationToken.None);
         await store.StoreAsync("OpenHabAuth", "cloud-password", "cloud-password", CancellationToken.None);
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
@@ -196,7 +227,7 @@ public sealed class AppSettingsControllerTests
     public async Task SetAndClearLocalApiToken()
     {
         var store = new FakeCredentialStore();
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         await controller.SetApiTokenAsync(TransportKind.Local, "my-local-token");
 
@@ -217,7 +248,7 @@ public sealed class AppSettingsControllerTests
     public async Task SetGetAndClearCloudCredentials()
     {
         var store = new FakeCredentialStore();
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         await controller.SetCloudCredentialsAsync("my-cloud-user", "my-cloud-password");
 
@@ -248,7 +279,7 @@ public sealed class AppSettingsControllerTests
     public async Task SetApiTokenRejectsBlankToken(string token)
     {
         var store = new FakeCredentialStore();
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(
             () => controller.SetApiTokenAsync(TransportKind.Local, token));
@@ -261,7 +292,7 @@ public sealed class AppSettingsControllerTests
     {
         var store = new FakeCredentialStore();
         await store.StoreAsync("OpenHabAuth", "local-token", "pre-seeded-token", CancellationToken.None);
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         var result = await controller.GetApiTokenAsync(TransportKind.Local);
 
@@ -272,7 +303,7 @@ public sealed class AppSettingsControllerTests
     public async Task GetApiTokenAsyncReturnsNullWhenNotStored()
     {
         var store = new FakeCredentialStore();
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         var result = await controller.GetApiTokenAsync(TransportKind.Local);
 
@@ -282,7 +313,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public async Task SetApiTokenAsyncThrowsWhenNoStore()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => controller.SetApiTokenAsync(TransportKind.Local, "token"));
@@ -293,7 +324,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public async Task ClearApiTokenAsyncThrowsWhenNoStore()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => controller.ClearApiTokenAsync(TransportKind.Local));
@@ -304,7 +335,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public async Task GetApiTokenAsyncThrowsWhenNoStore()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => controller.GetApiTokenAsync(TransportKind.Local));
@@ -316,7 +347,7 @@ public sealed class AppSettingsControllerTests
     public async Task CloudTransportRejectsApiTokenOperations()
     {
         var store = new FakeCredentialStore();
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         var setException = await Assert.ThrowsAsync<ArgumentException>(
             () => controller.SetApiTokenAsync(TransportKind.Cloud, "token"));
@@ -334,7 +365,7 @@ public sealed class AppSettingsControllerTests
     public async Task GetCloudCredentialsAsyncReturnsNullWhenNotStored()
     {
         var store = new FakeCredentialStore();
-        var controller = new AppSettingsController(store);
+        var controller = CreateController(store);
 
         var result = await controller.GetCloudCredentialsAsync();
 
@@ -344,7 +375,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public async Task CloudCredentialMethodsThrowWhenNoStore()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         var setException = await Assert.ThrowsAsync<InvalidOperationException>(
             () => controller.SetCloudCredentialsAsync("user", "password"));
@@ -361,14 +392,14 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void AnimationSpeed_DefaultsToDefault()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
         Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
     }
 
     [Fact]
     public void GetFlyoutAnimationDurationMs_ReturnsCorrectDurations()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
         Assert.Equal(300, controller.GetFlyoutAnimationDurationMs()); // Default = 300ms
 
         controller.SetAnimationSpeed(FlyoutAnimationSpeed.Off);
@@ -387,7 +418,7 @@ public sealed class AppSettingsControllerTests
     [Fact]
     public void CanSetChartQuality()
     {
-        var controller = new AppSettingsController();
+        var controller = CreateController();
 
         Assert.Equal(ChartQuality.High, controller.Current.ChartQuality);
 

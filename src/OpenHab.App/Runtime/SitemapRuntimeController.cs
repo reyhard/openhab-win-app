@@ -36,6 +36,7 @@ public sealed class SitemapRuntimeController
     private bool _sitemapEventStreamStarted;
     private string? _sitemapEventStreamSitemapName;
     private string? _sitemapEventStreamPageId;
+    private long _sitemapEventStreamAttempt;
     private static readonly TimeSpan WidgetEventReconcileDebounce = TimeSpan.FromMilliseconds(250);
     public bool CanGoBack => backStack.Count > 0;
 
@@ -366,29 +367,103 @@ public sealed class SitemapRuntimeController
     {
         if (sitemapEventStreamClient is null) return;
 
-        // If already connected to the same sitemap/page, skip
         if (_sitemapEventStreamStarted && _sitemapEventStreamSitemapName == sitemapName && _sitemapEventStreamPageId == pageId)
+        {
             return;
+        }
 
         _sitemapEventStreamStarted = true;
         _sitemapEventStreamSitemapName = sitemapName;
         _sitemapEventStreamPageId = pageId;
+        var attempt = Interlocked.Increment(ref _sitemapEventStreamAttempt);
 
-        DiagnosticLogger.Info($"Starting sitemap event stream to {localBaseUri} for sitemap '{sitemapName}' page '{pageId}'");
-
-        EnsureSitemapEventHandlersAttached();
-
-        _subscriptionId = await sitemapEventStreamClient.SubscribeToSitemapEventsAsync(localBaseUri, ct);
-        if (_subscriptionId is null)
+        try
         {
-            DiagnosticLogger.Warn("Failed to subscribe to sitemap events — no subscription ID returned");
-            _sitemapEventStreamStarted = false;
+            DiagnosticLogger.Info($"Starting sitemap event stream to {localBaseUri} for sitemap '{sitemapName}' page '{pageId}'");
+
+            EnsureSitemapEventHandlersAttached();
+
+            var subscriptionId = await sitemapEventStreamClient.SubscribeToSitemapEventsAsync(localBaseUri, ct);
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event subscription for page '{pageId}'");
+                return;
+            }
+
+            if (subscriptionId is null)
+            {
+                DiagnosticLogger.Warn("Failed to subscribe to sitemap events — no subscription ID returned");
+                if (ResetSitemapEventStreamStart(attempt))
+                {
+                    DegradeSitemapEventStreamIfOnline();
+                }
+
+                return;
+            }
+
+            _subscriptionId = subscriptionId;
+            DiagnosticLogger.Info($"Sitemap event subscription created: {_subscriptionId}");
+            var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
+            await sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            ResetSitemapEventStreamStart(attempt);
+            throw;
+        }
+        catch (Exception error)
+        {
+            DiagnosticLogger.Warn($"Failed to start sitemap event stream: {error.Message}");
+            if (!ResetSitemapEventStreamStart(attempt))
+            {
+                return;
+            }
+
+            if (Current.ConnectionState == ConnectionState.Online)
+            {
+                DegradeSitemapEventStreamIfOnline();
+            }
+            else
+            {
+                Current = Current with { ChangedRowIndices = [] };
+            }
+        }
+    }
+
+    private bool ResetSitemapEventStreamStart(long attempt)
+    {
+        if (!IsCurrentSitemapEventStreamAttempt(attempt))
+        {
+            return false;
+        }
+
+        _sitemapEventStreamStarted = false;
+        _sitemapEventStreamSitemapName = null;
+        _sitemapEventStreamPageId = null;
+        _subscriptionId = null;
+        return true;
+    }
+
+    private bool IsCurrentSitemapEventStreamAttempt(long attempt)
+    {
+        return Interlocked.Read(ref _sitemapEventStreamAttempt) == attempt;
+    }
+
+    private void DegradeSitemapEventStreamIfOnline()
+    {
+        if (Current.ConnectionState != ConnectionState.Online)
+        {
+            Current = Current with { ChangedRowIndices = [] };
             return;
         }
 
-        DiagnosticLogger.Info($"Sitemap event subscription created: {_subscriptionId}");
-        var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
-        _ = sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
+        Current = Current with
+        {
+            ConnectionState = ConnectionState.Degraded,
+            StatusText = "Live updates unavailable. Refresh manually.",
+            ChangedRowIndices = []
+        };
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task ReconnectSitemapEventStreamAsync(Uri localBaseUri, string sitemapName, string pageId, CancellationToken ct = default)
