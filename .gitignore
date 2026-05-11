@@ -11,3 +11,10 @@ publish/
 /.dotnethome
 /.dotnethome/
 /.dotnet-home/
+
+# Local Windows packaging/signing artifacts
+*.pfx
+*.csproj.user
+*.pubxml.user
+**/AppPackages/
+**/BundleArtifacts/
