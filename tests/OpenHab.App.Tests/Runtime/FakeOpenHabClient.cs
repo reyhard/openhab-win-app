@@ -11,6 +11,7 @@ public sealed class FakeOpenHabClient : IOpenHabClient
     public List<string> RequestedSitemaps { get; } = new();
     public List<SitemapInfo> Sitemaps { get; set; } = new();
     public Exception? SetItemStateFailure { get; set; }
+    public Dictionary<string, Exception> SetItemStateFailuresByItem { get; } = new();
 
     public void EnqueueSitemapJson(string json)
     {
@@ -30,6 +31,11 @@ public sealed class FakeOpenHabClient : IOpenHabClient
 
     public Task SetItemStateAsync(string itemName, string state, CancellationToken cancellationToken)
     {
+        if (SetItemStateFailuresByItem.TryGetValue(itemName, out var perItemFailure))
+        {
+            return Task.FromException(perItemFailure);
+        }
+
         if (SetItemStateFailure is not null)
         {
             return Task.FromException(SetItemStateFailure);

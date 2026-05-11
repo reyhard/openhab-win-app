@@ -11,6 +11,7 @@ public sealed class DeviceInfoSyncService : IDisposable
     private readonly Func<IOpenHabClient?> getClient;
     private readonly IDeviceStateSnapshotSource snapshotSource;
     private readonly SemaphoreSlim syncGate = new(1, 1);
+    private readonly CancellationTokenSource serviceCancellation = new();
     private Timer? timer;
     private int isDisposed;
 
@@ -28,10 +29,15 @@ public sealed class DeviceInfoSyncService : IDisposable
 
     public void Start()
     {
+        if (Volatile.Read(ref isDisposed) != 0)
+        {
+            return;
+        }
+
         var settings = getSettings();
         timer?.Dispose();
         timer = new Timer(
-            _ => _ = TriggerSyncAsync(CancellationToken.None),
+            _ => _ = TriggerFromTimerAsync(),
             null,
             TimeSpan.FromSeconds(3),
             TimeSpan.FromMinutes(settings.SyncIntervalMinutes));
@@ -39,6 +45,11 @@ public sealed class DeviceInfoSyncService : IDisposable
 
     public void RefreshInterval()
     {
+        if (Volatile.Read(ref isDisposed) != 0)
+        {
+            return;
+        }
+
         if (timer is null)
         {
             return;
@@ -55,9 +66,20 @@ public sealed class DeviceInfoSyncService : IDisposable
             return;
         }
 
-        await syncGate.WaitAsync(cancellationToken);
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, serviceCancellation.Token);
+        var effectiveCancellation = linkedCancellation.Token;
+        var enteredGate = false;
+
         try
         {
+            await syncGate.WaitAsync(effectiveCancellation);
+            enteredGate = true;
+
+            if (Volatile.Read(ref isDisposed) != 0)
+            {
+                return;
+            }
+
             var attempted = DateTimeOffset.UtcNow;
             var settings = getSettings().Normalized();
             if (!settings.IsEnabled)
@@ -83,7 +105,7 @@ public sealed class DeviceInfoSyncService : IDisposable
                 return;
             }
 
-            var snapshot = await snapshotSource.CaptureAsync(cancellationToken);
+            var snapshot = await snapshotSource.CaptureAsync(effectiveCancellation);
             var updates = DeviceStateMapper.Map(snapshot, settings.ToMapping());
             if (updates.Count == 0)
             {
@@ -96,33 +118,73 @@ public sealed class DeviceInfoSyncService : IDisposable
                 return;
             }
 
+            var successfulUpdates = 0;
+            var failedUpdates = 0;
+            string? firstError = null;
+
             foreach (var update in updates)
             {
-                await client.SetItemStateAsync(update.ItemName, update.State, cancellationToken);
+                try
+                {
+                    await client.SetItemStateAsync(update.ItemName, update.State, effectiveCancellation);
+                    successfulUpdates++;
+                }
+                catch (OperationCanceledException) when (effectiveCancellation.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    failedUpdates++;
+                    firstError ??= $"{ex.GetType().Name}: {ex.Message}";
+                    DiagnosticLogger.Warn($"Device Info Sync item update failed ({update.ItemName}): {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            if (failedUpdates == 0)
+            {
+                CurrentStatus = new DeviceInfoSyncStatus(
+                    LastAttemptedSync: attempted,
+                    LastSuccessfulSync: DateTimeOffset.UtcNow,
+                    LastResult: updates.Count == 1 ? "1 Item updated" : $"{updates.Count} Items updated",
+                    LastError: null);
+                return;
             }
 
             CurrentStatus = new DeviceInfoSyncStatus(
                 LastAttemptedSync: attempted,
-                LastSuccessfulSync: DateTimeOffset.UtcNow,
-                LastResult: updates.Count == 1 ? "1 Item updated" : $"{updates.Count} Items updated",
-                LastError: null);
+                LastSuccessfulSync: successfulUpdates > 0 ? DateTimeOffset.UtcNow : CurrentStatus.LastSuccessfulSync,
+                LastResult: $"{updates.Count} Items attempted, {successfulUpdates} succeeded, {failedUpdates} failed",
+                LastError: firstError);
+        }
+        catch (OperationCanceledException) when (serviceCancellation.IsCancellationRequested)
+        {
+            return;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (ObjectDisposedException) when (Volatile.Read(ref isDisposed) != 0)
+        {
+            return;
         }
         catch (Exception ex)
         {
             CurrentStatus = CurrentStatus with
             {
                 LastAttemptedSync = DateTimeOffset.UtcNow,
+                LastResult = null,
                 LastError = $"{ex.GetType().Name}: {ex.Message}"
             };
             DiagnosticLogger.Warn($"Device Info Sync failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
-            syncGate.Release();
+            if (enteredGate)
+            {
+                syncGate.Release();
+            }
         }
     }
 
@@ -133,7 +195,19 @@ public sealed class DeviceInfoSyncService : IDisposable
             return;
         }
 
+        serviceCancellation.Cancel();
         timer?.Dispose();
-        syncGate.Dispose();
+        timer = null;
+    }
+
+    private async Task TriggerFromTimerAsync()
+    {
+        try
+        {
+            await TriggerSyncAsync(serviceCancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 }
