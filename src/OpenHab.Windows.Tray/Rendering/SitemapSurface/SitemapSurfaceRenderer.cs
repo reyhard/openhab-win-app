@@ -23,6 +23,12 @@ public sealed class SitemapSurfaceRenderer(
         bool UseWindowsIcons,
         SitemapControlFactory.IconAuthContext IconAuth,
         int ChartDpi);
+    private bool forceFullRebuild;
+
+    public void ForceFullRebuild()
+    {
+        forceFullRebuild = true;
+    }
 
     public void Refresh(StackPanel rowsPanel, SitemapRuntimeSnapshot snapshot)
     {
@@ -33,7 +39,13 @@ public sealed class SitemapSurfaceRenderer(
             return;
         }
 
-        if (snapshot.ChangedRowIndices is { Count: > 0 })
+        if (forceFullRebuild)
+        {
+            forceFullRebuild = false;
+            rowsPanel.Children.Clear();
+        }
+
+        if (snapshot.ChangedRowIndices is { Count: > 0 } && rowsPanel.Children.Count > 0)
         {
             RefreshChangedRows(rowsPanel, rows, snapshot);
             return;
