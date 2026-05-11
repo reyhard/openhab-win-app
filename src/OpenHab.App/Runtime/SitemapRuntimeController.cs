@@ -909,6 +909,9 @@ public sealed class SitemapRuntimeController
             a.Period != b.Period ||
             a.ItemName != b.ItemName ||
             a.WidgetId != b.WidgetId ||
+            a.SearchResultKey != b.SearchResultKey ||
+            a.SourcePageId != b.SourcePageId ||
+            a.SourceWidgetId != b.SourceWidgetId ||
             a.InputHint != b.InputHint ||
             a.GridRow != b.GridRow ||
             a.GridColumn != b.GridColumn)

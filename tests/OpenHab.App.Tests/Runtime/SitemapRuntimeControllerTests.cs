@@ -4,7 +4,9 @@ using OpenHab.App.Sitemaps;
 using OpenHab.Core.Api;
 using OpenHab.Core.Events;
 using OpenHab.Core.Profiles;
+using OpenHab.Rendering.Descriptors;
 using System.IO;
+using System.Reflection;
 
 namespace OpenHab.App.Tests.Runtime;
 
@@ -193,6 +195,43 @@ public sealed class SitemapRuntimeControllerTests
         Assert.True(jumped);
         Assert.Equal(["Home"], controller.Current.Breadcrumbs);
         Assert.False(controller.CanGoBack);
+    }
+
+    [Fact]
+    public void ChangedRowsIncludeSearchMetadataChanges()
+    {
+        var oldDescriptor = new SitemapRenderDescriptor(
+            SitemapSkinKind.Windows11,
+            "search",
+            "Search results",
+            [
+                new SitemapRowDescriptor(
+                    "Lampka nocna",
+                    "OFF",
+                    RenderControlKind.Toggle,
+                    RenderActionKind.SendCommand,
+                    RenderDensity.Comfortable,
+                    [],
+                    SearchResultKey: "search:widget:old",
+                    SourcePageId: "home",
+                    SourceWidgetId: "old")
+            ]);
+        var newDescriptor = oldDescriptor with
+        {
+            Rows =
+            [
+                oldDescriptor.Rows[0] with
+                {
+                    SearchResultKey = "search:widget:new",
+                    SourcePageId = "lights",
+                    SourceWidgetId = "new"
+                }
+            ]
+        };
+
+        var changed = InvokeComputeChangedRowIndices(oldDescriptor, newDescriptor);
+
+        Assert.Equal([0], changed);
     }
 
     private static SitemapRuntimeController CreateRuntimeController(
@@ -546,6 +585,18 @@ public sealed class SitemapRuntimeControllerTests
         }
 
         Assert.True(condition());
+    }
+
+    private static IReadOnlyList<int> InvokeComputeChangedRowIndices(
+        SitemapRenderDescriptor? oldDescriptor,
+        SitemapRenderDescriptor newDescriptor)
+    {
+        var method = typeof(SitemapRuntimeController).GetMethod(
+            "ComputeChangedRowIndices",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        return (IReadOnlyList<int>)method.Invoke(null, [oldDescriptor, newDescriptor])!;
     }
 }
 
