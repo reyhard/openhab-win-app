@@ -16,6 +16,8 @@ public sealed class SitemapSurfaceRenderer(
     Func<int, string, Task> sendCommandByRowIndex)
 {
     private sealed record RenderedRowTag(int RowIndex, string RowKey, string VisualStateKey);
+    private sealed record ExistingRenderedRow(FrameworkElement Element, int ChildIndex);
+    private sealed record PendingRowUpdate(FrameworkElement Element, int RowIndex, SitemapRowDescriptor Row);
     private sealed record RenderContext(
         Uri? IconBaseUri,
         bool UseWindowsIcons,
@@ -37,11 +39,17 @@ public sealed class SitemapSurfaceRenderer(
             return;
         }
 
-        var visualRows = SitemapRowPlanner.BuildVisualRows(rows);
         var context = CreateRenderContext(snapshot);
+        var visualRows = SitemapRowPlanner.BuildVisualRows(rows);
         if (rowsPanel.Children.Count == visualRows.Count)
         {
             RefreshExistingRows(rowsPanel, visualRows, snapshot, context);
+            return;
+        }
+
+        if (rowsPanel.Children.Count > 0)
+        {
+            ReconcileStructuralRows(rowsPanel, visualRows, snapshot, context);
             return;
         }
 
@@ -77,9 +85,7 @@ public sealed class SitemapSurfaceRenderer(
                 continue;
             }
 
-            SitemapControlFactory.UpdateState(existing, visualRow.Row);
-            SitemapControlFactory.SetVisibility(existing, visualRow.Row.IsVisible);
-            SetRenderedRowTag(existing, visualRow.RowIndex, visualRow.Row);
+            ApplyPartialRowUpdate(existing, visualRow.Row, visualRow.RowIndex);
         }
     }
 
@@ -109,9 +115,93 @@ public sealed class SitemapSurfaceRenderer(
                 continue;
             }
 
-            SitemapControlFactory.UpdateState(existing, row);
-            SitemapControlFactory.SetVisibility(existing, row.IsVisible);
-            SetRenderedRowTag(existing, index, row);
+            ApplyPartialRowUpdate(existing, row, index);
+        }
+    }
+
+    private void ReconcileStructuralRows(
+        StackPanel rowsPanel,
+        IReadOnlyList<SitemapVisualRow> visualRows,
+        SitemapRuntimeSnapshot snapshot,
+        RenderContext context)
+    {
+        var existingByKey = new Dictionary<string, Queue<ExistingRenderedRow>>(StringComparer.Ordinal);
+        for (var childIndex = 0; childIndex < rowsPanel.Children.Count; childIndex++)
+        {
+            if (rowsPanel.Children[childIndex] is not FrameworkElement child
+                || child.Tag is not RenderedRowTag tag)
+            {
+                continue;
+            }
+
+            if (!existingByKey.TryGetValue(tag.RowKey, out var bucket))
+            {
+                bucket = new Queue<ExistingRenderedRow>();
+                existingByKey[tag.RowKey] = bucket;
+            }
+
+            bucket.Enqueue(new ExistingRenderedRow(child, childIndex));
+        }
+
+        var orderedRows = new List<FrameworkElement>();
+        var pendingUpdates = new List<PendingRowUpdate>();
+        rowsPanel.Children.Clear();
+
+        foreach (var visualRow in visualRows)
+        {
+            var row = visualRow.Row;
+            var rowKey = SitemapControlFactory.BuildRowIdentityKey(row);
+            if (existingByKey.TryGetValue(rowKey, out var bucket) && bucket.Count > 0)
+            {
+                var existing = bucket.Dequeue().Element;
+                if (row.Control == RenderControlKind.ButtonGrid || ShouldRebuild(existing, row, visualRow.RowIndex))
+                {
+                    existing = CreateRowElement(visualRow.RowIndex, row, snapshot, context);
+                    SitemapControlFactory.SetVisibility(existing, row.IsVisible);
+                }
+                else
+                {
+                    pendingUpdates.Add(new PendingRowUpdate(existing, visualRow.RowIndex, row));
+                }
+
+                orderedRows.Add(existing);
+                continue;
+            }
+
+            var inserted = CreateRowElement(visualRow.RowIndex, row, snapshot, context);
+            SitemapControlFactory.SetVisibility(inserted, visible: false);
+            if (row.IsVisible)
+            {
+                pendingUpdates.Add(new PendingRowUpdate(inserted, visualRow.RowIndex, row));
+            }
+
+            orderedRows.Add(inserted);
+        }
+
+        var disappearing = existingByKey.Values
+            .SelectMany(bucket => bucket)
+            .OrderBy(item => item.ChildIndex)
+            .ToList();
+
+        foreach (var item in disappearing)
+        {
+            var insertIndex = Math.Min(item.ChildIndex, orderedRows.Count);
+            orderedRows.Insert(insertIndex, item.Element);
+        }
+
+        foreach (var element in orderedRows)
+        {
+            rowsPanel.Children.Add(element);
+        }
+
+        foreach (var update in pendingUpdates)
+        {
+            ApplyPartialRowUpdate(update.Element, update.Row, update.RowIndex);
+        }
+
+        foreach (var item in disappearing)
+        {
+            SitemapControlFactory.CollapseAndRemove(rowsPanel, item.Element);
         }
     }
 
@@ -213,6 +303,12 @@ public sealed class SitemapSurfaceRenderer(
             rowIndex,
             SitemapControlFactory.BuildRowIdentityKey(row),
             SitemapControlFactory.BuildRowVisualStateKey(row, rowIndex));
+    }
+
+    private static void ApplyPartialRowUpdate(FrameworkElement element, SitemapRowDescriptor row, int rowIndex)
+    {
+        SitemapControlFactory.UpdateState(element, row);
+        SetRenderedRowTag(element, rowIndex, row);
     }
 
     private static bool ShouldRebuild(FrameworkElement element, SitemapRowDescriptor row, int rowIndex)
