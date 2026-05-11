@@ -64,7 +64,7 @@ Pending completion after audit findings are collected and ranked. Task 1 establi
 
 ## Findings
 
-Findings will be ordered by priority: maintainability first, reliability/correctness second, runtime efficiency third. Security/privacy findings will be escalated when severity warrants it.
+Findings are ordered by priority within each completed audit task. Security/privacy findings are escalated when severity warrants it.
 
 ### Task 2 Maintainability Evidence Notes
 
@@ -132,6 +132,86 @@ Relevant observations from inspecting surrounding code:
 - **Affected files/layers:** `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs` (`OpenHab.Windows.Tray`), `src\OpenHab.Windows.Tray\MainWindow.xaml.cs` (`OpenHab.Windows.Tray`), and `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs` (`OpenHab.Windows.Tray`).
 - **Verification needed:** Add resolver tests for local token auth, cloud username/password auth, missing credential fallback, and exception-to-null behavior before deleting the duplicated methods.
 
+### R1: Fire-and-forget sitemap event stream lifecycle can lose start and connect failures
+
+- **Severity:** Medium
+- **Priority:** Reliability
+- **Evidence:** `src\OpenHab.App\Runtime\SitemapRuntimeController.cs` discards `StartSitemapEventStreamAsync` from `RefreshAsyncInternal` after primary and fallback loads, and `ReconnectForPage` discards it with `CancellationToken.None`. `StartSitemapEventStreamAsync` sets `_sitemapEventStreamStarted` before awaiting `SubscribeToSitemapEventsAsync`, then discards `sitemapEventStreamClient.ConnectAsync`. `src\OpenHab.Core\Events\OpenHabEventStreamClient.cs` implements `ConnectAsync` by starting `ReadLoopAsync` with `Task.Run` and returning `Task.CompletedTask`.
+- **Impact:** Live sitemap updates can fail after a successful page load without a caller observing the failure. A subscription failure can also leave `_sitemapEventStreamStarted` set before the connection is actually usable, making a later same-page start eligible for the "already started" skip path. The user-facing symptom is stale sitemap state until manual refresh or navigation.
+- **Suggested direction:** Track the event-stream start/connect task inside `SitemapRuntimeController`, reset stream-start state if subscription fails, and expose a deterministic state transition when connect fails or is canceled. Keep reconnect retry behavior in `OpenHabEventStreamClient`, but make the first subscription/start outcome observable to the runtime controller.
+- **Affected files/layers:** `src\OpenHab.App\Runtime\SitemapRuntimeController.cs` (`OpenHab.App`), `src\OpenHab.Core\Events\OpenHabEventStreamClient.cs` (`OpenHab.Core`), and `tests\OpenHab.App.Tests\Runtime\SitemapRuntimeControllerTests.cs` / `tests\OpenHab.Core.Tests\Events\OpenHabEventStreamClientTests.cs` (tests).
+- **Verification needed:** Add tests where `SubscribeToSitemapEventsAsync` throws, where `ConnectAsync` fails or is canceled, where same-page retry is attempted after failure, and where `RefreshAsync` does not report online live updates unless the stream start outcome is known.
+
+### R2: Fire-and-forget settings persistence hides failed saves and can race callers
+
+- **Severity:** Medium
+- **Priority:** Reliability
+- **Evidence:** `src\OpenHab.App\Settings\AppSettingsController.cs` calls `_ = SaveAsync()` from settings mutators such as `SetSkin`, `SetEndpoints`, `SetSitemapName`, `SetNotificationPollInterval`, `SetApiTokenAsync`, and `SetCloudCredentialsAsync`. `SaveAsync` catches all exceptions and silently discards them. `tests\OpenHab.App.Tests\AppSettingsControllerTests.cs`, `tests\OpenHab.App.Tests\Runtime\SitemapRuntimeControllerTests.cs`, and `tests\OpenHab.App.Tests\SitemapRenderControllerTests.cs` include constructor retry loops with the comment "fire-and-forget SaveAsync from a previous test may still be writing."
+- **Impact:** A settings change can update in-memory state while persistence fails or is still in flight, so the app can appear configured but revert after restart. The test retry loops show the asynchronous write can outlive the operation that triggered it, creating observable file-system races.
+- **Suggested direction:** Make persistence completion observable for callers that need durability, at least by returning or exposing a save task from mutators or by queueing serialized writes with a flush method for tests and shutdown. Log save failures without including sensitive settings values.
+- **Affected files/layers:** `src\OpenHab.App\Settings\AppSettingsController.cs` (`OpenHab.App`) and related settings/runtime/render tests under `tests\OpenHab.App.Tests`.
+- **Verification needed:** Add tests for ordered consecutive settings writes, simulated write failure reporting, and a flush/shutdown path that guarantees `settings.json` is stable before test cleanup or app exit.
+
+### R3: Dispatcher enqueue failure drops UI refresh work without replay
+
+- **Severity:** Low
+- **Priority:** Reliability
+- **Evidence:** `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs` handles `SnapshotChanged` and notification changes by calling `DispatcherQueue.TryEnqueue`; when it returns false, the code only logs warnings such as "UI update lost" or "badge update lost." `src\OpenHab.Windows.Tray\MainWindow.xaml.cs` uses the same pattern for notification-list and sitemap snapshot refreshes.
+- **Impact:** If the dispatcher rejects enqueue during shutdown, startup race, or window lifetime transitions, the runtime snapshot can advance while the visible UI remains stale. Main window has transition-specific pending refresh handling, but neither window records a retry when `TryEnqueue` itself fails.
+- **Suggested direction:** Treat enqueue failure as a pending refresh on the owning window or route snapshot refresh through a small dispatcher adapter that can record and drain missed updates when the window is active again.
+- **Affected files/layers:** `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs` (`OpenHab.Windows.Tray`) and `src\OpenHab.Windows.Tray\MainWindow.xaml.cs` (`OpenHab.Windows.Tray`).
+- **Verification needed:** Add a dispatcher-adapter test or window harness that simulates rejected enqueue, then verifies the next successful dispatcher cycle refreshes sitemap rows and notification indicators exactly once.
+
+### S1: Tracked temporary signing certificates and user publish metadata need release hygiene review
+
+- **Severity:** High
+- **Priority:** Security/Privacy
+- **Evidence:** `git ls-files 'src/**.user' 'src/**.pfx' 'src/**/AppPackages/**' 'src/**/BundleArtifacts/**'` reports tracked files `src/OpenHab.Windows.Package/OpenHab.Windows.Package_TemporaryKey.pfx`, `src/OpenHab.Windows.Tray/OpenHab_TemporaryKey.pfx`, `src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj.user`, `src/OpenHab.Windows.Tray/Properties/PublishProfiles/ClickOnceProfile.pubxml.user`, and `src/OpenHab.Windows.Tray/Properties/PublishProfiles/FolderProfile.pubxml.user`. `src\OpenHab.Windows.Package\OpenHab.Windows.Package.wapproj` enables app package signing and points `PackageCertificateKeyFile` at `OpenHab.Windows.Package_TemporaryKey.pfx`.
+- **Impact:** This is repository hygiene and release-blocking until reviewed. If the `.pfx` files contain usable private keys, anyone with repository access can sign packages with those temporary identities. The `.user` files also capture local publish/debug metadata and should not be treated as intentional project configuration without an explicit decision.
+- **Suggested direction:** Move signing material out of source control, rotate any certificate that may have been shared, add ignore rules for generated signing/user publish files, and document the supported local developer signing flow versus release signing flow.
+- **Affected files/layers:** `src/OpenHab.Windows.Package/OpenHab.Windows.Package_TemporaryKey.pfx`, `src/OpenHab.Windows.Tray/OpenHab_TemporaryKey.pfx`, `src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj.user`, `src/OpenHab.Windows.Tray/Properties/PublishProfiles/*.pubxml.user`, and `src\OpenHab.Windows.Package\OpenHab.Windows.Package.wapproj` (`OpenHab.Windows.Package` / repository configuration).
+- **Verification needed:** Add a release checklist item that confirms no private signing keys or `.user` files are tracked, run `git ls-files` for `.pfx`, `.user`, `AppPackages`, and `BundleArtifacts`, and verify package signing still works from documented local or CI-provided certificate inputs.
+
+### S2: Server error bodies are copied into logs and status text without a redaction contract
+
+- **Severity:** Medium
+- **Priority:** Security/Privacy
+- **Evidence:** `src\OpenHab.Core\Api\OpenHabHttpClient.cs` reads failed response bodies and includes the first 120 characters in `OpenHabRequestException.Message`. `src\OpenHab.App\Runtime\SitemapRuntimeController.cs` logs exception messages and copies them into `StatusText` for connection failures and fallback failures. `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs` and `src\OpenHab.Windows.Tray\MainWindow.xaml.cs` also display caught exception messages in `StatusText`. Existing `tests\OpenHab.Core.Tests\Api\OpenHabHttpClientAuthTests.cs` and `tests\OpenHab.Core.Tests\OpenHabHttpClientTests.cs` assert configured tokens and URI credentials are not included, but they do not cover sensitive server-provided response bodies.
+- **Impact:** This is local-only and user-facing through the app status area and diagnostics log. It is not evidence of current credential leakage, but it is a privacy risk if an openHAB server, proxy, or cloud endpoint returns sensitive details in an error body.
+- **Suggested direction:** Define a redaction contract for user-visible and logged request failures: keep status code and reason phrase, but avoid raw body text by default or pass it through a shared redactor with tests for token-like, credential-like, URL, and authorization-like values.
+- **Affected files/layers:** `src\OpenHab.Core\Api\OpenHabHttpClient.cs` (`OpenHab.Core`), `src\OpenHab.App\Runtime\SitemapRuntimeController.cs` (`OpenHab.App`), `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs` and `src\OpenHab.Windows.Tray\MainWindow.xaml.cs` (`OpenHab.Windows.Tray`), plus related API/runtime tests.
+- **Verification needed:** Add API tests where response bodies contain token-like strings, basic-auth-looking strings, URLs with credentials, and item/user names; add runtime/UI-adjacent tests that verify `StatusText` uses sanitized request failure messages.
+
+### E1: Chart image loading bypasses cache on every render
+
+- **Severity:** Medium
+- **Priority:** Runtime efficiency
+- **Evidence:** `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs` builds chart URLs in `BuildChartUrl` with a random query parameter, creates a new `Image`, then fire-and-forget calls `LoadChartImageWithAuthAsync`. That method fetches with `HttpCompletionOption.ResponseContentRead` and reads the whole response with `ReadAsByteArrayAsync`. No chart cache or cancellation token is used.
+- **Impact:** Every chart row render is forced to issue a fresh network request and decode a full image, even when the same chart is recreated by refresh, navigation, or a full row rebuild. On battery-powered systems or slow openHAB links, this can increase network, CPU, memory, and redraw cost.
+- **Suggested direction:** Replace unconditional random cache-busting with a bounded refresh policy, pass a cancellation token tied to the row/window lifetime, and consider a short-lived chart image cache keyed by item, period, dpi, endpoint, and auth mode.
+- **Affected files/layers:** `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs` (`OpenHab.Windows.Tray`) and windows that trigger row rendering from `FlyoutWindow.xaml.cs` / `MainWindow.xaml.cs`.
+- **Verification needed:** Add a chart URL test that proves cache-busting only changes when required, plus a measured scenario comparing network requests and image decode count across repeated refreshes of a page with chart widgets.
+
+### E2: Main window full row rebuilds create avoidable UI and image work
+
+- **Severity:** Medium
+- **Priority:** Runtime efficiency
+- **Evidence:** `src\OpenHab.Windows.Tray\MainWindow.xaml.cs` `RefreshRuntimeBindings` applies `ChangedRowIndices` when present, but otherwise calls `rowsPanel.Children.Clear()` and recreates every visible row. `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs` has additional no-op and structural reconciliation paths that avoid full rebuild when visual row count is unchanged or rows can be reconciled.
+- **Impact:** Main window refreshes can recreate WinUI controls and re-trigger icon/chart loading even when the page structure did not materially change. This can cause flicker, extra allocations, and repeated network/image work, especially on pages with charts, images, and many widgets.
+- **Suggested direction:** Share the flyout structural reconcile policy or introduce the shared row adapter from `M2`, then use the same visual-row diffing path for both windows.
+- **Affected files/layers:** `src\OpenHab.Windows.Tray\MainWindow.xaml.cs`, `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs`, and `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs` (`OpenHab.Windows.Tray`).
+- **Verification needed:** Add parity tests or a UI harness that counts created row elements and image loads for no-op refresh, changed-row refresh, ButtonGrid child changes, and row insert/remove scenarios.
+
+### E3: Icon source cache has no eviction or size guard
+
+- **Severity:** Low
+- **Priority:** Runtime efficiency
+- **Evidence:** `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs` stores loaded icon `ImageSource` instances in a static `ConcurrentDictionary<string, ImageSource>` keyed by absolute icon URI, color, and auth mode. `TryLoadIconForFormatAsync` loads response content into a byte array before decoding, then keeps successful image sources for the lifetime of the process. The audit did not find a maximum size, expiration policy, or cache-clear path.
+- **Impact:** The positive cache reduces repeat network requests, but long-running sessions that visit many endpoints, icon states, colors, or sitemaps can retain decoded image sources indefinitely. This is a bounded risk for small installations and a memory-growth risk for large or frequently changing sitemap sets.
+- **Suggested direction:** Add a small bounded cache policy or cache-clear hook tied to endpoint/profile changes, and measure memory use before choosing an eviction size.
+- **Affected files/layers:** `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs` (`OpenHab.Windows.Tray`).
+- **Verification needed:** Add a focused cache test or diagnostic counter for cache entry count, then measure memory after loading a representative large sitemap with many icon/color/state combinations.
+
 ## Flyout/Main Sitemap Behavior Comparison
 
 | Behavior | Flyout | Main Window | Assessment | Evidence |
@@ -152,11 +232,15 @@ Relevant observations from inspecting surrounding code:
 
 ## Security And Privacy Review
 
-Pending Task 3 evidence collection. Baseline inventory already identifies package/signing and user-specific artifact categories that should be reviewed for repository hygiene.
+Task 3 found one release-hygiene issue and one local privacy risk. The highest security priority is `S1`: tracked `.pfx` temporary signing certificates and `.user` publish metadata should be reviewed before any distributable package is treated as release-ready. Runtime credential handling has positive evidence: `OpenHabHttpClient` and `NotificationPoller` inject `Bearer` or `Basic` headers without logging header values, credentials are stored through `ICredentialStore` / `WindowsCredentialStore`, and existing HTTP-client tests assert configured tokens and URI credentials are not included in exception messages.
+
+The remaining privacy gap is `S2`: failed openHAB response bodies are copied into exception messages, then into runtime logs and status text. This is local-only and user-facing rather than proof of current credential leakage, but it needs a redaction contract because server-provided bodies are outside the app's control.
 
 ## Runtime Efficiency Review
 
-Pending Task 3 evidence collection.
+The main runtime-efficiency opportunities are image/network churn and row rebuild churn. `E1` is the clearest network issue: chart URLs include a random query value and chart images are fetched and decoded on every render. `E2` shows the main window recreates all row controls when no changed-row delta is available, while the flyout already has more selective no-op and structural reconciliation paths. `E3` is a lower-priority memory risk: icon caching avoids repeated fetches, but successful `ImageSource` entries have no eviction or size guard.
+
+The notification poller uses the configured interval with `Task.Delay` and a cancellation token, and the sitemap runtime debounces widget-event reconcile refreshes. Those are reasonable baseline controls; future efficiency work should measure request counts, created row elements, image decode counts, and icon cache size before changing behavior.
 
 ## Repository Instructions And Design Status Review
 
@@ -178,4 +262,12 @@ Pending Task 5 after findings are ranked.
 - `rg --files src tests docs\superpowers\specs docs\superpowers\status docs\superpowers\plans`: used to identify audit coverage and artifact categories; full output not pasted because it was routine inventory.
 - `Get-ChildItem -Path src,tests -Recurse -Filter *.cs | Where-Object { $_.FullName -notmatch '\\obj\\|\\bin\\' } | ... | Select-Object -First 25`: recorded Task 2 large-file metric under `Task 2 Maintainability Evidence Notes`; top relevant files were `SitemapControlFactory.cs` (2462 lines), `FlyoutWindow.xaml.cs` (1396), `MainWindow.xaml.cs` (1091), and `SitemapRuntimeController.cs` (907).
 - `rg -n "RefreshRuntimeBindings|CreateRowElementForIndex|ButtonGrid|NavigateBackWithAnimationAsync|OnRowNavigateAsync|ResolveIconAuth|GetApiTokenSync|GetCloudCredentialsSync|ChangedRowIndices|Breadcrumb" src\OpenHab.Windows.Tray src\OpenHab.App tests`: recorded Task 2 duplicate sitemap concept observations and used them to inspect surrounding code.
+- `rg -n "async void|Task\.Run|_ = |CancellationToken\.None|OperationCanceledException|DispatcherQueue\.TryEnqueue|Dispose|event .*\\+=|Task\.Delay|Interlocked|Volatile|Thread\.Sleep" src tests`: run for Task 3 reliability review. Key hits inspected included `SitemapRuntimeController` fire-and-forget stream/reconcile work, `OpenHabEventStreamClient.ConnectAsync`, dispatcher enqueue paths in both windows, settings persistence `_ = SaveAsync()`, and tests using retry loops or `Task.Delay`.
+- `rg -n "password|token|credential|Authorization|Basic|Bearer|secret|Log|DiagnosticLogger|StatusText|ProcessStartInfo|TemporaryKey|pfx|Package.appxmanifest|AppPackages|BundleArtifacts" src tests AGENTS.md docs`: run for Task 3 security/privacy review. Key hits inspected included HTTP auth header injection, credential store paths, diagnostic/status text propagation, package manifest/signing configuration, tracked `.pfx` files, and tracked `.user` publish metadata.
+- `rg -n "HttpClient|Children\.Clear|new BitmapImage|SvgImageSource|ReadAsByteArrayAsync|ResponseContentRead|ResponseHeadersRead|Timer|PeriodicTimer|Poll|Debounce|Refresh|Reconcile|StartSitemapEventStreamAsync|ConnectAsync" src tests`: run for Task 3 efficiency review. Key hits inspected included icon/chart loading in `SitemapControlFactory`, main/flyout row refresh behavior, notification polling, SSE connection setup, and widget-event reconcile debounce.
+- `git ls-files 'src/**.user' 'src/**.pfx' 'src/**/AppPackages/**' 'src/**/BundleArtifacts/**'`: found tracked temporary signing certificates and user publish metadata recorded in `S1`.
+- Placeholder/self-review search for pending Task 3 text and template instructions: no matches after Task 3 edits.
+- `git diff --check -- docs\superpowers\audits\2026-05-11-openhab-windows-code-quality-audit.md`: no whitespace errors; Git emitted the existing global safe.directory warnings and an LF-to-CRLF warning for the audit file.
+- `git diff --name-only`: only `docs/superpowers/audits/2026-05-11-openhab-windows-code-quality-audit.md` was modified for Task 3.
 - Tests were not rerun for Task 1. Controller-provided baseline verification is recorded in `Baseline Verification Note`.
+- Tests were not rerun for Task 3 because the task modified documentation only and required search/inspection verification rather than production behavior changes.
