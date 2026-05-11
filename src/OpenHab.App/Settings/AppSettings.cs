@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using System.Collections.Immutable;
 
 namespace OpenHab.App.Settings;
 
@@ -29,6 +30,7 @@ public sealed record AppSettings(
     int FlyoutWidth = 460,
     FlyoutAnimationSpeed AnimationSpeed = FlyoutAnimationSpeed.Default,
     int NotificationPollIntervalSeconds = 30,
+    ImmutableArray<string> ImportantNotificationTags = default,
     bool LaunchAtStartup = true,
     ChartQuality ChartQuality = ChartQuality.High,
     DeviceInfoSyncSettings? DeviceInfoSync = null,
@@ -44,5 +46,6 @@ public sealed record AppSettings(
         string.Empty,
         AnimationSpeed: FlyoutAnimationSpeed.Default,
         NotificationPollIntervalSeconds: 30,
+        ImportantNotificationTags: [],
         DeviceInfoSync: DeviceInfoSyncSettings.Default);
 }

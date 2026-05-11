@@ -84,6 +84,7 @@ public sealed partial class MainWindow : Window
     private ToggleSwitch? LaunchAtStartupToggle;
     private NumberBox? FlyoutWidthBox;
     private NumberBox? NotificationPollBox;
+    private TextBox? ImportantNotificationTagsText;
     private ToggleSwitch? DeviceInfoSyncEnabledToggle;
     private TextBlock? DeviceInfoSyncDisabledText;
     private TextBox? DeviceInfoSyncIdentifierText;
@@ -465,7 +466,19 @@ public sealed partial class MainWindow : Window
             "How often the app checks for openHAB notifications, in seconds",
             NotificationPollBox);
 
-        SettingsContent.Children.Add(CreateSettingsGroup(launchRow, flyoutWidthRow, notificationPollRow));
+        ImportantNotificationTagsText = new TextBox
+        {
+            PlaceholderText = "critical, warning, security",
+            Width = 320
+        };
+        ImportantNotificationTagsText.LostFocus += ImportantNotificationTagsText_LostFocus;
+        var importantTagsRow = CreateSettingsControlRow(
+            "\uE7BA",
+            "Important notification tags",
+            "Comma-separated tags/severities that should be sent as important notifications",
+            ImportantNotificationTagsText);
+
+        SettingsContent.Children.Add(CreateSettingsGroup(launchRow, flyoutWidthRow, notificationPollRow, importantTagsRow));
     }
 
     private void BuildAppearanceSettingsPage()
@@ -799,6 +812,7 @@ public sealed partial class MainWindow : Window
         LaunchAtStartupToggle = null;
         FlyoutWidthBox = null;
         NotificationPollBox = null;
+        ImportantNotificationTagsText = null;
         DeviceInfoSyncEnabledToggle = null;
         DeviceInfoSyncDisabledText = null;
         DeviceInfoSyncIdentifierText = null;
@@ -1264,6 +1278,10 @@ public sealed partial class MainWindow : Window
             if (NotificationPollBox is not null)
             {
                 NotificationPollBox.Value = settingsController.Current.NotificationPollIntervalSeconds;
+            }
+            if (ImportantNotificationTagsText is not null)
+            {
+                ImportantNotificationTagsText.Text = string.Join(", ", settingsController.Current.ImportantNotificationTags);
             }
             var deviceInfoSync = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
             if (DeviceInfoSyncEnabledToggle is not null)
@@ -1810,6 +1828,19 @@ public sealed partial class MainWindow : Window
         }
 
         settingsController.SetNotificationPollInterval(seconds);
+    }
+
+    private void ImportantNotificationTagsText_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not TextBox textBox)
+        {
+            return;
+        }
+
+        var tags = textBox.Text
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        settingsController.SetImportantNotificationTags(tags);
+        textBox.Text = string.Join(", ", settingsController.Current.ImportantNotificationTags);
     }
 
     private void DeviceInfoSyncEnabledToggle_Toggled(object sender, RoutedEventArgs e)

@@ -13,6 +13,7 @@ public static class ToastService
     private static bool isPackaged;
     private static bool isInitialized;
     private static int _toastSequence;
+    private static int _toastHeaderSequence;
 
     public static bool IsAvailable => isAvailable;
 
@@ -80,28 +81,59 @@ public static class ToastService
     public static void Show(string title, string body)
     {
         if (!isAvailable || !isInitialized) return;
-        ShowInternal(title, body, null);
+        ShowInternal(title, body, null, important: false, header: null, tag: null, appLogoOverrideUri: null);
     }
 
     public static void Show(string title, string body, IReadOnlyList<NotificationActionButton>? actions)
     {
         if (!isAvailable || !isInitialized) return;
-        ShowInternal(title, body, actions);
+        ShowInternal(title, body, actions, important: false, header: null, tag: null, appLogoOverrideUri: null);
     }
 
-    private static void ShowInternal(string title, string body, IReadOnlyList<NotificationActionButton>? actions)
+    public static void Show(
+        string title,
+        string body,
+        IReadOnlyList<NotificationActionButton>? actions,
+        bool important,
+        string? header,
+        string? tag,
+        Uri? appLogoOverrideUri)
+    {
+        if (!isAvailable || !isInitialized) return;
+        ShowInternal(title, body, actions, important, header, tag, appLogoOverrideUri);
+    }
+
+    private static void ShowInternal(
+        string title,
+        string body,
+        IReadOnlyList<NotificationActionButton>? actions,
+        bool important,
+        string? header,
+        string? tag,
+        Uri? appLogoOverrideUri)
     {
         var seq = Interlocked.Increment(ref _toastSequence);
         var actionCount = actions?.Count ?? 0;
         DiagnosticLogger.Info(
             $"Toast.Show#{seq} begin title=\"{title}\" actions={actionCount} " +
-            $"packaged={isPackaged} threadId={Environment.CurrentManagedThreadId}");
+            $"packaged={isPackaged} important={important} tag={tag ?? "<none>"} threadId={Environment.CurrentManagedThreadId}");
 
         try
         {
             var builder = new ToastContentBuilder()
                 .AddText(title)
                 .AddText(body);
+
+            if (!string.IsNullOrWhiteSpace(header))
+            {
+                var headerId = Interlocked.Increment(ref _toastHeaderSequence).ToString();
+                builder.AddHeader(headerId, header.Trim(), "openhab:open");
+            }
+
+            if (appLogoOverrideUri is not null)
+            {
+                builder.AddAppLogoOverride(appLogoOverrideUri);
+            }
 
             if (actions is not null)
             {
@@ -113,6 +145,15 @@ public static class ToastService
             }
 
             var toast = new ToastNotification(builder.GetXml());
+            if (!string.IsNullOrWhiteSpace(tag))
+            {
+                toast.Tag = tag.Trim();
+            }
+
+            if (important)
+            {
+                toast.Priority = ToastNotificationPriority.High;
+            }
 
             if (isPackaged)
             {
