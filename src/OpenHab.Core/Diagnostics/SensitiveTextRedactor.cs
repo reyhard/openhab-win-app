@@ -41,4 +41,3 @@ public static partial class SensitiveTextRedactor
     [GeneratedRegex(@"(?i)(https?://)[^/\s:@]+:[^/\s@]+@")]
     private static partial Regex UrlCredentialPattern();
 }
-

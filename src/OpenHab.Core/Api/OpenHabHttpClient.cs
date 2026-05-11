@@ -151,4 +151,3 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         throw new OpenHabRequestException(response.StatusCode, $"openHAB request failed with {(int)response.StatusCode} {response.ReasonPhrase}: {safeBody}");
     }
 }
-
