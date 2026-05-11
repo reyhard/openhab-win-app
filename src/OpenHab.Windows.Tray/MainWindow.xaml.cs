@@ -209,6 +209,12 @@ public sealed partial class MainWindow : Window
         SidePanelPivot.SelectedIndex = 0;
     }
 
+    public void ShowSettingsTab()
+    {
+        SidePanelPivot.SelectedIndex = 1;
+        NavigateToSettingsPage(SettingsPage.Root);
+    }
+
     private void InitializeSettingsControls()
     {
         NavigateToSettingsPage(SettingsPage.Root);

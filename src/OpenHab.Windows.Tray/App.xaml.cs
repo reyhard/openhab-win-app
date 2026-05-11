@@ -136,6 +136,12 @@ public partial class App : Application
                 shellController.HandleOpenMainWindow();
                 _ = ApplyShellStateAsync();
             },
+            requestOpenSettings: () =>
+            {
+                mainWindow?.ShowSettingsTab();
+                shellController.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
+            },
             requestOpenNotifications: () =>
             {
                 mainWindow?.ShowNotificationsTab();

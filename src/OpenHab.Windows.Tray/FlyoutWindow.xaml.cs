@@ -29,6 +29,7 @@ public sealed partial class FlyoutWindow : Window
     private readonly SitemapRuntimeController runtimeController;
     private readonly NotificationStore? notificationStore;
     private readonly Action requestOpenMainWindow;
+    private readonly Action requestOpenSettings;
     private readonly Action requestOpenNotifications;
     private readonly Action requestHideFlyout;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
@@ -55,6 +56,7 @@ public sealed partial class FlyoutWindow : Window
         SitemapRuntimeController runtimeController,
         NotificationStore? notificationStore,
         Action requestOpenMainWindow,
+        Action requestOpenSettings,
         Action requestOpenNotifications,
         Action requestHideFlyout)
     {
@@ -62,6 +64,7 @@ public sealed partial class FlyoutWindow : Window
         this.runtimeController = runtimeController;
         this.notificationStore = notificationStore;
         this.requestOpenMainWindow = requestOpenMainWindow;
+        this.requestOpenSettings = requestOpenSettings;
         this.requestOpenNotifications = requestOpenNotifications;
         this.requestHideFlyout = requestHideFlyout;
         var iconAuthResolver = new SitemapIconAuthResolver(settingsController);
@@ -332,7 +335,7 @@ public sealed partial class FlyoutWindow : Window
 
     private void SettingsButton_Click(object sender, RoutedEventArgs e)
     {
-        requestOpenMainWindow();
+        requestOpenSettings();
     }
 
     private void OpenNotificationsButton_Click(object sender, RoutedEventArgs e)
