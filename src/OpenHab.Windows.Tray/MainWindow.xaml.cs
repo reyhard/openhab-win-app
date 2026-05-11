@@ -71,6 +71,7 @@ public sealed partial class MainWindow : Window
     private bool _pendingSnapshotRefresh;
     private bool notificationControlsReady;
     private SettingsPage _activeSettingsPage = SettingsPage.Root;
+    private bool _lastRefreshUseWindows11Icons;
 
     private ComboBox? SkinCombo;
     private ComboBox? EndpointModeCombo;
@@ -167,6 +168,7 @@ public sealed partial class MainWindow : Window
             }
             snapshotRefreshGate.Request(() => RefreshRuntimeBindings(targetRows: null));
         };
+        _lastRefreshUseWindows11Icons = settingsController.Current.UseWindows11Icons;
         // Initial load is deferred until sitemaps are resolved in CompleteStartupAsync.
     }
 
@@ -1737,6 +1739,13 @@ public sealed partial class MainWindow : Window
 
     private async void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
+        var useWindows11Icons = settingsController.Current.UseWindows11Icons;
+        if (useWindows11Icons != _lastRefreshUseWindows11Icons)
+        {
+            sitemapSurfaceRenderer.ForceFullRebuild();
+            _lastRefreshUseWindows11Icons = useWindows11Icons;
+        }
+
         await RefreshRuntimeAsync();
     }
 
