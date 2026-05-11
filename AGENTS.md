@@ -86,7 +86,10 @@ Prefer preserving the existing project split. Do not push WinUI-specific concern
 Primary verification commands:
 
 - `dotnet test OpenHab.Windows.sln`
-- `dotnet build OpenHab.Windows.sln --configuration Release`
+- `dotnet build src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj --configuration Release`
+- `.\build-package.ps1 -Configuration Release -Platform x64`
+
+Use `dotnet build` for layer-specific and tray-app builds. Use `.\build-package.ps1` for full solution/package builds because the `.wapproj` imports DesktopBridge targets that are available through Visual Studio MSBuild, not necessarily through the standalone .NET SDK MSBuild path. The script locates Visual Studio with `vswhere` and verifies `Microsoft.DesktopBridge.props` before invoking MSBuild.
 
 If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio, try a Debug build before diagnosing code changes.
 
