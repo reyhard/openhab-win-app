@@ -61,7 +61,13 @@ Controller-provided baseline verification: direct test projects passed `266/266`
 
 ## Executive Summary
 
-Pending completion after audit findings are collected and ranked. Task 1 establishes the report skeleton, repository baseline, reviewed documents, and known verification constraints.
+The top maintainability risk is duplicated sitemap behavior between flyout and main window. `M1` and `M2` show that both windows build rows, route commands, merge ButtonGrid rows, and apply row updates through separate Windows-layer code paths, with flyout-only row identity and structural reconciliation while the main window still performs more direct index updates and full rebuilds.
+
+The next reliability concern is runtime lifecycle behavior around background operations, live updates, and UI dispatcher refreshes. `R1` is the highest-impact runtime finding: `SitemapRuntimeController` starts the sitemap event stream through discarded tasks and `OpenHabEventStreamClient.ConnectAsync` returns before its `Task.Run` read loop has a durable observable outcome.
+
+The most practical runtime-efficiency opportunity is reducing repeated image/network and row-rebuild work. `E1` shows chart rows force fresh network fetches and image decodes on every render, while `E2` shows the main window can recreate all row controls when the flyout already has more selective reconciliation paths.
+
+The project needs a consolidated current-state tracker. `D1`, `D2`, and `D3` show that `AGENTS.md` still points readers to multiple historical status pages even though later plans, statuses, and implemented files now carry current evidence for notifications, credentials, event streams, packaging, flyout behavior, and main-window behavior.
 
 ## Findings
 
@@ -317,7 +323,81 @@ First backlog item: create `docs/superpowers/status/openhab-windows-current-stat
 
 ## Backlog
 
-Pending Task 5 after findings are ranked.
+Priority meanings:
+
+- `P0`: unblock future work or prevent major drift/security risk.
+- `P1`: high-value cleanup or reliability work with bounded scope.
+- `P2`: optimization, tooling, or documentation improvement that can follow P0/P1 work.
+
+### B1: Create consolidated project tracker and AGENTS status pointer
+
+- **Priority:** P0
+- **Problem:** Project orientation depends on reading several historical status pages and later plan/status files, which makes it easy to misread shipped, partial, pending, and release-blocked behavior.
+- **Evidence:** `D1`, `D2`, and `D3` cite `AGENTS.md`, the three 2026-05-05 status pages, later `docs/superpowers/status/*.md` files, later `docs/superpowers/plans/*.md` files, and the original sitemap design spec.
+- **Suggested change:** Create `docs/superpowers/status/openhab-windows-current-state.md` from this audit's design-area table and findings, then update `AGENTS.md` to make that tracker the first status document while preserving older status pages as historical references.
+- **Affected files/layers:** `AGENTS.md` and `docs/superpowers/status/openhab-windows-current-state.md` in repository documentation; historical references remain under `docs/superpowers/status/*.md` and `docs/superpowers/plans/*.md`.
+- **Verification:** Run `rg --files AGENTS.md docs\superpowers\specs docs\superpowers\status docs\superpowers\plans`, confirm every linked path exists, and review that `AGENTS.md` points to the consolidated tracker before older status pages.
+- **Risk/notes:** This should be completed before broad feature work so future agents use one current source of truth instead of reconstructing state from dated reports.
+
+### B2: Review credential, logging, and package-artifact hygiene
+
+- **Priority:** P0
+- **Problem:** Tracked signing certificates and user publish metadata are release-blocking hygiene issues, and server-provided error bodies can still flow into local logs and status text without a clear redaction contract.
+- **Evidence:** `S1` cites tracked `.pfx` and `.user` files plus `OpenHab.Windows.Package.wapproj` signing configuration. `S2` cites `OpenHabHttpClient` response-body exception text, runtime `StatusText` propagation, and current auth tests that do not cover sensitive server-provided response bodies.
+- **Suggested change:** Decide whether tracked temporary signing keys are intentional; if not, remove and rotate them, add ignore/release checklist coverage, and document local versus release signing inputs. Add a shared redaction rule for request-failure messages before they reach diagnostics or user-visible status text.
+- **Affected files/layers:** `src/OpenHab.Windows.Package/OpenHab.Windows.Package_TemporaryKey.pfx`, `src/OpenHab.Windows.Tray/OpenHab_TemporaryKey.pfx`, `src/OpenHab.Windows.Tray/*.csproj.user`, `src/OpenHab.Windows.Tray/Properties/PublishProfiles/*.pubxml.user`, `src\OpenHab.Windows.Package\OpenHab.Windows.Package.wapproj`, `src\OpenHab.Core\Api\OpenHabHttpClient.cs`, `src\OpenHab.App\Runtime\SitemapRuntimeController.cs`, and Windows tray status surfaces.
+- **Verification:** Run `git ls-files 'src/**.user' 'src/**.pfx' 'src/**/AppPackages/**' 'src/**/BundleArtifacts/**'`; add API/runtime tests for token-like, credential-like, URL-with-credential, and authorization-like error bodies; verify packaging still signs from documented developer or CI inputs.
+- **Risk/notes:** Treat certificate rotation and release signing as a deliberate owner decision; do not remove signing inputs without confirming how local package builds should work afterward.
+
+### B3: Add shared sitemap row update and navigation tests before refactoring
+
+- **Priority:** P1
+- **Problem:** Existing adjacent tests cover runtime `ChangedRowIndices` and factory helpers, but they do not prove flyout/main parity for visual-row mapping, ButtonGrid merging, row-key command routing, or navigation behavior.
+- **Evidence:** `M1` and `M2` cite duplicated row binding in `FlyoutWindow.xaml.cs` and `MainWindow.xaml.cs`; `M2` notes that current tests do not verify flyout/main visual-row parity.
+- **Suggested change:** Add a Windows-layer testable adapter or harness around descriptor-row to visual-row operations before moving production behavior, with cases for normal rows, hidden rows, ButtonGrid child changes, changed-row snapshots, row insertion/removal, row-key command routing, forward navigation, and back navigation.
+- **Affected files/layers:** New or expanded tests near `tests\OpenHab.App.Tests\SitemapControlFactoryTests.cs` or a Windows tray test project, with inputs from `src\OpenHab.App\Runtime\SitemapRuntimeController.cs` and `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs`.
+- **Verification:** Run the targeted sitemap/runtime test projects and confirm the new parity cases fail against intentionally divergent adapter behavior and pass against the shared adapter.
+- **Risk/notes:** This backlog item should precede the refactor in `B4`; otherwise the shared coordinator could preserve one window's behavior while accidentally regressing the other.
+
+### B4: Unify flyout and main sitemap behavior behind a shared Windows-layer coordinator
+
+- **Priority:** P1
+- **Problem:** Flyout and main window sitemap surfaces duplicate load/refresh wrappers, command delegates, icon-auth setup, ButtonGrid merge decisions, and changed-row application while already showing divergent row reconciliation behavior.
+- **Evidence:** `M1`, `M2`, and `M3` cite duplicated `RefreshRuntimeBindings`, `CreateRowElementForIndex`, `OnRowNavigateAsync`, `NavigateBackWithAnimationAsync`, `ResolveIconAuth`, `GetApiTokenSync`, and `GetCloudCredentialsSync` logic across `FlyoutWindow.xaml.cs` and `MainWindow.xaml.cs`.
+- **Suggested change:** Extract a shared Windows-layer sitemap surface coordinator or adapter that owns row operations, visual-row identity, ButtonGrid merging, navigation command wiring, and icon-auth context resolution while leaving `OpenHab.Core`, `OpenHab.Sitemaps`, `OpenHab.Rendering`, and `OpenHab.App` UI-independent.
+- **Affected files/layers:** `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs`, `src\OpenHab.Windows.Tray\MainWindow.xaml.cs`, `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs`, and any new Windows-layer coordinator under `src\OpenHab.Windows.Tray`.
+- **Verification:** Run the tests added in `B3`, existing `SitemapRuntimeControllerTests`, existing `SitemapControlFactoryTests`, `dotnet test OpenHab.Windows.sln` when the package project environment supports it, and a manual flyout/main navigation smoke check.
+- **Risk/notes:** Keep the coordinator in the Windows layer because WinUI element creation and dispatcher concerns do not belong in `OpenHab.App` or lower layers.
+
+### B5: Harden runtime, SSE, settings, and dispatcher lifecycle behavior
+
+- **Priority:** P1
+- **Problem:** Several asynchronous paths start work without an observable completion or replay path, so failures can leave stale live sitemap state, non-durable settings, or missed UI refreshes.
+- **Evidence:** `R1` cites discarded sitemap event stream start/connect tasks and `OpenHabEventStreamClient.ConnectAsync` returning before the read loop outcome is known. `R2` cites fire-and-forget settings saves and test retry loops caused by prior writes. `R3` cites dispatcher enqueue failures that log a lost update without replay.
+- **Suggested change:** Track event-stream start/connect outcomes in `SitemapRuntimeController`, reset start state after subscription failure, expose or queue durable settings saves with a flush/shutdown path, and route dispatcher refreshes through an adapter that can mark and drain missed updates.
+- **Affected files/layers:** `src\OpenHab.App\Runtime\SitemapRuntimeController.cs`, `src\OpenHab.Core\Events\OpenHabEventStreamClient.cs`, `src\OpenHab.App\Settings\AppSettingsController.cs`, `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs`, and `src\OpenHab.Windows.Tray\MainWindow.xaml.cs`.
+- **Verification:** Add tests for SSE subscription failure retry, connect cancellation/failure, ordered settings writes, save failure reporting, settings flush on shutdown/test cleanup, and rejected dispatcher enqueue followed by one successful replay.
+- **Risk/notes:** Separate runtime/App-layer lifecycle changes from WinUI dispatcher changes so cancellation and settings durability can be verified without a live window.
+
+### B6: Add practical quality gates using existing local tooling
+
+- **Priority:** P2
+- **Problem:** The repository has useful unit tests and build commands, but solution-level verification currently depends on package-project tooling that is not present in the observed environment, so agents need explicit gates that distinguish core/test regressions from packaging-environment failures.
+- **Evidence:** Baseline verification notes direct test projects passed `266/266`, while `dotnet test OpenHab.Windows.sln` fails because `OpenHab.Windows.Package.wapproj` imports missing `Microsoft.DesktopBridge.props`. Task verification in this report records the current solution test/build behavior.
+- **Suggested change:** Document a two-tier gate: direct test projects for everyday logic changes, and full solution test/build when DesktopBridge packaging prerequisites are installed. Add a script or doc entry that captures the exact direct test project list and the known package prerequisite.
+- **Affected files/layers:** `OpenHab.Windows.sln`, `src\OpenHab.Windows.Package\OpenHab.Windows.Package.wapproj`, `tests\*.Tests`, and repository documentation under `AGENTS.md` or the consolidated tracker from `B1`.
+- **Verification:** Run direct test projects, run `dotnet test OpenHab.Windows.sln`, run `dotnet build OpenHab.Windows.sln --configuration Release`, and confirm the gate text records pass/fail causes without masking package-environment failures.
+- **Risk/notes:** This should not weaken verification expectations; it should make the existing package tooling constraint explicit until the full solution gate can run cleanly everywhere.
+
+### B7: Improve icon and chart loading, caching, and idle refresh behavior
+
+- **Priority:** P2
+- **Problem:** Chart rows intentionally bypass caching and main-window full rebuilds can retrigger image work, while the positive icon cache has no eviction or endpoint-change clearing policy.
+- **Evidence:** `E1` cites chart URL random cache busting, full response reads, and no chart cancellation/cache path in `SitemapControlFactory`. `E2` cites main-window full row rebuilds. `E3` cites the static unbounded icon `ConcurrentDictionary`.
+- **Suggested change:** Add a bounded chart refresh policy, pass cancellation tokens tied to row/window lifetime, share the row reconciliation work from `B4`, and add a measured icon cache size or endpoint-change clear policy before choosing eviction limits.
+- **Affected files/layers:** `src\OpenHab.Windows.Tray\Rendering\SitemapControlFactory.cs`, `src\OpenHab.Windows.Tray\MainWindow.xaml.cs`, `src\OpenHab.Windows.Tray\FlyoutWindow.xaml.cs`, and any shared Windows-layer row coordinator from `B4`.
+- **Verification:** Add chart URL/cache tests, expose diagnostic counters for chart fetches, image decodes, row creations, and icon cache entries, then compare repeated refresh/navigation of a page with chart and icon widgets before and after the change.
+- **Risk/notes:** Keep chart freshness user-visible and conservative; avoid stale chart images by tying caching to explicit refresh or short-lived expiry rather than indefinite reuse.
 
 ## Verification
 
@@ -335,10 +415,9 @@ Pending Task 5 after findings are ranked.
 - `Test-Path OpenHab.Windows.sln; Test-Path .docs\design.md`: run for the Task 4 review refinement. Key result: both commands returned `True`, verifying the AGENTS-named solution file and `.docs/design.md` path that were not covered by the `rg --files` inventory command.
 - `Select-String -Path docs\superpowers\plans\*.md -Pattern '^# |^## |^### |Goal:|Still Out Of Scope|Out of scope|Verification|MSIX|package|UI automation|Event stream|Notifications|credentials|cache|offline|main window|flyout|tray|WebView|telemetry'`: run for Task 4 plan review. Key result: confirmed the plan inventory spans foundation, auth/notifications, connected homepage, tray shell behavior, UI bugfix/polish/icon polish, packaging/notifications migration, notification inbox actions, flyout animation/corners/light-dismiss, and this audit plan.
 - `Select-String -Path docs\superpowers\status\*.md -Pattern '^# |^## |Completed|Still Out Of Scope|Verification|Event stream|Notifications|credentials|cache|offline|packaging|UI automation|Main|flyout|tray|MSIX|WebView|telemetry'`: run as supporting Task 4 current-state review. Key result: later status docs contain evidence for auth/notifications, tray shell behavior, UI polish, event stream live updates, notification debugging, flyout animation, merge-conflict fallout, and flyout retoggle issues beyond the three AGENTS-linked status docs.
-- Placeholder/self-review search for pending Task 3 text and template instructions: no matches after Task 3 edits.
+- Task 3 and Task 4 placeholder/template self-review searches: no leftover placeholders after edits.
+- `dotnet test OpenHab.Windows.sln`: sandboxed run exited `1` because restore attempted to reach `https://api.nuget.org/v3/index.json` and network access was denied. The escalated rerun restored packages, ran direct test assemblies with `266/266` passing (`OpenHab.Rendering.Tests` 22, `OpenHab.Sitemaps.Tests` 35, `OpenHab.Core.Tests` 38, `OpenHab.App.Tests` 171), and still exited `1` because `src\OpenHab.Windows.Package\OpenHab.Windows.Package.wapproj` imports missing `C:\Program Files\dotnet\sdk\10.0.203\Microsoft\DesktopBridge\Microsoft.DesktopBridge.props`.
+- `dotnet build OpenHab.Windows.sln --configuration Release`: sandboxed run exited `1` because restore attempted to reach NuGet and network access was denied. The escalated rerun restored packages and built the non-package projects, then exited `1` because `OpenHab.Windows.Package.wapproj` imports the same missing DesktopBridge props file.
+- Audit report self-review: checked for report-template remnants, unsupported placeholder wording, and backlog items without finding references; no matches remained.
 - `git diff --check -- docs\superpowers\audits\2026-05-11-openhab-windows-code-quality-audit.md`: no whitespace errors; Git emitted the existing global safe.directory warnings and an LF-to-CRLF warning for the audit file.
-- Task 4 placeholder/template self-review search: no leftover Task 4 placeholders after edits.
-- `git diff --name-only`: only `docs/superpowers/audits/2026-05-11-openhab-windows-code-quality-audit.md` was modified for Task 4.
-- Tests were not rerun for Task 1. Controller-provided baseline verification is recorded in `Baseline Verification Note`.
-- Tests were not rerun for Task 3 because the task modified documentation only and required search/inspection verification rather than production behavior changes.
-- Tests were not rerun for Task 4 because the task modified documentation only and required path/status/spec/plan review rather than production behavior changes.
+- `git diff --name-only`: only `docs/superpowers/audits/2026-05-11-openhab-windows-code-quality-audit.md` was modified for Task 5.
