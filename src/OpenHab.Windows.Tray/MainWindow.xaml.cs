@@ -30,6 +30,16 @@ namespace OpenHab.Windows.Tray;
 
 public sealed partial class MainWindow : Window
 {
+    private enum SettingsPage
+    {
+        Root,
+        Connection,
+        General,
+        Appearance,
+        DeviceInfoSync,
+        About
+    }
+
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
     private readonly NotificationStore? notificationStore;
@@ -49,6 +59,22 @@ public sealed partial class MainWindow : Window
     private bool _suppressNextSnapshotRefresh;
     private bool _isPageTransitionRunning;
     private bool _pendingSnapshotRefresh;
+    private SettingsPage _activeSettingsPage = SettingsPage.Root;
+
+    private ComboBox? SkinCombo;
+    private ComboBox? EndpointModeCombo;
+    private TextBox? LocalEndpointText;
+    private TextBox? CloudEndpointText;
+    private PasswordBox? LocalTokenBox;
+    private TextBox? CloudUserNameText;
+    private PasswordBox? CloudPasswordBox;
+    private ToggleSwitch? FollowThemeToggle;
+    private ToggleSwitch? UseWin11IconsToggle;
+    private ToggleSwitch? LaunchAtStartupToggle;
+    private NumberBox? FlyoutWidthBox;
+    private NumberBox? NotificationPollBox;
+    private Button? ViewLogsButton;
+    private TextBlock? VersionText;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -167,11 +193,259 @@ public sealed partial class MainWindow : Window
 
     private void InitializeSettingsControls()
     {
-        SkinCombo.ItemsSource = Enum.GetValues<SitemapSkinKind>();
-        EndpointModeCombo.ItemsSource = Enum.GetValues<EndpointMode>();
+        NavigateToSettingsPage(SettingsPage.Root);
+    }
 
-        var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown";
-        VersionText.Text = $"openHAB Windows App v{version}";
+    private void NavigateToSettingsPage(SettingsPage page)
+    {
+        _activeSettingsPage = page;
+        ResetSettingsControlReferences();
+        SettingsContent.Children.Clear();
+
+        switch (page)
+        {
+            case SettingsPage.Root:
+                SettingsBackButton.Visibility = Visibility.Collapsed;
+                SettingsTitleText.Text = "Settings";
+                SettingsSubtitleText.Text = "Choose a category";
+                SettingsContent.Children.Add(CreateCategoryRow("\uE713", "Connection", "Endpoints and credentials", SettingsPage.Connection));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPage.General));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPage.Appearance));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", "Device Info Sync", "Configure device metadata sync", SettingsPage.DeviceInfoSync));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE946", "About", "Logs and version", SettingsPage.About));
+                break;
+            case SettingsPage.Connection:
+                SettingsBackButton.Visibility = Visibility.Visible;
+                SettingsTitleText.Text = "Connection";
+                SettingsSubtitleText.Text = "Endpoints and credentials";
+                BuildConnectionSettingsPage();
+                break;
+            case SettingsPage.General:
+                SettingsBackButton.Visibility = Visibility.Visible;
+                SettingsTitleText.Text = "General";
+                SettingsSubtitleText.Text = "Startup and runtime behavior";
+                BuildGeneralSettingsPage();
+                break;
+            case SettingsPage.Appearance:
+                SettingsBackButton.Visibility = Visibility.Visible;
+                SettingsTitleText.Text = "Appearance";
+                SettingsSubtitleText.Text = "Visual options";
+                BuildAppearanceSettingsPage();
+                break;
+            case SettingsPage.DeviceInfoSync:
+                SettingsBackButton.Visibility = Visibility.Visible;
+                SettingsTitleText.Text = "Device Info Sync";
+                SettingsSubtitleText.Text = "Configuration coming soon";
+                BuildDeviceInfoSyncPlaceholderPage();
+                break;
+            case SettingsPage.About:
+                SettingsBackButton.Visibility = Visibility.Visible;
+                SettingsTitleText.Text = "About";
+                SettingsSubtitleText.Text = "Diagnostics and version";
+                BuildAboutSettingsPage();
+                break;
+        }
+
+        RefreshSettingsBindings();
+    }
+
+    private Button CreateCategoryRow(string glyph, string title, string subtitle, SettingsPage destination)
+    {
+        var button = new Button
+        {
+            Padding = new Thickness(12, 10, 12, 10),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+
+        var row = new Grid { ColumnSpacing = 10 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 18,
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = 0.85
+        };
+        Grid.SetColumn(icon, 0);
+        row.Children.Add(icon);
+
+        var textPanel = new StackPanel { Spacing = 2 };
+        textPanel.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold });
+        textPanel.Children.Add(new TextBlock
+        {
+            Text = subtitle,
+            Opacity = 0.68,
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
+        });
+        Grid.SetColumn(textPanel, 1);
+        row.Children.Add(textPanel);
+
+        var chevron = new FontIcon
+        {
+            Glyph = "\uE76C",
+            FontSize = 14,
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = 0.75
+        };
+        Grid.SetColumn(chevron, 2);
+        row.Children.Add(chevron);
+
+        button.Content = row;
+        button.Click += (_, _) => NavigateToSettingsPage(destination);
+        return button;
+    }
+
+    private void BuildConnectionSettingsPage()
+    {
+        EndpointModeCombo = new ComboBox { Header = "Endpoint mode" };
+        EndpointModeCombo.ItemsSource = Enum.GetValues<EndpointMode>();
+        EndpointModeCombo.SelectionChanged += EndpointModeCombo_SelectionChanged;
+        SettingsContent.Children.Add(EndpointModeCombo);
+
+        LocalEndpointText = new TextBox { Header = "Local endpoint" };
+        LocalEndpointText.LostFocus += EndpointText_LostFocus;
+        SettingsContent.Children.Add(LocalEndpointText);
+
+        CloudEndpointText = new TextBox { Header = "Cloud endpoint" };
+        CloudEndpointText.LostFocus += EndpointText_LostFocus;
+        SettingsContent.Children.Add(CloudEndpointText);
+
+        LocalTokenBox = new PasswordBox
+        {
+            Header = "Local API token",
+            PlaceholderText = "Enter token (optional)",
+            Tag = "Local"
+        };
+        LocalTokenBox.GotFocus += TokenBox_GotFocus;
+        LocalTokenBox.PasswordChanged += TokenBox_PasswordChanged;
+        LocalTokenBox.LostFocus += TokenBox_LostFocus;
+        SettingsContent.Children.Add(LocalTokenBox);
+
+        CloudUserNameText = new TextBox
+        {
+            Header = "Cloud email / username",
+            PlaceholderText = "Enter myopenHAB email"
+        };
+        CloudUserNameText.TextChanged += CloudUserNameText_TextChanged;
+        CloudUserNameText.LostFocus += CloudCredentials_LostFocus;
+        SettingsContent.Children.Add(CloudUserNameText);
+
+        CloudPasswordBox = new PasswordBox
+        {
+            Header = "Cloud password",
+            PlaceholderText = "Enter myopenHAB password"
+        };
+        CloudPasswordBox.PasswordChanged += CloudPasswordBox_PasswordChanged;
+        CloudPasswordBox.LostFocus += CloudCredentials_LostFocus;
+        SettingsContent.Children.Add(CloudPasswordBox);
+    }
+
+    private void BuildGeneralSettingsPage()
+    {
+        LaunchAtStartupToggle = new ToggleSwitch
+        {
+            Header = "Launch at startup",
+            OnContent = "On",
+            OffContent = "Off"
+        };
+        LaunchAtStartupToggle.Toggled += LaunchAtStartupToggle_Toggled;
+        SettingsContent.Children.Add(LaunchAtStartupToggle);
+
+        FlyoutWidthBox = new NumberBox
+        {
+            Header = "Flyout width (px)",
+            Minimum = AppSettingsController.MinFlyoutWidth,
+            Maximum = AppSettingsController.MaxFlyoutWidth,
+            SmallChange = 10,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        FlyoutWidthBox.ValueChanged += FlyoutWidthBox_ValueChanged;
+        SettingsContent.Children.Add(FlyoutWidthBox);
+
+        NotificationPollBox = new NumberBox
+        {
+            Header = "Notification check interval (seconds)",
+            Minimum = AppSettingsController.MinNotificationPollIntervalSeconds,
+            Maximum = AppSettingsController.MaxNotificationPollIntervalSeconds,
+            SmallChange = 10,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        NotificationPollBox.ValueChanged += NotificationPollBox_ValueChanged;
+        SettingsContent.Children.Add(NotificationPollBox);
+    }
+
+    private void BuildAppearanceSettingsPage()
+    {
+        SkinCombo = new ComboBox { Header = "Skin" };
+        SkinCombo.ItemsSource = Enum.GetValues<SitemapSkinKind>();
+        SkinCombo.SelectionChanged += SkinCombo_SelectionChanged;
+        SettingsContent.Children.Add(SkinCombo);
+
+        FollowThemeToggle = new ToggleSwitch
+        {
+            Header = "Follow Windows color scheme",
+            OnContent = "On",
+            OffContent = "Off"
+        };
+        FollowThemeToggle.Toggled += FollowThemeToggle_Toggled;
+        SettingsContent.Children.Add(FollowThemeToggle);
+
+        UseWin11IconsToggle = new ToggleSwitch
+        {
+            Header = "Use Windows 11 style icons",
+            OnContent = "On",
+            OffContent = "Off"
+        };
+        UseWin11IconsToggle.Toggled += UseWin11IconsToggle_Toggled;
+        SettingsContent.Children.Add(UseWin11IconsToggle);
+    }
+
+    private void BuildDeviceInfoSyncPlaceholderPage()
+    {
+        SettingsContent.Children.Add(new TextBlock
+        {
+            Text = "Device Info Sync settings will be added in the next task.",
+            TextWrapping = TextWrapping.Wrap,
+            Opacity = 0.72
+        });
+    }
+
+    private void BuildAboutSettingsPage()
+    {
+        ViewLogsButton = new Button { Content = "View diagnostic logs" };
+        ViewLogsButton.Click += ViewLogsButton_Click;
+        SettingsContent.Children.Add(ViewLogsButton);
+
+        VersionText = new TextBlock
+        {
+            Margin = new Thickness(0, 8, 0, 0),
+            Opacity = 0.5,
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
+        };
+        SettingsContent.Children.Add(VersionText);
+    }
+
+    private void ResetSettingsControlReferences()
+    {
+        SkinCombo = null;
+        EndpointModeCombo = null;
+        LocalEndpointText = null;
+        CloudEndpointText = null;
+        LocalTokenBox = null;
+        CloudUserNameText = null;
+        CloudPasswordBox = null;
+        FollowThemeToggle = null;
+        UseWin11IconsToggle = null;
+        LaunchAtStartupToggle = null;
+        FlyoutWidthBox = null;
+        NotificationPollBox = null;
+        ViewLogsButton = null;
+        VersionText = null;
     }
 
     private static readonly HttpClient IconHttpClient = new();
@@ -456,33 +730,80 @@ public sealed partial class MainWindow : Window
 
     private void RefreshSettingsBindings()
     {
-        SkinCombo.SelectedItem = settingsController.Current.Skin;
-        EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
-        LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
-        CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
+        if (SkinCombo is not null)
+        {
+            SkinCombo.SelectedItem = settingsController.Current.Skin;
+        }
+        if (EndpointModeCombo is not null)
+        {
+            EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
+        }
+        if (LocalEndpointText is not null)
+        {
+            LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
+        }
+        if (CloudEndpointText is not null)
+        {
+            CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
+        }
 
         // Sitemap selection is reflected via title/header tap menu.
 
         suppressTokenEditTracking = true;
-        LocalTokenBox.Password = string.Empty;
-        CloudPasswordBox.Password = string.Empty;
-        CloudUserNameText.Text = settingsController.Current.CloudUserName ?? string.Empty;
+        if (LocalTokenBox is not null)
+        {
+            LocalTokenBox.Password = string.Empty;
+        }
+        if (CloudPasswordBox is not null)
+        {
+            CloudPasswordBox.Password = string.Empty;
+        }
+        if (CloudUserNameText is not null)
+        {
+            CloudUserNameText.Text = settingsController.Current.CloudUserName ?? string.Empty;
+        }
         suppressTokenEditTracking = false;
 
-        FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
-        UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
-        LaunchAtStartupToggle.IsOn = settingsController.Current.LaunchAtStartup;
+        if (FollowThemeToggle is not null)
+        {
+            FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
+        }
+        if (UseWin11IconsToggle is not null)
+        {
+            UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
+        }
+        if (LaunchAtStartupToggle is not null)
+        {
+            LaunchAtStartupToggle.IsOn = settingsController.Current.LaunchAtStartup;
+        }
         suppressFlyoutWidthChange = true;
-        FlyoutWidthBox.Value = settingsController.Current.FlyoutWidth;
-        NotificationPollBox.Value = settingsController.Current.NotificationPollIntervalSeconds;
+        if (FlyoutWidthBox is not null)
+        {
+            FlyoutWidthBox.Value = settingsController.Current.FlyoutWidth;
+        }
+        if (NotificationPollBox is not null)
+        {
+            NotificationPollBox.Value = settingsController.Current.NotificationPollIntervalSeconds;
+        }
         suppressFlyoutWidthChange = false;
 
-        LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
-            ? "Stored token configured. Type to replace, or leave unchanged."
-            : "Enter token (optional)";
-        CloudPasswordBox.PlaceholderText = settingsController.Current.HasCloudCredentials
-            ? "Stored password configured. Type to replace, or leave unchanged."
-            : "Enter myopenHAB password";
+        if (LocalTokenBox is not null)
+        {
+            LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
+                ? "Stored token configured. Type to replace, or leave unchanged."
+                : "Enter token (optional)";
+        }
+        if (CloudPasswordBox is not null)
+        {
+            CloudPasswordBox.PlaceholderText = settingsController.Current.HasCloudCredentials
+                ? "Stored password configured. Type to replace, or leave unchanged."
+                : "Enter myopenHAB password";
+        }
+        if (VersionText is not null)
+        {
+            var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+            VersionText.Text = $"openHAB Windows App v{version}";
+        }
         localTokenEdited = false;
         cloudTokenEdited = false;
         cloudUserNameEdited = false;
@@ -569,7 +890,7 @@ public sealed partial class MainWindow : Window
 
     private async void SkinCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isRefreshing || SkinCombo.SelectedItem is not SitemapSkinKind skin)
+        if (isRefreshing || sender is not ComboBox skinCombo || skinCombo.SelectedItem is not SitemapSkinKind skin)
         {
             return;
         }
@@ -580,7 +901,7 @@ public sealed partial class MainWindow : Window
 
     private async void EndpointModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isRefreshing || EndpointModeCombo.SelectedItem is not EndpointMode endpointMode)
+        if (isRefreshing || sender is not ComboBox endpointModeCombo || endpointModeCombo.SelectedItem is not EndpointMode endpointMode)
         {
             return;
         }
@@ -591,6 +912,11 @@ public sealed partial class MainWindow : Window
 
     private async void EndpointText_LostFocus(object sender, RoutedEventArgs e)
     {
+        if (LocalEndpointText is null || CloudEndpointText is null)
+        {
+            return;
+        }
+
         if (!Uri.TryCreate(LocalEndpointText.Text, UriKind.Absolute, out var localEndpoint)
             || !Uri.TryCreate(CloudEndpointText.Text, UriKind.Absolute, out var cloudEndpoint))
         {
@@ -703,6 +1029,11 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        if (CloudUserNameText is null || CloudPasswordBox is null)
+        {
+            return;
+        }
+
         await Task.Yield();
         if (CloudUserNameText.FocusState != FocusState.Unfocused
             || CloudPasswordBox.FocusState != FocusState.Unfocused)
@@ -777,6 +1108,14 @@ public sealed partial class MainWindow : Window
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
     {
         _ = NavigateBackWithAnimationAsync();
+    }
+
+    private void SettingsBackButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeSettingsPage != SettingsPage.Root)
+        {
+            NavigateToSettingsPage(SettingsPage.Root);
+        }
     }
 
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
@@ -870,17 +1209,28 @@ public sealed partial class MainWindow : Window
 
     private void FollowThemeToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        settingsController.SetFollowSystemTheme(FollowThemeToggle.IsOn);
+        if (sender is ToggleSwitch toggle)
+        {
+            settingsController.SetFollowSystemTheme(toggle.IsOn);
+        }
     }
 
     private void UseWin11IconsToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        settingsController.SetUseWindows11Icons(UseWin11IconsToggle.IsOn);
+        if (sender is ToggleSwitch toggle)
+        {
+            settingsController.SetUseWindows11Icons(toggle.IsOn);
+        }
     }
 
     private async void LaunchAtStartupToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        var enabled = LaunchAtStartupToggle.IsOn;
+        if (sender is not ToggleSwitch toggle)
+        {
+            return;
+        }
+
+        var enabled = toggle.IsOn;
         settingsController.SetLaunchAtStartup(enabled);
         await Startup.StartupManager.SetEnabledAsync(enabled);
     }
