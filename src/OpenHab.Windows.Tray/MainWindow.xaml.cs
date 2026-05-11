@@ -335,47 +335,88 @@ public sealed partial class MainWindow : Window
     {
         AddSettingsSectionTitle("Server connection");
 
-        EndpointModeCombo = new ComboBox { Header = "Endpoint mode" };
+        EndpointModeCombo = new ComboBox
+        {
+            Width = 220
+        };
         EndpointModeCombo.ItemsSource = Enum.GetValues<EndpointMode>();
         EndpointModeCombo.SelectionChanged += EndpointModeCombo_SelectionChanged;
-        SettingsContent.Children.Add(EndpointModeCombo);
+        var endpointModeRow = CreateSettingsControlRow(
+            "\uE713",
+            "Endpoint mode",
+            "Choose how the app selects local or cloud connectivity",
+            EndpointModeCombo);
 
-        LocalEndpointText = new TextBox { Header = "Local endpoint" };
+        LocalEndpointText = new TextBox
+        {
+            Width = 520
+        };
         LocalEndpointText.LostFocus += EndpointText_LostFocus;
-        SettingsContent.Children.Add(LocalEndpointText);
+        var localEndpointRow = CreateSettingsControlRow(
+            "\uE839",
+            "Local endpoint",
+            "Base URL for your openHAB server on the local network",
+            LocalEndpointText);
 
-        CloudEndpointText = new TextBox { Header = "Cloud endpoint" };
+        CloudEndpointText = new TextBox
+        {
+            Width = 520
+        };
         CloudEndpointText.LostFocus += EndpointText_LostFocus;
-        SettingsContent.Children.Add(CloudEndpointText);
+        var cloudEndpointRow = CreateSettingsControlRow(
+            "\uE753",
+            "Cloud endpoint",
+            "Base URL for the myopenHAB cloud service",
+            CloudEndpointText);
 
         LocalTokenBox = new PasswordBox
         {
-            Header = "Local API token",
             PlaceholderText = "Enter token (optional)",
-            Tag = "Local"
+            Tag = "Local",
+            Width = 520
         };
         LocalTokenBox.GotFocus += TokenBox_GotFocus;
         LocalTokenBox.PasswordChanged += TokenBox_PasswordChanged;
         LocalTokenBox.LostFocus += TokenBox_LostFocus;
-        SettingsContent.Children.Add(LocalTokenBox);
+        var localTokenRow = CreateSettingsControlRow(
+            "\uE72E",
+            "Local API token",
+            "Optional bearer token used with the local endpoint",
+            LocalTokenBox);
 
         CloudUserNameText = new TextBox
         {
-            Header = "Cloud email / username",
-            PlaceholderText = "Enter myopenHAB email"
+            PlaceholderText = "Enter myopenHAB email",
+            Width = 520
         };
         CloudUserNameText.TextChanged += CloudUserNameText_TextChanged;
         CloudUserNameText.LostFocus += CloudCredentials_LostFocus;
-        SettingsContent.Children.Add(CloudUserNameText);
+        var cloudUserNameRow = CreateSettingsControlRow(
+            "\uE77B",
+            "Cloud email / username",
+            "Account used to sign in to myopenHAB",
+            CloudUserNameText);
 
         CloudPasswordBox = new PasswordBox
         {
-            Header = "Cloud password",
-            PlaceholderText = "Enter myopenHAB password"
+            PlaceholderText = "Enter myopenHAB password",
+            Width = 520
         };
         CloudPasswordBox.PasswordChanged += CloudPasswordBox_PasswordChanged;
         CloudPasswordBox.LostFocus += CloudCredentials_LostFocus;
-        SettingsContent.Children.Add(CloudPasswordBox);
+        var cloudPasswordRow = CreateSettingsControlRow(
+            "\uE72E",
+            "Cloud password",
+            "Password used only for the configured cloud account",
+            CloudPasswordBox);
+
+        SettingsContent.Children.Add(CreateSettingsGroup(
+            endpointModeRow,
+            localEndpointRow,
+            cloudEndpointRow,
+            localTokenRow,
+            cloudUserNameRow,
+            cloudPasswordRow));
     }
 
     private void BuildGeneralSettingsPage()
