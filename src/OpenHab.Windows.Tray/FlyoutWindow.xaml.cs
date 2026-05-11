@@ -1,7 +1,6 @@
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Composition;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -40,7 +39,6 @@ public sealed partial class FlyoutWindow : Window
     private bool isEntranceAnimationRunning;
     private bool isExitAnimationRunning;
     private bool shouldRunEntranceAnimation;
-    private InputLightDismissAction? _lightDismissAction;
     private bool _lightDismissInitialized;
     private bool _activeSlotIsA = true;
     private bool _suppressNextSnapshotRefresh;
@@ -411,23 +409,11 @@ public sealed partial class FlyoutWindow : Window
     {
         if (_lightDismissInitialized) return;
 
-        try
-        {
-            _lightDismissAction = InputLightDismissAction.GetForWindowId(AppWindow.Id);
-            _lightDismissAction.Dismissed += (_, _) =>
-            {
-                _ = CloseFlyoutWithAnimationAsync();
-            };
-            _lightDismissInitialized = true;
-            DiagnosticLogger.Info("Flyout InputLightDismissAction initialized successfully");
-        }
-        catch (Exception ex)
-        {
-            _lightDismissInitialized = false;
-            DiagnosticLogger.Warn(
-                $"Failed to initialize InputLightDismissAction — light-dismiss unavailable. " +
-                $"Exception: {ex.GetType().Name}: {ex.Message}");
-        }
+        // Temporary startup safety guard:
+        // some environments crash inside Microsoft.UI.Input when creating
+        // InputLightDismissAction. Keep flyout functional without OS light-dismiss.
+        _lightDismissInitialized = true;
+        DiagnosticLogger.Warn("InputLightDismissAction disabled for startup stability");
     }
 
     private void ConfigureFlyoutWindow()
