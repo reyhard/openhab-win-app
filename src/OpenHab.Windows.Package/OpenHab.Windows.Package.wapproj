@@ -14,7 +14,8 @@
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
     <PackageCertificateKeyFile Condition="'$(PackageCertificateKeyFile)' != ''">$(PackageCertificateKeyFile)</PackageCertificateKeyFile>
     <PackageCertificateThumbprint Condition="'$(PackageCertificateThumbprint)' != ''">$(PackageCertificateThumbprint)</PackageCertificateThumbprint>
-    <AppxPackageSigningEnabled>true</AppxPackageSigningEnabled>
+    <AppxPackageSigningEnabled Condition="'$(PackageCertificateKeyFile)' != '' Or '$(PackageCertificateThumbprint)' != ''">true</AppxPackageSigningEnabled>
+    <AppxPackageSigningEnabled Condition="'$(PackageCertificateKeyFile)' == '' And '$(PackageCertificateThumbprint)' == ''">false</AppxPackageSigningEnabled>
     <!-- Przewidywalna lokalizacja wyjściowa dla MSIX -->
     <DefaultPublishDir>$(MSBuildProjectDirectory)\bin\publish\</DefaultPublishDir>
     <!-- Główny projekt aplikacji -->
