@@ -551,11 +551,32 @@ public partial class App : Application
         {
             return;
         }
+        var sessionSwitchRegistered = false;
+        var powerModeRegistered = false;
+        try
+        {
+            SystemEvents.SessionSwitch += OnSessionSwitch;
+            sessionSwitchRegistered = true;
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            powerModeRegistered = true;
+            NetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
+            deviceInfoEventsRegistered = true;
+        }
+        catch (Exception ex)
+        {
+            if (powerModeRegistered)
+            {
+                SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            }
 
-        SystemEvents.SessionSwitch += OnSessionSwitch;
-        SystemEvents.PowerModeChanged += OnPowerModeChanged;
-        NetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
-        deviceInfoEventsRegistered = true;
+            if (sessionSwitchRegistered)
+            {
+                SystemEvents.SessionSwitch -= OnSessionSwitch;
+            }
+
+            deviceInfoEventsRegistered = false;
+            DiagnosticLogger.Warn($"Device Info Sync event registration failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private void UnregisterDeviceInfoSyncEvents()
