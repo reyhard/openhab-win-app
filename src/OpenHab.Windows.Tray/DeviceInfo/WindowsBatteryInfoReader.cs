@@ -14,7 +14,7 @@ internal sealed class WindowsBatteryInfoReader
             BatteryStatus.Charging => true,
             BatteryStatus.Discharging => false,
             BatteryStatus.Idle => true,
-            BatteryStatus.NotPresent => (bool?)null,
+            BatteryStatus.NotPresent => ReadPowerSupplyChargingStatus(),
             _ => (bool?)null
         };
 
@@ -43,5 +43,16 @@ internal sealed class WindowsBatteryInfoReader
         {
             return null;
         }
+    }
+
+    private static bool? ReadPowerSupplyChargingStatus()
+    {
+        return PowerManager.PowerSupplyStatus switch
+        {
+            PowerSupplyStatus.Adequate => true,
+            PowerSupplyStatus.Inadequate => true,
+            PowerSupplyStatus.NotPresent => false,
+            _ => (bool?)null
+        };
     }
 }
