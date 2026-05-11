@@ -14,12 +14,16 @@ using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Core;
 using OpenHab.Core.Events;
+using OpenHab.App.DeviceInfo;
 using OpenHab.Windows.Notifications;
 using OpenHab.Windows.Tray.Tray;
 using OpenHab.Windows.Tray.Startup;
+using OpenHab.Windows.Tray.DeviceInfo;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using Microsoft.Win32;
+using Windows.Networking.Connectivity;
 
 namespace OpenHab.Windows.Tray;
 
@@ -37,6 +41,9 @@ public partial class App : Application
     private NotificationStore? notificationStore;
     private NotificationPoller? notificationPoller;
     private SitemapRuntimeController? runtimeController;
+    private DeviceInfoSyncService? deviceInfoSyncService;
+    private WindowsSessionInfoReader? windowsSessionInfoReader;
+    private bool deviceInfoEventsRegistered;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
     private int isShuttingDown;
 
@@ -95,6 +102,17 @@ public partial class App : Application
                     basicPassword: auth.BasicPassword);
             },
             sitemapEventStreamClient: CreateEventStreamClient(settingsController, httpClient));
+        windowsSessionInfoReader = new WindowsSessionInfoReader();
+        var deviceStateSource = new WindowsDeviceStateSnapshotSource(
+            runtimeController,
+            new WindowsBatteryInfoReader(),
+            new WindowsNetworkInfoReader(),
+            new WindowsFocusInfoReader(),
+            windowsSessionInfoReader);
+        deviceInfoSyncService = new DeviceInfoSyncService(
+            getSettings: () => this.settingsController?.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default,
+            getClient: CreateDeviceInfoSyncClient,
+            snapshotSource: deviceStateSource);
 
         shellController = new TrayShellController();
         shellController.HandleLaunch();
@@ -304,6 +322,30 @@ public partial class App : Application
 
     private readonly record struct RuntimeAuth(string? ApiToken, string? BasicUserName, string? BasicPassword);
 
+    private IOpenHabClient? CreateDeviceInfoSyncClient()
+    {
+        var settings = settingsController?.Current;
+        var sharedClient = httpClient;
+        if (settings is null || sharedClient is null)
+        {
+            return null;
+        }
+
+        var preferredTransport = runtimeController?.Current.ActiveTransport ??
+            (settings.EndpointMode == EndpointMode.CloudOnly ? TransportKind.Cloud : TransportKind.Local);
+        var endpoint = preferredTransport == TransportKind.Cloud
+            ? settings.CloudEndpoint
+            : settings.LocalEndpoint;
+        var auth = ResolveRuntimeAuthSync(settingsController!, preferredTransport);
+
+        return new OpenHabHttpClient(
+            sharedClient,
+            endpoint,
+            apiToken: auth.ApiToken,
+            basicUserName: auth.BasicUserName,
+            basicPassword: auth.BasicPassword);
+    }
+
     private void OnProcessExit(object? sender, EventArgs args)
     {
         ShutdownTrayResources();
@@ -389,6 +431,11 @@ public partial class App : Application
     private async Task CompleteStartupAsync(AppSettingsController settingsController, AppActivationArguments? activatedEventArgs)
     {
         await InitializeAsync(settingsController);
+
+        RegisterDeviceInfoSyncEvents();
+        deviceInfoSyncService?.Start();
+        _ = TriggerDeviceInfoSyncAsync();
+
         await ApplyShellStateAsync();
 
         // Sync autostart state with saved preference.
@@ -485,6 +532,10 @@ public partial class App : Application
     private void ShutdownTrayResourcesCore()
     {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        UnregisterDeviceInfoSyncEvents();
+        deviceInfoSyncService?.Dispose();
+        deviceInfoSyncService = null;
+        windowsSessionInfoReader = null;
         DiagnosticLogger.Info("Shutting down notification poller");
         notificationPoller?.Dispose();
         notificationPoller = null;
@@ -492,6 +543,108 @@ public partial class App : Application
         trayIcon = null;
         httpClient?.Dispose();
         httpClient = null;
+    }
+
+    private void RegisterDeviceInfoSyncEvents()
+    {
+        if (deviceInfoEventsRegistered)
+        {
+            return;
+        }
+
+        SystemEvents.SessionSwitch += OnSessionSwitch;
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+        NetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
+        deviceInfoEventsRegistered = true;
+    }
+
+    private void UnregisterDeviceInfoSyncEvents()
+    {
+        if (!deviceInfoEventsRegistered)
+        {
+            return;
+        }
+
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        NetworkInformation.NetworkStatusChanged -= OnNetworkStatusChanged;
+        deviceInfoEventsRegistered = false;
+    }
+
+    private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        try
+        {
+            var sessionReader = windowsSessionInfoReader;
+            if (sessionReader is not null)
+            {
+                if (e.Reason == SessionSwitchReason.SessionLock)
+                {
+                    sessionReader.MarkLocked();
+                }
+                else if (e.Reason == SessionSwitchReason.SessionUnlock)
+                {
+                    sessionReader.MarkActive();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Device Info Sync session event update failed: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        _ = TriggerDeviceInfoSyncAsync();
+    }
+
+    private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
+    {
+        try
+        {
+            var sessionReader = windowsSessionInfoReader;
+            if (sessionReader is not null)
+            {
+                if (e.Mode == PowerModes.Suspend)
+                {
+                    sessionReader.MarkSleep();
+                }
+                else if (e.Mode == PowerModes.Resume)
+                {
+                    sessionReader.MarkResume();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Device Info Sync power event update failed: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        _ = TriggerDeviceInfoSyncAsync();
+    }
+
+    private void OnNetworkStatusChanged(object sender)
+    {
+        _ = TriggerDeviceInfoSyncAsync();
+    }
+
+    private async Task TriggerDeviceInfoSyncAsync()
+    {
+        try
+        {
+            var service = deviceInfoSyncService;
+            if (service is null)
+            {
+                return;
+            }
+
+            await service.TriggerSyncAsync(CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Device Info Sync trigger failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private static void TryAddButton(string? rawButton, List<NotificationActionButton> buttons)
