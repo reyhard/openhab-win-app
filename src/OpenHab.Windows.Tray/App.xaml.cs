@@ -16,6 +16,7 @@ using OpenHab.Core;
 using OpenHab.Core.Events;
 using OpenHab.App.DeviceInfo;
 using OpenHab.Windows.Notifications;
+using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Tray;
 using OpenHab.Windows.Tray.Startup;
 using OpenHab.Windows.Tray.DeviceInfo;
@@ -262,6 +263,10 @@ public partial class App : Application
                 DiagnosticLogger.Info($"Notification received — severity: {notification.Severity ?? "none"}");
                 var title = BuildNotificationHeader(notification);
                 var body = BuildNotificationBody(notification);
+                var tag = ResolveNotificationTag(notification);
+                var importantTags = settingsController.Current.ImportantNotificationTags;
+                var isImportant = IsImportantNotification(tag, importantTags);
+                var toastHeader = ResolveNotificationHeader(tag);
 
                 // Parse action buttons from the notification data
                 var actionButtons = new List<NotificationActionButton>();
@@ -269,7 +274,14 @@ public partial class App : Application
                 TryAddButton(notification.ActionButton2, actionButtons);
                 TryAddButton(notification.ActionButton3, actionButtons);
 
-                ToastService.Show(title, body, actionButtons.Count > 0 ? actionButtons : null);
+                _ = ShowNotificationToastAsync(
+                    notification.Icon,
+                    title,
+                    body,
+                    actionButtons.Count > 0 ? actionButtons : null,
+                    isImportant,
+                    toastHeader,
+                    tag);
             };
 
             notificationPoller.Start();
@@ -677,15 +689,19 @@ public partial class App : Application
 
     private static string BuildNotificationHeader(CloudNotification notification)
     {
+        var tag = ResolveNotificationTag(notification);
         if (!string.IsNullOrWhiteSpace(notification.Title))
         {
-            return notification.Title;
+            var title = notification.Title;
+            if (!string.IsNullOrWhiteSpace(tag))
+            {
+                title = StripLeadingBracketToken(title, tag);
+            }
+
+            return CapitalizeFirstLetter(title.Trim());
         }
 
-        var tag = ResolveNotificationTag(notification);
-        return !string.IsNullOrWhiteSpace(tag)
-            ? $"[{tag}] openHAB"
-            : "openHAB";
+        return "openHAB";
     }
 
     private static string BuildNotificationBody(CloudNotification notification)
@@ -697,7 +713,7 @@ public partial class App : Application
             body = StripLeadingBracketToken(body, tag);
         }
 
-        body = body.Trim();
+        body = CapitalizeFirstLetter(body.Trim());
         if (body.Length > 200)
         {
             return body[..197] + "...";
@@ -716,13 +732,194 @@ public partial class App : Application
             RegexOptions.IgnoreCase);
     }
 
+    private static string CapitalizeFirstLetter(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        return char.ToUpperInvariant(text[0]) + text[1..];
+    }
+
     // openHAB Cloud docs: "tag" supersedes/semsame as legacy "severity".
-    // Keep it in-memory (store severity slot) for future important-notification policy.
     private static string? ResolveNotificationTag(CloudNotification notification)
     {
         return string.IsNullOrWhiteSpace(notification.Tag)
             ? notification.Severity
             : notification.Tag;
+    }
+
+    private static string? ResolveNotificationHeader(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return null;
+        }
+
+        return CapitalizeFirstLetter(tag.Trim());
+    }
+
+    private static bool IsImportantNotification(string? tag, IReadOnlyList<string> configuredImportantTags)
+    {
+        if (string.IsNullOrWhiteSpace(tag) || configuredImportantTags.Count == 0)
+        {
+            return false;
+        }
+
+        return configuredImportantTags.Any(configured =>
+            string.Equals(configured, tag.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task ShowNotificationToastAsync(
+        string? icon,
+        string title,
+        string body,
+        IReadOnlyList<NotificationActionButton>? actionButtons,
+        bool isImportant,
+        string? toastHeader,
+        string? tag)
+    {
+        Uri? appLogoOverrideUri = null;
+        try
+        {
+            using var iconCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            appLogoOverrideUri = await ResolveNotificationAppLogoOverrideUriAsync(icon, iconCts.Token);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Notification icon cache failed: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        ToastService.Show(
+            title,
+            body,
+            actionButtons,
+            important: isImportant,
+            header: toastHeader,
+            tag: tag,
+            appLogoOverrideUri: appLogoOverrideUri);
+    }
+
+    private async Task<Uri?> ResolveNotificationAppLogoOverrideUriAsync(string? icon, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(icon)
+            && Uri.TryCreate(icon.Trim(), UriKind.Absolute, out var iconUri))
+        {
+            return iconUri;
+        }
+
+        if (string.IsNullOrWhiteSpace(icon))
+        {
+            return null;
+        }
+
+        var settings = settingsController?.Current;
+        var client = httpClient;
+        if (settings is null || client is null)
+        {
+            return null;
+        }
+
+        var primaryTransport = settings.EndpointMode == EndpointMode.CloudOnly
+            ? TransportKind.Cloud
+            : TransportKind.Local;
+
+        var cached = await TryCacheNotificationIconAsync(icon, settings, primaryTransport, client, cancellationToken);
+        if (cached is not null || settings.EndpointMode != EndpointMode.Automatic)
+        {
+            return cached;
+        }
+
+        return await TryCacheNotificationIconAsync(icon, settings, TransportKind.Cloud, client, cancellationToken);
+    }
+
+    private static async Task<Uri?> TryCacheNotificationIconAsync(
+        string icon,
+        AppSettings settings,
+        TransportKind transport,
+        HttpClient client,
+        CancellationToken cancellationToken)
+    {
+        var baseUri = transport == TransportKind.Cloud ? settings.CloudEndpoint : settings.LocalEndpoint;
+        foreach (var format in new[] { "svg", "png" })
+        {
+            var iconUri = SitemapControlFactory.BuildOpenHabIconUri(baseUri, icon.Trim(), null, format);
+            var cachePath = BuildNotificationIconCachePath(iconUri, format);
+            if (File.Exists(cachePath))
+            {
+                return new Uri(cachePath);
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+            using var request = new HttpRequestMessage(HttpMethod.Get, iconUri);
+            var authMode = ApplyNotificationIconAuth(request, transport);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                DiagnosticLogger.Warn(
+                    $"Notification icon request failed: icon='{icon}', format='{format}', status={(int)response.StatusCode}, auth='{authMode}', uri={iconUri}");
+                continue;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            if (bytes.Length == 0 || bytes.Length > 3 * 1024 * 1024)
+            {
+                DiagnosticLogger.Warn(
+                    $"Notification icon skipped due to invalid size: icon='{icon}', format='{format}', bytes={bytes.Length}");
+                continue;
+            }
+
+            await File.WriteAllBytesAsync(cachePath, bytes, cancellationToken);
+            DiagnosticLogger.Info(
+                $"Notification icon cached: icon='{icon}', format='{format}', bytes={bytes.Length}, auth='{authMode}'");
+            return new Uri(cachePath);
+        }
+
+        return null;
+    }
+
+    private static string ApplyNotificationIconAuth(HttpRequestMessage request, TransportKind transport)
+    {
+        var controller = ((App)Current).settingsController;
+        if (controller is null)
+        {
+            return "none";
+        }
+
+        if (transport == TransportKind.Local)
+        {
+            var token = GetApiTokenSync(controller, TransportKind.Local);
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                return "bearer";
+            }
+
+            return "none";
+        }
+
+        var cloudCredentials = GetCloudCredentialsSync(controller);
+        if (!string.IsNullOrWhiteSpace(cloudCredentials?.UserName))
+        {
+            var raw = $"{cloudCredentials.UserName}:{cloudCredentials.Password ?? string.Empty}";
+            var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(raw));
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", base64);
+            return "basic";
+        }
+
+        return "none";
+    }
+
+    private static string BuildNotificationIconCachePath(Uri iconUri, string format)
+    {
+        var hash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(iconUri.ToString())));
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "OpenHab.WinApp",
+            "NotificationIcons",
+            $"{hash}.{format}");
     }
 
     private async Task HandleNotificationActionAsync(string actionArg)

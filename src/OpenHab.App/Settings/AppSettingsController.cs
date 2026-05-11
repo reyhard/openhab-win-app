@@ -2,6 +2,7 @@ using OpenHab.Core;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using System.Collections.Immutable;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -191,6 +192,15 @@ public sealed class AppSettingsController
         }
 
         UpdateSettings(settings => settings with { NotificationPollIntervalSeconds = seconds });
+    }
+
+    public void SetImportantNotificationTags(IEnumerable<string> tags)
+    {
+        ArgumentNullException.ThrowIfNull(tags);
+        UpdateSettings(settings => settings with
+        {
+            ImportantNotificationTags = NormalizeImportantNotificationTags(tags)
+        });
     }
 
     public void SetDeviceInfoSyncSettings(DeviceInfoSyncSettings settings)
@@ -465,8 +475,24 @@ public sealed class AppSettingsController
         {
             FlyoutWidth = width,
             NotificationPollIntervalSeconds = interval,
+            ImportantNotificationTags = NormalizeImportantNotificationTags(settings.ImportantNotificationTags),
             DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default
         };
+    }
+
+    private static ImmutableArray<string> NormalizeImportantNotificationTags(IEnumerable<string>? tags)
+    {
+        if (tags is null)
+        {
+            return [];
+        }
+
+        var normalized = tags
+            .Where(static tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(static tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToImmutableArray();
+        return normalized;
     }
 
     private sealed class SaveQueue

@@ -33,6 +33,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(460, controller.Current.FlyoutWidth);
         Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
         Assert.Equal(ChartQuality.High, controller.Current.ChartQuality);
+        Assert.Empty(controller.Current.ImportantNotificationTags);
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
         Assert.Null(controller.Current.CloudUserName);
@@ -428,6 +429,26 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void CanSetImportantNotificationTags()
+    {
+        var controller = CreateController();
+
+        controller.SetImportantNotificationTags(["critical", "warning"]);
+
+        Assert.Equal(["critical", "warning"], controller.Current.ImportantNotificationTags.ToArray());
+    }
+
+    [Fact]
+    public void SetImportantNotificationTags_NormalizesWhitespaceAndDuplicates()
+    {
+        var controller = CreateController();
+
+        controller.SetImportantNotificationTags(["  critical ", "warning", "CRITICAL", "  "]);
+
+        Assert.Equal(["critical", "warning"], controller.Current.ImportantNotificationTags.ToArray());
+    }
+
+    [Fact]
     public void ChartQuality_RoundTripsThroughJson()
     {
         var original = AppSettings.Default with { ChartQuality = ChartQuality.Normal };
@@ -550,5 +571,17 @@ public sealed class AppSettingsControllerTests
         Assert.False(deviceInfoSync.IsEnabled);
         Assert.Equal(DeviceInfoSyncSettings.DefaultSyncIntervalMinutes, deviceInfoSync.SyncIntervalMinutes);
         Assert.True(deviceInfoSync.HasAnyMapping);
+        Assert.Empty(controller.Current.ImportantNotificationTags);
+    }
+
+    [Fact]
+    public async Task ImportantNotificationTagsRoundTripThroughJson()
+    {
+        var controller = CreateController();
+        controller.SetImportantNotificationTags(["critical", "warning"]);
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        Assert.Equal(["critical", "warning"], reloaded.Current.ImportantNotificationTags.ToArray());
     }
 }
