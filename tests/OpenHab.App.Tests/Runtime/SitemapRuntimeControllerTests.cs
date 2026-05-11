@@ -341,6 +341,28 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task RefreshWhileSearchActiveRecomputesFromLatestSitemapOrder()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", reversed: true));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka");
+        await controller.RefreshAsync();
+
+        var labels = controller.Current.Descriptor!.Rows
+            .Where(row => row.Label.StartsWith("Lampka", StringComparison.Ordinal))
+            .Select(row => row.Label)
+            .ToArray();
+        Assert.Equal(["Lampka mobilna", "Lampka nocna"], labels);
+    }
+
+    [Fact]
     public async Task ActivateSearchResultSendsCommandToSourceWidget()
     {
         var settings = CreateSettingsController();
@@ -784,6 +806,37 @@ public sealed class SitemapRuntimeControllerTests
         Assert.True(eventSnapshot.IsSearchActive);
         Assert.Equal("__search__", eventSnapshot.Descriptor!.PageId);
         Assert.Contains(eventSnapshot.Descriptor.Rows, row => row.Label == "Living Room Light" && row.State == "ON");
+    }
+
+    [Fact]
+    public async Task SearchDescriptorRemovesResultWhenSitemapWidgetEventHidesIt()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        controller.ApplySearchQuery("Lampka nocna");
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "lamp-night",
+            Label: null,
+            Icon: null,
+            Visibility: false,
+            ItemName: "Bedroom_Lamp",
+            ItemState: "OFF",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.DoesNotContain(controller.Current.Descriptor!.Rows, row => row.Label == "Lampka nocna");
+        Assert.Contains(controller.Current.Descriptor.Rows, row => row.Label == "No matching sitemap elements");
     }
 
     [Fact]
