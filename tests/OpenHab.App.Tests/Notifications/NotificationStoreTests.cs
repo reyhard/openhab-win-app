@@ -392,6 +392,50 @@ public sealed class NotificationStoreTests
     }
 
     [Fact]
+    public void Changed_DoesNotFire_WhenHideOnAlreadyHidden()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
+        store.Hide("n1");
+        var fired = false;
+        store.Changed += (_, _) => fired = true;
+
+        store.Hide("n1");
+
+        Assert.False(fired);
+    }
+
+    [Fact]
+    public void Changed_DoesNotFire_WhenUnhideOnAlreadyVisible()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
+        var fired = false;
+        store.Changed += (_, _) => fired = true;
+
+        store.Unhide("n1");
+
+        Assert.False(fired);
+    }
+
+    [Fact]
+    public void Changed_DoesNotFire_WhenMarkAllReadHasNoVisibleUnreadNotifications()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("read", "Read", DateTimeOffset.UtcNow);
+        store.AddOrUpdate("hidden", "Hidden", DateTimeOffset.UtcNow);
+        store.MarkRead("read");
+        store.Hide("hidden");
+        store.MarkUnread("hidden");
+        var fired = false;
+        store.Changed += (_, _) => fired = true;
+
+        store.MarkAllRead();
+
+        Assert.False(fired);
+    }
+
+    [Fact]
     public void Hide_MarksNotificationHiddenAndRead()
     {
         var store = new NotificationStore();
