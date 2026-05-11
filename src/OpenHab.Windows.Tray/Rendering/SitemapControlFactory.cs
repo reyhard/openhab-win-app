@@ -1671,7 +1671,7 @@ public static partial class SitemapControlFactory
         grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(220);
 
         var inferredHint = ResolveInputHint(row);
-        var rawValue = row.RawItemState ?? row.RawState ?? row.State ?? string.Empty;
+        var rawValue = NormalizeInputStateValue(row.RawItemState ?? row.RawState ?? row.State);
 
         async Task SubmitAsync(string value)
         {
@@ -1944,7 +1944,7 @@ public static partial class SitemapControlFactory
         return DateTimeOffset.TryParse(raw, CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal, out dateTime);
     }
 
-    private static string? NormalizeInputByHint(string? raw, SitemapInputHint hint)
+    internal static string? NormalizeInputByHint(string? raw, SitemapInputHint hint)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
@@ -1957,9 +1957,28 @@ public static partial class SitemapControlFactory
             SitemapInputHint.Date when TryParseDateOnly(value, out var date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             SitemapInputHint.Time when TryParseTimeOnly(value, out var time) => time.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
             SitemapInputHint.DateTime when TryParseDateTime(value, out var dateTime) => dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
+            SitemapInputHint.Number when HasIntegerLeadingZeros(value) => value,
             SitemapInputHint.Number when TryParseNumericState(value, out var number) => number.ToString(CultureInfo.InvariantCulture),
             _ => value
         };
+    }
+
+    private static bool HasIntegerLeadingZeros(string value)
+    {
+        if (value.Length < 2 || value[0] != '0')
+        {
+            return false;
+        }
+
+        foreach (var ch in value)
+        {
+            if (!char.IsAsciiDigit(ch))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static string FormatInputDisplayValue(string? raw, SitemapInputHint hint)
@@ -1976,6 +1995,20 @@ public static partial class SitemapControlFactory
             SitemapInputHint.DateTime when TryParseDateTime(raw, out var dateTime) => dateTime.ToString("g", CultureInfo.CurrentCulture),
             _ => raw.Trim()
         };
+    }
+
+    private static string NormalizeInputStateValue(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return string.Empty;
+        }
+
+        var value = raw.Trim();
+        return value.Equals("NULL", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("UNDEF", StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : value;
     }
 
     private static bool SelectionValueMatches(string? left, string? right)
