@@ -203,21 +203,8 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Button x:Name="SettingsBackButton"
-                                    Width="34"
-                                    Height="34"
-                                    Padding="0"
-                                    Click="SettingsBackButton_Click"
-                                    ToolTipService.ToolTip="Back"
-                                    Visibility="Collapsed">
-                                <FontIcon Glyph="&#xE72B;" FontSize="13" />
-                            </Button>
-                            <StackPanel Grid.Column="1" Spacing="2">
+                        <Grid>
+                            <StackPanel Spacing="2">
                                 <StackPanel Orientation="Horizontal"
                                             Spacing="6"
                                             VerticalAlignment="Center">
@@ -227,7 +214,7 @@
                                             BorderThickness="0"
                                             Background="Transparent"
                                             FontSize="18"
-                                            FontWeight="SemiBold"
+                                            Opacity="0.65"
                                             Visibility="Collapsed"
                                             Click="SettingsBreadcrumbRootButton_Click" />
                                     <FontIcon x:Name="SettingsBreadcrumbChevron"

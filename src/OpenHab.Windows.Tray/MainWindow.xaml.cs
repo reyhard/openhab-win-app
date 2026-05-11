@@ -264,7 +264,6 @@ public sealed partial class MainWindow : Window
     private void UpdateSettingsBreadcrumb(string? pageTitle)
     {
         var isRoot = string.IsNullOrWhiteSpace(pageTitle);
-        SettingsBackButton.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
         SettingsBreadcrumbRootButton.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
         SettingsBreadcrumbChevron.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
         SettingsTitleText.Text = isRoot ? "Settings" : pageTitle;
@@ -385,12 +384,14 @@ public sealed partial class MainWindow : Window
 
         LaunchAtStartupToggle = new ToggleSwitch
         {
-            Header = "Launch at startup",
-            OnContent = "On",
-            OffContent = "Off"
+            OnContent = string.Empty,
+            OffContent = string.Empty
         };
         LaunchAtStartupToggle.Toggled += LaunchAtStartupToggle_Toggled;
-        SettingsContent.Children.Add(LaunchAtStartupToggle);
+        SettingsContent.Children.Add(CreateSettingsToggleRow(
+            "Launch at startup",
+            "Start openHAB automatically when you sign in to Windows",
+            LaunchAtStartupToggle));
 
         FlyoutWidthBox = new NumberBox
         {
@@ -426,21 +427,25 @@ public sealed partial class MainWindow : Window
 
         FollowThemeToggle = new ToggleSwitch
         {
-            Header = "Follow Windows color scheme",
-            OnContent = "On",
-            OffContent = "Off"
+            OnContent = string.Empty,
+            OffContent = string.Empty
         };
         FollowThemeToggle.Toggled += FollowThemeToggle_Toggled;
-        SettingsContent.Children.Add(FollowThemeToggle);
+        SettingsContent.Children.Add(CreateSettingsToggleRow(
+            "Follow Windows color scheme",
+            "Use the current Windows app theme preference",
+            FollowThemeToggle));
 
         UseWin11IconsToggle = new ToggleSwitch
         {
-            Header = "Use Windows 11 style icons",
-            OnContent = "On",
-            OffContent = "Off"
+            OnContent = string.Empty,
+            OffContent = string.Empty
         };
         UseWin11IconsToggle.Toggled += UseWin11IconsToggle_Toggled;
-        SettingsContent.Children.Add(UseWin11IconsToggle);
+        SettingsContent.Children.Add(CreateSettingsToggleRow(
+            "Use Windows 11 style icons",
+            "Prefer Fluent-style symbols for sitemap widgets",
+            UseWin11IconsToggle));
     }
 
     private void BuildDeviceInfoSyncSettingsPage()
@@ -450,12 +455,14 @@ public sealed partial class MainWindow : Window
 
         DeviceInfoSyncEnabledToggle = new ToggleSwitch
         {
-            Header = "Enable Device Info Sync",
-            OnContent = "On",
-            OffContent = "Off"
+            OnContent = string.Empty,
+            OffContent = string.Empty
         };
         DeviceInfoSyncEnabledToggle.Toggled += DeviceInfoSyncEnabledToggle_Toggled;
-        syncContent.Children.Add(DeviceInfoSyncEnabledToggle);
+        syncContent.Children.Add(CreateSettingsToggleRow(
+            "Enable Device Info Sync",
+            "Send selected Windows device state to openHAB Items",
+            DeviceInfoSyncEnabledToggle));
 
         var current = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
         if (!current.IsEnabled)
@@ -538,6 +545,55 @@ public sealed partial class MainWindow : Window
         Grid.SetColumn(textBox, 1);
         row.Children.Add(textBox);
         target.Children.Add(row);
+    }
+
+    private static Grid CreateSettingsToggleRow(string title, string subtitle, ToggleSwitch toggle)
+    {
+        var row = new Grid
+        {
+            ColumnSpacing = 16,
+            Padding = new Thickness(16, 12, 16, 12),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var textPanel = new StackPanel { Spacing = 2 };
+        textPanel.Children.Add(new TextBlock
+        {
+            Text = title,
+            TextWrapping = TextWrapping.Wrap
+        });
+        textPanel.Children.Add(new TextBlock
+        {
+            Text = subtitle,
+            Opacity = 0.68,
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+            TextWrapping = TextWrapping.Wrap
+        });
+        row.Children.Add(textPanel);
+
+        var stateText = new TextBlock
+        {
+            Text = toggle.IsOn ? "On" : "Off",
+            VerticalAlignment = VerticalAlignment.Center,
+            MinWidth = 24
+        };
+        toggle.Toggled += (_, _) => stateText.Text = toggle.IsOn ? "On" : "Off";
+        toggle.VerticalAlignment = VerticalAlignment.Center;
+
+        var actionPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        actionPanel.Children.Add(stateText);
+        actionPanel.Children.Add(toggle);
+        Grid.SetColumn(actionPanel, 1);
+        row.Children.Add(actionPanel);
+
+        return row;
     }
 
     private void BuildAboutSettingsPage()
@@ -1424,14 +1480,6 @@ public sealed partial class MainWindow : Window
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
     {
         _ = NavigateBackWithAnimationAsync();
-    }
-
-    private void SettingsBackButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_activeSettingsPage != SettingsPage.Root)
-        {
-            NavigateToSettingsPage(SettingsPage.Root);
-        }
     }
 
     private void SettingsBreadcrumbRootButton_Click(object sender, RoutedEventArgs e)
