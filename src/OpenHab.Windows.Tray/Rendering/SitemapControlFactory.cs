@@ -16,6 +16,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using OpenHab.Core;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Rendering.Icons;
 using OpenHab.Sitemaps.Models;
 using Windows.Storage.Streams;
 
@@ -689,7 +690,7 @@ public static partial class SitemapControlFactory
             return;
         }
 
-        var iconState = row.RawState ?? row.State;
+        var iconState = OpenHabIconUriBuilder.NormalizeStateForRequest(row.RawState ?? row.State);
         if (string.Equals(tag.IconName, iconName, StringComparison.Ordinal) &&
             string.Equals(tag.IconState, iconState, StringComparison.Ordinal) &&
             string.Equals(tag.IconColor, row.IconColor, StringComparison.Ordinal))
@@ -862,6 +863,7 @@ public static partial class SitemapControlFactory
         IconAuthContext? iconAuth)
     {
         if (string.IsNullOrWhiteSpace(iconName)) return false;
+        var requestIconState = OpenHabIconUriBuilder.NormalizeStateForRequest(iconState);
 
         if (useWindowsIcons)
         {
@@ -892,7 +894,7 @@ public static partial class SitemapControlFactory
                 Width = 26,
                 Height = 26,
                 VerticalAlignment = VerticalAlignment.Center,
-                Tag = new IconImageTag(baseUri, iconName, iconState, iconColor, iconAuth)
+                Tag = new IconImageTag(baseUri, iconName, requestIconState, iconColor, iconAuth)
             };
             Grid.SetColumn(image, column);
             grid.Children.Add(image);
@@ -900,16 +902,16 @@ public static partial class SitemapControlFactory
             if (iconAuth is { } authContext)
             {
                 StartIconProbeIfNeeded(baseUri, authContext);
-                _ = LoadIconAsync(image, baseUri, iconName, iconState, iconColor, authContext);
+                _ = LoadIconAsync(image, baseUri, iconName, requestIconState, iconColor, authContext);
                 return true;
             }
 
-            _ = LoadIconAsync(image, baseUri, iconName, iconState, iconColor, null);
+            _ = LoadIconAsync(image, baseUri, iconName, requestIconState, iconColor, null);
             return true;
         }
 
             if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{iconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
+                DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{requestIconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
         return false;
     }
 
@@ -985,6 +987,7 @@ public static partial class SitemapControlFactory
         string? iconColor,
         IconAuthContext? authContext)
     {
+        iconState = OpenHabIconUriBuilder.NormalizeStateForRequest(iconState);
         var attempts = new List<string>(IconFormatsByPreference.Length);
 
         foreach (var format in IconFormatsByPreference)
@@ -1226,44 +1229,7 @@ public static partial class SitemapControlFactory
 
     internal static Uri BuildOpenHabIconUri(Uri baseUri, string iconName, string? iconState, string format = "png")
     {
-        ArgumentNullException.ThrowIfNull(baseUri);
-        ArgumentException.ThrowIfNullOrWhiteSpace(iconName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(format);
-
-        var sourceSplit = iconName.Split(':', 2, StringSplitOptions.TrimEntries);
-        var hasExplicitSource = sourceSplit.Length == 2;
-        var iconSource = hasExplicitSource ? sourceSplit[0] : "oh";
-        if (hasExplicitSource &&
-            (iconSource.Equals("f7", StringComparison.OrdinalIgnoreCase) ||
-             iconSource.Equals("material", StringComparison.OrdinalIgnoreCase) ||
-             iconSource.Equals("if", StringComparison.OrdinalIgnoreCase) ||
-             iconSource.Equals("iconify", StringComparison.OrdinalIgnoreCase)))
-        {
-            var source = iconSource.ToLowerInvariant();
-            var rawName = sourceSplit[1];
-            if (source == "f7")
-            {
-                return new Uri($"https://api.iconify.design/f7/{Uri.EscapeDataString(rawName.Replace('_', '-'))}.svg");
-            }
-
-            if (source == "material")
-            {
-                var materialName = $"baseline-{rawName.Replace('_', '-')}";
-                return new Uri($"https://api.iconify.design/ic/{Uri.EscapeDataString(materialName)}.svg");
-            }
-
-            var iconifyName = rawName.Replace(':', '/');
-            return new Uri($"https://api.iconify.design/{Uri.EscapeDataString(iconifyName)}.svg");
-        }
-
-        var escapedIcon = hasExplicitSource
-            ? $"{Uri.EscapeDataString(iconSource)}:{Uri.EscapeDataString(sourceSplit[1])}"
-            : Uri.EscapeDataString(iconName);
-        var query = string.IsNullOrWhiteSpace(iconState)
-            ? $"format={Uri.EscapeDataString(format)}"
-            : $"format={Uri.EscapeDataString(format)}&state={Uri.EscapeDataString(iconState)}";
-
-        return new Uri(baseUri, $"icon/{escapedIcon}?{query}");
+        return OpenHabIconUriBuilder.Build(baseUri, iconName, iconState, format);
     }
 
     private static bool CanDisplayIcon(string? iconName, Uri? baseUri, bool useWindowsIcons)
