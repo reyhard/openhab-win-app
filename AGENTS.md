@@ -17,7 +17,11 @@ The implementation is intentionally layered:
 
 Do not maintain implementation progress directly in this file.
 
-Use the status docs as the source of truth for what is finished, what was verified, and what remains out of scope:
+Use the status docs as the source of truth for what is finished, what was verified, and what remains out of scope. Read this consolidated tracker first:
+
+- `docs/superpowers/status/openhab-windows-current-state.md`
+
+Historical status references:
 
 - `docs/superpowers/status/2026-05-05-openhab-windows-foundation-status.md`
 - `docs/superpowers/status/2026-05-05-openhab-windows-ui-slice-status.md`
@@ -46,11 +50,16 @@ Useful files there include `diagnostics.log`, `task-crash.log`, `settings.json`,
 
 Useful project docs:
 
-- `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md`
-- `docs/superpowers/status/2026-05-05-openhab-windows-foundation-status.md`
-- `docs/superpowers/status/2026-05-05-openhab-windows-ui-slice-status.md`
-- `docs/superpowers/status/2026-05-05-openhab-windows-connected-homepage-status.md`
-- `.docs/design.md`
+- `docs/superpowers/status/openhab-windows-current-state.md` - start here for current shipped behavior, release blockers, and verification gates.
+- `docs/superpowers/verification/openhab-windows-quality-gates.md` - direct test and full-solution verification commands, including DesktopBridge caveats.
+- `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md` - original sitemap client architecture and intended rendering/navigation direction.
+- `.docs/design.md` - broader product/design notes and UI direction.
+
+Historical implementation evidence, when needed:
+
+- `docs/superpowers/status/2026-05-05-openhab-windows-foundation-status.md` - foundation/runtime status at that checkpoint.
+- `docs/superpowers/status/2026-05-05-openhab-windows-ui-slice-status.md` - UI slice status at that checkpoint.
+- `docs/superpowers/status/2026-05-05-openhab-windows-connected-homepage-status.md` - connected homepage status at that checkpoint.
 
 Treat the status docs as the best summary of what is actually finished.
 
@@ -78,6 +87,8 @@ Primary verification commands:
 
 - `dotnet test OpenHab.Windows.sln`
 - `dotnet build OpenHab.Windows.sln --configuration Release`
+
+If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio, try a Debug build before diagnosing code changes.
 
 If a change is isolated to one layer, targeted tests are fine during iteration, but run the full solution tests before claiming completion when practical.
 
