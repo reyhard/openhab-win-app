@@ -9,6 +9,7 @@ using OpenHab.Sitemaps.Models;
 using OpenHab.Sitemaps.Parsing;
 using OpenHab.Sitemaps.Runtime;
 using System.Diagnostics;
+using System.Globalization;
 using System.Threading;
 
 namespace OpenHab.App.Runtime;
@@ -41,6 +42,11 @@ public sealed class SitemapRuntimeController
     private IReadOnlyDictionary<string, SitemapSearchSource> _activeSearchSources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
     private static readonly TimeSpan WidgetEventReconcileDebounce = TimeSpan.FromMilliseconds(250);
     public bool CanGoBack => backStack.Count > 0;
+
+    private sealed record ResolvedSearchWidget(
+        NormalizedSitemapPage Page,
+        NormalizedSitemapWidget Widget,
+        int WidgetIndex);
 
     public SitemapRuntimeController(
         AppSettingsController settingsController,
@@ -233,6 +239,66 @@ public sealed class SitemapRuntimeController
         return true;
     }
 
+    public Task<bool> ActivateRowByKeyAsync(string rowKey, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rowKey);
+
+        if (Current.IsSearchActive)
+        {
+            if (_activeSearchSources.TryGetValue(rowKey, out var source))
+            {
+                return ActivateSearchSourceAsync(source, cancellationToken);
+            }
+
+            RebuildActiveSearchSnapshot();
+            return Task.FromResult(false);
+        }
+
+        return TryResolveCurrentDescriptorRow(rowKey, out var rowIndex)
+            ? ActivateRowAsync(rowIndex, cancellationToken)
+            : Task.FromResult(false);
+    }
+
+    public Task<bool> SendCommandForRowKeyAsync(string rowKey, string command, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rowKey);
+
+        if (Current.IsSearchActive)
+        {
+            if (_activeSearchSources.TryGetValue(rowKey, out var source))
+            {
+                return SendCommandForSearchSourceAsync(source, command, cancellationToken);
+            }
+
+            RebuildActiveSearchSnapshot();
+            return Task.FromResult(false);
+        }
+
+        return TryResolveCurrentDescriptorRow(rowKey, out var rowIndex)
+            ? SendCommandForRowAsync(rowIndex, command, cancellationToken)
+            : Task.FromResult(false);
+    }
+
+    public Task<bool> NavigateRowByKeyAsync(string rowKey, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rowKey);
+
+        if (Current.IsSearchActive)
+        {
+            if (_activeSearchSources.TryGetValue(rowKey, out var source))
+            {
+                return NavigateToSearchSourceAsync(source, cancellationToken);
+            }
+
+            RebuildActiveSearchSnapshot();
+            return Task.FromResult(false);
+        }
+
+        return TryResolveCurrentDescriptorRow(rowKey, out var rowIndex)
+            ? NavigateToChildAsync(rowIndex, cancellationToken)
+            : Task.FromResult(false);
+    }
+
     public async Task<bool> NavigateToChildAsync(int rowIndex, CancellationToken ct = default)
     {
         if (currentPage is null || rowIndex < 0 || rowIndex >= currentPage.Widgets.Count) return false;
@@ -378,6 +444,113 @@ public sealed class SitemapRuntimeController
         await client.SendCommandAsync(widget.ItemName, command, cancellationToken);
         await ReconcileCurrentPageAsync(cancellationToken);
         return true;
+    }
+
+    private async Task<bool> ActivateSearchSourceAsync(SitemapSearchSource source, CancellationToken cancellationToken)
+    {
+        if (!TryResolveSearchSource(source, out var resolved))
+        {
+            RebuildActiveSearchSnapshot();
+            return false;
+        }
+
+        var widget = resolved.Widget;
+        if (widget.Type != SitemapWidgetType.Switch || string.IsNullOrWhiteSpace(widget.ItemName))
+        {
+            return false;
+        }
+
+        var activeTransport = Current.ActiveTransport
+            ?? throw new InvalidOperationException("Cannot activate a row without an active transport.");
+        var endpoint = activeTransport == TransportKind.Local
+            ? settingsController.Current.LocalEndpoint
+            : settingsController.Current.CloudEndpoint;
+        var client = clientFactory(activeTransport, endpoint);
+        var command = string.Equals(widget.State, "ON", StringComparison.OrdinalIgnoreCase) ? "OFF" : "ON";
+        await client.SendCommandAsync(widget.ItemName, command, cancellationToken);
+        await ReconcileCurrentPageAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task<bool> SendCommandForSearchSourceAsync(
+        SitemapSearchSource source,
+        string command,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveSearchSource(source, out var resolved))
+        {
+            RebuildActiveSearchSnapshot();
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(resolved.Widget.ItemName))
+        {
+            return false;
+        }
+
+        var activeTransport = Current.ActiveTransport ?? throw new InvalidOperationException("No active transport.");
+        var endpoint = activeTransport == TransportKind.Local
+            ? settingsController.Current.LocalEndpoint
+            : settingsController.Current.CloudEndpoint;
+        var client = clientFactory(activeTransport, endpoint);
+        await client.SendCommandAsync(resolved.Widget.ItemName, command, cancellationToken);
+        await ReconcileCurrentPageAsync(cancellationToken);
+        return true;
+    }
+
+    private Task<bool> NavigateToSearchSourceAsync(SitemapSearchSource source, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!TryResolveSearchSource(source, out var resolved))
+        {
+            RebuildActiveSearchSnapshot();
+            return Task.FromResult(false);
+        }
+
+        if (resolved.Widget.Children.Count == 0)
+        {
+            return Task.FromResult(false);
+        }
+
+        var sourceChain = FindPageChainFromCurrentPage(resolved.Page.Id);
+        if (sourceChain.Count == 0)
+        {
+            RebuildActiveSearchSnapshot();
+            return Task.FromResult(false);
+        }
+
+        var existingAncestors = backStack.Reverse().ToArray();
+        backStack.Clear();
+        foreach (var ancestor in existingAncestors)
+        {
+            backStack.Push(ancestor);
+        }
+
+        foreach (var page in sourceChain)
+        {
+            backStack.Push(page);
+        }
+
+        var normalized = SitemapNormalizer.Normalize(resolved.Widget.Children[0]);
+        currentPage = normalized;
+        BuildItemIndexMap();
+
+        var descriptor = renderController.BuildCurrentDescriptor(normalized);
+        ClearSearchState();
+        Current = Current with
+        {
+            Descriptor = descriptor,
+            Breadcrumbs = BuildBreadcrumbTrail(),
+            StatusText = $"Navigated to: {normalized.Label}",
+            ChangedRowIndices = [],
+            IsSearchActive = false,
+            SearchQuery = string.Empty,
+            SearchResultCount = 0
+        };
+
+        ReconnectForPage(normalized.Id);
+        return Task.FromResult(true);
     }
 
     private async Task<OpenHab.Rendering.Descriptors.SitemapRenderDescriptor> LoadDescriptorAsync(
@@ -925,6 +1098,226 @@ public sealed class SitemapRuntimeController
             EndpointMode.Automatic => new TransportSelection(TransportKind.Local, settings.LocalEndpoint),
             _ => throw new InvalidOperationException($"Unsupported endpoint mode '{settings.EndpointMode}'.")
         };
+    }
+
+    private bool TryResolveCurrentDescriptorRow(string rowKey, out int rowIndex)
+    {
+        rowIndex = -1;
+        var rows = Current.Descriptor?.Rows;
+        if (rows is null)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            if (string.Equals(BuildRuntimeRowKey(rows[index]), rowKey, StringComparison.Ordinal))
+            {
+                rowIndex = index;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string BuildRuntimeRowKey(SitemapRowDescriptor row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.SearchResultKey))
+        {
+            return row.SearchResultKey;
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.WidgetId))
+        {
+            return $"widget:{row.WidgetId}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.ItemName))
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"item:{row.ItemName}:{row.Control}:{row.Action}:{row.Label}:{row.IconName ?? string.Empty}:{row.Command ?? string.Empty}:{row.ReleaseCommand ?? string.Empty}:{row.Period ?? string.Empty}");
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"row:{row.Control}:{row.Action}:{row.IconName ?? string.Empty}:{row.Label}");
+    }
+
+    private bool TryResolveSearchSource(SitemapSearchSource source, out ResolvedSearchWidget resolved)
+    {
+        resolved = null!;
+        if (currentPage is null)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(source.SourceWidgetId))
+        {
+            var matches = new List<ResolvedSearchWidget>();
+            CollectSearchSourceWidgetIdMatches(currentPage, source, matches);
+            if (matches.Count == 1)
+            {
+                resolved = matches[0];
+                return true;
+            }
+
+            return false;
+        }
+
+        if (TryResolveSearchSourcePath(source.SourceWidgetPath, out var pathResolved) &&
+            IsMatchingSearchSource(pathResolved.Page, pathResolved.Widget, source))
+        {
+            resolved = pathResolved;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void CollectSearchSourceWidgetIdMatches(
+        NormalizedSitemapPage page,
+        SitemapSearchSource source,
+        List<ResolvedSearchWidget> matches)
+    {
+        for (var index = 0; index < page.Widgets.Count; index++)
+        {
+            var widget = page.Widgets[index];
+            if (string.Equals(widget.WidgetId, source.SourceWidgetId, StringComparison.Ordinal) &&
+                IsMatchingSearchSource(page, widget, source))
+            {
+                matches.Add(new ResolvedSearchWidget(page, widget, index));
+            }
+
+            foreach (var child in widget.Children)
+            {
+                CollectSearchSourceWidgetIdMatches(SitemapNormalizer.Normalize(child), source, matches);
+            }
+        }
+    }
+
+    private bool TryResolveSearchSourcePath(string sourceWidgetPath, out ResolvedSearchWidget resolved)
+    {
+        resolved = null!;
+        if (currentPage is null)
+        {
+            return false;
+        }
+
+        var segments = sourceWidgetPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 2 || !string.Equals(segments[0], currentPage.Id, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var page = currentPage;
+        for (var segmentIndex = 1; segmentIndex < segments.Length;)
+        {
+            if (!TryParsePathSegment(segments[segmentIndex], "idx:", out var widgetIndex) ||
+                widgetIndex < 0 ||
+                widgetIndex >= page.Widgets.Count)
+            {
+                return false;
+            }
+
+            var widget = page.Widgets[widgetIndex];
+            segmentIndex++;
+            if (segmentIndex == segments.Length)
+            {
+                resolved = new ResolvedSearchWidget(page, widget, widgetIndex);
+                return true;
+            }
+
+            if (!TryParsePathSegment(segments[segmentIndex], "child:", out var childIndex) ||
+                childIndex < 0 ||
+                childIndex >= widget.Children.Count)
+            {
+                return false;
+            }
+
+            page = SitemapNormalizer.Normalize(widget.Children[childIndex]);
+            segmentIndex++;
+        }
+
+        return false;
+    }
+
+    private static bool TryParsePathSegment(string segment, string prefix, out int value)
+    {
+        value = -1;
+        return segment.StartsWith(prefix, StringComparison.Ordinal) &&
+               int.TryParse(segment[prefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool IsMatchingSearchSource(
+        NormalizedSitemapPage page,
+        NormalizedSitemapWidget widget,
+        SitemapSearchSource source)
+    {
+        return widget.IsVisible &&
+               string.Equals(page.Id, source.SourcePageId, StringComparison.Ordinal) &&
+               string.Equals(widget.Label, source.SourceWidgetLabel, StringComparison.Ordinal) &&
+               widget.Type == source.SourceWidgetType;
+    }
+
+    private IReadOnlyList<NormalizedSitemapPage> FindPageChainFromCurrentPage(string pageId)
+    {
+        if (currentPage is null)
+        {
+            return [];
+        }
+
+        var path = new List<NormalizedSitemapPage>();
+        return FindPageChainFromCurrentPage(currentPage, pageId, path)
+            ? path
+            : [];
+    }
+
+    private static bool FindPageChainFromCurrentPage(
+        NormalizedSitemapPage page,
+        string pageId,
+        List<NormalizedSitemapPage> path)
+    {
+        path.Add(page);
+        if (string.Equals(page.Id, pageId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        foreach (var widget in page.Widgets)
+        {
+            foreach (var child in widget.Children)
+            {
+                if (FindPageChainFromCurrentPage(SitemapNormalizer.Normalize(child), pageId, path))
+                {
+                    return true;
+                }
+            }
+        }
+
+        path.RemoveAt(path.Count - 1);
+        return false;
+    }
+
+    private void RebuildActiveSearchSnapshot()
+    {
+        if (_activeSearchQuery.Length == 0 || currentPage is null)
+        {
+            return;
+        }
+
+        var normalDescriptor = renderController.BuildCurrentDescriptor(currentPage);
+        var effectiveDescriptor = BuildEffectiveDescriptor(normalDescriptor);
+        Current = Current with
+        {
+            Descriptor = effectiveDescriptor,
+            ChangedRowIndices = [],
+            IsSearchActive = _activeSearchQuery.Length > 0,
+            SearchQuery = _activeSearchQuery,
+            SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
+        };
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private static IReadOnlyList<int> ComputeChangedRowIndices(

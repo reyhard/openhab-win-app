@@ -341,6 +341,73 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task ActivateSearchResultSendsCommandToSourceWidget()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("ON"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka nocna");
+        var row = Assert.Single(controller.Current.Descriptor!.Rows, r => r.Label == "Lampka nocna");
+
+        var activated = await controller.ActivateRowByKeyAsync(row.SearchResultKey!);
+
+        Assert.True(activated);
+        var command = Assert.Single(localClient.CommandsSent);
+        Assert.Equal("Bedroom_Lamp", command.ItemName);
+        Assert.Equal("ON", command.Command);
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+    }
+
+    [Fact]
+    public async Task StaleSearchResultDoesNotCommandWrongWidget()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false, reversed: true));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka nocna");
+        var row = Assert.Single(controller.Current.Descriptor!.Rows, r => r.Label == "Lampka nocna");
+        await controller.RefreshAsync();
+
+        var activated = await controller.ActivateRowByKeyAsync(row.SearchResultKey!);
+
+        Assert.False(activated);
+        Assert.Empty(localClient.CommandsSent);
+    }
+
+    [Fact]
+    public async Task SearchHeaderRowDoesNotFallBackToCurrentPageIndex()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka");
+        var header = Assert.Single(controller.Current.Descriptor!.Rows, r => r.IsSectionHeader && r.Label == "Search results");
+
+        var activated = await controller.ActivateRowByKeyAsync(header.SearchResultKey!);
+
+        Assert.False(activated);
+        Assert.Empty(localClient.CommandsSent);
+    }
+
+    [Fact]
     public void ChangedRowsIncludeSearchMetadataChanges()
     {
         var oldDescriptor = new SitemapRenderDescriptor(
@@ -446,6 +513,53 @@ public sealed class SitemapRuntimeControllerTests
                         }
                       ]
                     }
+                  }
+                ]
+              }
+            }
+            """;
+    }
+
+    private static string HomepageSearchActionJson(string lampState, bool includeWidgetIds = true, bool reversed = false)
+    {
+        var firstLabel = reversed ? "Lampka mobilna" : "Lampka nocna";
+        var firstItem = reversed ? "Mobile_Lamp" : "Bedroom_Lamp";
+        var firstId = reversed ? "lamp-mobile" : "lamp-night";
+        var secondLabel = reversed ? "Lampka nocna" : "Lampka mobilna";
+        var secondItem = reversed ? "Bedroom_Lamp" : "Mobile_Lamp";
+        var secondId = reversed ? "lamp-night" : "lamp-mobile";
+        var firstWidgetId = includeWidgetIds
+            ? $"                    \"widgetId\": \"{firstId}\",{Environment.NewLine}"
+            : string.Empty;
+        var secondWidgetId = includeWidgetIds
+            ? $"                    \"widgetId\": \"{secondId}\",{Environment.NewLine}"
+            : string.Empty;
+
+        return $$"""
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  {
+                    {{firstWidgetId}}
+                    "type": "Switch",
+                    "label": "{{firstLabel}} [{{lampState}}]",
+                    "item": {
+                      "name": "{{firstItem}}",
+                      "state": "{{lampState}}"
+                    },
+                    "visibility": true
+                  },
+                  {
+                    {{secondWidgetId}}
+                    "type": "Switch",
+                    "label": "{{secondLabel}} [OFF]",
+                    "item": {
+                      "name": "{{secondItem}}",
+                      "state": "OFF"
+                    },
+                    "visibility": true
                   }
                 ]
               }

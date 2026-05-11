@@ -247,11 +247,14 @@ public sealed partial class FlyoutWindow : Window
         await RunRuntimeOperationAsync(async ct => await runtimeController.ActivateRowAsync(rowIndex, ct));
     }
 
-    private Task OnRowActivatedByKeyAsync(string rowKey)
+    private async Task OnRowActivatedByKeyAsync(string rowKey)
     {
-        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
-            ? OnRowActivatedAsync(rowIndex)
-            : Task.CompletedTask;
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        await RunRuntimeOperationAsync(ct => runtimeController.ActivateRowByKeyAsync(rowKey, ct));
     }
 
     private async Task OnRowNavigateAsync(int rowIndex)
@@ -294,18 +297,29 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    private Task OnRowNavigateByKeyAsync(string rowKey)
+    private async Task OnRowNavigateByKeyAsync(string rowKey)
     {
-        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
-            ? OnRowNavigateAsync(rowIndex)
-            : Task.CompletedTask;
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        if (runtimeController.Current.IsSearchActive)
+        {
+            await RunRuntimeOperationAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
+            RefreshRuntimeBindings(ActiveRows);
+            return;
+        }
+
+        if (TryResolveCurrentRowIndex(rowKey, out var rowIndex))
+        {
+            await OnRowNavigateAsync(rowIndex);
+        }
     }
 
     private Task SendCommandForRowKeyAsync(string rowKey, string command)
     {
-        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
-            ? runtimeController.SendCommandForRowAsync(rowIndex, command)
-            : Task.CompletedTask;
+        return runtimeController.SendCommandForRowKeyAsync(rowKey, command);
     }
 
     private bool TryResolveCurrentRowIndex(string rowKey, out int rowIndex)
