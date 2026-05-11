@@ -38,13 +38,13 @@ public static class DeviceStateMapper
 
         if (mapping.WifiNameItem is not null)
         {
-            if (snapshot.WifiName is not null)
-            {
-                updates.Add(new DeviceStateUpdate(mapping.WifiNameItem, snapshot.WifiName));
-            }
-            else if (snapshot.IsWifiConnected is false)
+            if (snapshot.IsWifiConnected is false)
             {
                 updates.Add(new DeviceStateUpdate(mapping.WifiNameItem, "UNDEF"));
+            }
+            else if (snapshot.WifiName is not null)
+            {
+                updates.Add(new DeviceStateUpdate(mapping.WifiNameItem, snapshot.WifiName));
             }
         }
 

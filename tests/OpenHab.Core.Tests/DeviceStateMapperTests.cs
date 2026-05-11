@@ -110,6 +110,33 @@ public sealed class DeviceStateMapperTests
     }
 
     [Fact]
+    public void MapsWifiDisconnectedNameAsUndefWhenStaleWifiNameIsPresent()
+    {
+        var mapping = new DeviceStateMapping(
+            null,
+            null,
+            null,
+            null,
+            WifiConnectedItem: null,
+            WifiNameItem: "PcWifiName",
+            OpenHabConnectionItem: null,
+            FocusStateItem: null);
+        var snapshot = new DeviceStateSnapshot(
+            null,
+            null,
+            null,
+            null,
+            IsWifiConnected: false,
+            WifiName: "StaleNetwork",
+            OpenHabConnectionState: null,
+            FocusState: null);
+
+        var updates = DeviceStateMapper.Map(snapshot, mapping);
+
+        Assert.Equal([new DeviceStateUpdate("PcWifiName", "UNDEF")], updates);
+    }
+
+    [Fact]
     public void MapsFocusUnsupportedAsStringState()
     {
         var mapping = new DeviceStateMapping(null, null, null, null, null, null, null, "PcFocusState");
