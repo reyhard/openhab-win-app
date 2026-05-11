@@ -36,6 +36,7 @@ Initial inspection found likely audit hotspots:
 - `src/OpenHab.App/Runtime/SitemapRuntimeController.cs`
 - `src/OpenHab.App/Settings/AppSettingsController.cs`
 - `AGENTS.md`
+- `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md`
 
 The worktree may contain package/build artifacts and package project changes. The audit should record them as repository hygiene evidence, not delete or rewrite them unless a later task explicitly approves that cleanup.
 
@@ -49,8 +50,10 @@ The audit should produce:
 4. A security/privacy review covering credentials, logs, auth headers, generated artifacts, temporary certificates, and diagnostics.
 5. A runtime-efficiency review covering idle behavior, refresh/reconcile loops, icon/chart loading, UI rebuilds, timers, and polling.
 6. A repository-instructions review for `AGENTS.md`.
-7. A backlog of scoped follow-up tasks suitable for later implementation planning.
-8. A verification summary listing commands run and results.
+7. A product/design-status review for the original sitemap client design.
+8. A recommendation for a single tracking document that replaces scattered status-page reading as the primary source of remaining work.
+9. A backlog of scoped follow-up tasks suitable for later implementation planning.
+10. A verification summary listing commands run and results.
 
 ## Audit Lanes
 
@@ -142,7 +145,7 @@ The audit should not install tooling or mutate project configuration without sep
 
 ### Repository Instructions
 
-Review `AGENTS.md` against current repository reality:
+Review `AGENTS.md` and the original sitemap client design against current repository reality:
 
 - Project summary accuracy.
 - Key file list accuracy.
@@ -155,6 +158,21 @@ Review `AGENTS.md` against current repository reality:
 
 Recommended documentation updates should be backlog items unless the user separately asks to edit `AGENTS.md`.
 
+### Design And Status Tracking
+
+Review `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md` together with the current status pages. The goal is to identify which design intentions are complete, partially complete, obsolete, or still pending.
+
+The audit should recommend a single tracking document that future agents and humans can read first. This document should summarize:
+
+- What is shipped.
+- What is partially implemented.
+- What remains to be done.
+- What is intentionally out of scope.
+- Which design/status documents are historical references.
+- Which backlog items should be planned next.
+
+The audit may propose the structure, path, and ownership rule for that tracker, but should not create or rewrite the tracker unless separately approved after the audit.
+
 ## Workflow
 
 1. Establish the baseline:
@@ -163,6 +181,7 @@ Recommended documentation updates should be backlog items unless the user separa
    - latest status docs
    - current project/test structure
    - current `AGENTS.md`
+   - original sitemap client design spec
 
 2. Collect evidence by lane:
    - Search for hotspots such as `TODO`, `FIXME`, credentials, tokens, auth, `async void`, `Task.Run`, fire-and-forget calls, cancellation, disposal, timers, polling, and dispatcher enqueue failures.
@@ -183,6 +202,7 @@ Recommended documentation updates should be backlog items unless the user separa
 5. Build the backlog:
    - Convert findings into small, sequenced tasks.
    - Keep architecture-sensitive work separate from quick wins.
+   - Include a task to create the consolidated tracking document when the audit confirms its structure.
    - Include affected layers, verification, and risk notes for each task.
 
 6. Record verification:
