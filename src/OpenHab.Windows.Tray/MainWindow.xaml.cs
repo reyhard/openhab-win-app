@@ -1,5 +1,6 @@
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -74,6 +75,11 @@ public sealed partial class MainWindow : Window
     private ToggleSwitch? LaunchAtStartupToggle;
     private NumberBox? FlyoutWidthBox;
     private NumberBox? NotificationPollBox;
+    private ToggleSwitch? DeviceInfoSyncEnabledToggle;
+    private TextBlock? DeviceInfoSyncDisabledText;
+    private TextBox? DeviceInfoSyncIdentifierText;
+    private NumberBox? DeviceInfoSyncIntervalBox;
+    private readonly Dictionary<string, TextBox> deviceInfoSyncItemMappingTexts = new(StringComparer.Ordinal);
     private Button? ViewLogsButton;
     private TextBlock? VersionText;
 
@@ -236,8 +242,8 @@ public sealed partial class MainWindow : Window
             case SettingsPage.DeviceInfoSync:
                 SettingsBackButton.Visibility = Visibility.Visible;
                 SettingsTitleText.Text = "Device Info Sync";
-                SettingsSubtitleText.Text = "Configuration coming soon";
-                BuildDeviceInfoSyncPlaceholderPage();
+                SettingsSubtitleText.Text = "Configure device metadata sync";
+                BuildDeviceInfoSyncSettingsPage();
                 break;
             case SettingsPage.About:
                 SettingsBackButton.Visibility = Visibility.Visible;
@@ -406,14 +412,68 @@ public sealed partial class MainWindow : Window
         SettingsContent.Children.Add(UseWin11IconsToggle);
     }
 
-    private void BuildDeviceInfoSyncPlaceholderPage()
+    private void BuildDeviceInfoSyncSettingsPage()
     {
-        SettingsContent.Children.Add(new TextBlock
+        DeviceInfoSyncEnabledToggle = new ToggleSwitch
         {
-            Text = "Device Info Sync settings will be added in the next task.",
-            TextWrapping = TextWrapping.Wrap,
-            Opacity = 0.72
-        });
+            Header = "Enable Device Info Sync",
+            OnContent = "On",
+            OffContent = "Off"
+        };
+        DeviceInfoSyncEnabledToggle.Toggled += DeviceInfoSyncEnabledToggle_Toggled;
+        SettingsContent.Children.Add(DeviceInfoSyncEnabledToggle);
+
+        var current = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
+        if (!current.IsEnabled)
+        {
+            DeviceInfoSyncDisabledText = new TextBlock
+            {
+                Text = "Device Info Sync is disabled. Turn it on to configure identifier, interval, and item mappings.",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.72
+            };
+            SettingsContent.Children.Add(DeviceInfoSyncDisabledText);
+            return;
+        }
+
+        DeviceInfoSyncIdentifierText = new TextBox
+        {
+            Header = "Device identifier"
+        };
+        DeviceInfoSyncIdentifierText.LostFocus += DeviceInfoSyncField_LostFocus;
+        SettingsContent.Children.Add(DeviceInfoSyncIdentifierText);
+
+        DeviceInfoSyncIntervalBox = new NumberBox
+        {
+            Header = "Sync interval (minutes)",
+            Minimum = DeviceInfoSyncSettings.MinSyncIntervalMinutes,
+            Maximum = DeviceInfoSyncSettings.MaxSyncIntervalMinutes,
+            SmallChange = 1,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+        };
+        DeviceInfoSyncIntervalBox.ValueChanged += DeviceInfoSyncIntervalBox_ValueChanged;
+        SettingsContent.Children.Add(DeviceInfoSyncIntervalBox);
+
+        AddDeviceInfoSyncMappingTextBox("BatteryLevelItem", "Battery level Item");
+        AddDeviceInfoSyncMappingTextBox("ChargingStateItem", "Charging state Item");
+        AddDeviceInfoSyncMappingTextBox("LockedStateItem", "Locked state Item");
+        AddDeviceInfoSyncMappingTextBox("SessionStateItem", "Session state Item");
+        AddDeviceInfoSyncMappingTextBox("WifiConnectedItem", "Wi-Fi connected Item");
+        AddDeviceInfoSyncMappingTextBox("WifiNameItem", "Wi-Fi name Item");
+        AddDeviceInfoSyncMappingTextBox("OpenHabConnectionItem", "openHAB connection Item");
+        AddDeviceInfoSyncMappingTextBox("FocusStateItem", "Focus / DND Item");
+    }
+
+    private void AddDeviceInfoSyncMappingTextBox(string key, string header)
+    {
+        var textBox = new TextBox
+        {
+            Header = header,
+            PlaceholderText = "Leave blank to disable"
+        };
+        textBox.LostFocus += DeviceInfoSyncField_LostFocus;
+        deviceInfoSyncItemMappingTexts[key] = textBox;
+        SettingsContent.Children.Add(textBox);
     }
 
     private void BuildAboutSettingsPage()
@@ -445,6 +505,11 @@ public sealed partial class MainWindow : Window
         LaunchAtStartupToggle = null;
         FlyoutWidthBox = null;
         NotificationPollBox = null;
+        DeviceInfoSyncEnabledToggle = null;
+        DeviceInfoSyncDisabledText = null;
+        DeviceInfoSyncIdentifierText = null;
+        DeviceInfoSyncIntervalBox = null;
+        deviceInfoSyncItemMappingTexts.Clear();
         ViewLogsButton = null;
         VersionText = null;
     }
@@ -789,6 +854,27 @@ public sealed partial class MainWindow : Window
             {
                 NotificationPollBox.Value = settingsController.Current.NotificationPollIntervalSeconds;
             }
+            var deviceInfoSync = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
+            if (DeviceInfoSyncEnabledToggle is not null)
+            {
+                DeviceInfoSyncEnabledToggle.IsOn = deviceInfoSync.IsEnabled;
+            }
+            if (DeviceInfoSyncIdentifierText is not null)
+            {
+                DeviceInfoSyncIdentifierText.Text = deviceInfoSync.DeviceIdentifier;
+            }
+            if (DeviceInfoSyncIntervalBox is not null)
+            {
+                DeviceInfoSyncIntervalBox.Value = deviceInfoSync.SyncIntervalMinutes;
+            }
+            SetDeviceInfoSyncMappingText("BatteryLevelItem", deviceInfoSync.BatteryLevelItem);
+            SetDeviceInfoSyncMappingText("ChargingStateItem", deviceInfoSync.ChargingStateItem);
+            SetDeviceInfoSyncMappingText("LockedStateItem", deviceInfoSync.LockedStateItem);
+            SetDeviceInfoSyncMappingText("SessionStateItem", deviceInfoSync.SessionStateItem);
+            SetDeviceInfoSyncMappingText("WifiConnectedItem", deviceInfoSync.WifiConnectedItem);
+            SetDeviceInfoSyncMappingText("WifiNameItem", deviceInfoSync.WifiNameItem);
+            SetDeviceInfoSyncMappingText("OpenHabConnectionItem", deviceInfoSync.OpenHabConnectionItem);
+            SetDeviceInfoSyncMappingText("FocusStateItem", deviceInfoSync.FocusStateItem);
             suppressFlyoutWidthChange = false;
 
             if (LocalTokenBox is not null)
@@ -1286,6 +1372,89 @@ public sealed partial class MainWindow : Window
         }
 
         settingsController.SetNotificationPollInterval(seconds);
+    }
+
+    private void DeviceInfoSyncEnabledToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ToggleSwitch toggle)
+        {
+            return;
+        }
+
+        SaveDeviceInfoSyncSettings(enabledOverride: toggle.IsOn);
+        NavigateToSettingsPage(SettingsPage.DeviceInfoSync);
+    }
+
+    private void DeviceInfoSyncField_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings)
+        {
+            return;
+        }
+
+        SaveDeviceInfoSyncSettings(enabledOverride: null);
+    }
+
+    private void DeviceInfoSyncIntervalBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (isRefreshingSettingsBindings || double.IsNaN(args.NewValue))
+        {
+            return;
+        }
+
+        SaveDeviceInfoSyncSettings(enabledOverride: null);
+    }
+
+    private void SaveDeviceInfoSyncSettings(bool? enabledOverride)
+    {
+        var current = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
+        var enabled = enabledOverride ?? DeviceInfoSyncEnabledToggle?.IsOn ?? current.IsEnabled;
+        var deviceIdentifier = DeviceInfoSyncIdentifierText?.Text ?? current.DeviceIdentifier;
+        var interval = DeviceInfoSyncIntervalBox is null || double.IsNaN(DeviceInfoSyncIntervalBox.Value)
+            ? current.SyncIntervalMinutes
+            : (int)Math.Round(DeviceInfoSyncIntervalBox.Value);
+
+        var updated = current with
+        {
+            IsEnabled = enabled,
+            DeviceIdentifier = deviceIdentifier,
+            SyncIntervalMinutes = interval,
+            BatteryLevelItem = GetDeviceInfoSyncMappingText("BatteryLevelItem", current.BatteryLevelItem),
+            ChargingStateItem = GetDeviceInfoSyncMappingText("ChargingStateItem", current.ChargingStateItem),
+            LockedStateItem = GetDeviceInfoSyncMappingText("LockedStateItem", current.LockedStateItem),
+            SessionStateItem = GetDeviceInfoSyncMappingText("SessionStateItem", current.SessionStateItem),
+            WifiConnectedItem = GetDeviceInfoSyncMappingText("WifiConnectedItem", current.WifiConnectedItem),
+            WifiNameItem = GetDeviceInfoSyncMappingText("WifiNameItem", current.WifiNameItem),
+            OpenHabConnectionItem = GetDeviceInfoSyncMappingText("OpenHabConnectionItem", current.OpenHabConnectionItem),
+            FocusStateItem = GetDeviceInfoSyncMappingText("FocusStateItem", current.FocusStateItem)
+        };
+
+        try
+        {
+            settingsController.SetDeviceInfoSyncSettings(updated);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            RefreshSettingsBindings();
+        }
+    }
+
+    private void SetDeviceInfoSyncMappingText(string key, string? value)
+    {
+        if (deviceInfoSyncItemMappingTexts.TryGetValue(key, out var textBox))
+        {
+            textBox.Text = value ?? string.Empty;
+        }
+    }
+
+    private string? GetDeviceInfoSyncMappingText(string key, string? fallback)
+    {
+        if (!deviceInfoSyncItemMappingTexts.TryGetValue(key, out var textBox))
+        {
+            return fallback;
+        }
+
+        return string.IsNullOrWhiteSpace(textBox.Text) ? null : textBox.Text.Trim();
     }
 
     private void ViewLogsButton_Click(object sender, RoutedEventArgs e)
