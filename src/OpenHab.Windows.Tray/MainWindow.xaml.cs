@@ -388,42 +388,60 @@ public sealed partial class MainWindow : Window
             OffContent = string.Empty
         };
         LaunchAtStartupToggle.Toggled += LaunchAtStartupToggle_Toggled;
-        SettingsContent.Children.Add(CreateSettingsToggleRow(
+        var launchRow = CreateSettingsToggleRow(
+            "\uE7C1",
             "Launch at startup",
             "Start openHAB automatically when you sign in to Windows",
-            LaunchAtStartupToggle));
+            LaunchAtStartupToggle);
 
         FlyoutWidthBox = new NumberBox
         {
-            Header = "Flyout width (px)",
             Minimum = AppSettingsController.MinFlyoutWidth,
             Maximum = AppSettingsController.MaxFlyoutWidth,
             SmallChange = 10,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Width = 220
         };
         FlyoutWidthBox.ValueChanged += FlyoutWidthBox_ValueChanged;
-        SettingsContent.Children.Add(FlyoutWidthBox);
+        var flyoutWidthRow = CreateSettingsControlRow(
+            "\uE7F4",
+            "Flyout width",
+            "Width of the tray flyout in pixels",
+            FlyoutWidthBox);
 
         NotificationPollBox = new NumberBox
         {
-            Header = "Notification check interval (seconds)",
             Minimum = AppSettingsController.MinNotificationPollIntervalSeconds,
             Maximum = AppSettingsController.MaxNotificationPollIntervalSeconds,
             SmallChange = 10,
-            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Width = 220
         };
         NotificationPollBox.ValueChanged += NotificationPollBox_ValueChanged;
-        SettingsContent.Children.Add(NotificationPollBox);
+        var notificationPollRow = CreateSettingsControlRow(
+            "\uE7F4",
+            "Notification check interval",
+            "How often the app checks for openHAB notifications, in seconds",
+            NotificationPollBox);
+
+        SettingsContent.Children.Add(CreateSettingsGroup(launchRow, flyoutWidthRow, notificationPollRow));
     }
 
     private void BuildAppearanceSettingsPage()
     {
         AddSettingsSectionTitle("Appearance");
 
-        SkinCombo = new ComboBox { Header = "Skin" };
+        SkinCombo = new ComboBox
+        {
+            Width = 220
+        };
         SkinCombo.ItemsSource = Enum.GetValues<SitemapSkinKind>();
         SkinCombo.SelectionChanged += SkinCombo_SelectionChanged;
-        SettingsContent.Children.Add(SkinCombo);
+        var skinRow = CreateSettingsControlRow(
+            "\uE790",
+            "Skin",
+            "Choose the sitemap rendering style",
+            SkinCombo);
 
         FollowThemeToggle = new ToggleSwitch
         {
@@ -431,10 +449,11 @@ public sealed partial class MainWindow : Window
             OffContent = string.Empty
         };
         FollowThemeToggle.Toggled += FollowThemeToggle_Toggled;
-        SettingsContent.Children.Add(CreateSettingsToggleRow(
+        var followThemeRow = CreateSettingsToggleRow(
+            "\uE771",
             "Follow Windows color scheme",
             "Use the current Windows app theme preference",
-            FollowThemeToggle));
+            FollowThemeToggle);
 
         UseWin11IconsToggle = new ToggleSwitch
         {
@@ -442,10 +461,13 @@ public sealed partial class MainWindow : Window
             OffContent = string.Empty
         };
         UseWin11IconsToggle.Toggled += UseWin11IconsToggle_Toggled;
-        SettingsContent.Children.Add(CreateSettingsToggleRow(
+        var iconStyleRow = CreateSettingsToggleRow(
+            "\uE8A5",
             "Use Windows 11 style icons",
             "Prefer Fluent-style symbols for sitemap widgets",
-            UseWin11IconsToggle));
+            UseWin11IconsToggle);
+
+        SettingsContent.Children.Add(CreateSettingsGroup(skinRow, followThemeRow, iconStyleRow));
     }
 
     private void BuildDeviceInfoSyncSettingsPage()
@@ -540,7 +562,39 @@ public sealed partial class MainWindow : Window
         target.Children.Add(textBox);
     }
 
-    private static Grid CreateSettingsToggleRow(string title, string subtitle, ToggleSwitch toggle)
+    private static Border CreateSettingsGroup(params FrameworkElement[] rows)
+    {
+        var stack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        for (var index = 0; index < rows.Length; index++)
+        {
+            stack.Children.Add(new Border
+            {
+                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = index == rows.Length - 1 ? new Thickness(0) : new Thickness(0, 0, 0, 1),
+                Child = rows[index]
+            });
+        }
+
+        return new Border
+        {
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Child = stack,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+    }
+
+    private static Grid CreateSettingsToggleRow(string glyph, string title, string subtitle, ToggleSwitch toggle)
+    {
+        return CreateSettingsControlRow(glyph, title, subtitle, CreateSettingsToggleAction(toggle));
+    }
+
+    private static Grid CreateSettingsControlRow(string glyph, string title, string subtitle, FrameworkElement control)
     {
         var row = new Grid
         {
@@ -548,8 +602,19 @@ public sealed partial class MainWindow : Window
             Padding = new Thickness(16, 12, 16, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var icon = new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 18,
+            Opacity = 0.82,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(icon, 0);
+        row.Children.Add(icon);
 
         var textPanel = new StackPanel { Spacing = 2 };
         textPanel.Children.Add(new TextBlock
@@ -564,11 +629,13 @@ public sealed partial class MainWindow : Window
             Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
             TextWrapping = TextWrapping.Wrap
         });
+        Grid.SetColumn(textPanel, 1);
         row.Children.Add(textPanel);
 
-        var actionPanel = CreateSettingsToggleAction(toggle);
-        Grid.SetColumn(actionPanel, 1);
-        row.Children.Add(actionPanel);
+        control.VerticalAlignment = VerticalAlignment.Center;
+        control.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetColumn(control, 2);
+        row.Children.Add(control);
 
         return row;
     }
