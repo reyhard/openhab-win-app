@@ -1,4 +1,5 @@
 using OpenHab.App.Notifications;
+using System.Text.Json;
 
 namespace OpenHab.App.Tests.Notifications;
 
@@ -523,5 +524,40 @@ public sealed class NotificationStoreTests
 
         Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.All, "internal-id"));
         Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.All, "reference-token"));
+    }
+
+    [Fact]
+    public void GetNotifications_LoadedDismissedEntry_IsHiddenAndExcludedFromVisible()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(StorageFilePath)!);
+
+        var seeded = new StoredNotification(
+            "persist-hidden",
+            "Hidden from persisted file",
+            "Persisted",
+            null,
+            "info",
+            new DateTimeOffset(2026, 5, 7, 9, 0, 0, TimeSpan.Zero),
+            DateTimeOffset.UtcNow,
+            true,
+            true,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        var json = JsonSerializer.Serialize(new
+        {
+            Notifications = new[] { seeded },
+        });
+        File.WriteAllText(StorageFilePath, json);
+
+        var store = new NotificationStore();
+
+        Assert.Contains(store.GetNotifications(NotificationVisibilityFilter.Hidden, null), n => n.Id == seeded.Id);
+        Assert.DoesNotContain(store.GetNotifications(NotificationVisibilityFilter.Visible, null), n => n.Id == seeded.Id);
+        Assert.Contains(store.GetNotifications(NotificationVisibilityFilter.All, null), n => n.Id == seeded.Id);
     }
 }
