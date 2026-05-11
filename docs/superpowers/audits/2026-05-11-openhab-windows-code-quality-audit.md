@@ -49,6 +49,7 @@ warning: safe.directory '`%(prefix)///192.168.1.175/opt/housedb`' not absolute
 - `docs/superpowers/status/2026-05-05-openhab-windows-ui-slice-status.md`
 - `docs/superpowers/status/2026-05-05-openhab-windows-connected-homepage-status.md`
 - `docs/superpowers/plans/2026-05-11-openhab-windows-code-quality-audit.md`
+- `docs/superpowers/plans/*.md`
 
 ### Project Inventory Note
 
@@ -244,11 +245,75 @@ The notification poller uses the configured interval with `Task.Delay` and a can
 
 ## Repository Instructions And Design Status Review
 
-Pending Task 4 evidence collection. `AGENTS.md` currently directs readers to the status docs as source of truth and warns that design/spec docs describe intended direction rather than shipped behavior.
+`AGENTS.md` gives accurate high-level repository rules: preserve the layer split, reuse the sitemap/runtime/rendering pipeline, avoid exposing credentials in diagnostics, and treat status documents as the source of truth over design documents. The key paths named by `AGENTS.md` were verified with `rg --files AGENTS.md src tests docs\superpowers\specs docs\superpowers\status docs\superpowers\plans`; the command returned `AGENTS.md`, the cited sitemap design spec, the three cited status pages, the listed source entry points, and current test projects.
+
+The main documentation weakness is not a broken link. It is that `AGENTS.md` still points future readers to three 2026-05-05 status pages as the best shipped-state summary, while the repository also contains later plan/status files for auth and notifications, tray shell behavior, UI polish, event stream live updates, notification debugging, flyout animation, merge-conflict fallout, and flyout retoggle issues. The three AGENTS-linked status pages remain valuable historical anchors, but they can now understate current work in areas such as credentials, notifications, the main window path, and event-stream support.
+
+The original sitemap design remains useful as a product and architecture reference. It should not be treated as a completion checklist without a current-state overlay: several design areas are shipped in foundation form, some are implemented only partially, and others remain pending or release-blocked. The table below maps the original design areas to the three AGENTS-linked status documents plus the current known repo inventory from this audit.
+
+| Original design area | Current state | Evidence | Next action |
+| --- | --- | --- | --- |
+| Endpoint selection and profiles | shipped | Foundation status says Task 2 added endpoint profiles and local/cloud/automatic transport selection; `rg --files` shows `src\OpenHab.Core\Profiles\EndpointSelector.cs`, `ServerProfile.cs`, `EndpointMode.cs`, and `tests\OpenHab.Core.Tests\EndpointSelectorTests.cs`. | Keep as current foundation behavior; track future changes in the consolidated current-state document. |
+| openHAB HTTP client | shipped | Foundation status says Task 3 added the openHAB HTTP client for commands, state updates, sitemap JSON loading, diagnostics, URI construction, and cancellation-aware tests; `rg --files` shows `src\OpenHab.Core\Api\OpenHabHttpClient.cs` and HTTP client tests. | Keep the client as the shared API surface; address `S2` before relying on raw server error bodies in logs or status text. |
+| Sitemap parsing and normalization | shipped | Foundation status says Task 4 added sitemap models and normalization; connected homepage status says sitemap REST JSON parsing from the openHAB homepage payload was added; `rg --files` shows `OpenHabSitemapJsonParser.cs`, `SitemapNormalizer.cs`, and related tests. | Continue compatibility coverage as new widget types and fallback behavior are added. |
+| Render descriptors and skins | shipped | Foundation status says Task 6 added render descriptors, skin contract, Basic skin, Windows 11 skin, and shared row mapping; UI slice status says the sample sitemap rendered through those descriptors. | Preserve the skin-neutral layer and avoid moving WinUI concerns into `OpenHab.Rendering`; use `M1` and `M2` to reduce Windows-layer duplication. |
+| Tray shell and flyout | partial | UI slice status says a tray icon and compact WinUI flyout host were added; `rg --files` shows `TrayIconService.cs`, `FlyoutWindow.xaml`, and flyout tests. Later plan/status inventory includes tray-shell, polish, animation, and retoggle follow-ups, showing this area is active rather than settled. | Record exact current flyout behavior and known caveats in the consolidated tracker before more UI work. |
+| Main window path | partial | Foundation status originally listed main window and settings UI out of scope; current repo inventory shows `src\OpenHab.Windows.Tray\MainWindow.xaml` and `.xaml.cs`, and Task 2 findings show duplicated sitemap behavior between main window and flyout. | Treat the main window as implemented but not behaviorally unified with flyout; follow `M1` and `M2`. |
+| Settings and credentials | partial | UI slice status added app settings; connected homepage status still listed persisted settings and credentials out of scope; current repo inventory shows `AppSettingsController.cs`, `AppSettings.cs`, `WindowsCredentialStore.cs`, credential tests, and Task 3 finding `R2` on fire-and-forget persistence. | Track current persisted settings and credential behavior explicitly; harden save durability and release hygiene before calling this complete. |
+| Event stream live updates | partial | The three AGENTS-linked status pages list event stream live updates as out of scope, but current repo inventory shows `OpenHabEventStreamClient.cs`, SSE tests, and `docs/superpowers/status/2026-05-07-openhab-windows-event-stream-status.md`; Task 3 finding `R1` records lifecycle risk. | Mark as implemented with reliability caveats in the consolidated tracker; fix `R1` before treating live updates as stable. |
+| Notifications | partial | UI slice and connected homepage statuses list native notifications out of scope; current repo inventory shows `OpenHab.Windows.Notifications`, `NotificationPoller.cs`, toast service files, notification tests, and later notification status/debugging docs. | Document current polling/toast degradation behavior and keep packaging/toast constraints visible. |
+| Device-state mapping | shipped | Foundation status says Task 7 added Windows device state telemetry mapping from battery, charging, lock, and session snapshots to configured openHAB Item state updates; `rg --files` shows `DeviceStateMapper.cs` and `DeviceStateMapperTests.cs`. | Keep the mapping as shipped foundation scope; separately track real Windows collection and scheduled/event-triggered telemetry sending if still pending. |
+| Offline/cache behavior | pending | The sitemap design calls for cached offline browsing; foundation and connected homepage statuses list cached offline sitemap state or offline cache persistence as out of scope. Current audit evidence found icon caching but no shipped offline sitemap persistence. | Add explicit offline/cache backlog after Task 5; do not imply cached browsing is shipped. |
+| Packaging/release workflow | partial | Foundation and UI slice statuses list MSIX packaging/signing out of scope; current repo inventory includes `src\OpenHab.Windows.Package`, manifests, `.pfx` files, and publish metadata; baseline verification notes the `.wapproj` DesktopBridge import issue, and `S1` records signing artifact risk. | Treat packaging as not release-ready; resolve `S1` and document supported developer versus release packaging. |
+| UI automation | pending | The original design asks for small real UI tests; foundation status lists UI automation tests as left from the original design. Current test inventory is unit/integration-style xUnit coverage under `tests/*`, with no UI automation project found by `rg --files`. | Add UI automation only after the tracker clarifies stable flyout/main behaviors and packaging/run prerequisites. |
+
+### D1: Status docs are too fragmented for reliable project orientation
+
+- **Severity:** Low
+- **Priority:** Documentation/Tracking
+- **Evidence:** `AGENTS.md` directs readers to `docs/superpowers/status/2026-05-05-openhab-windows-foundation-status.md`, `docs/superpowers/status/2026-05-05-openhab-windows-ui-slice-status.md`, and `docs/superpowers/status/2026-05-05-openhab-windows-connected-homepage-status.md` as the source of truth. `rg --files docs\superpowers\status docs\superpowers\plans` also shows later status and plan files for auth/notifications, tray shell behavior, UI polish, event stream live updates, notification debugging, flyout animation, merge-conflict resolution, and flyout retoggle issues.
+- **Impact:** A maintainer or future agent who follows `AGENTS.md` literally can conclude that event stream live updates, persisted credentials, notifications, main-window behavior, and packaging constraints are still only pending, even though the current repo contains implementation and later status evidence for several of those areas.
+- **Suggested direction:** Create one current-state tracker that links to historical status pages and classifies each feature as shipped, partial, pending, obsolete, or historical reference.
+- **Affected files/layers:** `AGENTS.md`, `docs/superpowers/status/*.md`, `docs/superpowers/plans/*.md`, and the proposed `docs/superpowers/status/openhab-windows-current-state.md`.
+- **Verification needed:** Run `rg --files AGENTS.md docs\superpowers\specs docs\superpowers\status docs\superpowers\plans` and confirm every status/spec/plan path linked from `AGENTS.md` and the tracker exists.
+
+### D2: AGENTS status guidance omits later current-state evidence
+
+- **Severity:** Low
+- **Priority:** Documentation/Tracking
+- **Evidence:** `AGENTS.md` says to use the three 2026-05-05 status docs as the best summary of finished behavior. Those pages say event stream live updates, notifications, credentials, WebView/Main UI fallback, offline cache persistence, and packaging are out of scope at that point. Current file inventory includes `src\OpenHab.Core\Events\OpenHabEventStreamClient.cs`, `src\OpenHab.Windows.Notifications\NotificationPoller.cs`, credential store files, main/flyout windows, and later status pages such as `2026-05-07-openhab-windows-event-stream-status.md` and `2026-05-06-openhab-windows-notification-debugging.md`.
+- **Impact:** The repository instructions are conservative, but now incomplete as an orientation path. They correctly warn that designs are not shipped behavior, yet they do not provide a single place that reconciles shipped code with later status pages and active audit findings.
+- **Suggested direction:** After the consolidated tracker exists, update `AGENTS.md` to name that tracker as the first status document, with the three 2026-05-05 pages and later status pages listed as historical references.
+- **Affected files/layers:** `AGENTS.md`, `docs/superpowers/status/2026-05-05-openhab-windows-*.md`, later `docs/superpowers/status/*.md`, and `docs/superpowers/status/openhab-windows-current-state.md`.
+- **Verification needed:** Review `AGENTS.md` after Task 5 follow-up work and confirm it no longer requires readers to infer current state from multiple historical pages.
+
+### D3: Original design needs an explicit historical-reference label and current-state overlay
+
+- **Severity:** Low
+- **Priority:** Documentation/Tracking
+- **Evidence:** `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md` describes MVP goals including cached offline browsing, active transport status, secure credential storage, live item updates, unsupported-widget fallback, telemetry sending, packaging, and UI tests. The three AGENTS-linked status pages show some foundation/UI/connectivity items complete, while offline cache persistence, WebView/Main UI fallback routing, notifications, telemetry sending, packaging, and UI automation remain out of scope as of those checkpoints. Current repo state has moved some areas forward after those checkpoints, which is not visible from the design spec alone.
+- **Impact:** The design spec is still useful, but without a current-state table it can be read either as a shipped MVP checklist or as stale direction. That ambiguity makes audit backlog and implementation planning easier to mis-rank.
+- **Suggested direction:** Treat the design spec as a historical product/architecture reference, and keep a separate current-state tracker with a design-area table like the one in this audit.
+- **Affected files/layers:** `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md`, `docs/superpowers/status/*.md`, and `docs/superpowers/status/openhab-windows-current-state.md`.
+- **Verification needed:** When the tracker is created, compare each original design area against source files, tests, and status docs, then leave the design spec unchanged unless a future product-direction update is explicitly requested.
 
 ## Consolidated Tracker Recommendation
 
-Pending Task 4 evidence collection. The code quality audit design asks the audit to recommend a single active tracking document for shipped behavior, partial work, remaining work, out-of-scope work, active risks, and historical references.
+Recommended path: `docs/superpowers/status/openhab-windows-current-state.md`
+
+Purpose: this file should be the first document read after `AGENTS.md`. It should replace scattered status-page reading as the active source of truth while preserving older status pages as historical evidence.
+
+Recommended sections:
+
+- Current shipped behavior
+- Partial behavior and known limitations
+- Remaining planned work
+- Out-of-scope work
+- Active risks and quality backlog
+- Historical reference documents
+- Update rule: update this tracker whenever a plan completes or an audit changes project priorities
+
+First backlog item: create `docs/superpowers/status/openhab-windows-current-state.md` from the accepted audit report and update `AGENTS.md` to point to it as the primary status document.
 
 ## Backlog
 
@@ -266,8 +331,13 @@ Pending Task 5 after findings are ranked.
 - `rg -n "password|token|credential|Authorization|Basic|Bearer|secret|Log|DiagnosticLogger|StatusText|ProcessStartInfo|TemporaryKey|pfx|Package.appxmanifest|AppPackages|BundleArtifacts" src tests AGENTS.md docs`: run for Task 3 security/privacy review. Key hits inspected included HTTP auth header injection, credential store paths, diagnostic/status text propagation, package manifest/signing configuration, tracked `.pfx` files, and tracked `.user` publish metadata.
 - `rg -n "HttpClient|Children\.Clear|new BitmapImage|SvgImageSource|ReadAsByteArrayAsync|ResponseContentRead|ResponseHeadersRead|Timer|PeriodicTimer|Poll|Debounce|Refresh|Reconcile|StartSitemapEventStreamAsync|ConnectAsync" src tests`: run for Task 3 efficiency review. Key hits inspected included icon/chart loading in `SitemapControlFactory`, main/flyout row refresh behavior, notification polling, SSE connection setup, and widget-event reconcile debounce.
 - `git ls-files 'src/**.user' 'src/**.pfx' 'src/**/AppPackages/**' 'src/**/BundleArtifacts/**'`: found tracked temporary signing certificates and user publish metadata recorded in `S1`.
+- `rg --files AGENTS.md src tests docs\superpowers\specs docs\superpowers\status docs\superpowers\plans`: run for Task 4. Key result: verified `AGENTS.md`, the AGENTS-named source entry points, the AGENTS-named sitemap design and three status docs, and the current source/test/spec/status/plan inventory all exist.
+- `Select-String -Path docs\superpowers\plans\*.md -Pattern '^# |^## |^### |Goal:|Still Out Of Scope|Out of scope|Verification|MSIX|package|UI automation|Event stream|Notifications|credentials|cache|offline|main window|flyout|tray|WebView|telemetry'`: run for Task 4 plan review. Key result: confirmed the plan inventory spans foundation, auth/notifications, connected homepage, tray shell behavior, UI bugfix/polish/icon polish, packaging/notifications migration, notification inbox actions, flyout animation/corners/light-dismiss, and this audit plan.
+- `Select-String -Path docs\superpowers\status\*.md -Pattern '^# |^## |Completed|Still Out Of Scope|Verification|Event stream|Notifications|credentials|cache|offline|packaging|UI automation|Main|flyout|tray|MSIX|WebView|telemetry'`: run as supporting Task 4 current-state review. Key result: later status docs contain evidence for auth/notifications, tray shell behavior, UI polish, event stream live updates, notification debugging, flyout animation, merge-conflict fallout, and flyout retoggle issues beyond the three AGENTS-linked status docs.
 - Placeholder/self-review search for pending Task 3 text and template instructions: no matches after Task 3 edits.
 - `git diff --check -- docs\superpowers\audits\2026-05-11-openhab-windows-code-quality-audit.md`: no whitespace errors; Git emitted the existing global safe.directory warnings and an LF-to-CRLF warning for the audit file.
-- `git diff --name-only`: only `docs/superpowers/audits/2026-05-11-openhab-windows-code-quality-audit.md` was modified for Task 3.
+- Task 4 placeholder/template self-review search: no leftover Task 4 placeholders after edits.
+- `git diff --name-only`: only `docs/superpowers/audits/2026-05-11-openhab-windows-code-quality-audit.md` was modified for Task 4.
 - Tests were not rerun for Task 1. Controller-provided baseline verification is recorded in `Baseline Verification Note`.
 - Tests were not rerun for Task 3 because the task modified documentation only and required search/inspection verification rather than production behavior changes.
+- Tests were not rerun for Task 4 because the task modified documentation only and required path/status/spec/plan review rather than production behavior changes.
