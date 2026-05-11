@@ -12,7 +12,8 @@
     <DefaultLanguage>en-US</DefaultLanguage>
     <AppxBundle>Always</AppxBundle>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
-    <PackageCertificateKeyFile>OpenHab.Windows.Package_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateKeyFile Condition="'$(PackageCertificateKeyFile)' != ''">$(PackageCertificateKeyFile)</PackageCertificateKeyFile>
+    <PackageCertificateThumbprint Condition="'$(PackageCertificateThumbprint)' != ''">$(PackageCertificateThumbprint)</PackageCertificateThumbprint>
     <AppxPackageSigningEnabled>true</AppxPackageSigningEnabled>
     <!-- Przewidywalna lokalizacja wyjściowa dla MSIX -->
     <DefaultPublishDir>$(MSBuildProjectDirectory)\bin\publish\</DefaultPublishDir>
