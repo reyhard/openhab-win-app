@@ -31,6 +31,33 @@ public static class DeviceStateMapper
             updates.Add(new DeviceStateUpdate(mapping.SessionStateItem, snapshot.SessionState));
         }
 
+        if (mapping.WifiConnectedItem is not null && snapshot.IsWifiConnected is not null)
+        {
+            updates.Add(new DeviceStateUpdate(mapping.WifiConnectedItem, snapshot.IsWifiConnected.Value ? "ON" : "OFF"));
+        }
+
+        if (mapping.WifiNameItem is not null)
+        {
+            if (snapshot.WifiName is not null)
+            {
+                updates.Add(new DeviceStateUpdate(mapping.WifiNameItem, snapshot.WifiName));
+            }
+            else if (snapshot.IsWifiConnected is false)
+            {
+                updates.Add(new DeviceStateUpdate(mapping.WifiNameItem, "UNDEF"));
+            }
+        }
+
+        if (mapping.OpenHabConnectionItem is not null && snapshot.OpenHabConnectionState is not null)
+        {
+            updates.Add(new DeviceStateUpdate(mapping.OpenHabConnectionItem, snapshot.OpenHabConnectionState));
+        }
+
+        if (mapping.FocusStateItem is not null && snapshot.FocusState is not null)
+        {
+            updates.Add(new DeviceStateUpdate(mapping.FocusStateItem, snapshot.FocusState));
+        }
+
         return updates;
     }
 }

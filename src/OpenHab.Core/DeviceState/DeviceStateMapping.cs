@@ -4,4 +4,8 @@ public sealed record DeviceStateMapping(
     string? BatteryLevelItem,
     string? ChargingStateItem,
     string? LockedStateItem,
-    string? SessionStateItem);
+    string? SessionStateItem,
+    string? WifiConnectedItem,
+    string? WifiNameItem,
+    string? OpenHabConnectionItem,
+    string? FocusStateItem);
