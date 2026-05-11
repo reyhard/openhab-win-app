@@ -73,8 +73,7 @@ public sealed partial class FlyoutWindow : Window
             iconAuthResolver,
             activateByRowKey: OnRowActivatedByKeyAsync,
             navigateByRowKey: OnRowNavigateByKeyAsync,
-            sendCommandByRowKey: SendCommandForRowKeyAsync,
-            sendCommandByRowIndex: (rowIndex, command) => runtimeController.SendCommandForRowAsync(rowIndex, command));
+            sendCommandByRowKey: SendCommandForRowKeyAsync);
         snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
@@ -260,12 +259,21 @@ public sealed partial class FlyoutWindow : Window
     private async Task OnRowNavigateAsync(int rowIndex)
     {
         if (isRefreshing) return;
+        await RunNavigateTransitionAsync(ct => runtimeController.NavigateToChildAsync(rowIndex, ct));
+    }
+
+    private async Task RunNavigateTransitionAsync(Func<CancellationToken, Task<bool>> navigateAsync)
+    {
         isRefreshing = true;
         _isPageTransitionRunning = true;
         try
         {
             _suppressNextSnapshotRefresh = true;
-            await runtimeController.NavigateToChildAsync(rowIndex, CancellationToken.None);
+            if (!await navigateAsync(CancellationToken.None))
+            {
+                _suppressNextSnapshotRefresh = false;
+                return;
+            }
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
@@ -311,20 +319,12 @@ public sealed partial class FlyoutWindow : Window
             return;
         }
 
-        if (TryResolveCurrentRowIndex(rowKey, out var rowIndex))
-        {
-            await OnRowNavigateAsync(rowIndex);
-        }
+        await RunNavigateTransitionAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
     }
 
     private Task SendCommandForRowKeyAsync(string rowKey, string command)
     {
         return runtimeController.SendCommandForRowKeyAsync(rowKey, command);
-    }
-
-    private bool TryResolveCurrentRowIndex(string rowKey, out int rowIndex)
-    {
-        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out rowIndex);
     }
 
     private async void SitemapMenuItem_Click(object sender, RoutedEventArgs e)

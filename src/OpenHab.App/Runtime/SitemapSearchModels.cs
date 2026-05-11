@@ -19,6 +19,7 @@ public sealed record SitemapSearchSource(
     string SourceWidgetId,
     string SourceWidgetPath,
     string SourceWidgetLabel,
+    string? SourceItemName,
     SitemapWidgetType SourceWidgetType,
     int? CurrentPageRowIndex);
 

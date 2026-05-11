@@ -46,7 +46,8 @@ public sealed class SitemapRuntimeController
     private sealed record ResolvedSearchWidget(
         NormalizedSitemapPage Page,
         NormalizedSitemapWidget Widget,
-        int WidgetIndex);
+        int WidgetIndex,
+        IReadOnlyList<NormalizedSitemapPage> SourcePageChain);
 
     public SitemapRuntimeController(
         AppSettingsController settingsController,
@@ -513,7 +514,7 @@ public sealed class SitemapRuntimeController
             return Task.FromResult(false);
         }
 
-        var sourceChain = FindPageChainFromCurrentPage(resolved.Page.Id);
+        var sourceChain = resolved.SourcePageChain;
         if (sourceChain.Count == 0)
         {
             RebuildActiveSearchSnapshot();
@@ -1156,14 +1157,15 @@ public sealed class SitemapRuntimeController
         if (!string.IsNullOrWhiteSpace(source.SourceWidgetId))
         {
             var matches = new List<ResolvedSearchWidget>();
-            CollectSearchSourceWidgetIdMatches(currentPage, source, matches);
+            CollectSearchSourceWidgetIdMatches(currentPage, source, [currentPage], matches);
             if (matches.Count == 1)
             {
                 resolved = matches[0];
                 return true;
             }
 
-            return false;
+            return TryResolveSearchSourcePath(source.SourceWidgetPath, out resolved) &&
+                   IsMatchingSearchSource(resolved.Page, resolved.Widget, source);
         }
 
         if (TryResolveSearchSourcePath(source.SourceWidgetPath, out var pathResolved) &&
@@ -1179,6 +1181,7 @@ public sealed class SitemapRuntimeController
     private void CollectSearchSourceWidgetIdMatches(
         NormalizedSitemapPage page,
         SitemapSearchSource source,
+        IReadOnlyList<NormalizedSitemapPage> pageChain,
         List<ResolvedSearchWidget> matches)
     {
         for (var index = 0; index < page.Widgets.Count; index++)
@@ -1187,12 +1190,13 @@ public sealed class SitemapRuntimeController
             if (string.Equals(widget.WidgetId, source.SourceWidgetId, StringComparison.Ordinal) &&
                 IsMatchingSearchSource(page, widget, source))
             {
-                matches.Add(new ResolvedSearchWidget(page, widget, index));
+                matches.Add(new ResolvedSearchWidget(page, widget, index, pageChain));
             }
 
             foreach (var child in widget.Children)
             {
-                CollectSearchSourceWidgetIdMatches(SitemapNormalizer.Normalize(child), source, matches);
+                var normalizedChild = SitemapNormalizer.Normalize(child);
+                CollectSearchSourceWidgetIdMatches(normalizedChild, source, Append(pageChain, normalizedChild), matches);
             }
         }
     }
@@ -1212,6 +1216,7 @@ public sealed class SitemapRuntimeController
         }
 
         var page = currentPage;
+        var pageChain = new List<NormalizedSitemapPage> { currentPage };
         for (var segmentIndex = 1; segmentIndex < segments.Length;)
         {
             if (!TryParsePathSegment(segments[segmentIndex], "idx:", out var widgetIndex) ||
@@ -1225,7 +1230,7 @@ public sealed class SitemapRuntimeController
             segmentIndex++;
             if (segmentIndex == segments.Length)
             {
-                resolved = new ResolvedSearchWidget(page, widget, widgetIndex);
+                resolved = new ResolvedSearchWidget(page, widget, widgetIndex, pageChain.ToArray());
                 return true;
             }
 
@@ -1237,6 +1242,7 @@ public sealed class SitemapRuntimeController
             }
 
             page = SitemapNormalizer.Normalize(widget.Children[childIndex]);
+            pageChain.Add(page);
             segmentIndex++;
         }
 
@@ -1258,46 +1264,22 @@ public sealed class SitemapRuntimeController
         return widget.IsVisible &&
                string.Equals(page.Id, source.SourcePageId, StringComparison.Ordinal) &&
                string.Equals(widget.Label, source.SourceWidgetLabel, StringComparison.Ordinal) &&
+               string.Equals(widget.ItemName, source.SourceItemName, StringComparison.Ordinal) &&
                widget.Type == source.SourceWidgetType;
     }
 
-    private IReadOnlyList<NormalizedSitemapPage> FindPageChainFromCurrentPage(string pageId)
+    private static IReadOnlyList<NormalizedSitemapPage> Append(
+        IReadOnlyList<NormalizedSitemapPage> path,
+        NormalizedSitemapPage segment)
     {
-        if (currentPage is null)
+        var next = new NormalizedSitemapPage[path.Count + 1];
+        for (var index = 0; index < path.Count; index++)
         {
-            return [];
+            next[index] = path[index];
         }
 
-        var path = new List<NormalizedSitemapPage>();
-        return FindPageChainFromCurrentPage(currentPage, pageId, path)
-            ? path
-            : [];
-    }
-
-    private static bool FindPageChainFromCurrentPage(
-        NormalizedSitemapPage page,
-        string pageId,
-        List<NormalizedSitemapPage> path)
-    {
-        path.Add(page);
-        if (string.Equals(page.Id, pageId, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        foreach (var widget in page.Widgets)
-        {
-            foreach (var child in widget.Children)
-            {
-                if (FindPageChainFromCurrentPage(SitemapNormalizer.Normalize(child), pageId, path))
-                {
-                    return true;
-                }
-            }
-        }
-
-        path.RemoveAt(path.Count - 1);
-        return false;
+        next[path.Count] = segment;
+        return next;
     }
 
     private void RebuildActiveSearchSnapshot()

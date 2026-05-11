@@ -372,13 +372,13 @@ public sealed class SitemapRuntimeControllerTests
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
-        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false));
-        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false, reversed: true));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false, sameLabels: true));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false, reversed: true, sameLabels: true));
         var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
         await controller.LoadAsync();
 
-        controller.ApplySearchQuery("Lampka nocna");
-        var row = Assert.Single(controller.Current.Descriptor!.Rows, r => r.Label == "Lampka nocna");
+        controller.ApplySearchQuery("Lampka");
+        var row = controller.Current.Descriptor!.Rows.First(r => r.Label == "Lampka");
         await controller.RefreshAsync();
 
         var activated = await controller.ActivateRowByKeyAsync(row.SearchResultKey!);
@@ -520,12 +520,16 @@ public sealed class SitemapRuntimeControllerTests
             """;
     }
 
-    private static string HomepageSearchActionJson(string lampState, bool includeWidgetIds = true, bool reversed = false)
+    private static string HomepageSearchActionJson(
+        string lampState,
+        bool includeWidgetIds = true,
+        bool reversed = false,
+        bool sameLabels = false)
     {
-        var firstLabel = reversed ? "Lampka mobilna" : "Lampka nocna";
+        var firstLabel = sameLabels ? "Lampka" : reversed ? "Lampka mobilna" : "Lampka nocna";
         var firstItem = reversed ? "Mobile_Lamp" : "Bedroom_Lamp";
         var firstId = reversed ? "lamp-mobile" : "lamp-night";
-        var secondLabel = reversed ? "Lampka nocna" : "Lampka mobilna";
+        var secondLabel = sameLabels ? "Lampka" : reversed ? "Lampka nocna" : "Lampka mobilna";
         var secondItem = reversed ? "Bedroom_Lamp" : "Mobile_Lamp";
         var secondId = reversed ? "lamp-night" : "lamp-mobile";
         var firstWidgetId = includeWidgetIds

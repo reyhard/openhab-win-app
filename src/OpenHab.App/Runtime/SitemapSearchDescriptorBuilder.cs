@@ -222,6 +222,7 @@ public static class SitemapSearchDescriptorBuilder
             widget.WidgetId,
             sourceWidgetPath,
             widget.Label,
+            widget.ItemName,
             widget.Type,
             currentPageRowIndex);
     }
@@ -235,7 +236,7 @@ public static class SitemapSearchDescriptorBuilder
             return "search:widget:" + EncodeKeyComponent(sourceWidgetPath) + ":id:" + EncodeKeyComponent(widget.WidgetId);
         }
 
-        return "search:path:" + EncodeKeyComponent(sourceWidgetPath);
+        return "search:path:" + EncodeKeyComponent(sourceWidgetPath) + ":source:" + EncodeKeyComponent(BuildSourceFingerprint(widget));
     }
 
     private static string BuildWidgetPath(string prefix, int index)
@@ -244,6 +245,19 @@ public static class SitemapSearchDescriptorBuilder
             "/",
             prefix,
             "idx:" + index.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static string BuildSourceFingerprint(NormalizedSitemapWidget widget)
+    {
+        return string.Join(
+            "|",
+            widget.Label,
+            widget.Type.ToString(),
+            widget.ItemName ?? string.Empty,
+            widget.Command ?? string.Empty,
+            widget.ReleaseCommand ?? string.Empty,
+            widget.Url ?? string.Empty,
+            widget.Period ?? string.Empty);
     }
 
     private static SitemapRowDescriptor CreateHeaderRow(string searchResultKey, string label, string? state)
