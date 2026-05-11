@@ -50,6 +50,7 @@ public sealed partial class MainWindow : Window
     private readonly DispatcherRefreshGate notificationRefreshGate;
     private bool isRefreshing;
     private bool suppressTokenEditTracking;
+    private bool isRefreshingSettingsBindings;
     private bool localTokenEdited;
     private bool cloudTokenEdited;
     private bool cloudUserNameEdited;
@@ -730,83 +731,93 @@ public sealed partial class MainWindow : Window
 
     private void RefreshSettingsBindings()
     {
-        if (SkinCombo is not null)
+        isRefreshingSettingsBindings = true;
+        try
         {
-            SkinCombo.SelectedItem = settingsController.Current.Skin;
-        }
-        if (EndpointModeCombo is not null)
-        {
-            EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
-        }
-        if (LocalEndpointText is not null)
-        {
-            LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
-        }
-        if (CloudEndpointText is not null)
-        {
-            CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
-        }
+            if (SkinCombo is not null)
+            {
+                SkinCombo.SelectedItem = settingsController.Current.Skin;
+            }
+            if (EndpointModeCombo is not null)
+            {
+                EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
+            }
+            if (LocalEndpointText is not null)
+            {
+                LocalEndpointText.Text = settingsController.Current.LocalEndpoint.ToString();
+            }
+            if (CloudEndpointText is not null)
+            {
+                CloudEndpointText.Text = settingsController.Current.CloudEndpoint.ToString();
+            }
 
-        // Sitemap selection is reflected via title/header tap menu.
+            // Sitemap selection is reflected via title/header tap menu.
 
-        suppressTokenEditTracking = true;
-        if (LocalTokenBox is not null)
-        {
-            LocalTokenBox.Password = string.Empty;
-        }
-        if (CloudPasswordBox is not null)
-        {
-            CloudPasswordBox.Password = string.Empty;
-        }
-        if (CloudUserNameText is not null)
-        {
-            CloudUserNameText.Text = settingsController.Current.CloudUserName ?? string.Empty;
-        }
-        suppressTokenEditTracking = false;
+            suppressTokenEditTracking = true;
+            if (LocalTokenBox is not null)
+            {
+                LocalTokenBox.Password = string.Empty;
+            }
+            if (CloudPasswordBox is not null)
+            {
+                CloudPasswordBox.Password = string.Empty;
+            }
+            if (CloudUserNameText is not null)
+            {
+                CloudUserNameText.Text = settingsController.Current.CloudUserName ?? string.Empty;
+            }
+            suppressTokenEditTracking = false;
 
-        if (FollowThemeToggle is not null)
-        {
-            FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
-        }
-        if (UseWin11IconsToggle is not null)
-        {
-            UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
-        }
-        if (LaunchAtStartupToggle is not null)
-        {
-            LaunchAtStartupToggle.IsOn = settingsController.Current.LaunchAtStartup;
-        }
-        suppressFlyoutWidthChange = true;
-        if (FlyoutWidthBox is not null)
-        {
-            FlyoutWidthBox.Value = settingsController.Current.FlyoutWidth;
-        }
-        if (NotificationPollBox is not null)
-        {
-            NotificationPollBox.Value = settingsController.Current.NotificationPollIntervalSeconds;
-        }
-        suppressFlyoutWidthChange = false;
+            if (FollowThemeToggle is not null)
+            {
+                FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
+            }
+            if (UseWin11IconsToggle is not null)
+            {
+                UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
+            }
+            if (LaunchAtStartupToggle is not null)
+            {
+                LaunchAtStartupToggle.IsOn = settingsController.Current.LaunchAtStartup;
+            }
+            suppressFlyoutWidthChange = true;
+            if (FlyoutWidthBox is not null)
+            {
+                FlyoutWidthBox.Value = settingsController.Current.FlyoutWidth;
+            }
+            if (NotificationPollBox is not null)
+            {
+                NotificationPollBox.Value = settingsController.Current.NotificationPollIntervalSeconds;
+            }
+            suppressFlyoutWidthChange = false;
 
-        if (LocalTokenBox is not null)
-        {
-            LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
-                ? "Stored token configured. Type to replace, or leave unchanged."
-                : "Enter token (optional)";
+            if (LocalTokenBox is not null)
+            {
+                LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
+                    ? "Stored token configured. Type to replace, or leave unchanged."
+                    : "Enter token (optional)";
+            }
+            if (CloudPasswordBox is not null)
+            {
+                CloudPasswordBox.PlaceholderText = settingsController.Current.HasCloudCredentials
+                    ? "Stored password configured. Type to replace, or leave unchanged."
+                    : "Enter myopenHAB password";
+            }
+            if (VersionText is not null)
+            {
+                var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+                VersionText.Text = $"openHAB Windows App v{version}";
+            }
+            localTokenEdited = false;
+            cloudTokenEdited = false;
+            cloudUserNameEdited = false;
         }
-        if (CloudPasswordBox is not null)
+        finally
         {
-            CloudPasswordBox.PlaceholderText = settingsController.Current.HasCloudCredentials
-                ? "Stored password configured. Type to replace, or leave unchanged."
-                : "Enter myopenHAB password";
+            suppressTokenEditTracking = false;
+            suppressFlyoutWidthChange = false;
+            isRefreshingSettingsBindings = false;
         }
-        if (VersionText is not null)
-        {
-            var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown";
-            VersionText.Text = $"openHAB Windows App v{version}";
-        }
-        localTokenEdited = false;
-        cloudTokenEdited = false;
-        cloudUserNameEdited = false;
     }
 
     internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
@@ -890,7 +901,7 @@ public sealed partial class MainWindow : Window
 
     private async void SkinCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isRefreshing || sender is not ComboBox skinCombo || skinCombo.SelectedItem is not SitemapSkinKind skin)
+        if (isRefreshing || isRefreshingSettingsBindings || sender is not ComboBox skinCombo || skinCombo.SelectedItem is not SitemapSkinKind skin)
         {
             return;
         }
@@ -901,7 +912,7 @@ public sealed partial class MainWindow : Window
 
     private async void EndpointModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isRefreshing || sender is not ComboBox endpointModeCombo || endpointModeCombo.SelectedItem is not EndpointMode endpointMode)
+        if (isRefreshing || isRefreshingSettingsBindings || sender is not ComboBox endpointModeCombo || endpointModeCombo.SelectedItem is not EndpointMode endpointMode)
         {
             return;
         }
@@ -912,7 +923,7 @@ public sealed partial class MainWindow : Window
 
     private async void EndpointText_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (LocalEndpointText is null || CloudEndpointText is null)
+        if (isRefreshingSettingsBindings || LocalEndpointText is null || CloudEndpointText is null)
         {
             return;
         }
@@ -938,7 +949,7 @@ public sealed partial class MainWindow : Window
     private async void TokenBox_LostFocus(object sender, RoutedEventArgs e)
     {
         if (sender is not PasswordBox box || box.Tag is not string tag) return;
-        if (isRefreshing) return;
+        if (isRefreshing || isRefreshingSettingsBindings) return;
 
         var wasEdited = IsTokenBoxEdited(tag);
         if (!wasEdited)
@@ -971,7 +982,7 @@ public sealed partial class MainWindow : Window
 
     private void TokenBox_GotFocus(object sender, RoutedEventArgs e)
     {
-        if (sender is not PasswordBox box || box.Tag is not string tag || suppressTokenEditTracking)
+        if (sender is not PasswordBox box || box.Tag is not string tag || suppressTokenEditTracking || isRefreshingSettingsBindings)
         {
             return;
         }
@@ -981,7 +992,7 @@ public sealed partial class MainWindow : Window
 
     private void TokenBox_PasswordChanged(object sender, RoutedEventArgs e)
     {
-        if (sender is not PasswordBox box || box.Tag is not string tag || suppressTokenEditTracking)
+        if (sender is not PasswordBox box || box.Tag is not string tag || suppressTokenEditTracking || isRefreshingSettingsBindings)
         {
             return;
         }
@@ -1004,7 +1015,7 @@ public sealed partial class MainWindow : Window
 
     private void CloudUserNameText_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (suppressTokenEditTracking)
+        if (suppressTokenEditTracking || isRefreshingSettingsBindings)
         {
             return;
         }
@@ -1014,7 +1025,7 @@ public sealed partial class MainWindow : Window
 
     private void CloudPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
     {
-        if (suppressTokenEditTracking)
+        if (suppressTokenEditTracking || isRefreshingSettingsBindings)
         {
             return;
         }
@@ -1024,7 +1035,7 @@ public sealed partial class MainWindow : Window
 
     private async void CloudCredentials_LostFocus(object sender, RoutedEventArgs e)
     {
-        if (isRefreshing)
+        if (isRefreshing || isRefreshingSettingsBindings)
         {
             return;
         }
@@ -1034,9 +1045,18 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var activeCloudUserNameText = CloudUserNameText;
+        var activeCloudPasswordBox = CloudPasswordBox;
+
         await Task.Yield();
-        if (CloudUserNameText.FocusState != FocusState.Unfocused
-            || CloudPasswordBox.FocusState != FocusState.Unfocused)
+        if (!ReferenceEquals(activeCloudUserNameText, CloudUserNameText)
+            || !ReferenceEquals(activeCloudPasswordBox, CloudPasswordBox))
+        {
+            return;
+        }
+
+        if (activeCloudUserNameText.FocusState != FocusState.Unfocused
+            || activeCloudPasswordBox.FocusState != FocusState.Unfocused)
         {
             return;
         }
@@ -1046,8 +1066,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var userName = CloudUserNameText.Text.Trim();
-        var password = CloudPasswordBox.Password;
+        var userName = activeCloudUserNameText.Text.Trim();
+        var password = activeCloudPasswordBox.Password;
 
         try
         {
@@ -1209,7 +1229,7 @@ public sealed partial class MainWindow : Window
 
     private void FollowThemeToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        if (sender is ToggleSwitch toggle)
+        if (!isRefreshingSettingsBindings && sender is ToggleSwitch toggle)
         {
             settingsController.SetFollowSystemTheme(toggle.IsOn);
         }
@@ -1217,7 +1237,7 @@ public sealed partial class MainWindow : Window
 
     private void UseWin11IconsToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        if (sender is ToggleSwitch toggle)
+        if (!isRefreshingSettingsBindings && sender is ToggleSwitch toggle)
         {
             settingsController.SetUseWindows11Icons(toggle.IsOn);
         }
@@ -1225,7 +1245,7 @@ public sealed partial class MainWindow : Window
 
     private async void LaunchAtStartupToggle_Toggled(object sender, RoutedEventArgs e)
     {
-        if (sender is not ToggleSwitch toggle)
+        if (isRefreshingSettingsBindings || sender is not ToggleSwitch toggle)
         {
             return;
         }
@@ -1237,7 +1257,7 @@ public sealed partial class MainWindow : Window
 
     private void FlyoutWidthBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
-        if (suppressFlyoutWidthChange || double.IsNaN(args.NewValue))
+        if (isRefreshingSettingsBindings || suppressFlyoutWidthChange || double.IsNaN(args.NewValue))
         {
             return;
         }
@@ -1253,7 +1273,7 @@ public sealed partial class MainWindow : Window
 
     private void NotificationPollBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
     {
-        if (suppressFlyoutWidthChange || double.IsNaN(args.NewValue))
+        if (isRefreshingSettingsBindings || suppressFlyoutWidthChange || double.IsNaN(args.NewValue))
         {
             return;
         }
