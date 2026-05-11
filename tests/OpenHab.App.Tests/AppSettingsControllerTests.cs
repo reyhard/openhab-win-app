@@ -444,4 +444,111 @@ public sealed class AppSettingsControllerTests
         var deserialized = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
         Assert.Equal(FlyoutAnimationSpeed.Slow, deserialized!.AnimationSpeed);
     }
+
+    [Fact]
+    public void DefaultsDisableDeviceInfoSync()
+    {
+        var controller = CreateController();
+        var deviceInfoSync = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+
+        Assert.False(deviceInfoSync.IsEnabled);
+        Assert.False(string.IsNullOrWhiteSpace(deviceInfoSync.DeviceIdentifier));
+        Assert.Equal(15, deviceInfoSync.SyncIntervalMinutes);
+        Assert.True(deviceInfoSync.HasAnyMapping);
+    }
+
+    [Fact]
+    public void DeviceInfoSyncDefaultItemNamesUseSanitizedIdentifier()
+    {
+        var settings = DeviceInfoSyncSettings.CreateDefault("Desk PC!");
+
+        Assert.Equal("DeskPC", settings.DeviceIdentifier);
+        Assert.Equal("DeskPCBatteryLevel", settings.BatteryLevelItem);
+        Assert.Equal("DeskPCChargingState", settings.ChargingStateItem);
+        Assert.Equal("DeskPCLockedState", settings.LockedStateItem);
+        Assert.Equal("DeskPCSessionState", settings.SessionStateItem);
+        Assert.Equal("DeskPCWifiConnected", settings.WifiConnectedItem);
+        Assert.Equal("DeskPCWifiName", settings.WifiNameItem);
+        Assert.Equal("DeskPCOpenHabConnection", settings.OpenHabConnectionItem);
+        Assert.Equal("DeskPCFocusState", settings.FocusStateItem);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(240)]
+    public void SetDeviceInfoSyncSettingsAcceptsIntervalBounds(int interval)
+    {
+        var controller = CreateController();
+        var current = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+        var settings = current with { IsEnabled = true, SyncIntervalMinutes = interval };
+
+        controller.SetDeviceInfoSyncSettings(settings);
+
+        var updated = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+        Assert.Equal(interval, updated.SyncIntervalMinutes);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(241)]
+    public void SetDeviceInfoSyncSettingsRejectsOutOfRangeInterval(int interval)
+    {
+        var controller = CreateController();
+        var current = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+        var settings = current with { SyncIntervalMinutes = interval };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetDeviceInfoSyncSettings(settings));
+    }
+
+    [Fact]
+    public async Task DeviceInfoSyncSettingsRoundTripThroughJson()
+    {
+        var controller = CreateController();
+        var settings = DeviceInfoSyncSettings.CreateDefault("Desk") with
+        {
+            IsEnabled = true,
+            SyncIntervalMinutes = 30,
+            WifiNameItem = null
+        };
+
+        controller.SetDeviceInfoSyncSettings(settings);
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        var reloadedDeviceInfoSync = Assert.IsType<DeviceInfoSyncSettings>(reloaded.Current.DeviceInfoSync);
+        Assert.True(reloadedDeviceInfoSync.IsEnabled);
+        Assert.Equal("Desk", reloadedDeviceInfoSync.DeviceIdentifier);
+        Assert.Equal(30, reloadedDeviceInfoSync.SyncIntervalMinutes);
+        Assert.Null(reloadedDeviceInfoSync.WifiNameItem);
+    }
+
+    [Fact]
+    public void LegacySettingsJsonWithoutDeviceInfoSyncLoadsDefaultDeviceInfoSync()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var legacyJson = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "FollowSystemTheme": true,
+          "UseWindows11Icons": false,
+          "FlyoutWidth": 460,
+          "AnimationSpeed": 2,
+          "NotificationPollIntervalSeconds": 30,
+          "LaunchAtStartup": true,
+          "ChartQuality": 192
+        }
+        """;
+        File.WriteAllText(settingsFilePath, legacyJson);
+
+        var controller = CreateController();
+        var deviceInfoSync = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+
+        Assert.False(deviceInfoSync.IsEnabled);
+        Assert.Equal(DeviceInfoSyncSettings.DefaultSyncIntervalMinutes, deviceInfoSync.SyncIntervalMinutes);
+        Assert.True(deviceInfoSync.HasAnyMapping);
+    }
 }

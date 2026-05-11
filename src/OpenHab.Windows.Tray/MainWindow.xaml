@@ -197,76 +197,41 @@
                         BorderThickness="1"
                         CornerRadius="8"
                         Padding="12">
-                    <ScrollViewer>
-                        <StackPanel Spacing="12">
-                            <TextBlock Text="Settings"
-                                       FontSize="18"
-                                       FontWeight="SemiBold" />
-                            <ComboBox x:Name="SkinCombo"
-                                      Header="Skin"
-                                      SelectionChanged="SkinCombo_SelectionChanged" />
-                            <ComboBox x:Name="EndpointModeCombo"
-                                      Header="Endpoint mode"
-                                      SelectionChanged="EndpointModeCombo_SelectionChanged" />
-                            <TextBox x:Name="LocalEndpointText"
-                                     Header="Local endpoint"
-                                     LostFocus="EndpointText_LostFocus" />
-                            <TextBox x:Name="CloudEndpointText"
-                                     Header="Cloud endpoint"
-                                     LostFocus="EndpointText_LostFocus" />
-                            <PasswordBox x:Name="LocalTokenBox"
-                                         Header="Local API token"
-                                         PlaceholderText="Enter token (optional)"
-                                         GotFocus="TokenBox_GotFocus"
-                                         PasswordChanged="TokenBox_PasswordChanged"
-                                         LostFocus="TokenBox_LostFocus"
-                                         Tag="Local" />
-                            <TextBox x:Name="CloudUserNameText"
-                                     Header="Cloud email / username"
-                                     PlaceholderText="Enter myopenHAB email"
-                                     TextChanged="CloudUserNameText_TextChanged"
-                                     LostFocus="CloudCredentials_LostFocus" />
-                            <PasswordBox x:Name="CloudPasswordBox"
-                                         Header="Cloud password"
-                                         PlaceholderText="Enter myopenHAB password"
-                                         PasswordChanged="CloudPasswordBox_PasswordChanged"
-                                         LostFocus="CloudCredentials_LostFocus" />
-                            <ToggleSwitch x:Name="FollowThemeToggle"
-                                          Header="Follow Windows color scheme"
-                                          OnContent="On" OffContent="Off"
-                                          Toggled="FollowThemeToggle_Toggled" />
-                            <ToggleSwitch x:Name="UseWin11IconsToggle"
-                                          Header="Use Windows 11 style icons"
-                                          OnContent="On" OffContent="Off"
-                                          Toggled="UseWin11IconsToggle_Toggled" />
-                            <ToggleSwitch x:Name="LaunchAtStartupToggle"
-                                          Header="Launch at startup"
-                                          OnContent="On" OffContent="Off"
-                                          Toggled="LaunchAtStartupToggle_Toggled" />
-                            <NumberBox x:Name="FlyoutWidthBox"
-                                       Header="Flyout width (px)"
-                                       Minimum="360"
-                                       Maximum="900"
-                                       SmallChange="10"
-                                       SpinButtonPlacementMode="Inline"
-                                       ValueChanged="FlyoutWidthBox_ValueChanged" />
-                            <NumberBox x:Name="NotificationPollBox"
-                                       Header="Notification check interval (seconds)"
-                                       Minimum="10"
-                                       Maximum="600"
-                                       SmallChange="10"
-                                       SpinButtonPlacementMode="Inline"
-                                       ValueChanged="NotificationPollBox_ValueChanged" />
-                            <Button x:Name="ViewLogsButton"
-                                    Content="View diagnostic logs"
-                                    Margin="0,8,0,0"
-                                    Click="ViewLogsButton_Click" />
-                            <TextBlock x:Name="VersionText"
-                                       Margin="0,12,0,0"
-                                       Opacity="0.5"
-                                       Style="{StaticResource CaptionTextBlockStyle}" />
-                        </StackPanel>
-                    </ScrollViewer>
+                    <Grid RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="SettingsBackButton"
+                                    Width="34"
+                                    Height="34"
+                                    Padding="0"
+                                    Click="SettingsBackButton_Click"
+                                    ToolTipService.ToolTip="Back"
+                                    Visibility="Collapsed">
+                                <FontIcon Glyph="&#xE72B;" FontSize="13" />
+                            </Button>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock x:Name="SettingsTitleText"
+                                           Text="Settings"
+                                           FontSize="18"
+                                           FontWeight="SemiBold" />
+                                <TextBlock x:Name="SettingsSubtitleText"
+                                           Opacity="0.6"
+                                           Style="{StaticResource CaptionTextBlockStyle}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1">
+                            <StackPanel x:Name="SettingsContent" Spacing="8" />
+                        </ScrollViewer>
+                    </Grid>
                 </Border>
             </PivotItem>
         </Pivot>

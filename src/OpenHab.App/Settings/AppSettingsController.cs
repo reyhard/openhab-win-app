@@ -193,6 +193,20 @@ public sealed class AppSettingsController
         UpdateSettings(settings => settings with { NotificationPollIntervalSeconds = seconds });
     }
 
+    public void SetDeviceInfoSyncSettings(DeviceInfoSyncSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (settings.SyncIntervalMinutes < DeviceInfoSyncSettings.MinSyncIntervalMinutes
+            || settings.SyncIntervalMinutes > DeviceInfoSyncSettings.MaxSyncIntervalMinutes)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(settings),
+                $"Device info sync interval must be between {DeviceInfoSyncSettings.MinSyncIntervalMinutes} and {DeviceInfoSyncSettings.MaxSyncIntervalMinutes} minutes.");
+        }
+
+        UpdateSettings(appSettings => appSettings with { DeviceInfoSync = settings.Normalized() });
+    }
+
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)
@@ -447,7 +461,12 @@ public sealed class AppSettingsController
             interval = AppSettings.Default.NotificationPollIntervalSeconds;
         }
 
-        return settings with { FlyoutWidth = width, NotificationPollIntervalSeconds = interval };
+        return settings with
+        {
+            FlyoutWidth = width,
+            NotificationPollIntervalSeconds = interval,
+            DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default
+        };
     }
 
     private sealed class SaveQueue
