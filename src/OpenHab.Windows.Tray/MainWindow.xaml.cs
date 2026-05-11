@@ -49,6 +49,7 @@ public sealed partial class MainWindow : Window
     private bool _suppressNextSnapshotRefresh;
     private bool _isPageTransitionRunning;
     private bool _pendingSnapshotRefresh;
+    private bool notificationControlsReady;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -91,6 +92,7 @@ public sealed partial class MainWindow : Window
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        notificationControlsReady = true;
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openhab-icon.ico");
         if (File.Exists(iconPath))
@@ -907,11 +909,21 @@ public sealed partial class MainWindow : Window
 
     private void NotificationSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
+        if (!notificationControlsReady)
+        {
+            return;
+        }
+
         RefreshNotificationList();
     }
 
     private void NotificationFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!notificationControlsReady)
+        {
+            return;
+        }
+
         RefreshNotificationList();
     }
 
