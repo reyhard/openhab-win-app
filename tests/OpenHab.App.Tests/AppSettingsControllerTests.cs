@@ -444,4 +444,76 @@ public sealed class AppSettingsControllerTests
         var deserialized = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(json);
         Assert.Equal(FlyoutAnimationSpeed.Slow, deserialized!.AnimationSpeed);
     }
+
+    [Fact]
+    public void DefaultsDisableDeviceInfoSync()
+    {
+        var controller = CreateController();
+
+        Assert.False(controller.Current.DeviceInfoSync.IsEnabled);
+        Assert.False(string.IsNullOrWhiteSpace(controller.Current.DeviceInfoSync.DeviceIdentifier));
+        Assert.Equal(15, controller.Current.DeviceInfoSync.SyncIntervalMinutes);
+        Assert.True(controller.Current.DeviceInfoSync.HasAnyMapping);
+    }
+
+    [Fact]
+    public void DeviceInfoSyncDefaultItemNamesUseSanitizedIdentifier()
+    {
+        var settings = DeviceInfoSyncSettings.CreateDefault("Desk PC!");
+
+        Assert.Equal("DeskPC", settings.DeviceIdentifier);
+        Assert.Equal("DeskPCBatteryLevel", settings.BatteryLevelItem);
+        Assert.Equal("DeskPCChargingState", settings.ChargingStateItem);
+        Assert.Equal("DeskPCLockedState", settings.LockedStateItem);
+        Assert.Equal("DeskPCSessionState", settings.SessionStateItem);
+        Assert.Equal("DeskPCWifiConnected", settings.WifiConnectedItem);
+        Assert.Equal("DeskPCWifiName", settings.WifiNameItem);
+        Assert.Equal("DeskPCOpenHabConnection", settings.OpenHabConnectionItem);
+        Assert.Equal("DeskPCFocusState", settings.FocusStateItem);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(240)]
+    public void SetDeviceInfoSyncSettingsAcceptsIntervalBounds(int interval)
+    {
+        var controller = CreateController();
+        var settings = controller.Current.DeviceInfoSync with { IsEnabled = true, SyncIntervalMinutes = interval };
+
+        controller.SetDeviceInfoSyncSettings(settings);
+
+        Assert.Equal(interval, controller.Current.DeviceInfoSync.SyncIntervalMinutes);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(241)]
+    public void SetDeviceInfoSyncSettingsRejectsOutOfRangeInterval(int interval)
+    {
+        var controller = CreateController();
+        var settings = controller.Current.DeviceInfoSync with { SyncIntervalMinutes = interval };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetDeviceInfoSyncSettings(settings));
+    }
+
+    [Fact]
+    public async Task DeviceInfoSyncSettingsRoundTripThroughJson()
+    {
+        var controller = CreateController();
+        var settings = DeviceInfoSyncSettings.CreateDefault("Desk") with
+        {
+            IsEnabled = true,
+            SyncIntervalMinutes = 30,
+            WifiNameItem = null
+        };
+
+        controller.SetDeviceInfoSyncSettings(settings);
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        Assert.True(reloaded.Current.DeviceInfoSync.IsEnabled);
+        Assert.Equal("Desk", reloaded.Current.DeviceInfoSync.DeviceIdentifier);
+        Assert.Equal(30, reloaded.Current.DeviceInfoSync.SyncIntervalMinutes);
+        Assert.Null(reloaded.Current.DeviceInfoSync.WifiNameItem);
+    }
 }

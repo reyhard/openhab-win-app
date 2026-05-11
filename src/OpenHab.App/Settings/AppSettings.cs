@@ -31,6 +31,7 @@ public sealed record AppSettings(
     int NotificationPollIntervalSeconds = 30,
     bool LaunchAtStartup = true,
     ChartQuality ChartQuality = ChartQuality.High,
+    DeviceInfoSyncSettings? DeviceInfoSync = null,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
     [property: JsonIgnore] string? CloudUserName = null)
@@ -42,5 +43,6 @@ public sealed record AppSettings(
         new Uri("https://myopenhab.org"),
         string.Empty,
         AnimationSpeed: FlyoutAnimationSpeed.Default,
-        NotificationPollIntervalSeconds: 30);
+        NotificationPollIntervalSeconds: 30,
+        DeviceInfoSync: DeviceInfoSyncSettings.Default);
 }
