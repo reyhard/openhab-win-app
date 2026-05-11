@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -30,6 +31,13 @@ namespace OpenHab.Windows.Tray;
 
 public sealed partial class MainWindow : Window
 {
+    private enum NotificationSortOrder
+    {
+        DateDescending,
+        DateAscending,
+        Name
+    }
+
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
     private readonly NotificationStore? notificationStore;
@@ -195,6 +203,21 @@ public sealed partial class MainWindow : Window
 
     private string CurrentNotificationSearchText => NotificationSearchBox?.Text ?? string.Empty;
 
+    private NotificationSortOrder CurrentNotificationSortOrder
+    {
+        get
+        {
+            if (NotificationSortBox?.SelectedItem is ComboBoxItem item
+                && item.Tag is string tag
+                && Enum.TryParse(tag, out NotificationSortOrder sortOrder))
+            {
+                return sortOrder;
+            }
+
+            return NotificationSortOrder.DateDescending;
+        }
+    }
+
     private static string GetEmptyNotificationsText(NotificationVisibilityFilter filter, string searchText)
     {
         if (!string.IsNullOrWhiteSpace(searchText))
@@ -218,7 +241,8 @@ public sealed partial class MainWindow : Window
 
         var readItem = new MenuFlyoutItem
         {
-            Text = notification.IsRead ? "Mark unread" : "Mark read"
+            Text = notification.IsRead ? "Mark unread" : "Mark read",
+            Icon = new FontIcon { Glyph = notification.IsRead ? "\uE119" : "\uE715" }
         };
         readItem.Click += (_, _) =>
         {
@@ -235,7 +259,8 @@ public sealed partial class MainWindow : Window
 
         var visibilityItem = new MenuFlyoutItem
         {
-            Text = notification.IsDismissed ? "Unhide" : "Hide"
+            Text = notification.IsDismissed ? "Unhide" : "Hide",
+            Icon = new FontIcon { Glyph = notification.IsDismissed ? "\uE8A7" : "\uE8F5" }
         };
         visibilityItem.Click += (_, _) =>
         {
@@ -265,7 +290,28 @@ public sealed partial class MainWindow : Window
 
             var filter = CurrentNotificationFilter;
             var searchText = CurrentNotificationSearchText;
+            var sortOrder = CurrentNotificationSortOrder;
             var notifications = notificationStore.GetNotifications(filter, searchText);
+            notifications = sortOrder switch
+            {
+                NotificationSortOrder.DateAscending => notifications
+                    .OrderBy(n => n.Created)
+                    .ThenBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Id, StringComparer.Ordinal)
+                    .ToList(),
+                NotificationSortOrder.Name => notifications
+                    .OrderBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Id, StringComparer.Ordinal)
+                    .ToList(),
+                _ => notifications
+                    .OrderByDescending(n => n.Created)
+                    .ThenBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Id, StringComparer.Ordinal)
+                    .ToList()
+            };
             var useWin11Icons = settingsController.Current.UseWindows11Icons;
 
             // Resolve base URI for server icons
@@ -960,6 +1006,16 @@ public sealed partial class MainWindow : Window
     }
 
     private void NotificationFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!notificationControlsReady)
+        {
+            return;
+        }
+
+        RefreshNotificationList();
+    }
+
+    private void NotificationSortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!notificationControlsReady)
         {
