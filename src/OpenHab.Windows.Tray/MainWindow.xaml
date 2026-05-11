@@ -218,18 +218,40 @@
                                 <FontIcon Glyph="&#xE72B;" FontSize="13" />
                             </Button>
                             <StackPanel Grid.Column="1" Spacing="2">
-                                <TextBlock x:Name="SettingsTitleText"
-                                           Text="Settings"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
+                                <StackPanel Orientation="Horizontal"
+                                            Spacing="6"
+                                            VerticalAlignment="Center">
+                                    <Button x:Name="SettingsBreadcrumbRootButton"
+                                            Content="Settings"
+                                            Padding="0"
+                                            BorderThickness="0"
+                                            Background="Transparent"
+                                            FontSize="18"
+                                            FontWeight="SemiBold"
+                                            Visibility="Collapsed"
+                                            Click="SettingsBreadcrumbRootButton_Click" />
+                                    <FontIcon x:Name="SettingsBreadcrumbChevron"
+                                              Glyph="&#xE76C;"
+                                              FontSize="12"
+                                              Opacity="0.65"
+                                              Visibility="Collapsed"
+                                              VerticalAlignment="Center" />
+                                    <TextBlock x:Name="SettingsTitleText"
+                                               Text="Settings"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                </StackPanel>
                                 <TextBlock x:Name="SettingsSubtitleText"
                                            Opacity="0.6"
                                            Style="{StaticResource CaptionTextBlockStyle}" />
                             </StackPanel>
                         </Grid>
 
-                        <ScrollViewer Grid.Row="1">
-                            <StackPanel x:Name="SettingsContent" Spacing="8" />
+                        <ScrollViewer Grid.Row="1"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="SettingsContent"
+                                        Spacing="8"
+                                        HorizontalAlignment="Stretch" />
                         </ScrollViewer>
                     </Grid>
                 </Border>

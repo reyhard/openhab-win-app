@@ -222,9 +222,9 @@ public sealed partial class MainWindow : Window
         switch (page)
         {
             case SettingsPage.Root:
-                SettingsBackButton.Visibility = Visibility.Collapsed;
-                SettingsTitleText.Text = "Settings";
+                UpdateSettingsBreadcrumb(null);
                 SettingsSubtitleText.Text = "Choose a category";
+                AddSettingsSectionTitle("Settings");
                 SettingsContent.Children.Add(CreateCategoryRow("\uE713", "Connection", "Endpoints and credentials", SettingsPage.Connection));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPage.General));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPage.Appearance));
@@ -232,32 +232,27 @@ public sealed partial class MainWindow : Window
                 SettingsContent.Children.Add(CreateCategoryRow("\uE946", "About", "Logs and version", SettingsPage.About));
                 break;
             case SettingsPage.Connection:
-                SettingsBackButton.Visibility = Visibility.Visible;
-                SettingsTitleText.Text = "Connection";
+                UpdateSettingsBreadcrumb("Connection");
                 SettingsSubtitleText.Text = "Endpoints and credentials";
                 BuildConnectionSettingsPage();
                 break;
             case SettingsPage.General:
-                SettingsBackButton.Visibility = Visibility.Visible;
-                SettingsTitleText.Text = "General";
+                UpdateSettingsBreadcrumb("General");
                 SettingsSubtitleText.Text = "Startup and runtime behavior";
                 BuildGeneralSettingsPage();
                 break;
             case SettingsPage.Appearance:
-                SettingsBackButton.Visibility = Visibility.Visible;
-                SettingsTitleText.Text = "Appearance";
+                UpdateSettingsBreadcrumb("Appearance");
                 SettingsSubtitleText.Text = "Visual options";
                 BuildAppearanceSettingsPage();
                 break;
             case SettingsPage.DeviceInfoSync:
-                SettingsBackButton.Visibility = Visibility.Visible;
-                SettingsTitleText.Text = "Device Info Sync";
+                UpdateSettingsBreadcrumb("Device Info Sync");
                 SettingsSubtitleText.Text = "Configure device metadata sync";
                 BuildDeviceInfoSyncSettingsPage();
                 break;
             case SettingsPage.About:
-                SettingsBackButton.Visibility = Visibility.Visible;
-                SettingsTitleText.Text = "About";
+                UpdateSettingsBreadcrumb("About");
                 SettingsSubtitleText.Text = "Diagnostics and version";
                 BuildAboutSettingsPage();
                 break;
@@ -266,11 +261,31 @@ public sealed partial class MainWindow : Window
         RefreshSettingsBindings();
     }
 
+    private void UpdateSettingsBreadcrumb(string? pageTitle)
+    {
+        var isRoot = string.IsNullOrWhiteSpace(pageTitle);
+        SettingsBackButton.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
+        SettingsBreadcrumbRootButton.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
+        SettingsBreadcrumbChevron.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
+        SettingsTitleText.Text = isRoot ? "Settings" : pageTitle;
+    }
+
+    private void AddSettingsSectionTitle(string title)
+    {
+        SettingsContent.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 0)
+        });
+    }
+
     private Button CreateCategoryRow(string glyph, string title, string subtitle, SettingsPage destination)
     {
         var button = new Button
         {
             Padding = new Thickness(12, 10, 12, 10),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 4)
@@ -319,6 +334,8 @@ public sealed partial class MainWindow : Window
 
     private void BuildConnectionSettingsPage()
     {
+        AddSettingsSectionTitle("Server connection");
+
         EndpointModeCombo = new ComboBox { Header = "Endpoint mode" };
         EndpointModeCombo.ItemsSource = Enum.GetValues<EndpointMode>();
         EndpointModeCombo.SelectionChanged += EndpointModeCombo_SelectionChanged;
@@ -364,6 +381,8 @@ public sealed partial class MainWindow : Window
 
     private void BuildGeneralSettingsPage()
     {
+        AddSettingsSectionTitle("App behavior");
+
         LaunchAtStartupToggle = new ToggleSwitch
         {
             Header = "Launch at startup",
@@ -398,6 +417,8 @@ public sealed partial class MainWindow : Window
 
     private void BuildAppearanceSettingsPage()
     {
+        AddSettingsSectionTitle("Appearance");
+
         SkinCombo = new ComboBox { Header = "Skin" };
         SkinCombo.ItemsSource = Enum.GetValues<SitemapSkinKind>();
         SkinCombo.SelectionChanged += SkinCombo_SelectionChanged;
@@ -424,6 +445,9 @@ public sealed partial class MainWindow : Window
 
     private void BuildDeviceInfoSyncSettingsPage()
     {
+        AddSettingsSectionTitle("Sync settings");
+        var syncContent = new StackPanel { Spacing = 10 };
+
         DeviceInfoSyncEnabledToggle = new ToggleSwitch
         {
             Header = "Enable Device Info Sync",
@@ -431,7 +455,7 @@ public sealed partial class MainWindow : Window
             OffContent = "Off"
         };
         DeviceInfoSyncEnabledToggle.Toggled += DeviceInfoSyncEnabledToggle_Toggled;
-        SettingsContent.Children.Add(DeviceInfoSyncEnabledToggle);
+        syncContent.Children.Add(DeviceInfoSyncEnabledToggle);
 
         var current = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
         if (!current.IsEnabled)
@@ -442,7 +466,11 @@ public sealed partial class MainWindow : Window
                 TextWrapping = TextWrapping.Wrap,
                 Opacity = 0.72
             };
-            SettingsContent.Children.Add(DeviceInfoSyncDisabledText);
+            syncContent.Children.Add(DeviceInfoSyncDisabledText);
+            SettingsContent.Children.Add(CreateSettingsExpander(
+                "Device Info Sync",
+                "Send selected Windows device state to openHAB Items",
+                syncContent));
             return;
         }
 
@@ -451,7 +479,7 @@ public sealed partial class MainWindow : Window
             Header = "Device identifier"
         };
         DeviceInfoSyncIdentifierText.LostFocus += DeviceInfoSyncField_LostFocus;
-        SettingsContent.Children.Add(DeviceInfoSyncIdentifierText);
+        syncContent.Children.Add(DeviceInfoSyncIdentifierText);
 
         DeviceInfoSyncIntervalBox = new NumberBox
         {
@@ -462,33 +490,63 @@ public sealed partial class MainWindow : Window
             SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline
         };
         DeviceInfoSyncIntervalBox.ValueChanged += DeviceInfoSyncIntervalBox_ValueChanged;
-        SettingsContent.Children.Add(DeviceInfoSyncIntervalBox);
+        syncContent.Children.Add(DeviceInfoSyncIntervalBox);
 
-        AddDeviceInfoSyncMappingTextBox("BatteryLevelItem", "Battery level Item");
-        AddDeviceInfoSyncMappingTextBox("ChargingStateItem", "Charging state Item");
-        AddDeviceInfoSyncMappingTextBox("LockedStateItem", "Locked state Item");
-        AddDeviceInfoSyncMappingTextBox("SessionStateItem", "Session state Item");
-        AddDeviceInfoSyncMappingTextBox("WifiConnectedItem", "Wi-Fi connected Item");
-        AddDeviceInfoSyncMappingTextBox("WifiNameItem", "Wi-Fi name Item");
-        AddDeviceInfoSyncMappingTextBox("OpenHabConnectionItem", "openHAB connection Item");
-        AddDeviceInfoSyncMappingTextBox("FocusStateItem", "Focus / DND Item");
+        SettingsContent.Children.Add(CreateSettingsExpander(
+            "Device Info Sync",
+            "Send selected Windows device state to openHAB Items",
+            syncContent));
+
+        AddSettingsSectionTitle("openHAB Item mappings");
+        var mappingContent = new StackPanel { Spacing = 8 };
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "BatteryLevelItem", "Battery level", "BatteryLevel");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "ChargingStateItem", "Charging state", "ChargingState");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "LockedStateItem", "Locked state", "LockedState");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "SessionStateItem", "Session state", "SessionState");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiConnectedItem", "Wi-Fi connected", "WifiConnected");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiNameItem", "Wi-Fi name", "WifiName");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "OpenHabConnectionItem", "openHAB connection", "OpenHabConnection");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "FocusStateItem", "Focus / DND", "FocusState");
+        SettingsContent.Children.Add(CreateSettingsExpander(
+            "Item suffixes",
+            "The device identifier is added automatically before each suffix",
+            mappingContent));
     }
 
-    private void AddDeviceInfoSyncMappingTextBox(string key, string header)
+    private void AddDeviceInfoSyncMappingTextBox(StackPanel target, string key, string title, string placeholder)
     {
+        var row = new Grid { ColumnSpacing = 8 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var prefix = new TextBlock
+        {
+            Text = GetDeviceInfoSyncIdentifier(),
+            Opacity = 0.68,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        row.Children.Add(prefix);
+
         var textBox = new TextBox
         {
-            Header = header,
-            PlaceholderText = "Leave blank to disable"
+            Header = title,
+            PlaceholderText = placeholder
         };
         textBox.LostFocus += DeviceInfoSyncField_LostFocus;
         deviceInfoSyncItemMappingTexts[key] = textBox;
-        SettingsContent.Children.Add(textBox);
+        Grid.SetColumn(textBox, 1);
+        row.Children.Add(textBox);
+        target.Children.Add(row);
     }
 
     private void BuildAboutSettingsPage()
     {
+        AddSettingsSectionTitle("Related settings");
+
         ViewLogsButton = new Button { Content = "View diagnostic logs" };
+        ViewLogsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
+        ViewLogsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
         ViewLogsButton.Click += ViewLogsButton_Click;
         SettingsContent.Children.Add(ViewLogsButton);
 
@@ -499,6 +557,31 @@ public sealed partial class MainWindow : Window
             Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
         };
         SettingsContent.Children.Add(VersionText);
+    }
+
+    private Expander CreateSettingsExpander(string title, string subtitle, UIElement content)
+    {
+        return new Expander
+        {
+            Header = CreateSettingsHeader(title, subtitle),
+            Content = content,
+            IsExpanded = true,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+    }
+
+    private static StackPanel CreateSettingsHeader(string title, string subtitle)
+    {
+        var header = new StackPanel { Spacing = 2 };
+        header.Children.Add(new TextBlock { Text = title });
+        header.Children.Add(new TextBlock
+        {
+            Text = subtitle,
+            Opacity = 0.68,
+            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+            TextWrapping = TextWrapping.Wrap
+        });
+        return header;
     }
 
     private void ResetSettingsControlReferences()
@@ -1351,6 +1434,11 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void SettingsBreadcrumbRootButton_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateToSettingsPage(SettingsPage.Root);
+    }
+
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
         if (e.Key == VirtualKey.GoBack && runtimeController.CanGoBack && !isRefreshing)
@@ -1550,6 +1638,11 @@ public sealed partial class MainWindow : Window
         }
 
         SaveDeviceInfoSyncSettings(enabledOverride: null);
+
+        if (ReferenceEquals(sender, DeviceInfoSyncIdentifierText))
+        {
+            NavigateToSettingsPage(SettingsPage.DeviceInfoSync);
+        }
     }
 
     private void DeviceInfoSyncIntervalBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -1600,7 +1693,7 @@ public sealed partial class MainWindow : Window
     {
         if (deviceInfoSyncItemMappingTexts.TryGetValue(key, out var textBox))
         {
-            textBox.Text = value ?? string.Empty;
+            textBox.Text = ToDeviceInfoSyncItemSuffix(value, GetDeviceInfoSyncIdentifier());
         }
     }
 
@@ -1611,7 +1704,31 @@ public sealed partial class MainWindow : Window
             return fallback;
         }
 
-        return string.IsNullOrWhiteSpace(textBox.Text) ? null : textBox.Text.Trim();
+        var suffix = textBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(suffix))
+        {
+            return null;
+        }
+
+        var identifier = GetDeviceInfoSyncIdentifier();
+        return suffix.StartsWith(identifier, StringComparison.Ordinal) ? suffix : identifier + suffix;
+    }
+
+    private string GetDeviceInfoSyncIdentifier()
+    {
+        var current = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
+        return DeviceInfoSyncSettings.SanitizeDeviceIdentifier(DeviceInfoSyncIdentifierText?.Text ?? current.DeviceIdentifier);
+    }
+
+    private static string ToDeviceInfoSyncItemSuffix(string? itemName, string identifier)
+    {
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = itemName.Trim();
+        return trimmed.StartsWith(identifier, StringComparison.Ordinal) ? trimmed[identifier.Length..] : trimmed;
     }
 
     private void ViewLogsButton_Click(object sender, RoutedEventArgs e)
