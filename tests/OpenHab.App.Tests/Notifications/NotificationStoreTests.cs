@@ -390,4 +390,94 @@ public sealed class NotificationStoreTests
 
         Assert.False(fired);
     }
+
+    [Fact]
+    public void Hide_MarksNotificationHiddenAndRead()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("n1", "Water leak", DateTimeOffset.UtcNow);
+
+        store.Hide("n1");
+
+        var notification = store.GetNotifications(NotificationVisibilityFilter.All, null)
+            .Single(n => n.Id == "n1");
+        Assert.True(notification.IsDismissed);
+        Assert.True(notification.IsRead);
+        Assert.Equal(0, store.UnreadCount);
+    }
+
+    [Fact]
+    public void Unhide_RestoresVisibilityWithoutChangingReadState()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("n1", "Water leak", DateTimeOffset.UtcNow);
+        store.Hide("n1");
+
+        store.Unhide("n1");
+
+        var notification = store.GetNotifications(NotificationVisibilityFilter.All, null)
+            .Single(n => n.Id == "n1");
+        Assert.False(notification.IsDismissed);
+        Assert.True(notification.IsRead);
+    }
+
+    [Fact]
+    public void MarkAllRead_MarksOnlyVisibleNotificationsRead()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("visible", "Visible", DateTimeOffset.UtcNow);
+        store.AddOrUpdate("hidden", "Hidden", DateTimeOffset.UtcNow);
+        store.Hide("hidden");
+        store.MarkUnread("hidden");
+
+        store.MarkAllRead();
+
+        var all = store.GetNotifications(NotificationVisibilityFilter.All, null);
+        Assert.True(all.Single(n => n.Id == "visible").IsRead);
+        Assert.False(all.Single(n => n.Id == "hidden").IsRead);
+    }
+
+    [Fact]
+    public void GetNotifications_FiltersByVisibilityAndReadState()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("unread", "Unread", DateTimeOffset.UtcNow.AddMinutes(-3));
+        store.AddOrUpdate("read", "Read", DateTimeOffset.UtcNow.AddMinutes(-2));
+        store.AddOrUpdate("hidden", "Hidden", DateTimeOffset.UtcNow.AddMinutes(-1));
+        store.MarkRead("read");
+        store.Hide("hidden");
+
+        Assert.Equal(["hidden", "read", "unread"], store.GetNotifications(NotificationVisibilityFilter.All, null).Select(n => n.Id));
+        Assert.Equal(["read", "unread"], store.GetNotifications(NotificationVisibilityFilter.Visible, null).Select(n => n.Id));
+        Assert.Equal(["unread"], store.GetNotifications(NotificationVisibilityFilter.Unread, null).Select(n => n.Id));
+        Assert.Equal(["read"], store.GetNotifications(NotificationVisibilityFilter.Read, null).Select(n => n.Id));
+        Assert.Equal(["hidden"], store.GetNotifications(NotificationVisibilityFilter.Hidden, null).Select(n => n.Id));
+    }
+
+    [Fact]
+    public void GetNotifications_SearchesTitleMessageAndTagCaseInsensitively()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate("title", "Body", DateTimeOffset.UtcNow, title: "Kitchen Alert");
+        store.AddOrUpdate("message", "Garage door open", DateTimeOffset.UtcNow);
+        store.AddOrUpdate("tag", "Other", DateTimeOffset.UtcNow, severity: "security");
+
+        Assert.Equal(["title"], store.GetNotifications(NotificationVisibilityFilter.All, "kitchen").Select(n => n.Id));
+        Assert.Equal(["message"], store.GetNotifications(NotificationVisibilityFilter.All, "GARAGE").Select(n => n.Id));
+        Assert.Equal(["tag"], store.GetNotifications(NotificationVisibilityFilter.All, "Security").Select(n => n.Id));
+    }
+
+    [Fact]
+    public void GetNotifications_SearchDoesNotMatchIdsOrReferenceIds()
+    {
+        var store = new NotificationStore();
+        store.AddOrUpdate(
+            "internal-id",
+            "Normal message",
+            DateTimeOffset.UtcNow,
+            referenceId: "reference-token");
+
+        Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.All, "internal-id"));
+        Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.All, "reference-token"));
+    }
 }
