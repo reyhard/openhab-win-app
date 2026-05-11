@@ -634,6 +634,41 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task WidgetEventWhileSearchActivePublishesSearchDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        controller.ApplySearchQuery("Living Room Light");
+
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "w1",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "LivingRoom_Light",
+            ItemState: "ON",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        var eventSnapshot = Assert.Single(snapshots);
+        Assert.True(eventSnapshot.IsSearchActive);
+        Assert.Equal("__search__", eventSnapshot.Descriptor!.PageId);
+        Assert.Contains(eventSnapshot.Descriptor.Rows, row => row.Label == "Living Room Light" && row.State == "ON");
+    }
+
+    [Fact]
     public async Task WidgetEventNoChangeIsIgnored()
     {
         var settings = CreateSettingsController();

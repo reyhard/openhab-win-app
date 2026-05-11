@@ -633,10 +633,15 @@ public sealed class SitemapRuntimeController
 
         currentPage = currentPage with { Widgets = widgets.AsReadOnly() };
 
+        var normalDescriptor = renderController.BuildCurrentDescriptor(currentPage);
+        var effectiveDescriptor = BuildEffectiveDescriptor(normalDescriptor);
         Current = Current with
         {
-            Descriptor = renderController.BuildCurrentDescriptor(currentPage),
-            ChangedRowIndices = changedIndices
+            Descriptor = effectiveDescriptor,
+            ChangedRowIndices = _activeSearchQuery.Length > 0 ? [] : changedIndices,
+            IsSearchActive = _activeSearchQuery.Length > 0,
+            SearchQuery = _activeSearchQuery,
+            SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
         };
 
         DiagnosticLogger.Info(
@@ -812,19 +817,18 @@ public sealed class SitemapRuntimeController
             }
         }
 
-        var normalized = SitemapNormalizer.Normalize(targetPage);
-        var descriptor = renderController.BuildCurrentDescriptor(normalized);
-        var effectiveDescriptor = BuildEffectiveDescriptor(descriptor);
-        var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, effectiveDescriptor);
         var previousPageId = currentPage?.Id;
-
+        var normalized = SitemapNormalizer.Normalize(targetPage);
         currentPage = normalized;
         BuildItemIndexMap();
 
+        var descriptor = renderController.BuildCurrentDescriptor(normalized);
+        var effectiveDescriptor = BuildEffectiveDescriptor(descriptor);
+        var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, effectiveDescriptor);
         var breadcrumbs = BuildBreadcrumbTrail();
         var hasPageChange = !string.Equals(previousPageId, normalized.Id, StringComparison.Ordinal);
         var hasBreadcrumbChange = !Current.Breadcrumbs.SequenceEqual(breadcrumbs, StringComparer.Ordinal);
-        var hasDescriptorChange = changedRowIndices.Count > 0 || Current.Descriptor is null || Current.Descriptor.Rows.Count != descriptor.Rows.Count;
+        var hasDescriptorChange = changedRowIndices.Count > 0 || Current.Descriptor is null || Current.Descriptor.Rows.Count != effectiveDescriptor.Rows.Count;
 
         if (hasDescriptorChange || hasPageChange || hasBreadcrumbChange)
         {
