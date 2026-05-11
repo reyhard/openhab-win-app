@@ -217,4 +217,96 @@ public class SitemapControlFactoryTests
 
         Assert.NotNull(method);
     }
+
+    [Fact]
+    public void BuildRowIdentityKey_PrefersWidgetId()
+    {
+        var row = new SitemapRowDescriptor(
+            "Biurko - Opcje",
+            null,
+            RenderControlKind.Text,
+            RenderActionKind.Navigate,
+            RenderDensity.Compact,
+            [],
+            WidgetId: "0101");
+
+        Assert.Equal("widget:0101", SitemapControlFactory.BuildRowIdentityKey(row));
+    }
+
+    [Fact]
+    public void BuildRowIdentityKey_UsesStableFallbackForRowsWithoutItems()
+    {
+        var row = new SitemapRowDescriptor(
+            "Biurko - Opcje",
+            null,
+            RenderControlKind.Text,
+            RenderActionKind.Navigate,
+            RenderDensity.Compact,
+            [],
+            IconName: "light");
+
+        Assert.Equal("row:Text:Navigate:light:Biurko - Opcje", SitemapControlFactory.BuildRowIdentityKey(row));
+    }
+
+    [Fact]
+    public void BuildRowVisualStateKey_IgnoresRowIndexChanges()
+    {
+        var row = new SitemapRowDescriptor(
+            "Kuchnia",
+            "OFF",
+            RenderControlKind.Toggle,
+            RenderActionKind.SendCommand,
+            RenderDensity.Compact,
+            [],
+            RawState: "OFF",
+            IconName: "switch",
+            ItemName: "Kitchen_Light",
+            WidgetId: "0102");
+
+        Assert.Equal(
+            SitemapControlFactory.BuildRowVisualStateKey(row, rowIndex: 2),
+            SitemapControlFactory.BuildRowVisualStateKey(row, rowIndex: 3));
+    }
+
+    [Fact]
+    public void BuildRowVisualStateKey_IgnoresIconStateChanges()
+    {
+        var offRow = new SitemapRowDescriptor(
+            "Biurko",
+            "OFF",
+            RenderControlKind.Toggle,
+            RenderActionKind.SendCommand,
+            RenderDensity.Compact,
+            [],
+            RawState: "OFF",
+            IconName: "switch",
+            ItemName: "BulbDesk_01_Switch",
+            WidgetId: "0100");
+        var onRow = offRow with { State = "ON", RawState = "ON" };
+
+        Assert.Equal(
+            SitemapControlFactory.BuildRowVisualStateKey(offRow, rowIndex: 1),
+            SitemapControlFactory.BuildRowVisualStateKey(onRow, rowIndex: 1));
+    }
+
+    [Fact]
+    public void BuildRowVisualStateKey_ChangesWhenIconNameChanges()
+    {
+        var switchRow = new SitemapRowDescriptor(
+            "Biurko",
+            "OFF",
+            RenderControlKind.Toggle,
+            RenderActionKind.SendCommand,
+            RenderDensity.Compact,
+            [],
+            RawState: "OFF",
+            IconName: "switch",
+            ItemName: "BulbDesk_01_Switch",
+            WidgetId: "0100");
+        var lightRow = switchRow with { IconName = "light" };
+
+        Assert.NotEqual(
+            SitemapControlFactory.BuildRowVisualStateKey(switchRow, rowIndex: 1),
+            SitemapControlFactory.BuildRowVisualStateKey(lightRow, rowIndex: 1));
+    }
 }

@@ -27,6 +27,9 @@ namespace OpenHab.Windows.Tray;
 
 public sealed partial class FlyoutWindow : Window
 {
+    private sealed record RenderedRowTag(int RowIndex, string RowKey, string VisualStateKey);
+    private sealed record ExistingRenderedRow(FrameworkElement Element, int ChildIndex);
+    private sealed record PendingRowUpdate(FrameworkElement Element, int RowIndex, SitemapRowDescriptor Row);
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
     private readonly NotificationStore? notificationStore;
@@ -225,14 +228,52 @@ public sealed partial class FlyoutWindow : Window
 
         if (changedIndices is { Count: > 0 } && rows is not null)
         {
-            foreach (var index in changedIndices)
+            var indicesToRefresh = ExpandChangedIndicesForMergedRows(changedIndices, rows);
+            foreach (var index in indicesToRefresh)
             {
-                if (index < 0 || index >= rowsPanel.Children.Count || index >= rows.Count) continue;
-                var existing = rowsPanel.Children[index] as FrameworkElement;
-                if (existing is null) continue;
-                SitemapControlFactory.UpdateState(existing, rows[index]);
+                if (index < 0 || index >= rows.Count) continue;
+                if (!TryFindRenderedRow(rowsPanel, index, out var existing, out var existingChildIndex))
+                {
+                    continue;
+                }
+                var row = rows[index];
+                if (row.Control == RenderControlKind.ButtonGrid)
+                {
+                    // ButtonGrid options are rendered as nested Button elements; rebuild this row
+                    // so visibility/active-state swaps from paired rows are reflected immediately.
+                    rowsPanel.Children.RemoveAt(existingChildIndex);
+                    var replacement = CreateRowElementForIndex(index, rows, snapshot);
+                    SitemapControlFactory.SetVisibility(replacement, row.IsVisible);
+                    rowsPanel.Children.Insert(existingChildIndex, replacement);
+                    continue;
+                }
+
+                if (ShouldRebuildRow(existing, row, index))
+                {
+                    rowsPanel.Children.RemoveAt(existingChildIndex);
+                    var replacement = CreateRowElementForIndex(index, rows, snapshot);
+                    SitemapControlFactory.SetVisibility(replacement, row.IsVisible);
+                    rowsPanel.Children.Insert(existingChildIndex, replacement);
+                    continue;
+                }
+
+                SitemapControlFactory.UpdateState(existing, row);
+                SetRenderedRowTag(existing, index, row);
             }
 
+            return;
+        }
+
+        if (rows is not null && rowsPanel.Children.Count == CountVisualRows(rows))
+        {
+            // Runtime did not report row-level deltas and row count is unchanged.
+            // Avoid full rebuild to prevent control reset flicker on no-op refresh.
+            return;
+        }
+
+        if (rows is not null && rowsPanel.Children.Count > 0)
+        {
+            ReconcileStructuralRows(rowsPanel, rows, snapshot);
             return;
         }
 
@@ -242,119 +283,25 @@ public sealed partial class FlyoutWindow : Window
             return;
         }
 
-        var iconTransport = snapshot.ActiveTransport ?? TransportKind.Local;
-        var iconBaseUri = iconTransport == TransportKind.Local
-            ? settingsController.Current.LocalEndpoint
-            : settingsController.Current.CloudEndpoint;
-        var iconAuth = ResolveIconAuth(iconTransport);
-
         for (var index = 0; index < rows.Count; index++)
         {
-            var rowIndex = index;
             var row = rows[index];
-
-            if (row.Control == RenderControlKind.ButtonGrid)
-            {
-                var childOptions = new List<SitemapMapOption>();
-                var scan = index + 1;
-                while (scan < rows.Count && rows[scan].Control == RenderControlKind.Button)
-                {
-                    var child = rows[scan];
-                    var command = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
-                    var isActive = string.Equals(child.RawItemState ?? child.RawState ?? child.State, "ON", StringComparison.OrdinalIgnoreCase) ||
-                                   string.Equals(child.Command, "ON", StringComparison.OrdinalIgnoreCase);
-                    childOptions.Add(new SitemapMapOption(
-                        command,
-                        child.Label,
-                        child.GridRow,
-                        child.GridColumn,
-                        isActive,
-                        child.Command,
-                        child.ReleaseCommand,
-                        child.Stateless,
-                        scan));
-                    scan++;
-                }
-
-                var visibleChildOptions = childOptions.Where(o => o.SourceRowIndex.HasValue && rows[o.SourceRowIndex.Value].IsVisible).ToList();
-                if (visibleChildOptions.Count > 0)
-                {
-                    childOptions = visibleChildOptions;
-                }
-
-                var mergedRow = childOptions.Count > 0 ? row with { SelectionOptions = childOptions } : row;
-                Func<SitemapMapOption, bool, Task>? sendGridCommand = async (option, isRelease) =>
-                {
-                    var expectedCommand = isRelease ? option.ReleaseCommand : option.ClickCommand ?? option.Command;
-                    if (string.IsNullOrWhiteSpace(expectedCommand) ||
-                        string.Equals(expectedCommand, "NULL", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return;
-                    }
-
-                    if (childOptions.Count == 0)
-                    {
-                        await runtimeController.SendCommandForRowAsync(rowIndex, expectedCommand);
-                        return;
-                    }
-
-                    if (option.SourceRowIndex.HasValue)
-                    {
-                        await runtimeController.SendCommandForRowAsync(option.SourceRowIndex.Value, expectedCommand);
-                        return;
-                    }
-
-                    for (var childIndex = index + 1; childIndex < scan; childIndex++)
-                    {
-                        var child = rows[childIndex];
-                        var childCommand = isRelease ? child.ReleaseCommand : child.Command;
-                        if (string.Equals(childCommand, expectedCommand, StringComparison.Ordinal))
-                        {
-                            await runtimeController.SendCommandForRowAsync(childIndex, expectedCommand);
-                            return;
-                        }
-                    }
-                };
-
-                rowsPanel.Children.Add(SitemapControlFactory.Create(
-                    mergedRow,
-                    activateRow: null,
-                    sendCommand: null,
-                    iconBaseUri,
-                    settingsController.Current.UseWindows11Icons,
-                    iconAuth,
-                    chartDpi: (int)settingsController.Current.ChartQuality,
-                    sendButtonGridCommand: sendGridCommand));
-                index = scan - 1;
-                continue;
-            }
 
             if (row.Control == RenderControlKind.Button)
             {
                 continue;
             }
-            Func<Task>? activateRow = null;
-            if (row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand)
-                activateRow = () => OnRowActivatedAsync(rowIndex);
-            else if (row.Action == RenderActionKind.Navigate)
-                activateRow = () => OnRowNavigateAsync(rowIndex);
-            Func<string, Task>? sendCommand = row.Action == RenderActionKind.SendCommand
-                ? cmd => runtimeController.SendCommandForRowAsync(rowIndex, cmd)
-                : null;
-            rowsPanel.Children.Add(SitemapControlFactory.Create(
-                row,
-                activateRow,
-                sendCommand,
-                iconBaseUri,
-                settingsController.Current.UseWindows11Icons,
-                iconAuth,
-                chartDpi: (int)settingsController.Current.ChartQuality));
 
-            // Apply initial visibility
-            var lastIndex = rowsPanel.Children.Count - 1;
-            if (lastIndex >= 0 && rowsPanel.Children[lastIndex] is FrameworkElement element)
+            var rowElement = CreateRowElementForIndex(index, rows, snapshot);
+            AddRenderedRow(rowsPanel, index, rowElement);
+            SitemapControlFactory.SetVisibility(rowElement, row.IsVisible);
+
+            if (row.Control == RenderControlKind.ButtonGrid)
             {
-                SitemapControlFactory.SetVisibility(element, row.IsVisible);
+                while (index + 1 < rows.Count && rows[index + 1].Control == RenderControlKind.Button)
+                {
+                    index++;
+                }
             }
         }
     }
@@ -400,6 +347,13 @@ public sealed partial class FlyoutWindow : Window
         await RunRuntimeOperationAsync(async ct => await runtimeController.ActivateRowAsync(rowIndex, ct));
     }
 
+    private Task OnRowActivatedByKeyAsync(string rowKey)
+    {
+        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
+            ? OnRowActivatedAsync(rowIndex)
+            : Task.CompletedTask;
+    }
+
     private async Task OnRowNavigateAsync(int rowIndex)
     {
         if (isRefreshing) return;
@@ -431,6 +385,42 @@ public sealed partial class FlyoutWindow : Window
         {
             isRefreshing = false;
         }
+    }
+
+    private Task OnRowNavigateByKeyAsync(string rowKey)
+    {
+        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
+            ? OnRowNavigateAsync(rowIndex)
+            : Task.CompletedTask;
+    }
+
+    private Task SendCommandForRowKeyAsync(string rowKey, string command)
+    {
+        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
+            ? runtimeController.SendCommandForRowAsync(rowIndex, command)
+            : Task.CompletedTask;
+    }
+
+    private bool TryResolveCurrentRowIndex(string rowKey, out int rowIndex)
+    {
+        var rows = runtimeController.Current.Descriptor?.Rows;
+        if (rows is null)
+        {
+            rowIndex = -1;
+            return false;
+        }
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            if (string.Equals(SitemapControlFactory.BuildRowIdentityKey(rows[index]), rowKey, StringComparison.Ordinal))
+            {
+                rowIndex = index;
+                return true;
+            }
+        }
+
+        rowIndex = -1;
+        return false;
     }
 
     private async void SitemapMenuItem_Click(object sender, RoutedEventArgs e)
@@ -891,6 +881,353 @@ public sealed partial class FlyoutWindow : Window
             InactiveSlotContainer,
             direction,
             durationMs);
+    }
+
+    private static IReadOnlyList<int> ExpandChangedIndicesForMergedRows(IReadOnlyList<int> changedIndices, IReadOnlyList<SitemapRowDescriptor> rows)
+    {
+        var set = new SortedSet<int>();
+        foreach (var index in changedIndices)
+        {
+            if (index < 0 || index >= rows.Count)
+            {
+                continue;
+            }
+
+            var effective = index;
+            if (rows[index].Control == RenderControlKind.Button)
+            {
+                for (var scan = index - 1; scan >= 0; scan--)
+                {
+                    if (rows[scan].Control == RenderControlKind.ButtonGrid)
+                    {
+                        effective = scan;
+                        break;
+                    }
+
+                    if (rows[scan].Control != RenderControlKind.Button)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (rows[effective].Control == RenderControlKind.Button)
+            {
+                // These are merged into an upstream ButtonGrid control and should
+                // never be refreshed as stand-alone visual rows.
+                continue;
+            }
+
+            set.Add(effective);
+        }
+
+        return set.ToArray();
+    }
+
+    private void ReconcileStructuralRows(StackPanel rowsPanel, IReadOnlyList<SitemapRowDescriptor> rows, SitemapRuntimeSnapshot snapshot)
+    {
+        var existingByKey = new Dictionary<string, Queue<ExistingRenderedRow>>(StringComparer.Ordinal);
+        for (var childIndex = 0; childIndex < rowsPanel.Children.Count; childIndex++)
+        {
+            if (rowsPanel.Children[childIndex] is not FrameworkElement child ||
+                child.Tag is not RenderedRowTag tag)
+            {
+                continue;
+            }
+
+            if (!existingByKey.TryGetValue(tag.RowKey, out var bucket))
+            {
+                bucket = new Queue<ExistingRenderedRow>();
+                existingByKey[tag.RowKey] = bucket;
+            }
+
+            bucket.Enqueue(new ExistingRenderedRow(child, childIndex));
+        }
+
+        var oldVisualRows = rowsPanel.Children.Count;
+        var reused = 0;
+        var inserted = 0;
+        var rebuilt = 0;
+        var removed = 0;
+        var orderedRows = new List<FrameworkElement>();
+        var pendingUpdates = new List<PendingRowUpdate>();
+        rowsPanel.Children.Clear();
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            if (row.Control == RenderControlKind.Button)
+            {
+                continue;
+            }
+
+            var effectiveRow = row.Control == RenderControlKind.ButtonGrid
+                ? BuildMergedButtonGridRow(index, rows)
+                : row;
+            var rowKey = SitemapControlFactory.BuildRowIdentityKey(effectiveRow);
+
+            if (existingByKey.TryGetValue(rowKey, out var bucket) && bucket.Count > 0)
+            {
+                var existing = bucket.Dequeue().Element;
+                if (row.Control == RenderControlKind.ButtonGrid || ShouldRebuildRow(existing, effectiveRow, index))
+                {
+                    existing = CreateRowElementForIndex(index, rows, snapshot);
+                    SitemapControlFactory.SetVisibility(existing, effectiveRow.IsVisible);
+                    rebuilt++;
+                }
+                else
+                {
+                    pendingUpdates.Add(new PendingRowUpdate(existing, index, effectiveRow));
+                    reused++;
+                }
+
+                orderedRows.Add(existing);
+            }
+            else
+            {
+                var insertedElement = CreateRowElementForIndex(index, rows, snapshot);
+                SitemapControlFactory.SetVisibility(insertedElement, visible: false);
+                if (effectiveRow.IsVisible)
+                {
+                    pendingUpdates.Add(new PendingRowUpdate(insertedElement, index, effectiveRow));
+                }
+
+                orderedRows.Add(insertedElement);
+                inserted++;
+            }
+
+            if (row.Control == RenderControlKind.ButtonGrid)
+            {
+                while (index + 1 < rows.Count && rows[index + 1].Control == RenderControlKind.Button)
+                {
+                    index++;
+                }
+            }
+        }
+
+        var disappearing = existingByKey.Values
+            .SelectMany(bucket => bucket)
+            .OrderBy(item => item.ChildIndex)
+            .ToList();
+
+        foreach (var item in disappearing)
+        {
+            var insertIndex = Math.Min(item.ChildIndex, orderedRows.Count);
+            orderedRows.Insert(insertIndex, item.Element);
+        }
+
+        foreach (var element in orderedRows)
+        {
+            rowsPanel.Children.Add(element);
+        }
+
+        foreach (var update in pendingUpdates)
+        {
+            SitemapControlFactory.UpdateState(update.Element, update.Row);
+            SetRenderedRowTag(update.Element, update.RowIndex, update.Row);
+        }
+
+        foreach (var item in disappearing)
+        {
+            removed++;
+            SitemapControlFactory.CollapseAndRemove(rowsPanel, item.Element);
+        }
+
+        DiagnosticLogger.Info(
+            $"Flyout structural row reconcile oldVisualRows={oldVisualRows} targetVisualRows={orderedRows.Count - removed} " +
+            $"currentVisualRows={rowsPanel.Children.Count} reused={reused} inserted={inserted} rebuilt={rebuilt} removed={removed}");
+    }
+
+    private static int CountVisualRows(IReadOnlyList<SitemapRowDescriptor> rows)
+    {
+        var count = 0;
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            if (row.Control == RenderControlKind.Button)
+            {
+                continue;
+            }
+
+            count++;
+            if (row.Control == RenderControlKind.ButtonGrid)
+            {
+                while (index + 1 < rows.Count && rows[index + 1].Control == RenderControlKind.Button)
+                {
+                    index++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static SitemapRowDescriptor BuildMergedButtonGridRow(int gridIndex, IReadOnlyList<SitemapRowDescriptor> rows)
+    {
+        var row = rows[gridIndex];
+        var childOptions = new List<SitemapMapOption>();
+        var scan = gridIndex + 1;
+        while (scan < rows.Count && rows[scan].Control == RenderControlKind.Button)
+        {
+            var child = rows[scan];
+            var command = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
+            var isActive = string.Equals(child.RawItemState ?? child.RawState ?? child.State, "ON", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(child.Command, "ON", StringComparison.OrdinalIgnoreCase);
+            childOptions.Add(new SitemapMapOption(
+                command,
+                child.Label,
+                child.GridRow,
+                child.GridColumn,
+                isActive,
+                child.Command,
+                child.ReleaseCommand,
+                child.Stateless,
+                scan));
+            scan++;
+        }
+
+        var visibleChildOptions = childOptions.Where(o => o.SourceRowIndex.HasValue && rows[o.SourceRowIndex.Value].IsVisible).ToList();
+        if (visibleChildOptions.Count > 0)
+        {
+            childOptions = visibleChildOptions;
+        }
+
+        return childOptions.Count > 0 ? row with { SelectionOptions = childOptions } : row;
+    }
+
+    private FrameworkElement CreateRowElementForIndex(int index, IReadOnlyList<SitemapRowDescriptor> rows, SitemapRuntimeSnapshot snapshot)
+    {
+        var row = rows[index];
+        var iconTransport = snapshot.ActiveTransport ?? TransportKind.Local;
+        var iconBaseUri = iconTransport == TransportKind.Local
+            ? settingsController.Current.LocalEndpoint
+            : settingsController.Current.CloudEndpoint;
+        var iconAuth = ResolveIconAuth(iconTransport);
+
+        if (row.Control == RenderControlKind.ButtonGrid)
+        {
+            var mergedRow = BuildMergedButtonGridRow(index, rows);
+            var childOptions = mergedRow.SelectionOptions;
+
+            Func<SitemapMapOption, bool, Task>? sendGridCommand = async (option, isRelease) =>
+            {
+                var expectedCommand = isRelease ? option.ReleaseCommand : option.ClickCommand ?? option.Command;
+                if (string.IsNullOrWhiteSpace(expectedCommand) ||
+                    string.Equals(expectedCommand, "NULL", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                if (childOptions.Count == 0)
+                {
+                    await runtimeController.SendCommandForRowAsync(index, expectedCommand);
+                    return;
+                }
+
+                if (option.SourceRowIndex.HasValue)
+                {
+                    await runtimeController.SendCommandForRowAsync(option.SourceRowIndex.Value, expectedCommand);
+                    return;
+                }
+
+                await runtimeController.SendCommandForRowAsync(index, expectedCommand);
+            };
+
+            var element = SitemapControlFactory.Create(
+                mergedRow,
+                activateRow: null,
+                sendCommand: null,
+                iconBaseUri,
+                settingsController.Current.UseWindows11Icons,
+                iconAuth,
+                chartDpi: (int)settingsController.Current.ChartQuality,
+                sendButtonGridCommand: sendGridCommand);
+            SetRenderedRowTag(element, index, mergedRow);
+            return element;
+        }
+
+        var rowKey = SitemapControlFactory.BuildRowIdentityKey(row);
+        Func<Task>? activateRow = null;
+        if (row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand)
+            activateRow = () => OnRowActivatedByKeyAsync(rowKey);
+        else if (row.Action == RenderActionKind.Navigate)
+            activateRow = () => OnRowNavigateByKeyAsync(rowKey);
+        Func<string, Task>? sendCommand = row.Action == RenderActionKind.SendCommand
+            ? cmd => SendCommandForRowKeyAsync(rowKey, cmd)
+            : null;
+
+        var created = SitemapControlFactory.Create(
+            row,
+            activateRow,
+            sendCommand,
+            iconBaseUri,
+            settingsController.Current.UseWindows11Icons,
+            iconAuth,
+            chartDpi: (int)settingsController.Current.ChartQuality);
+        SetRenderedRowTag(created, index, row);
+        return created;
+    }
+
+    private static void AddRenderedRow(StackPanel rowsPanel, int rowIndex, FrameworkElement rowElement)
+    {
+        // Tag is assigned by CreateRowElementForIndex for delta mapping metadata.
+        rowsPanel.Children.Add(rowElement);
+    }
+
+    private static bool TryFindRenderedRow(StackPanel rowsPanel, int rowIndex, out FrameworkElement element, out int childIndex)
+    {
+        for (var i = 0; i < rowsPanel.Children.Count; i++)
+        {
+            if (rowsPanel.Children[i] is FrameworkElement candidate &&
+                TryGetRenderedRowIndex(candidate, out var candidateRowIndex) &&
+                candidateRowIndex == rowIndex)
+            {
+                element = candidate;
+                childIndex = i;
+                return true;
+            }
+        }
+
+        element = null!;
+        childIndex = -1;
+        return false;
+    }
+
+    private static bool TryGetRenderedRowIndex(FrameworkElement element, out int rowIndex)
+    {
+        switch (element.Tag)
+        {
+            case int idx:
+                rowIndex = idx;
+                return true;
+            case RenderedRowTag tag:
+                rowIndex = tag.RowIndex;
+                return true;
+            default:
+                rowIndex = -1;
+                return false;
+        }
+    }
+
+    private static void SetRenderedRowTag(FrameworkElement element, int rowIndex, SitemapRowDescriptor row)
+    {
+        element.Tag = new RenderedRowTag(
+            rowIndex,
+            SitemapControlFactory.BuildRowIdentityKey(row),
+            SitemapControlFactory.BuildRowVisualStateKey(row, rowIndex));
+    }
+
+    private static bool ShouldRebuildRow(FrameworkElement existingElement, SitemapRowDescriptor updatedRow, int rowIndex)
+    {
+        if (existingElement.Tag is not RenderedRowTag tag)
+        {
+            return false;
+        }
+
+        return !string.Equals(
+            tag.VisualStateKey,
+            SitemapControlFactory.BuildRowVisualStateKey(updatedRow, rowIndex),
+            StringComparison.Ordinal);
     }
 
     private void RefreshNotificationBadge()

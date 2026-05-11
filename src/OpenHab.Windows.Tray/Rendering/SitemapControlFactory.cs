@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Media.Animation;
 using OpenHab.Core;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
@@ -32,6 +33,7 @@ public static partial class SitemapControlFactory
     private static readonly ConcurrentDictionary<string, ImageSource> IconSourceCache = new(StringComparer.Ordinal);
     private static readonly System.Threading.Lock IconProbeSyncRoot = new();
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
+    private sealed record IconImageTag(Uri BaseUri, string IconName, string? IconState, string? IconColor, IconAuthContext? AuthContext);
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
         // --- LIGHTING ---
@@ -202,6 +204,34 @@ public static partial class SitemapControlFactory
         return NormalizedWin11IconMap.ContainsKey(normalized);
     }
 
+    internal static string BuildRowIdentityKey(SitemapRowDescriptor row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        if (!string.IsNullOrWhiteSpace(row.WidgetId))
+        {
+            return $"widget:{row.WidgetId}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.ItemName))
+        {
+            return $"item:{row.ItemName}:{row.Control}:{row.Action}";
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"row:{row.Control}:{row.Action}:{row.IconName ?? string.Empty}:{row.Label}");
+    }
+
+    internal static string BuildRowVisualStateKey(SitemapRowDescriptor row, int rowIndex)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"key:{BuildRowIdentityKey(row)}|control:{row.Control}|action:{row.Action}|label:{row.Label}|icon:{row.IconName ?? string.Empty}|command:{row.Command ?? string.Empty}|release:{row.ReleaseCommand ?? string.Empty}");
+    }
+
     public static FrameworkElement Create(
         SitemapRowDescriptor row,
         Func<Task>? activateRow,
@@ -241,8 +271,8 @@ public static partial class SitemapControlFactory
             inner = child;
         }
 
-        // Update visibility first
-        control.Visibility = updated.IsVisible ? Visibility.Visible : Visibility.Collapsed;
+        // Update visibility first (with animated transitions for smoother unhide/hide).
+        ApplyAnimatedVisibility(control, updated.IsVisible);
 
         var rawState = updated.RawState ?? updated.State;
 
@@ -253,10 +283,13 @@ public static partial class SitemapControlFactory
                 if (toggle is not null)
                 {
                     var isOn = string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase);
-                    // Suppress Toggled event to prevent feedback loop
-                    toggle.Tag = "suppress";
-                    toggle.IsOn = isOn;
-                    toggle.Tag = null;
+                    if (toggle.IsOn != isOn)
+                    {
+                        // Suppress Toggled event to prevent feedback loop.
+                        toggle.Tag = "suppress";
+                        toggle.IsOn = isOn;
+                        toggle.Tag = null;
+                    }
                 }
                 // Also update the state text next to the toggle
                 UpdateStateTextBlock(inner, string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase) ? "ON" : "OFF");
@@ -293,12 +326,207 @@ public static partial class SitemapControlFactory
         }
 
         ApplyRowColors(inner, updated);
+        UpdateIconImage(inner, updated);
     }
 
     public static void SetVisibility(FrameworkElement control, bool visible)
     {
         ArgumentNullException.ThrowIfNull(control);
         control.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        control.Opacity = 1d;
+        control.Height = double.NaN;
+        if (control.RenderTransform is TranslateTransform transform)
+        {
+            transform.Y = 0d;
+        }
+    }
+
+    public static void CollapseAndRemove(Panel parent, FrameworkElement control)
+    {
+        ArgumentNullException.ThrowIfNull(parent);
+        ArgumentNullException.ThrowIfNull(control);
+
+        if (!parent.Children.Contains(control))
+        {
+            return;
+        }
+
+        if (control.Visibility == Visibility.Collapsed)
+        {
+            parent.Children.Remove(control);
+            return;
+        }
+
+        ApplyAnimatedVisibility(control, visible: false, onCompleted: () =>
+        {
+            if (parent.Children.Contains(control))
+            {
+                parent.Children.Remove(control);
+            }
+        });
+    }
+
+    private static void ApplyAnimatedVisibility(FrameworkElement control, bool visible, Action? onCompleted = null)
+    {
+        const double totalMs = 280d;
+        var expandEase = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var collapseEase = new CubicEase { EasingMode = EasingMode.EaseIn };
+
+        if (visible)
+        {
+            if (control.Visibility != Visibility.Visible)
+            {
+                EnsureSlideTransform(control);
+                control.Opacity = 0d;
+                control.Visibility = Visibility.Visible;
+                control.Height = double.NaN;
+                control.Measure(new global::Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+                var targetHeight = Math.Max(1d, control.DesiredSize.Height);
+                control.Height = 0d;
+
+                // Match Windows 11's feel: height, offset, and opacity move together.
+                var heightIn = new DoubleAnimation
+                {
+                    From = 0d,
+                    To = targetHeight,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+                    EasingFunction = expandEase,
+                    EnableDependentAnimation = true
+                };
+
+                var slideIn = new DoubleAnimation
+                {
+                    From = -5d,
+                    To = 0d,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+                    EasingFunction = expandEase,
+                    EnableDependentAnimation = true
+                };
+
+                var fadeIn = new DoubleAnimationUsingKeyFrames
+                {
+                    Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+                    EnableDependentAnimation = true
+                };
+                fadeIn.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0d });
+                fadeIn.KeyFrames.Add(new SplineDoubleKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(totalMs * 0.72d)),
+                    Value = 1d,
+                    KeySpline = new KeySpline { ControlPoint1 = new global::Windows.Foundation.Point(0.16d, 1d), ControlPoint2 = new global::Windows.Foundation.Point(0.3d, 1d) }
+                });
+
+                var sb = new Storyboard();
+                Storyboard.SetTarget(heightIn, control);
+                Storyboard.SetTargetProperty(heightIn, nameof(FrameworkElement.Height));
+                Storyboard.SetTarget(slideIn, control);
+                Storyboard.SetTargetProperty(slideIn, "(UIElement.RenderTransform).(TranslateTransform.Y)");
+                Storyboard.SetTarget(fadeIn, control);
+                Storyboard.SetTargetProperty(fadeIn, nameof(UIElement.Opacity));
+                sb.Children.Add(heightIn);
+                sb.Children.Add(slideIn);
+                sb.Children.Add(fadeIn);
+                sb.Completed += (_, _) =>
+                {
+                    control.Height = double.NaN;
+                    control.Opacity = 1d;
+                    if (control.RenderTransform is TranslateTransform transform)
+                    {
+                        transform.Y = 0d;
+                    }
+
+                    onCompleted?.Invoke();
+                };
+                sb.Begin();
+            }
+            else
+            {
+                control.Opacity = 1d;
+                onCompleted?.Invoke();
+            }
+
+            return;
+        }
+
+        if (control.Visibility == Visibility.Collapsed)
+        {
+            control.Opacity = 1d;
+            onCompleted?.Invoke();
+            return;
+        }
+
+        EnsureSlideTransform(control);
+        var measuredHeight = control.ActualHeight;
+        if (measuredHeight <= 0d)
+        {
+            control.Measure(new global::Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+            measuredHeight = control.DesiredSize.Height;
+        }
+
+        var currentHeight = Math.Max(1d, measuredHeight);
+        control.Height = currentHeight;
+
+        var fadeOut = new DoubleAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+            EnableDependentAnimation = true
+        };
+        fadeOut.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 1d });
+        fadeOut.KeyFrames.Add(new SplineDoubleKeyFrame
+        {
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(totalMs * 0.62d)),
+            Value = 0d,
+            KeySpline = new KeySpline { ControlPoint1 = new global::Windows.Foundation.Point(0.7d, 0d), ControlPoint2 = new global::Windows.Foundation.Point(0.84d, 0d) }
+        });
+
+        var slideOut = new DoubleAnimation
+        {
+            To = -5d,
+            Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+            EasingFunction = collapseEase,
+            EnableDependentAnimation = true
+        };
+
+        var heightOut = new DoubleAnimation
+        {
+            From = currentHeight,
+            To = 0d,
+            Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+            EasingFunction = collapseEase,
+            EnableDependentAnimation = true
+        };
+
+        var sbHide = new Storyboard();
+        Storyboard.SetTarget(heightOut, control);
+        Storyboard.SetTargetProperty(heightOut, nameof(FrameworkElement.Height));
+        Storyboard.SetTarget(slideOut, control);
+        Storyboard.SetTargetProperty(slideOut, "(UIElement.RenderTransform).(TranslateTransform.Y)");
+        Storyboard.SetTarget(fadeOut, control);
+        Storyboard.SetTargetProperty(fadeOut, nameof(UIElement.Opacity));
+        sbHide.Children.Add(heightOut);
+        sbHide.Children.Add(slideOut);
+        sbHide.Children.Add(fadeOut);
+        sbHide.Completed += (_, _) =>
+        {
+            control.Visibility = Visibility.Collapsed;
+            control.Opacity = 1d;
+            control.Height = double.NaN;
+            if (control.RenderTransform is TranslateTransform transform)
+            {
+                transform.Y = 0d;
+            }
+
+            onCompleted?.Invoke();
+        };
+        sbHide.Begin();
+    }
+
+    private static void EnsureSlideTransform(FrameworkElement control)
+    {
+        if (control.RenderTransform is not TranslateTransform)
+        {
+            control.RenderTransform = new TranslateTransform();
+        }
     }
 
     private static void UpdateStateTextBlock(DependencyObject parent, string newState)
@@ -368,6 +596,57 @@ public static partial class SitemapControlFactory
         {
             ApplyBrush(icon, row.IconColor);
         }
+    }
+
+    private static void UpdateIconImage(FrameworkElement root, SitemapRowDescriptor row)
+    {
+        if (FindIconImage(root) is not { } image || image.Tag is not IconImageTag tag)
+        {
+            return;
+        }
+
+        var iconName = row.IconName;
+        if (string.IsNullOrWhiteSpace(iconName))
+        {
+            return;
+        }
+
+        var iconState = row.RawState ?? row.State;
+        if (string.Equals(tag.IconName, iconName, StringComparison.Ordinal) &&
+            string.Equals(tag.IconState, iconState, StringComparison.Ordinal) &&
+            string.Equals(tag.IconColor, row.IconColor, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var updated = tag with
+        {
+            IconName = iconName,
+            IconState = iconState,
+            IconColor = row.IconColor
+        };
+        image.Tag = updated;
+        _ = LoadIconAsync(image, updated.BaseUri, updated.IconName, updated.IconState, updated.IconColor, updated.AuthContext);
+    }
+
+    private static Image? FindIconImage(DependencyObject parent)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is Image { Tag: IconImageTag } image)
+            {
+                return image;
+            }
+
+            var found = FindIconImage(child);
+            if (found is not null)
+            {
+                return found;
+            }
+        }
+
+        return null;
     }
 
     private static T? FindTaggedElement<T>(DependencyObject parent, string tag) where T : FrameworkElement
@@ -534,7 +813,8 @@ public static partial class SitemapControlFactory
             {
                 Width = 26,
                 Height = 26,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                Tag = new IconImageTag(baseUri, iconName, iconState, iconColor, iconAuth)
             };
             Grid.SetColumn(image, column);
             grid.Children.Add(image);

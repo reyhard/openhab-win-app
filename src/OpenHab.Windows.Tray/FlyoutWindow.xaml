@@ -87,7 +87,14 @@
                     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                                   HorizontalScrollMode="Disabled"
                                   HorizontalAlignment="Stretch">
-                        <StackPanel x:Name="SitemapRows" Spacing="4" />
+                        <StackPanel x:Name="SitemapRows" Spacing="4">
+                            <StackPanel.Transitions>
+                                <TransitionCollection>
+                                    <RepositionThemeTransition />
+                                    <AddDeleteThemeTransition />
+                                </TransitionCollection>
+                            </StackPanel.Transitions>
+                        </StackPanel>
                     </ScrollViewer>
                 </Grid>
                 <Grid x:Name="SitemapPageSlotB"
@@ -96,7 +103,14 @@
                     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                                   HorizontalScrollMode="Disabled"
                                   HorizontalAlignment="Stretch">
-                        <StackPanel x:Name="SitemapRowsB" Spacing="4" />
+                        <StackPanel x:Name="SitemapRowsB" Spacing="4">
+                            <StackPanel.Transitions>
+                                <TransitionCollection>
+                                    <RepositionThemeTransition />
+                                    <AddDeleteThemeTransition />
+                                </TransitionCollection>
+                            </StackPanel.Transitions>
+                        </StackPanel>
                     </ScrollViewer>
                 </Grid>
             </Grid>

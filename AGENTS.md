@@ -38,6 +38,12 @@ Useful entry points when orienting:
 - `src/OpenHab.Sitemaps/Parsing/OpenHabSitemapJsonParser.cs`
 - `src/OpenHab.Rendering/Skins/Windows11SitemapSkin.cs`
 
+Runtime logs and local app state are written under:
+
+- `%localappdata%\OpenHab.WinApp`
+
+Useful files there include `diagnostics.log`, `task-crash.log`, `settings.json`, and `notifications.json`. Prefer `diagnostics.log` first when tracing runtime behavior.
+
 Useful project docs:
 
 - `docs/superpowers/specs/2026-05-04-openhab-windows-sitemap-client-design.md`

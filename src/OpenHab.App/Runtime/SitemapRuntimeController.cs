@@ -4,6 +4,7 @@ using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Events;
 using OpenHab.Core.Profiles;
+using OpenHab.Rendering.Descriptors;
 using OpenHab.Sitemaps.Models;
 using OpenHab.Sitemaps.Parsing;
 using OpenHab.Sitemaps.Runtime;
@@ -21,6 +22,7 @@ public sealed class SitemapRuntimeController
     private NormalizedSitemapPage? currentPage;
     private readonly Stack<NormalizedSitemapPage> backStack = new();
     private Dictionary<string, int>? itemIndexMap;
+    private Dictionary<string, List<int>>? itemIndicesMap;
     private Dictionary<string, int>? widgetIdMap;
     private string? _subscriptionId;
     private int _widgetRefreshQueued;
@@ -28,10 +30,13 @@ public sealed class SitemapRuntimeController
     private bool _sitemapEventHandlersAttached;
     private DateTimeOffset _lastReconcileRefreshUtc = DateTimeOffset.MinValue;
     private long _refreshSequence;
+    private long _reconcileSequence;
+    private long _sitemapStateVersion;
     private int _refreshInProgress;
     private bool _sitemapEventStreamStarted;
     private string? _sitemapEventStreamSitemapName;
     private string? _sitemapEventStreamPageId;
+    private static readonly TimeSpan WidgetEventReconcileDebounce = TimeSpan.FromMilliseconds(250);
     public bool CanGoBack => backStack.Count > 0;
 
     public SitemapRuntimeController(
@@ -93,6 +98,7 @@ public sealed class SitemapRuntimeController
         try
         {
             var descriptor = await LoadDescriptorAsync(primary, settings.SitemapName, cancellationToken, previousPageId);
+            var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, descriptor);
             DiagnosticLogger.Info(
                 $"Refresh#{refreshId} primary success transport={primary.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
             Current = Current with
@@ -104,7 +110,7 @@ public sealed class SitemapRuntimeController
                 StatusText = $"Connected via {primary.Kind.ToString().ToLowerInvariant()}.",
                 IsBusy = false,
                 HasError = false,
-                ChangedRowIndices = []
+                ChangedRowIndices = changedRowIndices
             };
 
             // Live updates via sitemap events only.
@@ -122,6 +128,7 @@ public sealed class SitemapRuntimeController
             try
             {
                 var descriptor = await LoadDescriptorAsync(fallback, settings.SitemapName, cancellationToken, previousPageId);
+                var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, descriptor);
                 DiagnosticLogger.Info(
                     $"Refresh#{refreshId} fallback success transport={fallback.Kind} page={descriptor.PageId} rows={descriptor.Rows.Count}");
                 Current = Current with
@@ -133,7 +140,7 @@ public sealed class SitemapRuntimeController
                     StatusText = "Connected via cloud (local failed).",
                     IsBusy = false,
                     HasError = false,
-                    ChangedRowIndices = []
+                    ChangedRowIndices = changedRowIndices
                 };
 
                 _ = StartSitemapEventStreamAsync(fallback.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
@@ -419,92 +426,137 @@ public sealed class SitemapRuntimeController
     private void OnWidgetEventReceived(object? sender, SitemapWidgetEvent e)
     {
         DiagnosticLogger.Info($"SSE widget event: id={e.WidgetId} item={e.ItemName} state={e.ItemState} vis={e.Visibility}");
+        Interlocked.Increment(ref _sitemapStateVersion);
         ApplyWidgetEvent(e);
 
-        // Some servers emit incomplete widget events (e.g. missing item/state) for dependent rows.
-        // Reconcile in background only for ambiguous payloads.
-        if (string.IsNullOrWhiteSpace(e.ItemName) && string.IsNullOrWhiteSpace(e.ItemState))
-        {
-            QueueRefreshFromWidgetEvent();
-        }
+        // Always reconcile in background (coalesced): visibility/icon rules often affect
+        // sibling widgets and are not fully represented in single-row widget events.
+        QueueRefreshFromWidgetEvent();
     }
 
     private void ApplyWidgetEvent(SitemapWidgetEvent e)
     {
         if (widgetIdMap is null || currentPage is null) return;
 
-        // Try to find by widgetId first
-        int? index = null;
-        if (!string.IsNullOrEmpty(e.WidgetId) && widgetIdMap.TryGetValue(e.WidgetId, out var widIndex))
-        {
-            index = widIndex;
-        }
-        // Fallback: find by item name
-        else if (!string.IsNullOrEmpty(e.ItemName) && itemIndexMap is not null &&
-                 itemIndexMap.TryGetValue(e.ItemName, out var itemIndex))
-        {
-            index = itemIndex;
-        }
-
-        if (index is null || index.Value < 0 || index.Value >= currentPage.Widgets.Count)
+        var targetIndices = ResolveTargetWidgetIndices(e);
+        if (targetIndices.Count == 0)
         {
             DiagnosticLogger.Warn($"SSE widget event: widget not found by id='{e.WidgetId}' or item='{e.ItemName}'");
             return;
         }
 
-        var widget = currentPage.Widgets[index.Value];
-        var changed = false;
-
-        // Apply state change
-        if (!string.IsNullOrEmpty(e.ItemState) && !string.Equals(widget.State, e.ItemState, StringComparison.Ordinal))
-        {
-            widget = widget with { State = e.ItemState };
-            changed = true;
-        }
-
-        // Apply label change if description changed
-        if (e.DescriptionChanged && !string.IsNullOrEmpty(e.Label) && !string.Equals(widget.Label, e.Label, StringComparison.Ordinal))
-        {
-            widget = widget with { Label = e.Label };
-            changed = true;
-        }
-
-        // Apply visibility change
-        if (widget.IsVisible != e.Visibility)
-        {
-            widget = widget with { IsVisible = e.Visibility };
-            changed = true;
-        }
-
-        if (!changed) return;
-
         var widgets = currentPage.Widgets.ToList();
-        widgets[index.Value] = widget;
+        var changedIndices = new List<int>();
+
+        foreach (var index in targetIndices)
+        {
+            if (index < 0 || index >= widgets.Count)
+            {
+                continue;
+            }
+
+            var widget = widgets[index];
+            var changed = false;
+
+            // Apply state change
+            if (!string.IsNullOrEmpty(e.ItemState) && !string.Equals(widget.State, e.ItemState, StringComparison.Ordinal))
+            {
+                widget = widget with { State = e.ItemState };
+                changed = true;
+            }
+
+            // Apply label change if description changed
+            if (e.DescriptionChanged && !string.IsNullOrEmpty(e.Label) && !string.Equals(widget.Label, e.Label, StringComparison.Ordinal))
+            {
+                widget = widget with { Label = e.Label };
+                changed = true;
+            }
+
+            // Apply icon updates from SSE event payload.
+            if (!string.IsNullOrEmpty(e.Icon) && !string.Equals(widget.Icon, e.Icon, StringComparison.Ordinal))
+            {
+                widget = widget with { Icon = e.Icon };
+                changed = true;
+            }
+
+            // Apply visibility change
+            if (widget.IsVisible != e.Visibility)
+            {
+                widget = widget with { IsVisible = e.Visibility };
+                changed = true;
+            }
+
+            if (!changed)
+            {
+                continue;
+            }
+
+            widgets[index] = widget;
+            changedIndices.Add(index);
+        }
+
+        if (changedIndices.Count == 0) return;
+
         currentPage = currentPage with { Widgets = widgets.AsReadOnly() };
 
         Current = Current with
         {
             Descriptor = renderController.BuildCurrentDescriptor(currentPage),
-            ChangedRowIndices = new[] { index.Value }
+            ChangedRowIndices = changedIndices
         };
 
         DiagnosticLogger.Info(
-            $"ApplyWidgetEvent applied id={e.WidgetId} index={index.Value} item={e.ItemName ?? "<null>"} " +
+            $"ApplyWidgetEvent applied id={e.WidgetId} indices=[{string.Join(",", changedIndices)}] item={e.ItemName ?? "<null>"} " +
             $"state={e.ItemState ?? "<null>"} vis={e.Visibility} descChanged={e.DescriptionChanged} " +
             $"threadId={Environment.CurrentManagedThreadId}");
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private IReadOnlyList<int> ResolveTargetWidgetIndices(SitemapWidgetEvent e)
+    {
+        // Prefer direct widget id mapping when present and found.
+        if (!string.IsNullOrEmpty(e.WidgetId) && widgetIdMap is not null && widgetIdMap.TryGetValue(e.WidgetId, out var widIndex))
+        {
+            return [widIndex];
+        }
+
+        // For duplicate ON/OFF rows (same item, different visibility rules), update all matches.
+        if (!string.IsNullOrEmpty(e.ItemName) && itemIndicesMap is not null &&
+            itemIndicesMap.TryGetValue(e.ItemName, out var indices) && indices.Count > 0)
+        {
+            return indices;
+        }
+
+        // Backward-compatible fallback to single-item map.
+        if (!string.IsNullOrEmpty(e.ItemName) && itemIndexMap is not null &&
+            itemIndexMap.TryGetValue(e.ItemName, out var itemIndex))
+        {
+            return [itemIndex];
+        }
+
+        return [];
+    }
+
     private void BuildItemIndexMap()
     {
-        if (currentPage is null) { itemIndexMap = null; widgetIdMap = null; return; }
+        if (currentPage is null) { itemIndexMap = null; itemIndicesMap = null; widgetIdMap = null; return; }
         itemIndexMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        itemIndicesMap = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         widgetIdMap = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < currentPage.Widgets.Count; i++)
         {
             var itemName = currentPage.Widgets[i].ItemName;
             if (!string.IsNullOrWhiteSpace(itemName))
+            {
                 itemIndexMap[itemName] = i;
+                if (!itemIndicesMap.TryGetValue(itemName, out var bucket))
+                {
+                    bucket = new List<int>();
+                    itemIndicesMap[itemName] = bucket;
+                }
+
+                bucket.Add(i);
+            }
 
             var widgetId = currentPage.Widgets[i].WidgetId;
             if (!string.IsNullOrEmpty(widgetId))
@@ -522,14 +574,6 @@ public sealed class SitemapRuntimeController
 
     private void QueueRefreshFromWidgetEvent()
     {
-        var sinceLastRefresh = DateTimeOffset.UtcNow - _lastReconcileRefreshUtc;
-        if (sinceLastRefresh < TimeSpan.FromMilliseconds(1200))
-        {
-            DiagnosticLogger.Info(
-                $"QueueRefreshFromWidgetEvent skipped (cooldown) sinceLastMs={sinceLastRefresh.TotalMilliseconds:F0}");
-            return;
-        }
-
         if (Interlocked.Exchange(ref _widgetRefreshQueued, 1) == 1)
         {
             DiagnosticLogger.Info("QueueRefreshFromWidgetEvent skipped (already queued)");
@@ -553,9 +597,9 @@ public sealed class SitemapRuntimeController
                     {
                         var now = DateTimeOffset.UtcNow;
                         var sinceLast = now - _lastReconcileRefreshUtc;
-                        if (sinceLast < TimeSpan.FromMilliseconds(1200))
+                        if (sinceLast < WidgetEventReconcileDebounce)
                         {
-                            await Task.Delay(TimeSpan.FromMilliseconds(1200) - sinceLast).ConfigureAwait(false);
+                            await Task.Delay(WidgetEventReconcileDebounce - sinceLast).ConfigureAwait(false);
                         }
 
                         DiagnosticLogger.Info("QueueRefreshFromWidgetEvent executing reconcile refresh");
@@ -585,6 +629,8 @@ public sealed class SitemapRuntimeController
 
     private async Task ReconcileCurrentPageAsync(CancellationToken cancellationToken = default)
     {
+        var reconcileId = Interlocked.Increment(ref _reconcileSequence);
+        var stateVersionAtStart = Volatile.Read(ref _sitemapStateVersion);
         var activeTransport = Current.ActiveTransport;
         if (activeTransport is null)
         {
@@ -603,6 +649,16 @@ public sealed class SitemapRuntimeController
         var client = clientFactory(transport, endpoint);
         var json = await client.GetSitemapJsonAsync(settings.SitemapName, cancellationToken).ConfigureAwait(false);
         var homepage = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        if (reconcileId != Volatile.Read(ref _reconcileSequence) ||
+            stateVersionAtStart != Volatile.Read(ref _sitemapStateVersion))
+        {
+            DiagnosticLogger.Info(
+                $"ReconcileCurrentPageAsync skipped stale result reconcileId={reconcileId} " +
+                $"latestReconcileId={Volatile.Read(ref _reconcileSequence)} " +
+                $"stateVersionAtStart={stateVersionAtStart} latestStateVersion={Volatile.Read(ref _sitemapStateVersion)}");
+            return;
+        }
 
         var targetPage = homepage;
         var shouldReconnectToResolvedPage = false;
@@ -623,15 +679,27 @@ public sealed class SitemapRuntimeController
         }
 
         var normalized = SitemapNormalizer.Normalize(targetPage);
+        var descriptor = renderController.BuildCurrentDescriptor(normalized);
+        var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, descriptor);
+        var previousPageId = currentPage?.Id;
+
         currentPage = normalized;
         BuildItemIndexMap();
 
-        Current = Current with
+        var breadcrumbs = BuildBreadcrumbTrail();
+        var hasPageChange = !string.Equals(previousPageId, normalized.Id, StringComparison.Ordinal);
+        var hasBreadcrumbChange = !Current.Breadcrumbs.SequenceEqual(breadcrumbs, StringComparer.Ordinal);
+        var hasDescriptorChange = changedRowIndices.Count > 0 || Current.Descriptor is null || Current.Descriptor.Rows.Count != descriptor.Rows.Count;
+
+        if (hasDescriptorChange || hasPageChange || hasBreadcrumbChange)
         {
-            Descriptor = renderController.BuildCurrentDescriptor(normalized),
-            Breadcrumbs = BuildBreadcrumbTrail(),
-            ChangedRowIndices = []
-        };
+            Current = Current with
+            {
+                Descriptor = descriptor,
+                Breadcrumbs = breadcrumbs,
+                ChangedRowIndices = changedRowIndices
+            };
+        }
 
         if (shouldReconnectToResolvedPage || !string.Equals(currentPageId, normalized.Id, StringComparison.Ordinal))
         {
@@ -641,7 +709,10 @@ public sealed class SitemapRuntimeController
         DiagnosticLogger.Info(
             $"ReconcileCurrentPageAsync done page={normalized.Id} rows={normalized.Widgets.Count} " +
             $"threadId={Environment.CurrentManagedThreadId}");
-        SnapshotChanged?.Invoke(this, EventArgs.Empty);
+        if (hasDescriptorChange || hasPageChange || hasBreadcrumbChange)
+        {
+            SnapshotChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private static SitemapPage? FindPageById(SitemapPage page, string pageId)
@@ -712,6 +783,88 @@ public sealed class SitemapRuntimeController
             EndpointMode.Automatic => new TransportSelection(TransportKind.Local, settings.LocalEndpoint),
             _ => throw new InvalidOperationException($"Unsupported endpoint mode '{settings.EndpointMode}'.")
         };
+    }
+
+    private static IReadOnlyList<int> ComputeChangedRowIndices(
+        SitemapRenderDescriptor? oldDescriptor,
+        SitemapRenderDescriptor newDescriptor)
+    {
+        if (oldDescriptor is null)
+        {
+            return [];
+        }
+
+        if (!string.Equals(oldDescriptor.PageId, newDescriptor.PageId, StringComparison.Ordinal) ||
+            oldDescriptor.Rows.Count != newDescriptor.Rows.Count)
+        {
+            // Treat structural changes as full refresh in UI.
+            return [];
+        }
+
+        var changed = new List<int>();
+        for (var i = 0; i < newDescriptor.Rows.Count; i++)
+        {
+            if (!AreRowsEquivalent(oldDescriptor.Rows[i], newDescriptor.Rows[i]))
+            {
+                changed.Add(i);
+            }
+        }
+
+        return changed;
+    }
+
+    private static bool AreRowsEquivalent(SitemapRowDescriptor a, SitemapRowDescriptor b)
+    {
+        if (a.Label != b.Label ||
+            a.State != b.State ||
+            a.RawState != b.RawState ||
+            a.RawItemState != b.RawItemState ||
+            a.IsVisible != b.IsVisible ||
+            a.Control != b.Control ||
+            a.Action != b.Action ||
+            a.IconName != b.IconName ||
+            a.LabelColor != b.LabelColor ||
+            a.ValueColor != b.ValueColor ||
+            a.IconColor != b.IconColor ||
+            a.IsSectionHeader != b.IsSectionHeader ||
+            a.Command != b.Command ||
+            a.ReleaseCommand != b.ReleaseCommand ||
+            a.Stateless != b.Stateless ||
+            a.Url != b.Url ||
+            a.Period != b.Period ||
+            a.ItemName != b.ItemName ||
+            a.WidgetId != b.WidgetId ||
+            a.InputHint != b.InputHint ||
+            a.GridRow != b.GridRow ||
+            a.GridColumn != b.GridColumn)
+        {
+            return false;
+        }
+
+        if (a.SelectionOptions.Count != b.SelectionOptions.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < a.SelectionOptions.Count; i++)
+        {
+            var oa = a.SelectionOptions[i];
+            var ob = b.SelectionOptions[i];
+            if (oa.Command != ob.Command ||
+                oa.Label != ob.Label ||
+                oa.Row != ob.Row ||
+                oa.Column != ob.Column ||
+                oa.IsActive != ob.IsActive ||
+                oa.ClickCommand != ob.ClickCommand ||
+                oa.ReleaseCommand != ob.ReleaseCommand ||
+                oa.Stateless != ob.Stateless ||
+                oa.SourceRowIndex != ob.SourceRowIndex)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private IReadOnlyList<string> BuildBreadcrumbTrail()
