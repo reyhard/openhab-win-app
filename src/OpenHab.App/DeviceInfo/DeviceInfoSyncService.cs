@@ -12,6 +12,7 @@ public sealed class DeviceInfoSyncService : IDisposable
     private readonly IDeviceStateSnapshotSource snapshotSource;
     private readonly SemaphoreSlim syncGate = new(1, 1);
     private readonly CancellationTokenSource serviceCancellation = new();
+    private readonly object timerLifecycleGate = new();
     private Timer? timer;
     private int isDisposed;
 
@@ -29,34 +30,35 @@ public sealed class DeviceInfoSyncService : IDisposable
 
     public void Start()
     {
-        if (Volatile.Read(ref isDisposed) != 0)
+        lock (timerLifecycleGate)
         {
-            return;
-        }
+            if (isDisposed != 0)
+            {
+                return;
+            }
 
-        var settings = getSettings();
-        timer?.Dispose();
-        timer = new Timer(
-            _ => _ = TriggerFromTimerAsync(),
-            null,
-            TimeSpan.FromSeconds(3),
-            TimeSpan.FromMinutes(settings.SyncIntervalMinutes));
+            var settings = getSettings();
+            timer?.Dispose();
+            timer = new Timer(
+                _ => _ = TriggerFromTimerAsync(),
+                null,
+                TimeSpan.FromSeconds(3),
+                TimeSpan.FromMinutes(settings.SyncIntervalMinutes));
+        }
     }
 
     public void RefreshInterval()
     {
-        if (Volatile.Read(ref isDisposed) != 0)
+        lock (timerLifecycleGate)
         {
-            return;
-        }
+            if (isDisposed != 0 || timer is null)
+            {
+                return;
+            }
 
-        if (timer is null)
-        {
-            return;
+            var settings = getSettings();
+            timer.Change(TimeSpan.FromMinutes(settings.SyncIntervalMinutes), TimeSpan.FromMinutes(settings.SyncIntervalMinutes));
         }
-
-        var settings = getSettings();
-        timer.Change(TimeSpan.FromMinutes(settings.SyncIntervalMinutes), TimeSpan.FromMinutes(settings.SyncIntervalMinutes));
     }
 
     public async Task TriggerSyncAsync(CancellationToken cancellationToken = default)
@@ -190,14 +192,21 @@ public sealed class DeviceInfoSyncService : IDisposable
 
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref isDisposed, 1) != 0)
+        Timer? timerToDispose = null;
+        lock (timerLifecycleGate)
         {
-            return;
+            if (isDisposed != 0)
+            {
+                return;
+            }
+
+            isDisposed = 1;
+            timerToDispose = timer;
+            timer = null;
         }
 
         serviceCancellation.Cancel();
-        timer?.Dispose();
-        timer = null;
+        timerToDispose?.Dispose();
     }
 
     private async Task TriggerFromTimerAsync()

@@ -154,6 +154,25 @@ public sealed class DeviceInfoSyncServiceTests
     }
 
     [Fact]
+    public async Task StartAndRefreshIntervalAfterDisposeDoNothingWithoutThrowing()
+    {
+        var client = new FakeOpenHabClient();
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", "online", "ON"));
+        var service = new DeviceInfoSyncService(
+            () => DeviceInfoSyncSettings.CreateDefault("Desk") with { IsEnabled = true },
+            () => client,
+            source);
+
+        service.Dispose();
+
+        service.Start();
+        service.RefreshInterval();
+        await service.TriggerSyncAsync(CancellationToken.None);
+
+        Assert.Empty(client.StatesSet);
+    }
+
+    [Fact]
     public async Task DisposeCancelsInFlightSync()
     {
         var client = new FakeOpenHabClient();
