@@ -66,6 +66,8 @@ public sealed class OpenHabHttpClientTests
     [InlineData("Authorization: Bearer oh.secret.token", "oh.secret.token")]
     [InlineData("{\"password\":\"p@ssw0rd\",\"error\":\"bad\"}", "p@ssw0rd")]
     [InlineData("{\"token\":\"abc123\",\"message\":\"bad token\"}", "abc123")]
+    [InlineData("{\"authorization\":\"Bearer abc.def\"}", "abc.def")]
+    [InlineData("{\"token\":\"abc 123\"}", "abc 123")]
     [InlineData("https://user:pass@example.org/rest/items", "user:pass@example.org")]
     [InlineData("Basic dXNlcjpwYXNz", "dXNlcjpwYXNz")]
     public async Task FailedRequestRedactsSensitiveResponseBodies(string responseBody, string sensitiveText)
@@ -118,3 +120,4 @@ public sealed class OpenHabHttpClientTests
         }
     }
 }
+
