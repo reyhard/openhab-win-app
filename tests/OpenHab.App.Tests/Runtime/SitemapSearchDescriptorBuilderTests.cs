@@ -140,6 +140,24 @@ public sealed class SitemapSearchDescriptorBuilderTests
         Assert.Equal(["Lampka mobilna", "Lampka nocna"], secondLabels);
     }
 
+    [Fact]
+    public void DuplicateWidgetIdsInDifferentChildPagesKeepDistinctResultSources()
+    {
+        var page = CreateDuplicateWidgetIdPage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Timer", renderController);
+        var timerRows = result.Descriptor.Rows
+            .Where(row => row.Label == "Timer")
+            .ToArray();
+
+        Assert.Equal(2, result.ResultCount);
+        Assert.Equal(2, timerRows.Length);
+        Assert.Equal(2, timerRows.Select(row => row.SearchResultKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(result.ResultCount, result.SourcesByResultKey.Count);
+        Assert.All(timerRows, row => Assert.True(result.SourcesByResultKey.ContainsKey(row.SearchResultKey!)));
+    }
+
     private static NormalizedSitemapPage CreateSearchPage(bool lampsReversed = false)
     {
         var lampNight = new SitemapWidget(
@@ -228,5 +246,56 @@ public sealed class SitemapSearchDescriptorBuilderTests
         };
 
         return SitemapNormalizer.Normalize(new SitemapPage("home", "Home", rootWidgets));
+    }
+
+    private static NormalizedSitemapPage CreateDuplicateWidgetIdPage()
+    {
+        return SitemapNormalizer.Normalize(new SitemapPage(
+            "home",
+            "Home",
+            [
+                new SitemapWidget(
+                    "First group",
+                    SitemapWidgetType.Group,
+                    null,
+                    null,
+                    [],
+                    true,
+                    [
+                        new SitemapPage("first", "First", [
+                            new SitemapWidget(
+                                "Timer",
+                                SitemapWidgetType.Text,
+                                "First_Timer",
+                                "10",
+                                [],
+                                true,
+                                [],
+                                WidgetId: "timer-widget")
+                        ])
+                    ],
+                    WidgetId: "first-group"),
+                new SitemapWidget(
+                    "Second group",
+                    SitemapWidgetType.Group,
+                    null,
+                    null,
+                    [],
+                    true,
+                    [
+                        new SitemapPage("second", "Second", [
+                            new SitemapWidget(
+                                "Timer",
+                                SitemapWidgetType.Text,
+                                "Second_Timer",
+                                "20",
+                                [],
+                                true,
+                                [],
+                                WidgetId: "timer-widget")
+                        ])
+                    ],
+                    WidgetId: "second-group")
+            ]));
     }
 }

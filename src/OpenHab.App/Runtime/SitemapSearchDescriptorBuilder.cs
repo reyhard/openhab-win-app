@@ -111,19 +111,20 @@ public static class SitemapSearchDescriptorBuilder
         var labelMatches = LabelMatches(widget.Label, query);
         var frameMatch = widget.Type == SitemapWidgetType.Frame && labelMatches;
         var includeSelf = forcedChildInclusion || labelMatches || inheritedFrameMatch;
+        var sourceWidgetPath = BuildWidgetPath(widgetPathPrefix, widget, widgetIndex);
         var hasAnyDescendantIncluded = false;
         var insertedGroupHeader = false;
 
         if (includeSelf)
         {
             var baseRow = pageDescriptor.Rows[widgetIndex];
-            var resultKey = BuildResultKey(page, widget, widgetIndex);
+            var resultKey = BuildResultKey(page, widget, widgetIndex, sourceWidgetPath);
             var source = BuildSource(
                 resultKey,
                 widget,
                 page,
                 pagePath,
-                widgetPathPrefix,
+                sourceWidgetPath,
                 widgetIndex,
                 currentPageRowIndex,
                 frameMatch ? SitemapSearchMatchKind.Frame : inheritedFrameMatch ? SitemapSearchMatchKind.ChildRow : SitemapSearchMatchKind.Row);
@@ -144,7 +145,7 @@ public static class SitemapSearchDescriptorBuilder
             var normalizedChildPage = SitemapNormalizer.Normalize(widget.Children[childPageIndex]);
             var childDescriptor = renderController.BuildCurrentDescriptor(normalizedChildPage);
             var childPagePath = Append(pagePath, normalizedChildPage.Id);
-            var childWidgetPathPrefix = widgetPathPrefix + "/child:" + childPageIndex;
+            var childWidgetPathPrefix = sourceWidgetPath + "/child:" + childPageIndex;
 
             var childRowsStart = rows.Count;
             var anyIncludedFromChildPage = false;
@@ -194,7 +195,7 @@ public static class SitemapSearchDescriptorBuilder
         NormalizedSitemapWidget widget,
         NormalizedSitemapPage page,
         IReadOnlyList<string> pagePath,
-        string widgetPathPrefix,
+        string sourceWidgetPath,
         int widgetIndex,
         int? currentPageRowIndex,
         SitemapSearchMatchKind matchKind)
@@ -205,17 +206,21 @@ public static class SitemapSearchDescriptorBuilder
             page.Id,
             pagePath,
             widget.WidgetId,
-            BuildWidgetPath(widgetPathPrefix, widget, widgetIndex),
+            sourceWidgetPath,
             widget.Label,
             widget.Type,
             currentPageRowIndex);
     }
 
-    private static string BuildResultKey(NormalizedSitemapPage page, NormalizedSitemapWidget widget, int index)
+    private static string BuildResultKey(
+        NormalizedSitemapPage page,
+        NormalizedSitemapWidget widget,
+        int index,
+        string sourceWidgetPath)
     {
         if (!string.IsNullOrWhiteSpace(widget.WidgetId))
         {
-            return "search:widget:" + widget.WidgetId;
+            return "search:widget:" + sourceWidgetPath + ":id:" + widget.WidgetId;
         }
 
         var fallback = string.Join(
