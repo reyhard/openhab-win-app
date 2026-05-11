@@ -449,11 +449,12 @@ public sealed class AppSettingsControllerTests
     public void DefaultsDisableDeviceInfoSync()
     {
         var controller = CreateController();
+        var deviceInfoSync = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
 
-        Assert.False(controller.Current.DeviceInfoSync.IsEnabled);
-        Assert.False(string.IsNullOrWhiteSpace(controller.Current.DeviceInfoSync.DeviceIdentifier));
-        Assert.Equal(15, controller.Current.DeviceInfoSync.SyncIntervalMinutes);
-        Assert.True(controller.Current.DeviceInfoSync.HasAnyMapping);
+        Assert.False(deviceInfoSync.IsEnabled);
+        Assert.False(string.IsNullOrWhiteSpace(deviceInfoSync.DeviceIdentifier));
+        Assert.Equal(15, deviceInfoSync.SyncIntervalMinutes);
+        Assert.True(deviceInfoSync.HasAnyMapping);
     }
 
     [Fact]
@@ -478,11 +479,13 @@ public sealed class AppSettingsControllerTests
     public void SetDeviceInfoSyncSettingsAcceptsIntervalBounds(int interval)
     {
         var controller = CreateController();
-        var settings = controller.Current.DeviceInfoSync with { IsEnabled = true, SyncIntervalMinutes = interval };
+        var current = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+        var settings = current with { IsEnabled = true, SyncIntervalMinutes = interval };
 
         controller.SetDeviceInfoSyncSettings(settings);
 
-        Assert.Equal(interval, controller.Current.DeviceInfoSync.SyncIntervalMinutes);
+        var updated = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+        Assert.Equal(interval, updated.SyncIntervalMinutes);
     }
 
     [Theory]
@@ -491,7 +494,8 @@ public sealed class AppSettingsControllerTests
     public void SetDeviceInfoSyncSettingsRejectsOutOfRangeInterval(int interval)
     {
         var controller = CreateController();
-        var settings = controller.Current.DeviceInfoSync with { SyncIntervalMinutes = interval };
+        var current = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+        var settings = current with { SyncIntervalMinutes = interval };
 
         Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetDeviceInfoSyncSettings(settings));
     }
@@ -511,9 +515,40 @@ public sealed class AppSettingsControllerTests
         await controller.FlushAsync();
 
         var reloaded = CreateController();
-        Assert.True(reloaded.Current.DeviceInfoSync.IsEnabled);
-        Assert.Equal("Desk", reloaded.Current.DeviceInfoSync.DeviceIdentifier);
-        Assert.Equal(30, reloaded.Current.DeviceInfoSync.SyncIntervalMinutes);
-        Assert.Null(reloaded.Current.DeviceInfoSync.WifiNameItem);
+        var reloadedDeviceInfoSync = Assert.IsType<DeviceInfoSyncSettings>(reloaded.Current.DeviceInfoSync);
+        Assert.True(reloadedDeviceInfoSync.IsEnabled);
+        Assert.Equal("Desk", reloadedDeviceInfoSync.DeviceIdentifier);
+        Assert.Equal(30, reloadedDeviceInfoSync.SyncIntervalMinutes);
+        Assert.Null(reloadedDeviceInfoSync.WifiNameItem);
+    }
+
+    [Fact]
+    public void LegacySettingsJsonWithoutDeviceInfoSyncLoadsDefaultDeviceInfoSync()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var legacyJson = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "FollowSystemTheme": true,
+          "UseWindows11Icons": false,
+          "FlyoutWidth": 460,
+          "AnimationSpeed": 2,
+          "NotificationPollIntervalSeconds": 30,
+          "LaunchAtStartup": true,
+          "ChartQuality": 192
+        }
+        """;
+        File.WriteAllText(settingsFilePath, legacyJson);
+
+        var controller = CreateController();
+        var deviceInfoSync = Assert.IsType<DeviceInfoSyncSettings>(controller.Current.DeviceInfoSync);
+
+        Assert.False(deviceInfoSync.IsEnabled);
+        Assert.Equal(DeviceInfoSyncSettings.DefaultSyncIntervalMinutes, deviceInfoSync.SyncIntervalMinutes);
+        Assert.True(deviceInfoSync.HasAnyMapping);
     }
 }
