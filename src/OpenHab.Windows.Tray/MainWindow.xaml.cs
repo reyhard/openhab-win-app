@@ -176,6 +176,40 @@ public sealed partial class MainWindow : Window
 
     private static readonly HttpClient IconHttpClient = new();
 
+    private NotificationVisibilityFilter CurrentNotificationFilter
+    {
+        get
+        {
+            if (NotificationFilterBox?.SelectedItem is ComboBoxItem item
+                && item.Tag is string tag
+                && Enum.TryParse(tag, out NotificationVisibilityFilter filter))
+            {
+                return filter;
+            }
+
+            return NotificationVisibilityFilter.Visible;
+        }
+    }
+
+    private string CurrentNotificationSearchText => NotificationSearchBox?.Text ?? string.Empty;
+
+    private static string GetEmptyNotificationsText(NotificationVisibilityFilter filter, string searchText)
+    {
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            return "No matching notifications";
+        }
+
+        return filter switch
+        {
+            NotificationVisibilityFilter.Unread => "No unread notifications",
+            NotificationVisibilityFilter.Read => "No read notifications",
+            NotificationVisibilityFilter.Hidden => "No hidden notifications",
+            NotificationVisibilityFilter.All => "No notifications",
+            _ => "No notifications"
+        };
+    }
+
     private void RefreshNotificationList()
     {
         try
@@ -186,7 +220,9 @@ public sealed partial class MainWindow : Window
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-            var notifications = notificationStore.GetAll();
+            var filter = CurrentNotificationFilter;
+            var searchText = CurrentNotificationSearchText;
+            var notifications = notificationStore.GetNotifications(filter, searchText);
             var useWin11Icons = settingsController.Current.UseWindows11Icons;
 
             // Resolve base URI for server icons
@@ -310,6 +346,7 @@ public sealed partial class MainWindow : Window
             var unreadCount = notificationStore.UnreadCount;
             UnreadBadge.Visibility = unreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
             UnreadCountText.Text = unreadCount.ToString();
+            EmptyNotificationsText.Text = GetEmptyNotificationsText(filter, searchText);
             EmptyNotificationsText.Visibility = notifications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         finally
@@ -863,9 +900,19 @@ public sealed partial class MainWindow : Window
         await RefreshRuntimeAsync();
     }
 
-    private void DismissAllButton_Click(object sender, RoutedEventArgs e)
+    private void MarkAllReadButton_Click(object sender, RoutedEventArgs e)
     {
-        notificationStore?.DismissAll();
+        notificationStore?.MarkAllRead();
+    }
+
+    private void NotificationSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        RefreshNotificationList();
+    }
+
+    private void NotificationFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        RefreshNotificationList();
     }
 
     private void FollowThemeToggle_Toggled(object sender, RoutedEventArgs e)
