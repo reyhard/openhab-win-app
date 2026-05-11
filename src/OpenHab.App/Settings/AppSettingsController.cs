@@ -1,6 +1,8 @@
+using OpenHab.Core;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -20,21 +22,28 @@ public sealed class AppSettingsController
     private const string CloudUserNameKey = "cloud-username";
     private const string CloudPasswordKey = "cloud-password";
 
-    private static readonly string SettingsFilePath = Path.Combine(
+    private static readonly string DefaultSettingsFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "OpenHab.WinApp",
         "settings.json");
 
+    private static readonly object saveSyncRoot = new();
+    private static readonly Dictionary<string, SaveQueue> queuedSaveTasks = new(StringComparer.OrdinalIgnoreCase);
+
     private readonly ICredentialStore? credentialStore;
+    private readonly string settingsFilePath;
+
     private readonly object syncRoot = new();
 
-    private string SettingsDirectory => Path.GetDirectoryName(SettingsFilePath)!;
+    private string SettingsDirectory => Path.GetDirectoryName(settingsFilePath)!;
 
     public AppSettings Current { get; private set; } = AppSettings.Default;
 
-    public AppSettingsController(ICredentialStore? credentialStore = null)
+    public AppSettingsController(ICredentialStore? credentialStore = null, string? settingsFilePath = null)
     {
         this.credentialStore = credentialStore;
+        this.settingsFilePath = Path.GetFullPath(settingsFilePath ?? DefaultSettingsFilePath);
+        WaitForQueuedSave();
         TryLoad();
     }
 
@@ -57,22 +66,23 @@ public sealed class AppSettingsController
         }
     }
 
+    public Task FlushAsync()
+    {
+        var saveQueue = GetSaveQueue(settingsFilePath);
+        lock (saveQueue.SyncRoot)
+        {
+            return saveQueue.QueuedSaveTask;
+        }
+    }
+
     public void SetSkin(SitemapSkinKind skin)
     {
-        lock (syncRoot)
-        {
-            Current = Current with { Skin = skin };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { Skin = skin });
     }
 
     public void SetEndpointMode(EndpointMode endpointMode)
     {
-        lock (syncRoot)
-        {
-            Current = Current with { EndpointMode = endpointMode };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { EndpointMode = endpointMode });
     }
 
     public void SetEndpoints(Uri localEndpoint, Uri cloudEndpoint)
@@ -100,26 +110,19 @@ public sealed class AppSettingsController
             throw new ArgumentException("Cloud endpoint must use HTTP or HTTPS.", nameof(cloudEndpoint));
         }
 
-        lock (syncRoot)
-        {
-            Current = Current with
+        UpdateSettings(settings =>
+            settings with
             {
                 LocalEndpoint = localEndpoint,
                 CloudEndpoint = cloudEndpoint
-            };
-        }
-        _ = SaveAsync();
+            });
     }
 
     public void SetSitemapName(string sitemapName)
     {
         if (string.IsNullOrWhiteSpace(sitemapName))
         {
-            lock (syncRoot)
-            {
-                Current = Current with { SitemapName = string.Empty };
-            }
-            _ = SaveAsync();
+            UpdateSettings(settings => settings with { SitemapName = string.Empty });
             return;
         }
         if (!SitemapNamePattern.IsMatch(sitemapName))
@@ -127,38 +130,22 @@ public sealed class AppSettingsController
             throw new ArgumentException("Sitemap name can only contain letters, digits, underscores, and hyphens.", nameof(sitemapName));
         }
 
-        lock (syncRoot)
-        {
-            Current = Current with { SitemapName = sitemapName };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { SitemapName = sitemapName });
     }
 
     public void SetFollowSystemTheme(bool follow)
     {
-        lock (syncRoot)
-        {
-            Current = Current with { FollowSystemTheme = follow };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { FollowSystemTheme = follow });
     }
 
     public void SetUseWindows11Icons(bool use)
     {
-        lock (syncRoot)
-        {
-            Current = Current with { UseWindows11Icons = use };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { UseWindows11Icons = use });
     }
 
     public void SetChartQuality(ChartQuality quality)
     {
-        lock (syncRoot)
-        {
-            Current = Current with { ChartQuality = quality };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { ChartQuality = quality });
     }
 
     public int GetFlyoutAnimationDurationMs()
@@ -175,11 +162,7 @@ public sealed class AppSettingsController
 
     public void SetAnimationSpeed(FlyoutAnimationSpeed speed)
     {
-        lock (syncRoot)
-        {
-            Current = Current with { AnimationSpeed = speed };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { AnimationSpeed = speed });
     }
 
     public void SetFlyoutWidth(int width)
@@ -191,20 +174,12 @@ public sealed class AppSettingsController
                 $"Flyout width must be between {MinFlyoutWidth} and {MaxFlyoutWidth}.");
         }
 
-        lock (syncRoot)
-        {
-            Current = Current with { FlyoutWidth = width };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { FlyoutWidth = width });
     }
 
     public void SetLaunchAtStartup(bool launch)
     {
-        lock (syncRoot)
-        {
-            Current = Current with { LaunchAtStartup = launch };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { LaunchAtStartup = launch });
     }
 
     public void SetNotificationPollInterval(int seconds)
@@ -215,11 +190,7 @@ public sealed class AppSettingsController
                 $"Notification poll interval must be between {MinNotificationPollIntervalSeconds} and {MaxNotificationPollIntervalSeconds} seconds.");
         }
 
-        lock (syncRoot)
-        {
-            Current = Current with { NotificationPollIntervalSeconds = seconds };
-        }
-        _ = SaveAsync();
+        UpdateSettings(settings => settings with { NotificationPollIntervalSeconds = seconds });
     }
 
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
@@ -239,15 +210,11 @@ public sealed class AppSettingsController
 
         await credentialStore.StoreAsync(CredentialResource, key, token, cancellationToken);
 
-        lock (syncRoot)
-        {
-            Current = transportKind switch
+        UpdateSettings(settings => transportKind switch
             {
-                TransportKind.Local => Current with { HasLocalToken = true },
+                TransportKind.Local => settings with { HasLocalToken = true },
                 _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
-            };
-        }
-        _ = SaveAsync();
+            });
     }
 
     public async Task ClearApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
@@ -264,15 +231,11 @@ public sealed class AppSettingsController
 
         await credentialStore.RemoveAsync(CredentialResource, key, cancellationToken);
 
-        lock (syncRoot)
-        {
-            Current = transportKind switch
+        UpdateSettings(settings => transportKind switch
             {
-                TransportKind.Local => Current with { HasLocalToken = false },
+                TransportKind.Local => settings with { HasLocalToken = false },
                 _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
-            };
-        }
-        _ = SaveAsync();
+            });
     }
 
     public async Task<string?> GetApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
@@ -305,15 +268,12 @@ public sealed class AppSettingsController
         await credentialStore.StoreAsync(CredentialResource, CloudUserNameKey, normalizedUserName, cancellationToken);
         await credentialStore.StoreAsync(CredentialResource, CloudPasswordKey, password, cancellationToken);
 
-        lock (syncRoot)
-        {
-            Current = Current with
+        UpdateSettings(settings =>
+            settings with
             {
                 HasCloudCredentials = true,
                 CloudUserName = normalizedUserName
-            };
-        }
-        _ = SaveAsync();
+            });
     }
 
     public async Task ClearCloudCredentialsAsync(CancellationToken cancellationToken = default)
@@ -324,15 +284,12 @@ public sealed class AppSettingsController
         await credentialStore.RemoveAsync(CredentialResource, CloudUserNameKey, cancellationToken);
         await credentialStore.RemoveAsync(CredentialResource, CloudPasswordKey, cancellationToken);
 
-        lock (syncRoot)
-        {
-            Current = Current with
+        UpdateSettings(settings =>
+            settings with
             {
                 HasCloudCredentials = false,
                 CloudUserName = null
-            };
-        }
-        _ = SaveAsync();
+            });
     }
 
     public async Task<CloudCredentials?> GetCloudCredentialsAsync(CancellationToken cancellationToken = default)
@@ -351,26 +308,76 @@ public sealed class AppSettingsController
         return new CloudCredentials(userName, password);
     }
 
-    private async Task SaveAsync()
+    private void UpdateSettings(Func<AppSettings, AppSettings> update)
+    {
+        var saveQueue = GetSaveQueue(settingsFilePath);
+        lock (saveQueue.SyncRoot)
+        {
+            lock (syncRoot)
+            {
+                Current = update(Current);
+                QueueSave(saveQueue, Current);
+            }
+        }
+    }
+
+    private void QueueSave(SaveQueue saveQueue, AppSettings snapshot)
+    {
+        saveQueue.QueuedSaveTask = saveQueue.QueuedSaveTask
+            .ContinueWith(
+                _ => SaveAsync(snapshot),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default)
+            .Unwrap();
+    }
+
+    private async Task SaveAsync(AppSettings snapshot)
     {
         try
         {
             Directory.CreateDirectory(SettingsDirectory);
-            var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(SettingsFilePath, json);
+            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(settingsFilePath, json);
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort persistence — swallow IO errors.
+            DiagnosticLogger.Warn($"Settings save failed: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private static SaveQueue GetSaveQueue(string settingsFilePath)
+    {
+        lock (saveSyncRoot)
+        {
+            if (!queuedSaveTasks.TryGetValue(settingsFilePath, out var saveQueue))
+            {
+                saveQueue = new SaveQueue();
+                queuedSaveTasks[settingsFilePath] = saveQueue;
+            }
+
+            return saveQueue;
+        }
+    }
+
+    private void WaitForQueuedSave()
+    {
+        var saveQueue = GetSaveQueue(settingsFilePath);
+        Task queuedSaveTask;
+        lock (saveQueue.SyncRoot)
+        {
+            queuedSaveTask = saveQueue.QueuedSaveTask;
+        }
+
+        queuedSaveTask.GetAwaiter().GetResult();
     }
 
     private void TryLoad()
     {
         try
         {
-            if (!File.Exists(SettingsFilePath)) return;
-            var json = File.ReadAllText(SettingsFilePath);
+            if (!File.Exists(settingsFilePath)) return;
+            var json = File.ReadAllText(settingsFilePath);
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
@@ -397,8 +404,8 @@ public sealed class AppSettingsController
     {
         try
         {
-            if (!File.Exists(SettingsFilePath)) return;
-            var json = await File.ReadAllTextAsync(SettingsFilePath);
+            if (!File.Exists(settingsFilePath)) return;
+            var json = await File.ReadAllTextAsync(settingsFilePath);
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
@@ -441,5 +448,12 @@ public sealed class AppSettingsController
         }
 
         return settings with { FlyoutWidth = width, NotificationPollIntervalSeconds = interval };
+    }
+
+    private sealed class SaveQueue
+    {
+        public object SyncRoot { get; } = new();
+
+        public Task QueuedSaveTask { get; set; } = Task.CompletedTask;
     }
 }

@@ -44,11 +44,11 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             throw new ArgumentException("Configure either bearer token auth or basic auth, not both.");
     }
 
-    public Task ConnectAsync(Uri sseUri, CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(Uri sseUri, CancellationToken cancellationToken = default)
     {
         var uriChanged = _sseUri is null || _sseUri != sseUri;
         if (IsConnected && !uriChanged)
-            return Task.CompletedTask;
+            return;
 
         _sseUri = sseUri;
 
@@ -56,14 +56,15 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         var previous = Interlocked.Exchange(ref _internalCts, cts);
         previous?.Cancel();
         previous?.Dispose();
+        Interlocked.Exchange(ref _isConnected, 0);
 
-        Interlocked.Exchange(ref _isConnected, 1);
-        _ = Task.Run(() => ReadLoopAsync(sseUri, cts), cancellationToken);
+        var firstAttempt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _ = Task.Run(() => ReadLoopAsync(sseUri, cts, firstAttempt), CancellationToken.None);
 
-        return Task.CompletedTask;
+        await firstAttempt.Task.WaitAsync(cancellationToken);
     }
 
-    private async Task ReadLoopAsync(Uri sseUri, CancellationTokenSource cts)
+    private async Task ReadLoopAsync(Uri sseUri, CancellationTokenSource cts, TaskCompletionSource firstAttempt)
     {
         var ct = cts.Token;
         var currentBackoff = _initialBackoff;
@@ -72,7 +73,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         {
             try
             {
-                ConnectionStateChanged?.Invoke(this, "connecting");
+                NotifyConnectionStateChanged("connecting");
                 DiagnosticLogger.Info($"SSE event stream connecting to {sseUri}");
 
                 using var request = new HttpRequestMessage(HttpMethod.Get, sseUri);
@@ -82,7 +83,9 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
                 response.EnsureSuccessStatusCode();
 
-                ConnectionStateChanged?.Invoke(this, "connected");
+                Interlocked.Exchange(ref _isConnected, 1);
+                firstAttempt.TrySetResult();
+                NotifyConnectionStateChanged("connected");
                 DiagnosticLogger.Info("SSE event stream connected");
                 currentBackoff = _initialBackoff;
 
@@ -132,16 +135,22 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             catch (Exception ex)
             {
                 DiagnosticLogger.Warn($"SSE event stream error: {ex.GetType().Name}: {ex.Message}");
+                if (firstAttempt.TrySetException(ex))
+                {
+                    cts.Cancel();
+                    break;
+                }
             }
 
             if (ct.IsCancellationRequested)
                 break;
 
-            ConnectionStateChanged?.Invoke(this, "disconnected");
+            Interlocked.Exchange(ref _isConnected, 0);
+            NotifyConnectionStateChanged("disconnected");
 
             try
             {
-                ConnectionStateChanged?.Invoke(this, "reconnecting");
+                NotifyConnectionStateChanged("reconnecting");
                 DiagnosticLogger.Info($"SSE event stream reconnecting in {currentBackoff.TotalSeconds:F1}s");
                 await Task.Delay(currentBackoff, ct);
             }
@@ -160,6 +169,8 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         {
             Interlocked.Exchange(ref _isConnected, 0);
         }
+
+        firstAttempt.TrySetCanceled(ct);
     }
 
     public void Dispose()
@@ -172,6 +183,25 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         }
 
         Interlocked.Exchange(ref _isConnected, 0);
+    }
+
+    private void NotifyConnectionStateChanged(string state)
+    {
+        var handlers = ConnectionStateChanged;
+        if (handlers is null)
+            return;
+
+        foreach (var handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((EventHandler<string>)handler)(this, state);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLogger.Warn($"SSE connection state handler error for '{state}': {ex.GetType().Name}: {ex.Message}");
+            }
+        }
     }
 
     private void ApplyAuth(HttpRequestMessage request)

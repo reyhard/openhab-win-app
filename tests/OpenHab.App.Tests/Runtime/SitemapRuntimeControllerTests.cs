@@ -10,26 +10,21 @@ namespace OpenHab.App.Tests.Runtime;
 
 public sealed class SitemapRuntimeControllerTests
 {
-    private static readonly string SettingsFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "OpenHab.WinApp",
+    private readonly string settingsFilePath = Path.Combine(
+        Path.GetTempPath(),
+        "OpenHab.App.Tests",
+        Guid.NewGuid().ToString("N"),
         "settings.json");
 
-    public SitemapRuntimeControllerTests()
+    private AppSettingsController CreateSettingsController()
     {
-        // Retry deletion — fire-and-forget SaveAsync from a previous test may still be writing.
-        for (int i = 0; i < 5; i++)
-        {
-            try { File.Delete(SettingsFilePath); } catch { }
-            if (!File.Exists(SettingsFilePath)) break;
-            Thread.Sleep(10);
-        }
+        return new AppSettingsController(settingsFilePath: settingsFilePath);
     }
 
     [Fact]
     public async Task LoadUsesLocalEndpointInAutomaticModeWhenLocalSucceeds()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -51,7 +46,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task LoadUsesLocalClientInLocalOnlyMode()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetEndpointMode(EndpointMode.LocalOnly);
         settings.SetSitemapName("default");
 
@@ -70,7 +65,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task LoadUsesCloudClientInCloudOnlyMode()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetEndpointMode(EndpointMode.CloudOnly);
         settings.SetSitemapName("default");
 
@@ -89,7 +84,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task LoadFallsBackToCloudWhenLocalFailsInAutomaticMode()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -111,7 +106,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task ActivateSwitchRowSendsCommandAndReloadsHomepage()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -133,7 +128,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task RefreshFailurePreservesLastDescriptorAndReportsOfflineState()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -156,7 +151,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task RefreshCancellationIsPropagatedAndNotConvertedToOfflineError()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -179,7 +174,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task NavigationUpdatesBreadcrumbTrailAndSupportsBreadcrumbJump()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -279,9 +274,146 @@ public sealed class SitemapRuntimeControllerTests
     // ── Event stream tests ──────────────────────────────────────────
 
     [Fact]
+    public async Task StartSitemapEventStreamAllowsRetryAfterSubscribeFailure()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient
+        {
+            SubscribeFailure = new InvalidOperationException("subscribe failed")
+        };
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        eventClient.SubscribeFailure = null;
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        Assert.Equal(2, eventClient.SubscribeCalls);
+        Assert.Equal(1, eventClient.ConnectCalls);
+    }
+
+    [Fact]
+    public async Task StartSitemapEventStreamAllowsRetryAfterConnectFailure()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient
+        {
+            ConnectFailure = new InvalidOperationException("connect failed")
+        };
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        eventClient.ConnectFailure = null;
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        Assert.Equal(2, eventClient.ConnectCalls);
+        Assert.True(eventClient.IsConnected);
+    }
+
+    [Fact]
+    public async Task SitemapEventStreamStaleFailureDoesNotResetNewerSuccessfulStart()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var staleConnect = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var eventClient = new FakeEventStreamClient();
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        eventClient.ConnectResults.Enqueue(staleConnect.Task);
+        var staleStart = controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "kitchen");
+        await WaitUntilAsync(() => eventClient.ConnectCalls == 2);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "living");
+        staleConnect.SetException(new InvalidOperationException("stale connect failed"));
+        await staleStart;
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "living");
+
+        Assert.Equal(ConnectionState.Online, controller.Current.ConnectionState);
+        Assert.Equal(3, eventClient.ConnectCalls);
+    }
+
+    [Fact]
+    public async Task SitemapEventStreamFailureDegradesOnlineSnapshotAndRaisesSnapshotChanged()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var cloudClient = new FakeOpenHabClient();
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient, eventClient);
+        var snapshotChanges = 0;
+        controller.SnapshotChanged += (_, _) => snapshotChanges++;
+
+        await controller.LoadAsync();
+        var snapshotChangesAfterLoad = snapshotChanges;
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "kitchen");
+
+        eventClient.ConnectFailure = new InvalidOperationException("connect failed");
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        Assert.Equal(ConnectionState.Degraded, controller.Current.ConnectionState);
+        Assert.Contains("Live updates unavailable", controller.Current.StatusText, StringComparison.Ordinal);
+        Assert.True(snapshotChanges > snapshotChangesAfterLoad);
+    }
+
+    [Fact]
+    public async Task SitemapEventStreamNullSubscriptionDegradesOnlineSnapshotAndRaisesSnapshotChanged()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var cloudClient = new FakeOpenHabClient();
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient, eventClient);
+        var snapshotChanges = 0;
+        controller.SnapshotChanged += (_, _) => snapshotChanges++;
+
+        await controller.LoadAsync();
+        var snapshotChangesAfterLoad = snapshotChanges;
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "kitchen");
+
+        eventClient.SubscriptionId = null;
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        Assert.Equal(ConnectionState.Degraded, controller.Current.ConnectionState);
+        Assert.Contains("Live updates unavailable", controller.Current.StatusText, StringComparison.Ordinal);
+        Assert.True(snapshotChanges > snapshotChangesAfterLoad);
+    }
+
+    [Fact]
+    public async Task SitemapEventStreamCancellationResetsAndPropagates()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient
+        {
+            SubscribeFailure = new OperationCanceledException("canceled")
+        };
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home"));
+
+        eventClient.SubscribeFailure = null;
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        Assert.Equal(2, eventClient.SubscribeCalls);
+        Assert.Equal(1, eventClient.ConnectCalls);
+    }
+
+    [Fact]
     public async Task WidgetEventUpdatesWidgetStateInSnapshot()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -322,7 +454,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task WidgetEventNoChangeIsIgnored()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -353,7 +485,7 @@ public sealed class SitemapRuntimeControllerTests
     [Fact]
     public async Task WidgetEventTriggersSitemapRefreshForCorrectVisibilityAndState()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSitemapName("default");
 
         var localClient = new FakeOpenHabClient();
@@ -400,6 +532,21 @@ public sealed class SitemapRuntimeControllerTests
             (kind, _) => kind == TransportKind.Local ? localClient : cloudClient,
             eventClient);
     }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        for (var i = 0; i < 50; i++)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(20);
+        }
+
+        Assert.True(condition());
+    }
 }
 
 public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
@@ -407,6 +554,12 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
     public event EventHandler<OpenHabEvent>? EventReceived;
     public event EventHandler<SitemapWidgetEvent>? WidgetEventReceived;
     public event EventHandler<string>? ConnectionStateChanged;
+    public Exception? SubscribeFailure { get; set; }
+    public Exception? ConnectFailure { get; set; }
+    public string? SubscriptionId { get; set; } = "fake-subscription-id";
+    public int SubscribeCalls { get; private set; }
+    public int ConnectCalls { get; private set; }
+    public Queue<Task> ConnectResults { get; } = new();
     public bool IsConnected { get; private set; }
 
     public void FireEvent(OpenHabEvent e)
@@ -424,15 +577,33 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
         ConnectionStateChanged?.Invoke(this, state);
     }
 
-    public Task ConnectAsync(Uri baseUri, CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
+        ConnectCalls++;
+        if (ConnectResults.Count > 0)
+        {
+            await ConnectResults.Dequeue();
+            IsConnected = true;
+            return;
+        }
+
+        if (ConnectFailure is not null)
+        {
+            throw ConnectFailure;
+        }
+
         IsConnected = true;
-        return Task.CompletedTask;
     }
 
     public Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<string?>("fake-subscription-id");
+        SubscribeCalls++;
+        if (SubscribeFailure is not null)
+        {
+            return Task.FromException<string?>(SubscribeFailure);
+        }
+
+        return Task.FromResult(SubscriptionId);
     }
 
     public void Dispose() { }

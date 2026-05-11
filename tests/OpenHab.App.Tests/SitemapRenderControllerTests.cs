@@ -8,26 +8,21 @@ namespace OpenHab.App.Tests;
 
 public sealed class SitemapRenderControllerTests
 {
-    private static readonly string SettingsFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "OpenHab.WinApp",
+    private readonly string settingsFilePath = Path.Combine(
+        Path.GetTempPath(),
+        "OpenHab.App.Tests",
+        Guid.NewGuid().ToString("N"),
         "settings.json");
 
-    public SitemapRenderControllerTests()
+    private AppSettingsController CreateSettingsController()
     {
-        // Retry deletion — fire-and-forget SaveAsync from a previous test may still be writing.
-        for (int i = 0; i < 5; i++)
-        {
-            try { File.Delete(SettingsFilePath); } catch { }
-            if (!File.Exists(SettingsFilePath)) break;
-            Thread.Sleep(10);
-        }
+        return new AppSettingsController(settingsFilePath: settingsFilePath);
     }
 
     [Fact]
     public void BuildsWindows11DescriptorByDefault()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         var controller = new SitemapRenderController(settings);
         var page = CreateTestPage();
 
@@ -64,7 +59,7 @@ public sealed class SitemapRenderControllerTests
     [Fact]
     public void UsesBasicSkinWhenSelected()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         settings.SetSkin(SitemapSkinKind.Basic);
         var controller = new SitemapRenderController(settings);
         var page = CreateTestPage();
@@ -87,7 +82,7 @@ public sealed class SitemapRenderControllerTests
     [Fact]
     public void BuildCurrentDescriptorThrowsForNullPage()
     {
-        var settings = new AppSettingsController();
+        var settings = CreateSettingsController();
         var controller = new SitemapRenderController(settings);
 
         var exception = Assert.Throws<ArgumentNullException>(() => controller.BuildCurrentDescriptor(null!));
