@@ -2,6 +2,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
@@ -30,6 +31,13 @@ namespace OpenHab.Windows.Tray;
 
 public sealed partial class MainWindow : Window
 {
+    private enum NotificationSortOrder
+    {
+        DateDescending,
+        DateAscending,
+        Name
+    }
+
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
     private readonly NotificationStore? notificationStore;
@@ -49,6 +57,7 @@ public sealed partial class MainWindow : Window
     private bool _suppressNextSnapshotRefresh;
     private bool _isPageTransitionRunning;
     private bool _pendingSnapshotRefresh;
+    private bool notificationControlsReady;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -91,6 +100,7 @@ public sealed partial class MainWindow : Window
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        notificationControlsReady = true;
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openhab-icon.ico");
         if (File.Exists(iconPath))
@@ -176,6 +186,98 @@ public sealed partial class MainWindow : Window
 
     private static readonly HttpClient IconHttpClient = new();
 
+    private NotificationVisibilityFilter CurrentNotificationFilter
+    {
+        get
+        {
+            if (NotificationFilterBox?.SelectedItem is ComboBoxItem item
+                && item.Tag is string tag
+                && Enum.TryParse(tag, out NotificationVisibilityFilter filter))
+            {
+                return filter;
+            }
+
+            return NotificationVisibilityFilter.Visible;
+        }
+    }
+
+    private string CurrentNotificationSearchText => NotificationSearchBox?.Text ?? string.Empty;
+
+    private NotificationSortOrder CurrentNotificationSortOrder
+    {
+        get
+        {
+            if (NotificationSortBox?.SelectedItem is ComboBoxItem item
+                && item.Tag is string tag
+                && Enum.TryParse(tag, out NotificationSortOrder sortOrder))
+            {
+                return sortOrder;
+            }
+
+            return NotificationSortOrder.DateDescending;
+        }
+    }
+
+    private static string GetEmptyNotificationsText(NotificationVisibilityFilter filter, string searchText)
+    {
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            return "No matching notifications";
+        }
+
+        return filter switch
+        {
+            NotificationVisibilityFilter.Unread => "No unread notifications",
+            NotificationVisibilityFilter.Read => "No read notifications",
+            NotificationVisibilityFilter.Hidden => "No hidden notifications",
+            NotificationVisibilityFilter.All => "No notifications",
+            _ => "No notifications"
+        };
+    }
+
+    private MenuFlyout CreateNotificationContextMenu(StoredNotification notification)
+    {
+        var menu = new MenuFlyout();
+
+        var readItem = new MenuFlyoutItem
+        {
+            Text = notification.IsRead ? "Mark unread" : "Mark read",
+            Icon = new FontIcon { Glyph = notification.IsRead ? "\uE119" : "\uE715" }
+        };
+        readItem.Click += (_, _) =>
+        {
+            if (notification.IsRead)
+            {
+                notificationStore?.MarkUnread(notification.Id);
+            }
+            else
+            {
+                notificationStore?.MarkRead(notification.Id);
+            }
+        };
+        menu.Items.Add(readItem);
+
+        var visibilityItem = new MenuFlyoutItem
+        {
+            Text = notification.IsDismissed ? "Unhide" : "Hide",
+            Icon = new FontIcon { Glyph = notification.IsDismissed ? "\uE8A7" : "\uE8F5" }
+        };
+        visibilityItem.Click += (_, _) =>
+        {
+            if (notification.IsDismissed)
+            {
+                notificationStore?.Unhide(notification.Id);
+            }
+            else
+            {
+                notificationStore?.Hide(notification.Id);
+            }
+        };
+        menu.Items.Add(visibilityItem);
+
+        return menu;
+    }
+
     private void RefreshNotificationList()
     {
         try
@@ -186,7 +288,30 @@ public sealed partial class MainWindow : Window
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
-            var notifications = notificationStore.GetAll();
+            var filter = CurrentNotificationFilter;
+            var searchText = CurrentNotificationSearchText;
+            var sortOrder = CurrentNotificationSortOrder;
+            var notifications = notificationStore.GetNotifications(filter, searchText);
+            notifications = sortOrder switch
+            {
+                NotificationSortOrder.DateAscending => notifications
+                    .OrderBy(n => n.Created)
+                    .ThenBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Id, StringComparer.Ordinal)
+                    .ToList(),
+                NotificationSortOrder.Name => notifications
+                    .OrderBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Id, StringComparer.Ordinal)
+                    .ToList(),
+                _ => notifications
+                    .OrderByDescending(n => n.Created)
+                    .ThenBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Id, StringComparer.Ordinal)
+                    .ToList()
+            };
             var useWin11Icons = settingsController.Current.UseWindows11Icons;
 
             // Resolve base URI for server icons
@@ -210,7 +335,7 @@ public sealed partial class MainWindow : Window
 
                 var isUnread = !n.IsRead && !n.IsDismissed;
                 var title = n.Title ?? "openHAB";
-                var hasSeverity = !string.IsNullOrWhiteSpace(n.Severity);
+                var hasTag = !string.IsNullOrWhiteSpace(n.Severity);
 
                 var row = new Grid { Padding = new Thickness(0, 8, 0, 0), ColumnSpacing = 8 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -245,7 +370,7 @@ public sealed partial class MainWindow : Window
                 };
                 contentPanel.Children.Add(previewBlock);
 
-                if (hasSeverity)
+                if (hasTag)
                 {
                     var tagBorder = new Border
                     {
@@ -295,6 +420,7 @@ public sealed partial class MainWindow : Window
                     Padding = new Thickness(0),
                     BorderThickness = new Thickness(0)
                 };
+                button.ContextFlyout = CreateNotificationContextMenu(n);
                 button.Click += (_, _) =>
                 {
                     if (capturedIsUnread)
@@ -310,6 +436,7 @@ public sealed partial class MainWindow : Window
             var unreadCount = notificationStore.UnreadCount;
             UnreadBadge.Visibility = unreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
             UnreadCountText.Text = unreadCount.ToString();
+            EmptyNotificationsText.Text = GetEmptyNotificationsText(filter, searchText);
             EmptyNotificationsText.Visibility = notifications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         finally
@@ -863,9 +990,39 @@ public sealed partial class MainWindow : Window
         await RefreshRuntimeAsync();
     }
 
-    private void DismissAllButton_Click(object sender, RoutedEventArgs e)
+    private void MarkAllReadButton_Click(object sender, RoutedEventArgs e)
     {
-        notificationStore?.DismissAll();
+        notificationStore?.MarkAllRead();
+    }
+
+    private void NotificationSearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!notificationControlsReady)
+        {
+            return;
+        }
+
+        RefreshNotificationList();
+    }
+
+    private void NotificationFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!notificationControlsReady)
+        {
+            return;
+        }
+
+        RefreshNotificationList();
+    }
+
+    private void NotificationSortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!notificationControlsReady)
+        {
+            return;
+        }
+
+        RefreshNotificationList();
     }
 
     private void FollowThemeToggle_Toggled(object sender, RoutedEventArgs e)

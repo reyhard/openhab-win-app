@@ -2,6 +2,15 @@ using System.Text.Json;
 
 namespace OpenHab.App.Notifications;
 
+public enum NotificationVisibilityFilter
+{
+    Visible,
+    Unread,
+    Read,
+    Hidden,
+    All
+}
+
 public sealed record StoredNotification(
     string Id,
     string Message,
@@ -54,6 +63,20 @@ public sealed class NotificationStore
         lock (syncRoot)
         {
             return notifications.Values
+                .OrderByDescending(n => n.Created)
+                .ToList();
+        }
+    }
+
+    public IReadOnlyList<StoredNotification> GetNotifications(
+        NotificationVisibilityFilter filter,
+        string? searchText)
+    {
+        lock (syncRoot)
+        {
+            return notifications.Values
+                .Where(n => MatchesFilter(n, filter))
+                .Where(n => MatchesSearch(n, searchText))
                 .OrderByDescending(n => n.Created)
                 .ToList();
         }
@@ -195,15 +218,62 @@ public sealed class NotificationStore
         }
     }
 
-    public void Dismiss(string id)
+    public void Hide(string id)
     {
         bool mutated = false;
         lock (syncRoot)
         {
             if (notifications.TryGetValue(id, out var existing) && !existing.IsDismissed)
             {
-                notifications[id] = existing with { IsDismissed = true };
+                notifications[id] = existing with { IsDismissed = true, IsRead = true };
                 mutated = true;
+            }
+        }
+
+        if (mutated)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+            _ = SaveAsync();
+        }
+    }
+
+    public void Dismiss(string id)
+    {
+        Hide(id);
+    }
+
+    public void Unhide(string id)
+    {
+        bool mutated = false;
+        lock (syncRoot)
+        {
+            if (notifications.TryGetValue(id, out var existing) && existing.IsDismissed)
+            {
+                notifications[id] = existing with { IsDismissed = false };
+                mutated = true;
+            }
+        }
+
+        if (mutated)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+            _ = SaveAsync();
+        }
+    }
+
+    public void MarkAllRead()
+    {
+        bool mutated = false;
+        lock (syncRoot)
+        {
+            foreach (var key in notifications.Keys.ToList())
+            {
+                var existing = notifications[key];
+                if (!existing.IsDismissed && !existing.IsRead)
+                {
+                    notifications[key] = existing with { IsRead = true };
+                    mutated = true;
+                }
             }
         }
 
@@ -224,7 +294,7 @@ public sealed class NotificationStore
                 var existing = notifications[key];
                 if (!existing.IsDismissed)
                 {
-                    notifications[key] = existing with { IsDismissed = true };
+                    notifications[key] = existing with { IsDismissed = true, IsRead = true };
                     mutated = true;
                 }
             }
@@ -264,6 +334,37 @@ public sealed class NotificationStore
                 notifications.Remove(r.Id);
             }
         }
+    }
+
+    private static bool MatchesFilter(StoredNotification notification, NotificationVisibilityFilter filter)
+    {
+        return filter switch
+        {
+            NotificationVisibilityFilter.Visible => !notification.IsDismissed,
+            NotificationVisibilityFilter.Unread => !notification.IsDismissed && !notification.IsRead,
+            NotificationVisibilityFilter.Read => !notification.IsDismissed && notification.IsRead,
+            NotificationVisibilityFilter.Hidden => notification.IsDismissed,
+            NotificationVisibilityFilter.All => true,
+            _ => true
+        };
+    }
+
+    private static bool MatchesSearch(StoredNotification notification, string? searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+        {
+            return true;
+        }
+
+        var query = searchText.Trim();
+        return Contains(notification.Title, query)
+            || Contains(notification.Message, query)
+            || Contains(notification.Severity, query);
+    }
+
+    private static bool Contains(string? value, string query)
+    {
+        return value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
     }
 
     private async Task SaveAsync()

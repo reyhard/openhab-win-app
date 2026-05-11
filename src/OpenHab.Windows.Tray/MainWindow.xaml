@@ -120,15 +120,39 @@
 
                         <Grid ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="NotificationsTitle"
-                                       Text="Notifications"
-                                       FontSize="18"
-                                       FontWeight="SemiBold" />
-                            <Border Grid.Column="1"
+                            <TextBox x:Name="NotificationSearchBox"
+                                     PlaceholderText="Search notifications"
+                                     MinWidth="220"
+                                     TextChanged="NotificationSearchBox_TextChanged" />
+                            <ComboBox Grid.Column="1"
+                                      x:Name="NotificationFilterBox"
+                                      MinWidth="120"
+                                      Width="120"
+                                      SelectedIndex="0"
+                                      SelectionChanged="NotificationFilterBox_SelectionChanged">
+                                <ComboBoxItem Content="Visible" Tag="Visible" />
+                                <ComboBoxItem Content="Unread" Tag="Unread" />
+                                <ComboBoxItem Content="Read" Tag="Read" />
+                                <ComboBoxItem Content="Hidden" Tag="Hidden" />
+                                <ComboBoxItem Content="All" Tag="All" />
+                            </ComboBox>
+                            <ComboBox Grid.Column="2"
+                                      x:Name="NotificationSortBox"
+                                      MinWidth="110"
+                                      Width="110"
+                                      SelectedIndex="0"
+                                      SelectionChanged="NotificationSortBox_SelectionChanged">
+                                <ComboBoxItem Content="Newest" Tag="DateDescending" />
+                                <ComboBoxItem Content="Oldest" Tag="DateAscending" />
+                                <ComboBoxItem Content="Name" Tag="Name" />
+                            </ComboBox>
+                            <Border Grid.Column="3"
                                     x:Name="UnreadBadge"
                                     Background="{ThemeResource AccentFillColorDefaultBrush}"
                                     CornerRadius="10"
@@ -139,12 +163,12 @@
                                 <TextBlock x:Name="UnreadCountText"
                                            FontSize="11" />
                             </Border>
-                            <Button Grid.Column="2"
-                                    x:Name="DismissAllButton"
-                                    Content="Dismiss all"
-                                    Click="DismissAllButton_Click" />
+                            <Button Grid.Column="4"
+                                    x:Name="MarkAllReadButton"
+                                    Content="Mark all read"
+                                    Click="MarkAllReadButton_Click" />
                         </Grid>
-                        
+
                         <TextBlock x:Name="LocalOnlyNote"
                                    Grid.Row="1"
                                    Text="New notifications unavailable in Local-Only mode. Switch to Automatic or Cloud to receive alerts."
