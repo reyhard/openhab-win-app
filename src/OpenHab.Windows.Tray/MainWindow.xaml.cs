@@ -212,6 +212,47 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    private MenuFlyout CreateNotificationContextMenu(StoredNotification notification)
+    {
+        var menu = new MenuFlyout();
+
+        var readItem = new MenuFlyoutItem
+        {
+            Text = notification.IsRead ? "Mark unread" : "Mark read"
+        };
+        readItem.Click += (_, _) =>
+        {
+            if (notification.IsRead)
+            {
+                notificationStore?.MarkUnread(notification.Id);
+            }
+            else
+            {
+                notificationStore?.MarkRead(notification.Id);
+            }
+        };
+        menu.Items.Add(readItem);
+
+        var visibilityItem = new MenuFlyoutItem
+        {
+            Text = notification.IsDismissed ? "Unhide" : "Hide"
+        };
+        visibilityItem.Click += (_, _) =>
+        {
+            if (notification.IsDismissed)
+            {
+                notificationStore?.Unhide(notification.Id);
+            }
+            else
+            {
+                notificationStore?.Hide(notification.Id);
+            }
+        };
+        menu.Items.Add(visibilityItem);
+
+        return menu;
+    }
+
     private void RefreshNotificationList()
     {
         try
@@ -248,7 +289,7 @@ public sealed partial class MainWindow : Window
 
                 var isUnread = !n.IsRead && !n.IsDismissed;
                 var title = n.Title ?? "openHAB";
-                var hasSeverity = !string.IsNullOrWhiteSpace(n.Severity);
+                var hasTag = !string.IsNullOrWhiteSpace(n.Severity);
 
                 var row = new Grid { Padding = new Thickness(0, 8, 0, 0), ColumnSpacing = 8 };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -283,7 +324,7 @@ public sealed partial class MainWindow : Window
                 };
                 contentPanel.Children.Add(previewBlock);
 
-                if (hasSeverity)
+                if (hasTag)
                 {
                     var tagBorder = new Border
                     {
@@ -333,6 +374,7 @@ public sealed partial class MainWindow : Window
                     Padding = new Thickness(0),
                     BorderThickness = new Thickness(0)
                 };
+                button.ContextFlyout = CreateNotificationContextMenu(n);
                 button.Click += (_, _) =>
                 {
                     if (capturedIsUnread)
