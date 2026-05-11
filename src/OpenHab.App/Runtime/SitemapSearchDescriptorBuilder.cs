@@ -126,6 +126,7 @@ public static class SitemapSearchDescriptorBuilder
         {
             var baseRow = pageDescriptor.Rows[widgetIndex];
             var resultKey = BuildResultKey(widget, sourceWidgetPath);
+            var matchKind = frameMatch ? SitemapSearchMatchKind.Frame : labelMatches ? SitemapSearchMatchKind.Row : SitemapSearchMatchKind.ChildRow;
             var source = BuildSource(
                 resultKey,
                 widget,
@@ -134,7 +135,8 @@ public static class SitemapSearchDescriptorBuilder
                 sourceWidgetPath,
                 widgetIndex,
                 currentPageRowIndex,
-                frameMatch ? SitemapSearchMatchKind.Frame : inheritedFrameMatch ? SitemapSearchMatchKind.ChildRow : SitemapSearchMatchKind.Row);
+                matchKind,
+                !labelMatches && (forcedChildInclusion || inheritedFrameMatch));
             var searchRow = baseRow with
             {
                 SearchResultKey = resultKey,
@@ -208,11 +210,13 @@ public static class SitemapSearchDescriptorBuilder
         string sourceWidgetPath,
         int widgetIndex,
         int? currentPageRowIndex,
-        SitemapSearchMatchKind matchKind)
+        SitemapSearchMatchKind matchKind,
+        bool isContextual)
     {
         return new SitemapSearchSource(
             resultKey,
             matchKind,
+            isContextual,
             page.Id,
             pagePath,
             widget.WidgetId,
@@ -228,10 +232,10 @@ public static class SitemapSearchDescriptorBuilder
     {
         if (!string.IsNullOrWhiteSpace(widget.WidgetId))
         {
-            return "search:widget:" + sourceWidgetPath + ":id:" + widget.WidgetId;
+            return "search:widget:" + EncodeKeyComponent(sourceWidgetPath) + ":id:" + EncodeKeyComponent(widget.WidgetId);
         }
 
-        return "search:path:" + sourceWidgetPath;
+        return "search:path:" + EncodeKeyComponent(sourceWidgetPath);
     }
 
     private static string BuildWidgetPath(string prefix, int index)
@@ -258,7 +262,12 @@ public static class SitemapSearchDescriptorBuilder
 
     private static string BuildHeaderKey(string scopePath)
     {
-        return "search:header:" + scopePath;
+        return "search:header:" + EncodeKeyComponent(scopePath);
+    }
+
+    private static string EncodeKeyComponent(string value)
+    {
+        return Uri.EscapeDataString(value);
     }
 
     private static bool LabelMatches(string label, string query)

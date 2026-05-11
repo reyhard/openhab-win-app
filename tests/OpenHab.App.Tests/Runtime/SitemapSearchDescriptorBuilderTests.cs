@@ -118,29 +118,56 @@ public sealed class SitemapSearchDescriptorBuilderTests
     }
 
     [Fact]
-    public void ResultKeysIgnoreLabelDelimitersWhileKeepingSourceLabels()
+    public void ResultKeysEncodeDelimiterContainingComponentsAndStayDistinct()
     {
-        var page = CreateDelimitedLabelSearchPage();
+        var page = CreateDelimiterCollisionSearchPage();
         var normal = renderController.BuildCurrentDescriptor(page);
 
         var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Lamp", renderController);
         var matchingRows = result.Descriptor.Rows
-            .Where(row => row.Label is "Lamp / Hall" or "Lamp:Hall")
+            .Where(row => row.Label is "Lamp / Hall" or "Lamp:Hall" or "Lamp:id:Hall")
             .ToArray();
 
-        Assert.Equal(2, result.ResultCount);
-        Assert.Equal(2, matchingRows.Length);
+        Assert.Equal(3, result.ResultCount);
+        Assert.Equal(3, matchingRows.Length);
         Assert.All(matchingRows, row => Assert.NotNull(row.SearchResultKey));
-        Assert.Equal(2, matchingRows.Select(row => row.SearchResultKey).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(3, matchingRows.Select(row => row.SearchResultKey).Distinct(StringComparer.Ordinal).Count());
         Assert.All(matchingRows, row =>
         {
             Assert.Equal(row.Label, result.SourcesByResultKey[row.SearchResultKey!].SourceWidgetLabel);
         });
         Assert.All(matchingRows, row =>
         {
-            Assert.DoesNotContain("Lamp / Hall", row.SearchResultKey!);
-            Assert.DoesNotContain("Lamp:Hall", row.SearchResultKey!);
+            Assert.Contains("%2F", row.SearchResultKey!);
+            Assert.Contains("%3A", row.SearchResultKey!);
         });
+        Assert.Equal(result.ResultCount, result.SourcesByResultKey.Count);
+    }
+
+    [Fact]
+    public void MatchingFramePreservesDirectMatchesAndMarksContextOnlyDescendants()
+    {
+        var page = CreateMatchingFrameContextPage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Matching frame", renderController);
+
+        Assert.True(result.IsSearchActive);
+        Assert.Equal(3, result.ResultCount);
+
+        var frameRow = Assert.Single(result.Descriptor.Rows, row => row.Label == "Matching frame" && row.SourceWidgetId == "matching-frame");
+        var directChildRow = Assert.Single(result.Descriptor.Rows, row => row.Label == "Matching frame" && row.SourceWidgetId == "direct-child");
+        var contextualChildRow = Assert.Single(result.Descriptor.Rows, row => row.Label == "Context only");
+
+        Assert.Equal(SitemapSearchMatchKind.Frame, result.SourcesByResultKey[frameRow.SearchResultKey!].MatchKind);
+        Assert.False(result.SourcesByResultKey[frameRow.SearchResultKey!].IsContextual);
+
+        Assert.Equal(SitemapSearchMatchKind.Row, result.SourcesByResultKey[directChildRow.SearchResultKey!].MatchKind);
+        Assert.False(result.SourcesByResultKey[directChildRow.SearchResultKey!].IsContextual);
+
+        Assert.Equal(SitemapSearchMatchKind.ChildRow, result.SourcesByResultKey[contextualChildRow.SearchResultKey!].MatchKind);
+        Assert.True(result.SourcesByResultKey[contextualChildRow.SearchResultKey!].IsContextual);
+        Assert.Equal(result.ResultCount, result.SourcesByResultKey.Count);
     }
 
     [Fact]
@@ -347,10 +374,10 @@ public sealed class SitemapSearchDescriptorBuilderTests
             ]));
     }
 
-    private static NormalizedSitemapPage CreateDelimitedLabelSearchPage()
+    private static NormalizedSitemapPage CreateDelimiterCollisionSearchPage()
     {
         return SitemapNormalizer.Normalize(new SitemapPage(
-            "home",
+            "home/section:search",
             "Home",
             [
                 new SitemapWidget(
@@ -370,7 +397,55 @@ public sealed class SitemapSearchDescriptorBuilderTests
                     [],
                     true,
                     [],
-                    WidgetId: "lamp-colon")
+                    WidgetId: "lamp-colon"),
+                new SitemapWidget(
+                    "Lamp:id:Hall",
+                    SitemapWidgetType.Text,
+                    "Hall_Lamp_3",
+                    "ON",
+                    [],
+                    true,
+                    [],
+                    WidgetId: "lamp:id:hall")
+            ]));
+    }
+
+    private static NormalizedSitemapPage CreateMatchingFrameContextPage()
+    {
+        return SitemapNormalizer.Normalize(new SitemapPage(
+            "home",
+            "Home",
+            [
+                new SitemapWidget(
+                    "Matching frame",
+                    SitemapWidgetType.Frame,
+                    null,
+                    null,
+                    [],
+                    true,
+                    [
+                        new SitemapPage("matching", "Matching", [
+                            new SitemapWidget(
+                                "Matching frame",
+                                SitemapWidgetType.Text,
+                                "Direct_Match",
+                                "ON",
+                                [],
+                                true,
+                                [],
+                                WidgetId: "direct-child"),
+                            new SitemapWidget(
+                                "Context only",
+                                SitemapWidgetType.Text,
+                                "Context_Only",
+                                "ON",
+                                [],
+                                true,
+                                [],
+                                WidgetId: "context-child")
+                        ])
+                    ],
+                    WidgetId: "matching-frame")
             ]));
     }
 

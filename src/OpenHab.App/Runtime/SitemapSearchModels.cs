@@ -13,6 +13,7 @@ public enum SitemapSearchMatchKind
 public sealed record SitemapSearchSource(
     string ResultKey,
     SitemapSearchMatchKind MatchKind,
+    bool IsContextual,
     string SourcePageId,
     IReadOnlyList<string> SourcePagePath,
     string SourceWidgetId,
