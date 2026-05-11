@@ -7,8 +7,10 @@ public sealed class FakeOpenHabClient : IOpenHabClient
     private readonly Queue<Func<string, CancellationToken, Task<string>>> sitemapResponses = new();
 
     public List<(string ItemName, string Command)> CommandsSent { get; } = new();
+    public List<(string ItemName, string State)> StatesSet { get; } = new();
     public List<string> RequestedSitemaps { get; } = new();
     public List<SitemapInfo> Sitemaps { get; set; } = new();
+    public Exception? SetItemStateFailure { get; set; }
 
     public void EnqueueSitemapJson(string json)
     {
@@ -28,6 +30,12 @@ public sealed class FakeOpenHabClient : IOpenHabClient
 
     public Task SetItemStateAsync(string itemName, string state, CancellationToken cancellationToken)
     {
+        if (SetItemStateFailure is not null)
+        {
+            return Task.FromException(SetItemStateFailure);
+        }
+
+        StatesSet.Add((itemName, state));
         return Task.CompletedTask;
     }
 
