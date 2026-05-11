@@ -49,7 +49,8 @@ internal static class SitemapRowMapper
             Period: widget.Period,
             ItemName: widget.ItemName,
             InputHint: widget.InputHint,
-            WidgetId: widget.WidgetId);
+            WidgetId: widget.WidgetId,
+            HeightRows: widget.HeightRows);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)

@@ -47,7 +47,8 @@ public sealed record SitemapRowDescriptor(
     string? Period = null,
     string? ItemName = null,
     SitemapInputHint InputHint = SitemapInputHint.Auto,
-    string? WidgetId = null)
+    string? WidgetId = null,
+    int? HeightRows = null)
 {
     public SitemapRowDescriptor(
         string Label,
@@ -55,7 +56,7 @@ public sealed record SitemapRowDescriptor(
         RenderControlKind Control,
         RenderActionKind Action,
         RenderDensity Density)
-        : this(Label, State, Control, Action, Density, [], null, null, null, null, null, false, null, null, null, null, true, null, null, null, null, null, true, null, null, null, SitemapInputHint.Auto, null)
+        : this(Label, State, Control, Action, Density, [], null, null, null, null, null, false, null, null, null, null, true, null, null, null, null, null, true, null, null, null, SitemapInputHint.Auto, null, null)
     {
     }
 }

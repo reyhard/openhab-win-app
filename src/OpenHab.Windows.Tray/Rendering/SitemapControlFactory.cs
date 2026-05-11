@@ -28,6 +28,8 @@ public static partial class SitemapControlFactory
     private const double NavigateChevronLaneWidth = 20;
     private const int SliderMoveDebounceMs = 200;
     private const double WidgetVisibilityAnimationDurationMs = 320d;
+    private const double WebviewDefaultHeight = 300d;
+    private const double SitemapRowHeight = 40d;
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
     private static readonly Regex FirstNumberRegex = FirstNumberRegexFactory();
@@ -213,6 +215,15 @@ public static partial class SitemapControlFactory
         // Normalized fallback.
         var normalized = NormalizeIconName(iconName);
         return NormalizedWin11IconMap.ContainsKey(normalized);
+    }
+
+    internal static double ResolveWebviewHeight(SitemapRowDescriptor row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return row.HeightRows is > 0
+            ? row.HeightRows.Value * SitemapRowHeight
+            : WebviewDefaultHeight;
     }
 
     internal static string BuildRowIdentityKey(SitemapRowDescriptor row)
@@ -2274,7 +2285,7 @@ public static partial class SitemapControlFactory
         // Try WebView2 for inline display; WebView2 runtime may be missing
         var webview = new WebView2
         {
-            Height = 300,
+            Height = ResolveWebviewHeight(row),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Top
         };

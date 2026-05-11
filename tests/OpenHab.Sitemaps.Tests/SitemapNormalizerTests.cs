@@ -64,6 +64,27 @@ public sealed class SitemapNormalizerTests
     }
 
     [Fact]
+    public void PreservesHeightRows()
+    {
+        var page = new SitemapPage("root", "Home", [
+            new SitemapWidget(
+                "Events",
+                SitemapWidgetType.Webview,
+                null,
+                null,
+                [],
+                true,
+                [],
+                Url: "http://openhab:9001",
+                HeightRows: 130)
+        ]);
+
+        var normalized = SitemapNormalizer.Normalize(page);
+
+        Assert.Equal(130, normalized.Widgets[0].HeightRows);
+    }
+
+    [Fact]
     public void NormalizedWidgetSnapshotsMappingsAndChildren()
     {
         var mappings = new List<SitemapMapping>

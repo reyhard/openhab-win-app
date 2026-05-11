@@ -222,6 +222,26 @@ public class SitemapControlFactoryTests
         Assert.Equal(56, controlLaneWidth);
     }
 
+    [Theory]
+    [InlineData(null, 300)]
+    [InlineData(0, 300)]
+    [InlineData(-1, 300)]
+    [InlineData(5, 200)]
+    [InlineData(130, 5200)]
+    public void ResolveWebviewHeight_ConvertsSitemapRowsToPixels(int? heightRows, double expectedHeight)
+    {
+        var row = new SitemapRowDescriptor(
+            "Events",
+            null,
+            RenderControlKind.Webview,
+            RenderActionKind.None,
+            RenderDensity.Compact,
+            [],
+            HeightRows: heightRows);
+
+        Assert.Equal(expectedHeight, SitemapControlFactory.ResolveWebviewHeight(row));
+    }
+
     [Fact]
     public void WidgetUnhideAnimation_UsesFullHeightLinearMotionWithDelayedFade()
     {

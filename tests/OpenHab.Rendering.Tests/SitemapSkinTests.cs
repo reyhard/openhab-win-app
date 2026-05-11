@@ -237,6 +237,31 @@ public sealed class SitemapSkinTests
         Assert.Equal("blue", row.IconColor);
     }
 
+    [Fact]
+    public void ToRow_PreservesHeightRows()
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Events",
+                SitemapWidgetType.Webview,
+                null,
+                null,
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                Url: "http://openhab:9001",
+                HeightRows: 130)
+        ]);
+
+        var descriptor = new Windows11SitemapSkin().Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Webview, row.Control);
+        Assert.Equal(130, row.HeightRows);
+    }
+
     private static NormalizedSitemapPage Page()
     {
         return new NormalizedSitemapPage("root", "Home", [

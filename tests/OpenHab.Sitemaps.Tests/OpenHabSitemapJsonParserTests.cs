@@ -305,6 +305,32 @@ public sealed class OpenHabSitemapJsonParserTests
     }
 
     [Fact]
+    public void ParseWidgetParsesHeight()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Webview",
+                    "label": "Events",
+                    "url": "http://openhab:9001",
+                    "height": 130
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+        var widget = Assert.Single(parsed.Widgets);
+
+        Assert.Equal(SitemapWidgetType.Webview, widget.Type);
+        Assert.Equal(130, widget.HeightRows);
+    }
+
+    [Fact]
     public void ParseWidgetParsesResolvedColors()
     {
         const string json = """

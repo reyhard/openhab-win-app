@@ -125,6 +125,7 @@ public static class OpenHabSitemapJsonParser
         var period = GetStringOrNull(widgetElement, "period");
         var service = GetStringOrNull(widgetElement, "service");
         var inputHint = ParseInputHint(GetStringOrNull(widgetElement, "inputHint"));
+        var heightRows = GetIntOrNull(widgetElement, "height");
 
         var isVisible = true;
         if (widgetElement.TryGetProperty("visibility", out var visibilityElement) &&
@@ -158,7 +159,8 @@ public static class OpenHabSitemapJsonParser
             Url: url,
             Period: period,
             Service: service,
-            InputHint: inputHint);
+            InputHint: inputHint,
+            HeightRows: heightRows);
     }
 
     private static string? ParseResolvedColor(JsonElement element, string propertyName)
