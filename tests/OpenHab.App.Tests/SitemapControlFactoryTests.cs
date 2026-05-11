@@ -163,6 +163,21 @@ public class SitemapControlFactoryTests
     }
 
     [Fact]
+    public void BuildChartUrl_UsesStableUrlWhenCacheBustDisabled()
+    {
+        var row = new SitemapRowDescriptor(
+            "Power", "12", RenderControlKind.Chart, RenderActionKind.None, RenderDensity.Compact,
+            [], ItemName: "Weather_Temperature", Period: "D");
+        var baseUri = new Uri("http://localhost:8080/");
+
+        var first = SitemapControlFactory.BuildChartUrl(row, baseUri, chartDpi: 192, cacheBust: false);
+        var second = SitemapControlFactory.BuildChartUrl(row, baseUri, chartDpi: 192, cacheBust: false);
+
+        Assert.Equal(first, second);
+        Assert.DoesNotContain("random=", first!.ToString());
+    }
+
+    [Fact]
     public void BuildChartUrl_ReturnsNull_WhenNoItemName()
     {
         var row = new SitemapRowDescriptor(

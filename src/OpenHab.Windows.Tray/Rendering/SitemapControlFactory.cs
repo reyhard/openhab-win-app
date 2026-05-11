@@ -226,7 +226,9 @@ public static partial class SitemapControlFactory
 
         if (!string.IsNullOrWhiteSpace(row.ItemName))
         {
-            return $"item:{row.ItemName}:{row.Control}:{row.Action}";
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"item:{row.ItemName}:{row.Control}:{row.Action}:{row.Label}:{row.IconName ?? string.Empty}:{row.Command ?? string.Empty}:{row.ReleaseCommand ?? string.Empty}:{row.Period ?? string.Empty}");
         }
 
         return string.Create(
@@ -2379,7 +2381,7 @@ public static partial class SitemapControlFactory
     }
 
     /// <summary>Builds an openHAB chart image URL from the row descriptor and base URI.</summary>
-    internal static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi)
+    internal static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi = 96, bool cacheBust = true)
     {
         var itemName = row.ItemName ?? row.RawItemState ?? row.RawState ?? row.State;
         if (string.IsNullOrWhiteSpace(itemName) && string.IsNullOrWhiteSpace(row.Command))
@@ -2394,9 +2396,12 @@ public static partial class SitemapControlFactory
 
         var items = Uri.EscapeDataString(itemName ?? row.Command ?? string.Empty);
         var period = row.Period ?? "D";
-        var random = Random.Shared.Next();
+        var query = $"items={items}&period={Uri.EscapeDataString(period)}&dpi={chartDpi}";
+        if (cacheBust)
+        {
+            query += $"&random={Random.Shared.Next()}";
+        }
 
-        var query = $"items={items}&period={Uri.EscapeDataString(period)}&dpi={chartDpi}&random={random}";
         return new Uri(baseUri, $"chart?{query}");
     }
 

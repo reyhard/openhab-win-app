@@ -23,6 +23,7 @@ using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
+using OpenHab.Windows.Tray.Rendering.SitemapSurface;
 using OpenHab.Windows.Tray.Startup;
 using Windows.Storage.Streams;
 namespace OpenHab.Windows.Tray;
@@ -33,6 +34,10 @@ public sealed partial class MainWindow : Window
     private readonly SitemapRuntimeController runtimeController;
     private readonly NotificationStore? notificationStore;
     private readonly Action requestHideToTray;
+    private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
+    private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
+    private readonly DispatcherRefreshGate snapshotRefreshGate;
+    private readonly DispatcherRefreshGate notificationRefreshGate;
     private bool isRefreshing;
     private bool suppressTokenEditTracking;
     private bool localTokenEdited;
@@ -74,6 +79,16 @@ public sealed partial class MainWindow : Window
         this.runtimeController = runtimeController;
         this.notificationStore = notificationStore;
         this.requestHideToTray = requestHideToTray;
+        sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
+        sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
+            settingsController,
+            sitemapIconAuthResolver,
+            activateByRowKey: OnRowActivatedByKeyAsync,
+            navigateByRowKey: OnRowNavigateByKeyAsync,
+            sendCommandByRowKey: SendCommandForRowKeyAsync,
+            sendCommandByRowIndex: (rowIndex, command) => runtimeController.SendCommandForRowAsync(rowIndex, command));
+        snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
+        notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
 
@@ -90,10 +105,7 @@ public sealed partial class MainWindow : Window
         {
             notificationStore.Changed += (_, _) =>
             {
-                if (!DispatcherQueue.TryEnqueue(RefreshNotificationList))
-                {
-                    DiagnosticLogger.Warn("MainWindow NotificationStore.Changed: DispatcherQueue.TryEnqueue returned false — notification list update lost");
-                }
+                notificationRefreshGate.Request(RefreshNotificationList);
             };
             RefreshNotificationList();
         }
@@ -109,10 +121,7 @@ public sealed partial class MainWindow : Window
                 _pendingSnapshotRefresh = true;
                 return;
             }
-            if (!DispatcherQueue.TryEnqueue(() => RefreshRuntimeBindings(targetRows: null)))
-            {
-                DiagnosticLogger.Warn("MainWindow SnapshotChanged: DispatcherQueue.TryEnqueue returned false — UI update lost");
-            }
+            snapshotRefreshGate.Request(() => RefreshRuntimeBindings(targetRows: null));
         };
         // Initial load is deferred until sitemaps are resolved in CompleteStartupAsync.
     }
@@ -169,137 +178,144 @@ public sealed partial class MainWindow : Window
 
     private void RefreshNotificationList()
     {
-        if (notificationStore is null) return;
-
-        LocalOnlyNote.Visibility = settingsController.Current.EndpointMode == EndpointMode.LocalOnly
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-
-        var notifications = notificationStore.GetAll();
-        var useWin11Icons = settingsController.Current.UseWindows11Icons;
-
-        // Resolve base URI for server icons
-        var iconTransport = settingsController.Current.EndpointMode == EndpointMode.CloudOnly
-            ? TransportKind.Cloud
-            : TransportKind.Local;
-        var iconBaseUri = iconTransport == TransportKind.Local
-            ? settingsController.Current.LocalEndpoint
-            : settingsController.Current.CloudEndpoint;
-        var iconAuth = ResolveIconAuth(iconTransport);
-
-        NotificationRows.Children.Clear();
-
-        foreach (var n in notifications)
+        try
         {
-            var elapsed = DateTimeOffset.UtcNow - n.Created;
-            var timeStr = elapsed.TotalMinutes < 1 ? "Just now"
-                : elapsed.TotalHours < 1 ? $"{(int)elapsed.TotalMinutes}m ago"
-                : elapsed.TotalDays < 1 ? $"{(int)elapsed.TotalHours}h ago"
-                : $"{(int)elapsed.TotalDays}d ago";
+            if (notificationStore is null) return;
 
-            var isUnread = !n.IsRead && !n.IsDismissed;
-            var title = n.Title ?? "openHAB";
-            var hasSeverity = !string.IsNullOrWhiteSpace(n.Severity);
+            LocalOnlyNote.Visibility = settingsController.Current.EndpointMode == EndpointMode.LocalOnly
+                ? Visibility.Visible
+                : Visibility.Collapsed;
 
-            var row = new Grid { Padding = new Thickness(0, 8, 0, 0), ColumnSpacing = 8 };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var notifications = notificationStore.GetAll();
+            var useWin11Icons = settingsController.Current.UseWindows11Icons;
 
-            // Column 0: Icon
-            AddNotificationIcon(row, 0, n.Icon, iconBaseUri, useWin11Icons, iconAuth);
+            // Resolve base URI for server icons
+            var iconTransport = settingsController.Current.EndpointMode == EndpointMode.CloudOnly
+                ? TransportKind.Cloud
+                : TransportKind.Local;
+            var iconBaseUri = iconTransport == TransportKind.Local
+                ? settingsController.Current.LocalEndpoint
+                : settingsController.Current.CloudEndpoint;
+            var iconAuth = sitemapIconAuthResolver.Resolve(iconTransport);
 
-            // Column 1: Title + Preview + Tag
-            var contentPanel = new StackPanel { Spacing = 2 };
-            Grid.SetColumn(contentPanel, 1);
+            NotificationRows.Children.Clear();
 
-            var titleBlock = new TextBlock
+            foreach (var n in notifications)
             {
-                Text = title,
-                FontWeight = FontWeights.SemiBold,
-                TextWrapping = TextWrapping.Wrap,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxLines = 2
-            };
-            contentPanel.Children.Add(titleBlock);
+                var elapsed = DateTimeOffset.UtcNow - n.Created;
+                var timeStr = elapsed.TotalMinutes < 1 ? "Just now"
+                    : elapsed.TotalHours < 1 ? $"{(int)elapsed.TotalMinutes}m ago"
+                    : elapsed.TotalDays < 1 ? $"{(int)elapsed.TotalHours}h ago"
+                    : $"{(int)elapsed.TotalDays}d ago";
 
-            var previewBlock = new TextBlock
-            {
-                Text = n.Message,
-                Opacity = 0.68,
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                TextWrapping = TextWrapping.Wrap,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxLines = 3
-            };
-            contentPanel.Children.Add(previewBlock);
+                var isUnread = !n.IsRead && !n.IsDismissed;
+                var title = n.Title ?? "openHAB";
+                var hasSeverity = !string.IsNullOrWhiteSpace(n.Severity);
 
-            if (hasSeverity)
-            {
-                var tagBorder = new Border
+                var row = new Grid { Padding = new Thickness(0, 8, 0, 0), ColumnSpacing = 8 };
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+                // Column 0: Icon
+                AddNotificationIcon(row, 0, n.Icon, iconBaseUri, useWin11Icons, iconAuth);
+
+                // Column 1: Title + Preview + Tag
+                var contentPanel = new StackPanel { Spacing = 2 };
+                Grid.SetColumn(contentPanel, 1);
+
+                var titleBlock = new TextBlock
                 {
-                    Background = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                    CornerRadius = new CornerRadius(4),
-                    Padding = new Thickness(6, 1, 6, 1),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    Child = new TextBlock { Text = n.Severity, FontSize = 11, Opacity = 0.6 }
+                    Text = title,
+                    FontWeight = FontWeights.SemiBold,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxLines = 2
                 };
-                contentPanel.Children.Add(tagBorder);
-            }
+                contentPanel.Children.Add(titleBlock);
 
-            row.Children.Add(contentPanel);
-
-            // Column 2: Timestamp + unread dot
-            var metaPanel = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right };
-            Grid.SetColumn(metaPanel, 2);
-
-            metaPanel.Children.Add(new TextBlock
-            {
-                Text = timeStr,
-                Opacity = 0.68,
-                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
-            });
-
-            if (isUnread)
-            {
-                metaPanel.Children.Add(new FontIcon
+                var previewBlock = new TextBlock
                 {
-                    Glyph = "\uEA3A",
-                    FontSize = 8,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                    Text = n.Message,
+                    Opacity = 0.68,
+                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                    TextWrapping = TextWrapping.Wrap,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxLines = 3
+                };
+                contentPanel.Children.Add(previewBlock);
+
+                if (hasSeverity)
+                {
+                    var tagBorder = new Border
+                    {
+                        Background = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(6, 1, 6, 1),
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        Child = new TextBlock { Text = n.Severity, FontSize = 11, Opacity = 0.6 }
+                    };
+                    contentPanel.Children.Add(tagBorder);
+                }
+
+                row.Children.Add(contentPanel);
+
+                // Column 2: Timestamp + unread dot
+                var metaPanel = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right };
+                Grid.SetColumn(metaPanel, 2);
+
+                metaPanel.Children.Add(new TextBlock
+                {
+                    Text = timeStr,
+                    Opacity = 0.68,
+                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
                 });
+
+                if (isUnread)
+                {
+                    metaPanel.Children.Add(new FontIcon
+                    {
+                        Glyph = "\uEA3A",
+                        FontSize = 8,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+                    });
+                }
+
+                row.Children.Add(metaPanel);
+
+                // Click handler: toggle read/unread
+                var capturedId = n.Id;
+                var capturedIsUnread = isUnread;
+                var button = new Button
+                {
+                    Content = row,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                    Padding = new Thickness(0),
+                    BorderThickness = new Thickness(0)
+                };
+                button.Click += (_, _) =>
+                {
+                    if (capturedIsUnread)
+                        notificationStore.MarkRead(capturedId);
+                    else
+                        notificationStore.MarkUnread(capturedId);
+                };
+
+                NotificationRows.Children.Add(button);
             }
 
-            row.Children.Add(metaPanel);
-
-            // Click handler: toggle read/unread
-            var capturedId = n.Id;
-            var capturedIsUnread = isUnread;
-            var button = new Button
-            {
-                Content = row,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                Padding = new Thickness(0),
-                BorderThickness = new Thickness(0)
-            };
-            button.Click += (_, _) =>
-            {
-                if (capturedIsUnread)
-                    notificationStore.MarkRead(capturedId);
-                else
-                    notificationStore.MarkUnread(capturedId);
-            };
-
-            NotificationRows.Children.Add(button);
+            // Update header
+            var unreadCount = notificationStore.UnreadCount;
+            UnreadBadge.Visibility = unreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+            UnreadCountText.Text = unreadCount.ToString();
+            EmptyNotificationsText.Visibility = notifications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
-
-        // Update header
-        var unreadCount = notificationStore.UnreadCount;
-        UnreadBadge.Visibility = unreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
-        UnreadCountText.Text = unreadCount.ToString();
-        EmptyNotificationsText.Visibility = notifications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        finally
+        {
+            notificationRefreshGate.Drain(RefreshNotificationList);
+        }
     }
 
     private static void AddNotificationIcon(Grid grid, int column, string? iconName,
@@ -477,173 +493,8 @@ public sealed partial class MainWindow : Window
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
-
-        var rows = snapshot.Descriptor?.Rows;
-        var changedIndices = snapshot.ChangedRowIndices;
-
-        if (changedIndices is { Count: > 0 } && rows is not null)
-        {
-            foreach (var index in changedIndices)
-            {
-                if (index < 0 || index >= rowsPanel.Children.Count || index >= rows.Count) continue;
-                var existing = rowsPanel.Children[index] as FrameworkElement;
-                if (existing is null) continue;
-                SitemapControlFactory.UpdateState(existing, rows[index]);
-            }
-
-            return;
-        }
-
-        rowsPanel.Children.Clear();
-        if (rows is null)
-        {
-            return;
-        }
-
-        var iconTransport = snapshot.ActiveTransport ?? TransportKind.Local;
-        var iconBaseUri = iconTransport == TransportKind.Local
-            ? settingsController.Current.LocalEndpoint
-            : settingsController.Current.CloudEndpoint;
-        var iconAuth = ResolveIconAuth(iconTransport);
-
-        for (var index = 0; index < rows.Count; index++)
-        {
-            var rowIndex = index;
-            var row = rows[index];
-
-            if (row.Control == RenderControlKind.ButtonGrid)
-            {
-                var childOptions = new List<SitemapMapOption>();
-                var scan = index + 1;
-                while (scan < rows.Count && rows[scan].Control == RenderControlKind.Button)
-                {
-                    var child = rows[scan];
-                    var command = child.Command ?? child.RawItemState ?? child.RawState ?? child.State ?? string.Empty;
-                    var isActive = string.Equals(child.RawItemState ?? child.RawState ?? child.State, "ON", StringComparison.OrdinalIgnoreCase) ||
-                                   string.Equals(child.Command, "ON", StringComparison.OrdinalIgnoreCase);
-                    childOptions.Add(new SitemapMapOption(
-                        command,
-                        child.Label,
-                        child.GridRow,
-                        child.GridColumn,
-                        isActive,
-                        child.Command,
-                        child.ReleaseCommand,
-                        child.Stateless,
-                        scan));
-                    scan++;
-                }
-
-                var visibleChildOptions = childOptions.Where(o => o.SourceRowIndex.HasValue && rows[o.SourceRowIndex.Value].IsVisible).ToList();
-                if (visibleChildOptions.Count > 0)
-                {
-                    childOptions = visibleChildOptions;
-                }
-
-                var mergedRow = childOptions.Count > 0 ? row with { SelectionOptions = childOptions } : row;
-                Func<SitemapMapOption, bool, Task>? sendGridCommand = async (option, isRelease) =>
-                {
-                    var expectedCommand = isRelease ? option.ReleaseCommand : option.ClickCommand ?? option.Command;
-                    if (string.IsNullOrWhiteSpace(expectedCommand) ||
-                        string.Equals(expectedCommand, "NULL", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return;
-                    }
-
-                    if (childOptions.Count == 0)
-                    {
-                        await runtimeController.SendCommandForRowAsync(rowIndex, expectedCommand);
-                        return;
-                    }
-
-                    if (option.SourceRowIndex.HasValue)
-                    {
-                        await runtimeController.SendCommandForRowAsync(option.SourceRowIndex.Value, expectedCommand);
-                        return;
-                    }
-
-                    for (var childIndex = index + 1; childIndex < scan; childIndex++)
-                    {
-                        var child = rows[childIndex];
-                        var childCommand = isRelease ? child.ReleaseCommand : child.Command;
-                        if (string.Equals(childCommand, expectedCommand, StringComparison.Ordinal))
-                        {
-                            await runtimeController.SendCommandForRowAsync(childIndex, expectedCommand);
-                            return;
-                        }
-                    }
-                };
-
-                rowsPanel.Children.Add(SitemapControlFactory.Create(
-                    mergedRow,
-                    activateRow: null,
-                    sendCommand: null,
-                    iconBaseUri,
-                    settingsController.Current.UseWindows11Icons,
-                    iconAuth,
-                    sendButtonGridCommand: sendGridCommand));
-                index = scan - 1;
-                continue;
-            }
-
-            if (row.Control == RenderControlKind.Button)
-            {
-                continue;
-            }
-            Func<Task>? activateRow = null;
-            if (row.Control == RenderControlKind.Toggle && row.Action == RenderActionKind.SendCommand)
-                activateRow = () => OnRowActivatedAsync(rowIndex);
-            else if (row.Action == RenderActionKind.Navigate)
-                activateRow = () => OnRowNavigateAsync(rowIndex);
-            Func<string, Task>? sendCommand = row.Action == RenderActionKind.SendCommand
-                ? cmd => runtimeController.SendCommandForRowAsync(rowIndex, cmd)
-                : null;
-            rowsPanel.Children.Add(SitemapControlFactory.Create(
-                row,
-                activateRow,
-                sendCommand,
-                iconBaseUri,
-                settingsController.Current.UseWindows11Icons,
-                iconAuth));
-
-            // Apply initial visibility
-            var lastIndex = rowsPanel.Children.Count - 1;
-            if (lastIndex >= 0 && rowsPanel.Children[lastIndex] is FrameworkElement element)
-            {
-                SitemapControlFactory.SetVisibility(element, row.IsVisible);
-            }
-        }
-    }
-
-    private SitemapControlFactory.IconAuthContext ResolveIconAuth(TransportKind transportKind)
-    {
-        if (transportKind == TransportKind.Local)
-        {
-            return new SitemapControlFactory.IconAuthContext(
-                ApiToken: GetApiTokenSync(TransportKind.Local),
-                BasicUserName: null,
-                BasicPassword: null,
-                TransportKind: transportKind);
-        }
-
-        var cloudCredentials = GetCloudCredentialsSync();
-        return new SitemapControlFactory.IconAuthContext(
-            ApiToken: null,
-            BasicUserName: cloudCredentials?.UserName,
-            BasicPassword: cloudCredentials?.Password,
-            TransportKind: transportKind);
-    }
-
-    private string? GetApiTokenSync(TransportKind kind)
-    {
-        try { return settingsController.GetApiTokenAsync(kind, CancellationToken.None).GetAwaiter().GetResult(); }
-        catch { return null; }
-    }
-
-    private CloudCredentials? GetCloudCredentialsSync()
-    {
-        try { return settingsController.GetCloudCredentialsAsync(CancellationToken.None).GetAwaiter().GetResult(); }
-        catch { return null; }
+        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
+        snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
     }
 
     private async Task OnRowActivatedAsync(int rowIndex)
@@ -657,6 +508,13 @@ public sealed partial class MainWindow : Window
         {
             await runtimeController.ActivateRowAsync(rowIndex, ct);
         });
+    }
+
+    private Task OnRowActivatedByKeyAsync(string rowKey)
+    {
+        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out var rowIndex)
+            ? OnRowActivatedAsync(rowIndex)
+            : Task.CompletedTask;
     }
 
     private async Task OnRowNavigateAsync(int rowIndex)
@@ -693,6 +551,20 @@ public sealed partial class MainWindow : Window
             }
             isRefreshing = false;
         }
+    }
+
+    private Task OnRowNavigateByKeyAsync(string rowKey)
+    {
+        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out var rowIndex)
+            ? OnRowNavigateAsync(rowIndex)
+            : Task.CompletedTask;
+    }
+
+    private Task SendCommandForRowKeyAsync(string rowKey, string command)
+    {
+        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out var rowIndex)
+            ? runtimeController.SendCommandForRowAsync(rowIndex, command)
+            : Task.CompletedTask;
     }
 
     private async void SkinCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
