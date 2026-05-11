@@ -27,6 +27,7 @@ public static partial class SitemapControlFactory
     private const double ControlLaneWidth = 56;
     private const double NavigateChevronLaneWidth = 20;
     private const int SliderMoveDebounceMs = 200;
+    private const double WidgetVisibilityAnimationDurationMs = 320d;
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
     private static readonly Regex FirstNumberRegex = FirstNumberRegexFactory();
@@ -151,6 +152,16 @@ public static partial class SitemapControlFactory
     }
 
     private readonly record struct RowLayout(Grid Grid, int LabelColumn, int ValueColumn, int ControlColumn);
+    private readonly record struct WidgetVisibilityAnimationProfile(
+        double DurationMs,
+        double SlideDistanceHeightRatio,
+        double FadeStartProgress,
+        double FadeCompleteProgress,
+        double FadeControlPoint1X,
+        double FadeControlPoint1Y,
+        double FadeControlPoint2X,
+        double FadeControlPoint2Y);
+
     public readonly record struct IconAuthContext(
         string? ApiToken,
         string? BasicUserName,
@@ -368,8 +379,7 @@ public static partial class SitemapControlFactory
 
     private static void ApplyAnimatedVisibility(FrameworkElement control, bool visible, Action? onCompleted = null)
     {
-        const double totalMs = 280d;
-        var expandEase = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var profile = ResolveWidgetVisibilityAnimationProfile();
         var collapseEase = new CubicEase { EasingMode = EasingMode.EaseIn };
 
         if (visible)
@@ -377,6 +387,9 @@ public static partial class SitemapControlFactory
             if (control.Visibility != Visibility.Visible)
             {
                 EnsureSlideTransform(control);
+                var showOriginalMinHeight = control.MinHeight;
+                control.MinHeight = 0d;
+                var restoreShowClip = BeginHeightAnimationClip(control);
                 control.Opacity = 0d;
                 control.Visibility = Visibility.Visible;
                 control.Height = double.NaN;
@@ -389,31 +402,38 @@ public static partial class SitemapControlFactory
                 {
                     From = 0d,
                     To = targetHeight,
-                    Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
-                    EasingFunction = expandEase,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(profile.DurationMs)),
                     EnableDependentAnimation = true
                 };
 
                 var slideIn = new DoubleAnimation
                 {
-                    From = -5d,
+                    From = -targetHeight * profile.SlideDistanceHeightRatio,
                     To = 0d,
-                    Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
-                    EasingFunction = expandEase,
+                    Duration = new Duration(TimeSpan.FromMilliseconds(profile.DurationMs)),
                     EnableDependentAnimation = true
                 };
 
                 var fadeIn = new DoubleAnimationUsingKeyFrames
                 {
-                    Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+                    Duration = new Duration(TimeSpan.FromMilliseconds(profile.DurationMs)),
                     EnableDependentAnimation = true
                 };
                 fadeIn.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0d });
+                fadeIn.KeyFrames.Add(new LinearDoubleKeyFrame
+                {
+                    KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(profile.DurationMs * profile.FadeStartProgress)),
+                    Value = 0d
+                });
                 fadeIn.KeyFrames.Add(new SplineDoubleKeyFrame
                 {
-                    KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(totalMs * 0.72d)),
+                    KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(profile.DurationMs * profile.FadeCompleteProgress)),
                     Value = 1d,
-                    KeySpline = new KeySpline { ControlPoint1 = new global::Windows.Foundation.Point(0.16d, 1d), ControlPoint2 = new global::Windows.Foundation.Point(0.3d, 1d) }
+                    KeySpline = new KeySpline
+                    {
+                        ControlPoint1 = new global::Windows.Foundation.Point(profile.FadeControlPoint1X, profile.FadeControlPoint1Y),
+                        ControlPoint2 = new global::Windows.Foundation.Point(profile.FadeControlPoint2X, profile.FadeControlPoint2Y)
+                    }
                 });
 
                 var sb = new Storyboard();
@@ -429,6 +449,8 @@ public static partial class SitemapControlFactory
                 sb.Completed += (_, _) =>
                 {
                     control.Height = double.NaN;
+                    control.MinHeight = showOriginalMinHeight;
+                    restoreShowClip();
                     control.Opacity = 1d;
                     if (control.RenderTransform is TranslateTransform transform)
                     {
@@ -464,25 +486,28 @@ public static partial class SitemapControlFactory
         }
 
         var currentHeight = Math.Max(1d, measuredHeight);
+        var hideOriginalMinHeight = control.MinHeight;
+        control.MinHeight = 0d;
+        var restoreHideClip = BeginHeightAnimationClip(control);
         control.Height = currentHeight;
 
         var fadeOut = new DoubleAnimationUsingKeyFrames
         {
-            Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+            Duration = new Duration(TimeSpan.FromMilliseconds(profile.DurationMs)),
             EnableDependentAnimation = true
         };
         fadeOut.KeyFrames.Add(new LinearDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 1d });
         fadeOut.KeyFrames.Add(new SplineDoubleKeyFrame
         {
-            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(totalMs * 0.62d)),
+            KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(profile.DurationMs * 0.62d)),
             Value = 0d,
             KeySpline = new KeySpline { ControlPoint1 = new global::Windows.Foundation.Point(0.7d, 0d), ControlPoint2 = new global::Windows.Foundation.Point(0.84d, 0d) }
         });
 
         var slideOut = new DoubleAnimation
         {
-            To = -5d,
-            Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+            To = -currentHeight * profile.SlideDistanceHeightRatio,
+            Duration = new Duration(TimeSpan.FromMilliseconds(profile.DurationMs)),
             EasingFunction = collapseEase,
             EnableDependentAnimation = true
         };
@@ -491,7 +516,7 @@ public static partial class SitemapControlFactory
         {
             From = currentHeight,
             To = 0d,
-            Duration = new Duration(TimeSpan.FromMilliseconds(totalMs)),
+            Duration = new Duration(TimeSpan.FromMilliseconds(profile.DurationMs)),
             EasingFunction = collapseEase,
             EnableDependentAnimation = true
         };
@@ -511,6 +536,8 @@ public static partial class SitemapControlFactory
             control.Visibility = Visibility.Collapsed;
             control.Opacity = 1d;
             control.Height = double.NaN;
+            control.MinHeight = hideOriginalMinHeight;
+            restoreHideClip();
             if (control.RenderTransform is TranslateTransform transform)
             {
                 transform.Y = 0d;
@@ -519,6 +546,44 @@ public static partial class SitemapControlFactory
             onCompleted?.Invoke();
         };
         sbHide.Begin();
+    }
+
+    private static Action BeginHeightAnimationClip(FrameworkElement control)
+    {
+        var originalClip = control.Clip;
+
+        void UpdateClip()
+        {
+            var width = Math.Max(control.ActualWidth, control.DesiredSize.Width);
+            var height = double.IsNaN(control.Height) ? control.ActualHeight : Math.Max(0d, control.Height);
+            control.Clip = new RectangleGeometry
+            {
+                Rect = new global::Windows.Foundation.Rect(0d, 0d, width, height)
+            };
+        }
+
+        SizeChangedEventHandler handler = (_, _) => UpdateClip();
+        control.SizeChanged += handler;
+        UpdateClip();
+
+        return () =>
+        {
+            control.SizeChanged -= handler;
+            control.Clip = originalClip;
+        };
+    }
+
+    private static WidgetVisibilityAnimationProfile ResolveWidgetVisibilityAnimationProfile()
+    {
+        return new WidgetVisibilityAnimationProfile(
+            DurationMs: WidgetVisibilityAnimationDurationMs,
+            SlideDistanceHeightRatio: 1d,
+            FadeStartProgress: 0.5d,
+            FadeCompleteProgress: 1d,
+            FadeControlPoint1X: 0.32d,
+            FadeControlPoint1Y: 0.28d,
+            FadeControlPoint2X: 0.68d,
+            FadeControlPoint2Y: 0.72d);
     }
 
     private static void EnsureSlideTransform(FrameworkElement control)

@@ -208,6 +208,31 @@ public class SitemapControlFactoryTests
     }
 
     [Fact]
+    public void WidgetUnhideAnimation_UsesFullHeightLinearMotionWithDelayedFade()
+    {
+        var durationField = typeof(SitemapControlFactory).GetField(
+            "WidgetVisibilityAnimationDurationMs",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var method = typeof(SitemapControlFactory).GetMethod(
+            "ResolveWidgetVisibilityAnimationProfile",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        var configuredDurationMs = Assert.IsType<double>(durationField?.GetRawConstantValue());
+        Assert.NotNull(method);
+        var profile = method!.Invoke(null, null);
+
+        Assert.NotNull(profile);
+        Assert.Equal(configuredDurationMs, ReadDoubleProperty(profile!, "DurationMs"));
+        Assert.Equal(1d, ReadDoubleProperty(profile!, "SlideDistanceHeightRatio"));
+        Assert.Equal(0.5d, ReadDoubleProperty(profile!, "FadeStartProgress"));
+        Assert.Equal(1d, ReadDoubleProperty(profile!, "FadeCompleteProgress"));
+        Assert.Equal(0.32d, ReadDoubleProperty(profile!, "FadeControlPoint1X"), precision: 2);
+        Assert.Equal(0.28d, ReadDoubleProperty(profile!, "FadeControlPoint1Y"), precision: 2);
+        Assert.Equal(0.68d, ReadDoubleProperty(profile!, "FadeControlPoint2X"), precision: 2);
+        Assert.Equal(0.72d, ReadDoubleProperty(profile!, "FadeControlPoint2Y"), precision: 2);
+    }
+
+    [Fact]
     public void UpdateState_ExposesPartialRowUpdateContract()
     {
         var method = typeof(SitemapControlFactory).GetMethod(
@@ -308,5 +333,12 @@ public class SitemapControlFactoryTests
         Assert.NotEqual(
             SitemapControlFactory.BuildRowVisualStateKey(switchRow, rowIndex: 1),
             SitemapControlFactory.BuildRowVisualStateKey(lightRow, rowIndex: 1));
+    }
+
+    private static double ReadDoubleProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(property);
+        return Assert.IsType<double>(property!.GetValue(instance));
     }
 }
