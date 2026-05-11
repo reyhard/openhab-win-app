@@ -45,6 +45,7 @@ public sealed partial class FlyoutWindow : Window
     private bool _suppressNextSnapshotRefresh;
     private bool _isPageTransitionRunning;
     private bool _pendingSnapshotRefresh;
+    private bool _useActivationFallbackDismiss;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -82,6 +83,7 @@ public sealed partial class FlyoutWindow : Window
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
         FlyoutChrome.PointerPressed += OnFlyoutChromePointerPressed;
+        Activated += OnFlyoutWindowActivated;
         EnsureLightDismissInitialized();
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
         runtimeController.SnapshotChanged += (_, _) =>
@@ -416,7 +418,28 @@ public sealed partial class FlyoutWindow : Window
         // some environments crash inside Microsoft.UI.Input when creating
         // InputLightDismissAction. Keep flyout functional without OS light-dismiss.
         _lightDismissInitialized = true;
+        _useActivationFallbackDismiss = true;
         DiagnosticLogger.Warn("InputLightDismissAction disabled for startup stability");
+    }
+
+    private void OnFlyoutWindowActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (!_useActivationFallbackDismiss)
+        {
+            return;
+        }
+
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
+        {
+            return;
+        }
+
+        if (!AppWindow.IsVisible || isExitAnimationRunning)
+        {
+            return;
+        }
+
+        _ = CloseFlyoutWithAnimationAsync();
     }
 
     private void ConfigureFlyoutWindow()
