@@ -159,6 +159,48 @@ public sealed class CloudNotificationNormalizerTests
     }
 
     [Fact]
+    public void Normalize_ClassifiesFlatLogOnlyTypeWhenPayloadTypeMissing()
+    {
+        var raw = Deserialize("""
+        {
+          "_id": "flat-log-only-1",
+          "message": "Saved only",
+          "created": "2026-05-12T10:00:00Z",
+          "type": "logOnly",
+          "payload": {
+            "message": "Saved only"
+          }
+        }
+        """);
+
+        var normalized = CloudNotificationNormalizer.Normalize(raw);
+
+        Assert.Equal(CloudNotificationKind.LogOnly, normalized.Kind);
+    }
+
+    [Fact]
+    public void Normalize_ClassifiesFlatHideNotificationTypeWhenPayloadTypeMissing()
+    {
+        var raw = Deserialize("""
+        {
+          "_id": "flat-hide-1",
+          "message": "",
+          "created": "2026-05-12T10:00:00Z",
+          "type": "hideNotification",
+          "referenceId": "motion-id-1234",
+          "tag": "Motion Tag",
+          "payload": {}
+        }
+        """);
+
+        var normalized = CloudNotificationNormalizer.Normalize(raw);
+
+        Assert.Equal(CloudNotificationKind.Hide, normalized.Kind);
+        Assert.Contains(normalized.HideTargets, t => t.Kind == NotificationHideTargetKind.ReferenceId && t.Value == "motion-id-1234");
+        Assert.Contains(normalized.HideTargets, t => t.Kind == NotificationHideTargetKind.Tag && t.Value == "Motion Tag");
+    }
+
+    [Fact]
     public void Normalize_ParsesPayloadActionsArray()
     {
         var raw = Deserialize("""

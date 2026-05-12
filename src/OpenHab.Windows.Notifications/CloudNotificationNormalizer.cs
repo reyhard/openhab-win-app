@@ -35,7 +35,7 @@ public static class CloudNotificationNormalizer
             GetPayloadString(payload, "media-attachment-url"),
             GetPayloadString(payload, "mediaAttachmentUrl"),
             notification.MediaAttachmentUrl);
-        var kind = ResolveKind(payload);
+        var kind = ResolveKind(payload, notification.Type);
         var hideTargets = BuildHideTargets(kind, referenceId, tag);
         var buttons = kind == CloudNotificationKind.Hide
             ? []
@@ -56,9 +56,9 @@ public static class CloudNotificationNormalizer
             hideTargets);
     }
 
-    private static CloudNotificationKind ResolveKind(JsonElement? payload)
+    private static CloudNotificationKind ResolveKind(JsonElement? payload, string? fallbackType)
     {
-        var type = GetPayloadString(payload, "type");
+        var type = FirstNonEmpty(GetPayloadString(payload, "type"), fallbackType);
         if (string.Equals(type, "hideNotification", StringComparison.OrdinalIgnoreCase))
         {
             return CloudNotificationKind.Hide;
