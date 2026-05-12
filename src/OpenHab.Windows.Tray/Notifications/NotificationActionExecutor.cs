@@ -38,7 +38,8 @@ public sealed class NotificationActionExecutor
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        switch (action.Type)
+        var actionType = action.Type.Trim().ToLowerInvariant();
+        switch (actionType)
         {
             case "command":
                 await ExecuteCommandAsync(action.Payload, cancellationToken);
@@ -71,8 +72,13 @@ public sealed class NotificationActionExecutor
             return;
         }
 
-        var itemName = payload[..colonIndex];
-        var commandValue = payload[(colonIndex + 1)..];
+        var itemName = payload[..colonIndex].Trim();
+        var commandValue = payload[(colonIndex + 1)..].Trim();
+        if (itemName.Length == 0 || commandValue.Length == 0)
+        {
+            DiagnosticLogger.Warn("Invalid command notification action payload.");
+            return;
+        }
         var transport = SelectTransport(getSettings().EndpointMode);
         var client = CreateClientForTransport(transport);
         await client.SendCommandAsync(itemName, commandValue, cancellationToken);

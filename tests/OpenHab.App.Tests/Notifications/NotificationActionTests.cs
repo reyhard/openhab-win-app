@@ -65,6 +65,16 @@ public sealed class NotificationActionTests
     }
 
     [Fact]
+    public void Parse_PreservesMixedCaseTypeForExecutorCaseInsensitiveDispatch()
+    {
+        var result = NotificationActionParser.TryParse("Command:KitchenLight:ON");
+
+        Assert.NotNull(result);
+        Assert.Equal("Command", result.Type);
+        Assert.Equal("KitchenLight:ON", result.Payload);
+    }
+
+    [Fact]
     public void Parse_RuleAction_ReturnsCorrectTypeAndPayload()
     {
         var result = NotificationActionParser.TryParse("rule:02ffc3a297:prop1=foo");

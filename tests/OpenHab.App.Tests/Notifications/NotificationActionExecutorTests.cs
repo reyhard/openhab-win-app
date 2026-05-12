@@ -91,6 +91,50 @@ public sealed class NotificationActionExecutorTests
         Assert.Empty(opened);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_CommandPayload_TrimmedAroundItemAndCommand()
+    {
+        var handler = new CaptureHandler(req =>
+        {
+            Assert.Equal("http://openhab.local:8080/rest/items/KitchenLight", req.RequestUri!.ToString());
+            Assert.Equal("ON", req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var opened = new List<Uri>();
+        var executor = CreateExecutor(
+            handler,
+            getSettings: () => AppSettings.Default with
+            {
+                EndpointMode = EndpointMode.LocalOnly,
+                LocalEndpoint = new Uri("http://openhab.local:8080/")
+            },
+            opened: opened);
+
+        await executor.ExecuteAsync(new NotificationAction("command", "KitchenLight : ON"), CancellationToken.None);
+
+        Assert.Empty(opened);
+    }
+
+    [Theory]
+    [InlineData(" :ON")]
+    [InlineData("KitchenLight: ")]
+    public async Task ExecuteAsync_CommandPayload_BlankItemOrCommand_NoOp(string payload)
+    {
+        var called = false;
+        var handler = new CaptureHandler(_ =>
+        {
+            called = true;
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var opened = new List<Uri>();
+        var executor = CreateExecutor(handler, opened: opened);
+
+        await executor.ExecuteAsync(new NotificationAction("command", payload), CancellationToken.None);
+
+        Assert.False(called);
+        Assert.Empty(opened);
+    }
+
     [Theory]
     [InlineData("http", "http://example.com")]
     [InlineData("https", "https://openhab.org")]
@@ -122,6 +166,49 @@ public sealed class NotificationActionExecutorTests
 
         Assert.Single(opened);
         Assert.Equal("https://example.test/openhab/basicui/app?w=0000&sitemap=main", opened[0].ToString());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MixedCaseUiAction_ResolvesAgainstSelectedEndpoint()
+    {
+        var opened = new List<Uri>();
+        var executor = CreateExecutor(
+            new CaptureHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)),
+            getSettings: () => AppSettings.Default with
+            {
+                EndpointMode = EndpointMode.LocalOnly,
+                LocalEndpoint = new Uri("https://example.test/openhab/")
+            },
+            opened: opened);
+
+        await executor.ExecuteAsync(new NotificationAction("UI", "/path"), CancellationToken.None);
+
+        Assert.Single(opened);
+        Assert.Equal("https://example.test/openhab/path", opened[0].ToString());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MixedCaseCommandAction_Executes()
+    {
+        var called = false;
+        var handler = new CaptureHandler(req =>
+        {
+            called = true;
+            Assert.Equal("http://openhab.local:8080/rest/items/KitchenLight", req.RequestUri!.ToString());
+            Assert.Equal("ON", req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var executor = CreateExecutor(
+            handler,
+            getSettings: () => AppSettings.Default with
+            {
+                EndpointMode = EndpointMode.LocalOnly,
+                LocalEndpoint = new Uri("http://openhab.local:8080/")
+            });
+
+        await executor.ExecuteAsync(new NotificationAction("Command", "KitchenLight:ON"), CancellationToken.None);
+
+        Assert.True(called);
     }
 
     [Fact]
