@@ -305,6 +305,64 @@ public sealed class OpenHabSitemapJsonParserTests
     }
 
     [Fact]
+    public void ParseWidgetParsesColorInputHint()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Input",
+                    "label": "Color []",
+                    "inputHint": "color",
+                    "item": {
+                      "name": "Light_01_Color",
+                      "state": "#ff0000"
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+        var widget = Assert.Single(parsed.Widgets);
+
+        Assert.Equal(SitemapWidgetType.Input, widget.Type);
+        Assert.Equal(SitemapInputHint.Color, widget.InputHint);
+    }
+
+    [Fact]
+    public void ParseWidgetParsesColorTemperatureInputHint()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Input",
+                    "label": "Color Temp []",
+                    "inputHint": "colortemperature",
+                    "item": {
+                      "name": "Light_01_ColorTemp",
+                      "state": "55"
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+        var widget = Assert.Single(parsed.Widgets);
+
+        Assert.Equal(SitemapWidgetType.Input, widget.Type);
+        Assert.Equal(SitemapInputHint.ColorTemperature, widget.InputHint);
+    }
+
+    [Fact]
     public void ParseWidgetParsesHeight()
     {
         const string json = """

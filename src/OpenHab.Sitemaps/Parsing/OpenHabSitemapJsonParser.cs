@@ -370,6 +370,8 @@ public static class OpenHabSitemapJsonParser
         {
             "text" => SitemapInputHint.Text,
             "number" => SitemapInputHint.Number,
+            "color" => SitemapInputHint.Color,
+            "colortemperature" => SitemapInputHint.ColorTemperature,
             "date" => SitemapInputHint.Date,
             "time" => SitemapInputHint.Time,
             "datetime" => SitemapInputHint.DateTime,

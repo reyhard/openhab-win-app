@@ -21,6 +21,12 @@ internal static class SitemapRowMapper
                 IsActive: SelectionValueMatches(m.Command, commandSource)))
             .ToArray();
         var isSectionHeader = widget.Type == SitemapWidgetType.Frame;
+        var inputHint = widget.Type switch
+        {
+            SitemapWidgetType.Colorpicker => SitemapInputHint.Color,
+            SitemapWidgetType.Colortemperaturepicker => SitemapInputHint.ColorTemperature,
+            _ => widget.InputHint
+        };
         return new SitemapRowDescriptor(
             widget.Label,
             state,
@@ -48,7 +54,7 @@ internal static class SitemapRowMapper
             Url: widget.Url,
             Period: widget.Period,
             ItemName: widget.ItemName,
-            InputHint: widget.InputHint,
+            InputHint: inputHint,
             WidgetId: widget.WidgetId,
             HeightRows: widget.HeightRows);
     }
@@ -72,8 +78,9 @@ internal static class SitemapRowMapper
         {
             SitemapWidgetType.Switch when widget.Mappings.Count > 0 => RenderControlKind.ButtonGrid,
             SitemapWidgetType.Switch => RenderControlKind.Toggle,
-            SitemapWidgetType.Slider or SitemapWidgetType.Setpoint => RenderControlKind.Slider,
+            SitemapWidgetType.Slider or SitemapWidgetType.Setpoint or SitemapWidgetType.Colortemperaturepicker => RenderControlKind.Slider,
             SitemapWidgetType.Selection => RenderControlKind.Selection,
+            SitemapWidgetType.Colorpicker => RenderControlKind.Input,
             SitemapWidgetType.Button => RenderControlKind.Button,
             SitemapWidgetType.Buttongrid => RenderControlKind.ButtonGrid,
             SitemapWidgetType.Image => RenderControlKind.Image,

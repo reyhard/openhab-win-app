@@ -69,6 +69,63 @@ public sealed class SitemapSkinTests
         Assert.Equal(SitemapInputHint.Number, row.InputHint);
     }
 
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void ColorPickerMapsToInputControlWithSendCommand(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Light Color",
+                SitemapWidgetType.Colorpicker,
+                "Light_Color",
+                "120,80,60",
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [])
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Input, row.Control);
+        Assert.Equal(RenderActionKind.SendCommand, row.Action);
+        Assert.Equal(SitemapInputHint.Color, row.InputHint);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
+    public void ColorTemperaturePickerMapsToSliderWithSendCommand(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Light Temp",
+                SitemapWidgetType.Colortemperaturepicker,
+                "Light_Temperature",
+                "42",
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                MinValue: 0,
+                MaxValue: 100,
+                Step: 1)
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Slider, row.Control);
+        Assert.Equal(RenderActionKind.SendCommand, row.Action);
+        Assert.Equal(SitemapInputHint.ColorTemperature, row.InputHint);
+    }
+
     [Fact]
     public void BasicAndWindows11UseSameNonDensityMappings()
     {

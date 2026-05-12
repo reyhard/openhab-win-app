@@ -98,6 +98,8 @@ public enum SitemapInputHint
     Auto,
     Text,
     Number,
+    Color,
+    ColorTemperature,
     Date,
     Time,
     DateTime

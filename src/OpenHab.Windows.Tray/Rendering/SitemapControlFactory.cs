@@ -28,6 +28,7 @@ public static partial class SitemapControlFactory
     private const double ControlLaneWidth = 56;
     private const double NavigateChevronLaneWidth = 20;
     private const int SliderMoveDebounceMs = 200;
+    private const int ColorPickerMoveDebounceMs = 200;
     private const double WidgetVisibilityAnimationDurationMs = 320d;
     private const double WebviewDefaultHeight = 300d;
     private const double SitemapRowHeight = 40d;
@@ -175,6 +176,12 @@ public static partial class SitemapControlFactory
     {
         public bool SuppressValueChanged { get; set; }
         public bool IsDragging { get; set; }
+        public CancellationTokenSource? DebounceCts { get; set; }
+        public string? LastSentCommand { get; set; }
+    }
+
+    private sealed class ColorCommandState
+    {
         public CancellationTokenSource? DebounceCts { get; set; }
         public string? LastSentCommand { get; set; }
     }
@@ -336,8 +343,15 @@ public static partial class SitemapControlFactory
 
                     sliderState?.SuppressValueChanged = false;
 
-                    var currentStateText = FindStateTextBlockText(inner);
-                    UpdateStateTextBlock(inner, FormatSliderStateText(currentStateText, val));
+                    if (updated.InputHint == SitemapInputHint.ColorTemperature)
+                    {
+                        UpdateColorPreview(inner, ResolveColorTemperaturePreview(val, slider.Minimum, slider.Maximum));
+                    }
+                    else
+                    {
+                        var currentStateText = FindStateTextBlockText(inner);
+                        UpdateStateTextBlock(inner, FormatSliderStateText(currentStateText, val));
+                    }
                 }
                 else
                 {
@@ -352,6 +366,12 @@ public static partial class SitemapControlFactory
             case RenderControlKind.Chart:
             case RenderControlKind.Fallback:
                 UpdateStateTextBlock(inner, updated.State ?? string.Empty);
+                if (updated.Control == RenderControlKind.Input
+                    && updated.InputHint == SitemapInputHint.Color
+                    && TryResolveOpenHabColor(updated.RawItemState ?? updated.RawState ?? updated.State, out var inputColor))
+                {
+                    UpdateColorPreview(inner, inputColor);
+                }
                 break;
         }
 
@@ -679,6 +699,14 @@ public static partial class SitemapControlFactory
         if (FindTaggedElement<FontIcon>(root, "sitemap-icon") is { } icon)
         {
             ApplyBrush(icon, row.IconColor);
+        }
+    }
+
+    private static void UpdateColorPreview(FrameworkElement root, global::Windows.UI.Color color)
+    {
+        if (FindTaggedElement<Border>(root, "sitemap-color-preview") is { } preview)
+        {
+            preview.Background = new SolidColorBrush(color);
         }
     }
 
@@ -1311,6 +1339,22 @@ public static partial class SitemapControlFactory
         return textBlock;
     }
 
+    private static Border CreateStateColorPreview(global::Windows.UI.Color color)
+    {
+        return new Border
+        {
+            Tag = "sitemap-color-preview",
+            Width = 30,
+            Height = 16,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(3),
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(color)
+        };
+    }
+
     private static FrameworkElement CreateText(
         SitemapRowDescriptor row,
         Func<Task>? activateRow = null,
@@ -1465,11 +1509,24 @@ public static partial class SitemapControlFactory
             ? Math.Clamp(parsed, min, max)
             : min;
 
-        var stateBlock = CreateStateTextBlock(row.State ?? string.Empty, row.ValueColor);
-        stateBlock.Margin = new Thickness(0, 0, 8, 0);
-        stateBlock.Opacity = 0.85;
-        Grid.SetColumn(stateBlock, layout.ValueColumn);
-        grid.Children.Add(stateBlock);
+        var isColorTemperature = row.InputHint == SitemapInputHint.ColorTemperature;
+        TextBlock? stateBlock = null;
+        if (isColorTemperature)
+        {
+            var previewColor = ResolveColorTemperaturePreview(value, min, max);
+            var preview = CreateStateColorPreview(previewColor);
+            preview.Margin = new Thickness(0, 0, 8, 0);
+            Grid.SetColumn(preview, layout.ValueColumn);
+            grid.Children.Add(preview);
+        }
+        else
+        {
+            stateBlock = CreateStateTextBlock(row.State ?? string.Empty, row.ValueColor);
+            stateBlock.Margin = new Thickness(0, 0, 8, 0);
+            stateBlock.Opacity = 0.85;
+            Grid.SetColumn(stateBlock, layout.ValueColumn);
+            grid.Children.Add(stateBlock);
+        }
 
         var slider = new Slider
         {
@@ -1515,7 +1572,14 @@ public static partial class SitemapControlFactory
                 }
 
                 var newValue = args.NewValue.ToString("F0", CultureInfo.InvariantCulture);
-                stateBlock.Text = FormatSliderStateText(stateBlock.Text, args.NewValue);
+                if (isColorTemperature)
+                {
+                    UpdateColorPreview(grid, ResolveColorTemperaturePreview(args.NewValue, min, max));
+                }
+                else if (stateBlock is not null)
+                {
+                    stateBlock.Text = FormatSliderStateText(stateBlock.Text, args.NewValue);
+                }
 
                 if (row.SliderUpdateOnMove)
                 {
@@ -1684,6 +1748,94 @@ public static partial class SitemapControlFactory
             {
                 await sendCommand(value.Trim());
             }
+        }
+
+        if (inferredHint == SitemapInputHint.Color)
+        {
+            grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(104);
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Vertical,
+                Spacing = 8,
+                MinWidth = 280,
+                MaxWidth = 340
+            };
+
+            var selectedColor = TryResolveOpenHabColor(rawValue, out var initialColor)
+                ? initialColor
+                : Microsoft.UI.Colors.White;
+            var currentCommand = BuildOpenHabColorCommand(selectedColor);
+            var button = CreateCompactColorTrigger(selectedColor, "\uE790", 96);
+
+            var preview = new Border
+            {
+                Height = 28,
+                CornerRadius = new CornerRadius(4),
+                Background = new SolidColorBrush(selectedColor),
+                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1)
+            };
+
+            var stateText = new TextBlock
+            {
+                Text = currentCommand,
+                Opacity = 0.7
+            };
+
+            var picker = new ColorPicker
+            {
+                IsAlphaEnabled = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Color = selectedColor
+            };
+
+            if (sendCommand is not null)
+            {
+                var colorState = new ColorCommandState();
+                picker.ColorChanged += async (_, args) =>
+                {
+                    var command = BuildOpenHabColorCommand(args.NewColor);
+                    stateText.Text = command;
+                    preview.Background = new SolidColorBrush(args.NewColor);
+                    UpdateColorPreview(button, args.NewColor);
+
+                    colorState.DebounceCts?.Cancel();
+                    colorState.DebounceCts?.Dispose();
+                    var cts = new CancellationTokenSource();
+                    colorState.DebounceCts = cts;
+                    try
+                    {
+                        await Task.Delay(ColorPickerMoveDebounceMs, cts.Token);
+                        if (!string.Equals(colorState.LastSentCommand, command, StringComparison.Ordinal))
+                        {
+                            await SubmitAsync(command);
+                            colorState.LastSentCommand = command;
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // New color change superseded this event.
+                    }
+                };
+            }
+            else
+            {
+                picker.ColorChanged += (_, args) =>
+                {
+                    var command = BuildOpenHabColorCommand(args.NewColor);
+                    stateText.Text = command;
+                    preview.Background = new SolidColorBrush(args.NewColor);
+                    UpdateColorPreview(button, args.NewColor);
+                };
+            }
+
+            panel.Children.Add(preview);
+            panel.Children.Add(stateText);
+            panel.Children.Add(picker);
+            button.Flyout = new Flyout { Content = panel };
+            Grid.SetColumn(button, layout.ControlColumn);
+            grid.Children.Add(button);
+            return WrapWithBorder(grid);
         }
 
         if (inferredHint == SitemapInputHint.Date)
@@ -1866,6 +2018,54 @@ public static partial class SitemapControlFactory
         };
     }
 
+    private static Button CreateCompactColorTrigger(global::Windows.UI.Color color, string glyph, double width)
+    {
+        var content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var swatch = new Border
+        {
+            Tag = "sitemap-color-preview",
+            Width = 40,
+            Height = 18,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(4),
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(color)
+        };
+        content.Children.Add(swatch);
+
+        var icon = new FontIcon
+        {
+            Glyph = glyph,
+            FontSize = 12,
+            Opacity = 0.65,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        content.Children.Add(icon);
+
+        return new Button
+        {
+            Content = content,
+            Width = width,
+            MinWidth = 0,
+            MinHeight = 30,
+            Padding = new Thickness(8, 2, 8, 2),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+    }
+
     private static SitemapInputHint ResolveInputHint(SitemapRowDescriptor row)
     {
         if (row.InputHint != SitemapInputHint.Auto)
@@ -1962,6 +2162,7 @@ public static partial class SitemapControlFactory
             SitemapInputHint.Date when TryParseDateOnly(value, out var date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             SitemapInputHint.Time when TryParseTimeOnly(value, out var time) => time.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
             SitemapInputHint.DateTime when TryParseDateTime(value, out var dateTime) => dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
+            SitemapInputHint.Color when TryResolveOpenHabColor(value, out var color) => BuildOpenHabColorCommand(color),
             SitemapInputHint.Number when HasIntegerLeadingZeros(value) => value,
             SitemapInputHint.Number when TryParseNumericState(value, out var number) => number.ToString(CultureInfo.InvariantCulture),
             _ => value
@@ -1998,8 +2199,151 @@ public static partial class SitemapControlFactory
             SitemapInputHint.Date when TryParseDateOnly(raw, out var date) => date.ToString("d", CultureInfo.CurrentCulture),
             SitemapInputHint.Time when TryParseTimeOnly(raw, out var time) => time.ToString(@"hh\:mm", CultureInfo.CurrentCulture),
             SitemapInputHint.DateTime when TryParseDateTime(raw, out var dateTime) => dateTime.ToString("g", CultureInfo.CurrentCulture),
+            SitemapInputHint.Color when TryResolveOpenHabColor(raw, out var color) => BuildOpenHabColorHex(color),
             _ => raw.Trim()
         };
+    }
+
+    internal static bool TryParseOpenHabColorState(string? raw, out double hue, out double saturation, out double brightness)
+    {
+        hue = 0;
+        saturation = 0;
+        brightness = 0;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var parts = raw.Trim().Split(',');
+        if (parts.Length < 3)
+        {
+            return false;
+        }
+
+        if (!TryParseDoubleInvariant(parts[0], out hue)
+            || !TryParseDoubleInvariant(parts[1], out saturation)
+            || !TryParseDoubleInvariant(parts[2], out brightness))
+        {
+            return false;
+        }
+
+        hue = Math.Clamp(hue, 0d, 360d);
+        saturation = Math.Clamp(saturation, 0d, 100d);
+        brightness = Math.Clamp(brightness, 0d, 100d);
+        return true;
+    }
+
+    internal static bool TryResolveOpenHabColor(string? raw, out global::Windows.UI.Color color)
+    {
+        color = default;
+        if (TryParseOpenHabColorState(raw, out var hue, out var saturation, out var brightness))
+        {
+            color = ColorFromHsv(hue, saturation, brightness);
+            return true;
+        }
+
+        return TryParseColor(raw, out color);
+    }
+
+    internal static string BuildOpenHabColorCommand(global::Windows.UI.Color color)
+    {
+        ColorToHsv(color, out var hue, out var saturation, out var brightness);
+        var roundedHue = (int)Math.Round(hue, MidpointRounding.AwayFromZero);
+        var roundedSaturation = (int)Math.Round(saturation, MidpointRounding.AwayFromZero);
+        var roundedBrightness = (int)Math.Round(brightness, MidpointRounding.AwayFromZero);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{roundedHue},{roundedSaturation},{roundedBrightness}");
+    }
+
+    internal static global::Windows.UI.Color ResolveColorTemperaturePreview(double value, double min, double max)
+    {
+        var range = max - min;
+        var ratio = range <= double.Epsilon ? 0d : (value - min) / range;
+        ratio = Math.Clamp(ratio, 0d, 1d);
+
+        var warm = Microsoft.UI.ColorHelper.FromArgb(255, 255, 180, 96);
+        var cool = Microsoft.UI.ColorHelper.FromArgb(255, 201, 226, 255);
+
+        var r = (byte)Math.Round(warm.R + ((cool.R - warm.R) * ratio), MidpointRounding.AwayFromZero);
+        var g = (byte)Math.Round(warm.G + ((cool.G - warm.G) * ratio), MidpointRounding.AwayFromZero);
+        var b = (byte)Math.Round(warm.B + ((cool.B - warm.B) * ratio), MidpointRounding.AwayFromZero);
+        return Microsoft.UI.ColorHelper.FromArgb(255, r, g, b);
+    }
+
+    private static string BuildOpenHabColorHex(global::Windows.UI.Color color)
+    {
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"#{color.R:X2}{color.G:X2}{color.B:X2}");
+    }
+
+    private static bool TryParseDoubleInvariant(string input, out double value)
+    {
+        var candidate = input.Trim();
+        return double.TryParse(candidate, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
+            || double.TryParse(candidate, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
+    }
+
+    private static global::Windows.UI.Color ColorFromHsv(double hue, double saturation, double brightness)
+    {
+        var normalizedHue = ((hue % 360d) + 360d) % 360d;
+        var s = Math.Clamp(saturation, 0d, 100d) / 100d;
+        var v = Math.Clamp(brightness, 0d, 100d) / 100d;
+        var chroma = v * s;
+        var x = chroma * (1d - Math.Abs((normalizedHue / 60d) % 2d - 1d));
+        var m = v - chroma;
+
+        var (r1, g1, b1) = normalizedHue switch
+        {
+            < 60d => (chroma, x, 0d),
+            < 120d => (x, chroma, 0d),
+            < 180d => (0d, chroma, x),
+            < 240d => (0d, x, chroma),
+            < 300d => (x, 0d, chroma),
+            _ => (chroma, 0d, x)
+        };
+
+        var r = (byte)Math.Round((r1 + m) * 255d, MidpointRounding.AwayFromZero);
+        var g = (byte)Math.Round((g1 + m) * 255d, MidpointRounding.AwayFromZero);
+        var b = (byte)Math.Round((b1 + m) * 255d, MidpointRounding.AwayFromZero);
+        return Microsoft.UI.ColorHelper.FromArgb(255, r, g, b);
+    }
+
+    internal static void ColorToHsv(global::Windows.UI.Color color, out double hue, out double saturation, out double brightness)
+    {
+        var r = color.R / 255d;
+        var g = color.G / 255d;
+        var b = color.B / 255d;
+
+        var max = Math.Max(r, Math.Max(g, b));
+        var min = Math.Min(r, Math.Min(g, b));
+        var delta = max - min;
+
+        if (delta <= double.Epsilon)
+        {
+            hue = 0d;
+        }
+        else if (Math.Abs(max - r) < double.Epsilon)
+        {
+            hue = 60d * (((g - b) / delta) % 6d);
+        }
+        else if (Math.Abs(max - g) < double.Epsilon)
+        {
+            hue = 60d * (((b - r) / delta) + 2d);
+        }
+        else
+        {
+            hue = 60d * (((r - g) / delta) + 4d);
+        }
+
+        if (hue < 0d)
+        {
+            hue += 360d;
+        }
+
+        saturation = max <= double.Epsilon ? 0d : (delta / max) * 100d;
+        brightness = max * 100d;
     }
 
     private static string NormalizeInputStateValue(string? raw)
