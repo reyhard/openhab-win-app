@@ -54,17 +54,27 @@ public sealed class NotificationMediaResolver
         }
 
         var trimmed = mediaAttachmentUrl.Trim();
-        var settings = getSettings();
-        var transport = settings.EndpointMode == EndpointMode.CloudOnly ? TransportKind.Cloud : TransportKind.Local;
-        var baseUri = transport == TransportKind.Cloud ? settings.CloudEndpoint : settings.LocalEndpoint;
 
-        var fetchUri = BuildFetchUri(baseUri, trimmed);
-        if (fetchUri is not null)
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absoluteUri)
+            && (absoluteUri.Scheme == Uri.UriSchemeHttp || absoluteUri.Scheme == Uri.UriSchemeHttps))
         {
+            return absoluteUri;
+        }
+
+        var settings = getSettings();
+        foreach (var transport in GetTransportOrder(settings.EndpointMode))
+        {
+            var baseUri = transport == TransportKind.Cloud ? settings.CloudEndpoint : settings.LocalEndpoint;
+            var fetchUri = BuildFetchUri(baseUri, trimmed);
+            if (fetchUri is null)
+            {
+                continue;
+            }
+
             var bytes = await TryFetchBytesAsync(fetchUri, transport, cancellationToken);
             if (bytes is null)
             {
-                return null;
+                continue;
             }
 
             var extension = ResolveFileExtension(bytes.Value.mediaType);
@@ -74,16 +84,28 @@ public sealed class NotificationMediaResolver
             return new Uri(cachePath);
         }
 
-        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absoluteUri)
-            && (absoluteUri.Scheme == Uri.UriSchemeHttp || absoluteUri.Scheme == Uri.UriSchemeHttps))
-        {
-            return absoluteUri;
-        }
-
         return null;
     }
 
-    private Uri? BuildFetchUri(Uri baseUri, string mediaAttachmentUrl)
+    private static IEnumerable<TransportKind> GetTransportOrder(EndpointMode endpointMode)
+    {
+        if (endpointMode == EndpointMode.CloudOnly)
+        {
+            yield return TransportKind.Cloud;
+            yield break;
+        }
+
+        if (endpointMode == EndpointMode.LocalOnly)
+        {
+            yield return TransportKind.Local;
+            yield break;
+        }
+
+        yield return TransportKind.Local;
+        yield return TransportKind.Cloud;
+    }
+
+    private static Uri? BuildFetchUri(Uri baseUri, string mediaAttachmentUrl)
     {
         if (mediaAttachmentUrl.StartsWith("item:", StringComparison.OrdinalIgnoreCase))
         {
@@ -93,15 +115,28 @@ public sealed class NotificationMediaResolver
                 return null;
             }
 
-            return new Uri(baseUri, $"rest/items/{Uri.EscapeDataString(itemName)}/state");
+            return BuildEndpointUri(baseUri, $"rest/items/{Uri.EscapeDataString(itemName)}/state");
         }
 
         if (mediaAttachmentUrl.StartsWith('/'))
         {
-            return new Uri(baseUri, mediaAttachmentUrl.TrimStart('/'));
+            return BuildEndpointUri(baseUri, mediaAttachmentUrl.TrimStart('/'));
         }
 
         return null;
+    }
+
+    private static Uri BuildEndpointUri(Uri endpointBaseUri, string relativePath)
+    {
+        var baseBuilder = new UriBuilder(endpointBaseUri);
+        var basePath = baseBuilder.Path ?? string.Empty;
+        if (!basePath.EndsWith("/", StringComparison.Ordinal))
+        {
+            basePath += "/";
+        }
+
+        baseBuilder.Path = basePath;
+        return new Uri(baseBuilder.Uri, relativePath.TrimStart('/'));
     }
 
     private async Task<(byte[] data, string? mediaType)?> TryFetchBytesAsync(

@@ -143,11 +143,81 @@ public sealed class NotificationMediaResolverTests : IDisposable
         Assert.Equal(".bin", Path.GetExtension(result!.LocalPath));
     }
 
+    [Fact]
+    public async Task ResolveAsync_AutomaticMode_FallsBackToCloudWhenLocalFails()
+    {
+        var calls = new List<(string Uri, string? Scheme)>();
+        var handler = new CaptureHandler(req =>
+        {
+            calls.Add((req.RequestUri!.ToString(), req.Headers.Authorization?.Scheme));
+            if (req.RequestUri!.Host.Equals("openhab.local", StringComparison.OrdinalIgnoreCase))
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            Assert.Equal("myopenhab.org", req.RequestUri.Host);
+            Assert.Equal("Basic", req.Headers.Authorization?.Scheme);
+            return ImageResponse("image/jpeg", [3, 2, 1]);
+        });
+
+        var resolver = CreateResolver(
+            handler,
+            EndpointMode.Automatic,
+            localToken: "local-token",
+            cloudCredentials: new CloudCredentials("user@example.com", "secret"));
+
+        var result = await resolver.ResolveAsync("/static/camera.jpg", CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.True(result!.IsFile);
+        Assert.Equal(new[] { "openhab.local", "myopenhab.org" }, calls.Select(c => new Uri(c.Uri).Host).ToArray());
+        Assert.Equal("Bearer", calls[0].Scheme);
+        Assert.Equal("Basic", calls[1].Scheme);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_RelativePath_PreservesEndpointBasePathPrefix()
+    {
+        var handler = new CaptureHandler(req =>
+        {
+            Assert.Equal("https://example.test/openhab/static/camera.jpg", req.RequestUri!.ToString());
+            return ImageResponse("image/jpeg", [1, 2, 3]);
+        });
+        var resolver = CreateResolver(
+            handler,
+            EndpointMode.LocalOnly,
+            localEndpoint: new Uri("https://example.test/openhab"));
+
+        var result = await resolver.ResolveAsync("/static/camera.jpg", CancellationToken.None);
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ItemReference_PreservesEndpointBasePathPrefix()
+    {
+        var handler = new CaptureHandler(req =>
+        {
+            Assert.Equal("https://example.test/openhab/rest/items/Camera_Image/state", req.RequestUri!.ToString());
+            return ImageResponse("image/png", [9, 8, 7]);
+        });
+        var resolver = CreateResolver(
+            handler,
+            EndpointMode.LocalOnly,
+            localEndpoint: new Uri("https://example.test/openhab"));
+
+        var result = await resolver.ResolveAsync("item:Camera_Image", CancellationToken.None);
+
+        Assert.NotNull(result);
+    }
+
     private NotificationMediaResolver CreateResolver(
         HttpMessageHandler handler,
         EndpointMode endpointMode,
         string? localToken = null,
         CloudCredentials? cloudCredentials = null,
+        Uri? localEndpoint = null,
+        Uri? cloudEndpoint = null,
         int maxBytes = 2 * 1024 * 1024)
     {
         var client = new HttpClient(handler);
@@ -156,8 +226,8 @@ public sealed class NotificationMediaResolverTests : IDisposable
             getSettings: () => AppSettings.Default with
             {
                 EndpointMode = endpointMode,
-                LocalEndpoint = new Uri("http://openhab.local:8080/"),
-                CloudEndpoint = new Uri("https://myopenhab.org/")
+                LocalEndpoint = localEndpoint ?? new Uri("http://openhab.local:8080/"),
+                CloudEndpoint = cloudEndpoint ?? new Uri("https://myopenhab.org/")
             },
             getApiToken: kind => kind == TransportKind.Local ? localToken : null,
             getCloudCredentials: kind => kind == TransportKind.Cloud ? cloudCredentials : null,
