@@ -526,10 +526,10 @@ public partial class App : Application
                 }
             }
 
+            var discoveryCancellationToken = promotedMainUiDiscoveryCts?.Token ?? CancellationToken.None;
             _ = uiDispatcherQueue?.TryEnqueue(() =>
             {
-                var cancellationToken = promotedMainUiDiscoveryCts?.Token ?? CancellationToken.None;
-                _ = RefreshPromotedMainUiPagesOnStartupAsync(cancellationToken);
+                _ = RefreshPromotedMainUiPagesOnStartupAsync(discoveryCancellationToken);
             });
         }
         catch
@@ -551,7 +551,8 @@ public partial class App : Application
                 await mainWindow.RefreshPromotedMainUiPagesAsync(cancellationToken);
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex)
+            when (cancellationToken.IsCancellationRequested && ex.CancellationToken == cancellationToken)
         {
             // Expected when the app exits while startup discovery is still in flight.
         }
