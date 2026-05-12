@@ -11,6 +11,7 @@ using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core;
 using OpenHab.Core.Api;
+using OpenHab.Core.Diagnostics;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Rendering.SitemapSurface;
 using System.Numerics;
@@ -262,8 +263,12 @@ public sealed partial class FlyoutWindow : Window
 
     internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
     {
+        using var scope = OpenHabProfiling.StartScope("FlyoutWindow.RefreshRuntimeBindings");
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
+        scope?.SetTag("snapshot.is_search_active", snapshot.IsSearchActive);
+        scope?.SetTag("snapshot.changed_row_count", snapshot.ChangedRowIndices?.Count ?? 0);
+        scope?.SetTag("panel.child_count", rowsPanel.Children.Count);
         RefreshChromeBindings(snapshot);
         if (ShouldSkipStaleSearchRender(snapshot))
         {

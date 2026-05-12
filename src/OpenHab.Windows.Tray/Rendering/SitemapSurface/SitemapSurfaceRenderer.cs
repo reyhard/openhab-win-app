@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.Core.Diagnostics;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 
@@ -31,7 +32,11 @@ public sealed class SitemapSurfaceRenderer(
 
     public void Refresh(StackPanel rowsPanel, SitemapRuntimeSnapshot snapshot)
     {
+        using var scope = OpenHabProfiling.StartScope("SitemapSurfaceRenderer.Refresh");
         var rows = snapshot.Descriptor?.Rows;
+        scope?.SetTag("panel.child_count", rowsPanel.Children.Count);
+        scope?.SetTag("rows.total_count", rows?.Count ?? 0);
+        scope?.SetTag("rows.changed_count", snapshot.ChangedRowIndices?.Count ?? 0);
         if (rows is null)
         {
             rowsPanel.Children.Clear();
@@ -136,6 +141,9 @@ public sealed class SitemapSurfaceRenderer(
         SitemapRuntimeSnapshot snapshot,
         RenderContext context)
     {
+        using var scope = OpenHabProfiling.StartScope("SitemapSurfaceRenderer.ReconcileStructuralRows");
+        scope?.SetTag("panel.child_count_before", rowsPanel.Children.Count);
+        scope?.SetTag("visual_rows.count", visualRows.Count);
         var existingByKey = new Dictionary<string, Queue<ExistingRenderedRow>>(StringComparer.Ordinal);
         for (var childIndex = 0; childIndex < rowsPanel.Children.Count; childIndex++)
         {

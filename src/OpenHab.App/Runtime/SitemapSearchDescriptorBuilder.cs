@@ -1,4 +1,5 @@
 using System.Globalization;
+using OpenHab.Core.Diagnostics;
 using OpenHab.App.Sitemaps;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Sitemaps.Models;
@@ -18,11 +19,14 @@ public static class SitemapSearchDescriptorBuilder
         string? query,
         SitemapRenderController renderController)
     {
+        using var scope = OpenHabProfiling.StartScope("SitemapSearchDescriptorBuilder.Build");
         ArgumentNullException.ThrowIfNull(currentPage);
         ArgumentNullException.ThrowIfNull(normalDescriptor);
         ArgumentNullException.ThrowIfNull(renderController);
 
         var trimmedQuery = (query ?? string.Empty).Trim();
+        scope?.SetTag("query.length", trimmedQuery.Length);
+        scope?.SetTag("current_page.widget_count", currentPage.Widgets.Count);
         if (trimmedQuery.Length == 0)
         {
             return new SitemapSearchBuildResult(

@@ -1,4 +1,5 @@
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Core.Diagnostics;
 using OpenHab.Windows.Tray.Rendering;
 
 namespace OpenHab.Windows.Tray.Rendering.SitemapSurface;
@@ -7,7 +8,9 @@ public static class SitemapRowPlanner
 {
     public static IReadOnlyList<SitemapVisualRow> BuildVisualRows(IReadOnlyList<SitemapRowDescriptor> rows)
     {
+        using var scope = OpenHabProfiling.StartScope("SitemapRowPlanner.BuildVisualRows");
         ArgumentNullException.ThrowIfNull(rows);
+        scope?.SetTag("rows.count", rows.Count);
 
         var visualRows = new List<SitemapVisualRow>();
         for (var index = 0; index < rows.Count; index++)

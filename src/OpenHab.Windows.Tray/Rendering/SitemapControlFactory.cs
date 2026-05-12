@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Media.Animation;
 using OpenHab.Core;
+using OpenHab.Core.Diagnostics;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Rendering.Icons;
@@ -279,7 +280,11 @@ public static partial class SitemapControlFactory
         int chartDpi = 192,
         Func<SitemapMapOption, bool, Task>? sendButtonGridCommand = null)
     {
+        using var scope = OpenHabProfiling.StartScope("SitemapControlFactory.Create");
         ArgumentNullException.ThrowIfNull(row);
+        scope?.SetTag("row.control", row.Control.ToString());
+        scope?.SetTag("row.action", row.Action.ToString());
+        scope?.SetTag("row.is_visible", row.IsVisible);
 
         return row.Control switch
         {
