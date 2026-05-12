@@ -85,6 +85,24 @@ public sealed class NotificationStoreTests
     }
 
     [Fact]
+    public void AddOrUpdate_DuplicateId_PreservesUnreadDismissedState()
+    {
+        var store = new NotificationStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("n1", "Original", created1);
+        store.Hide("n1");
+        store.MarkUnread("n1");
+
+        store.AddOrUpdate("n1", "Updated", created2);
+
+        var notification = store.GetAll().Single(n => n.Id == "n1");
+        Assert.True(notification.IsDismissed);
+        Assert.False(notification.IsRead);
+    }
+
+    [Fact]
     public void AddOrUpdate_DirectIdMatchWinsOverReferenceReplacement()
     {
         var store = new NotificationStore();

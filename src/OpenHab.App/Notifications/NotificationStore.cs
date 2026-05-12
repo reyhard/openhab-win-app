@@ -133,6 +133,7 @@ public sealed class NotificationStore
             var existing = notifications.TryGetValue(id, out var directMatch)
                 ? directMatch
                 : null;
+            var replacedByReference = false;
 
             if (existing is null
                 && !notifications.ContainsKey(id)
@@ -152,6 +153,7 @@ public sealed class NotificationStore
                 {
                     existingKey = referenceMatch.Key;
                     existing = referenceMatch.Value;
+                    replacedByReference = true;
                 }
             }
 
@@ -166,7 +168,9 @@ public sealed class NotificationStore
                     Severity = severity ?? existing.Severity,
                     Created = created,
                     ReferenceId = normalizedReferenceId ?? existing.ReferenceId,
-                    IsRead = existing.IsDismissed || existing.IsRead,
+                    IsRead = replacedByReference && existing.IsDismissed
+                        ? true
+                        : existing.IsRead,
                     OnClickAction = onClickAction ?? existing.OnClickAction,
                     MediaAttachmentUrl = mediaAttachmentUrl ?? existing.MediaAttachmentUrl,
                     ActionButton1 = actionButton1 ?? existing.ActionButton1,
