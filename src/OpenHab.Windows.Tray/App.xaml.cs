@@ -930,23 +930,35 @@ public partial class App : Application
 
     private async Task HandleNotificationActivationAsync(string? arguments)
     {
-        var action = ExtractToastAction(arguments);
-        if (!string.IsNullOrWhiteSpace(action))
+        if (TryExtractToastActionArgument(arguments, out var actionArgument))
         {
-            var parsed = NotificationActionParser.TryParse(action);
+            var parsed = NotificationActionParser.TryParse(actionArgument);
             if (parsed is null)
             {
-                DiagnosticLogger.Warn("Unparseable toast action.");
-                return;
+                DiagnosticLogger.Warn("Unparseable toast action argument.");
             }
-
-            var executor = notificationActionExecutor;
-            if (executor is not null)
+            else
             {
-                await executor.ExecuteAsync(parsed, CancellationToken.None);
+                var executor = notificationActionExecutor;
+                if (executor is not null)
+                {
+                    await executor.ExecuteAsync(parsed, CancellationToken.None);
+                    return;
+                }
             }
-
-            return;
+        }
+        else if (!string.IsNullOrWhiteSpace(arguments))
+        {
+            var parsed = NotificationActionParser.TryParse(arguments);
+            if (parsed is not null && IsInlineToastAction(parsed))
+            {
+                var executor = notificationActionExecutor;
+                if (executor is not null)
+                {
+                    await executor.ExecuteAsync(parsed, CancellationToken.None);
+                    return;
+                }
+            }
         }
 
         _ = uiDispatcherQueue?.TryEnqueue(() =>
@@ -957,11 +969,12 @@ public partial class App : Application
         });
     }
 
-    private static string? ExtractToastAction(string? arguments)
+    private static bool TryExtractToastActionArgument(string? arguments, out string actionArgument)
     {
+        actionArgument = string.Empty;
         if (string.IsNullOrWhiteSpace(arguments))
         {
-            return null;
+            return false;
         }
 
         const string prefix = "action=";
@@ -969,11 +982,20 @@ public partial class App : Application
         {
             if (part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             {
-                return Uri.UnescapeDataString(part[prefix.Length..]);
+                actionArgument = Uri.UnescapeDataString(part[prefix.Length..]);
+                return true;
             }
         }
 
-        return arguments;
+        return false;
+    }
+
+    private static bool IsInlineToastAction(NotificationAction action)
+    {
+        return action.Type.Equals("command", StringComparison.OrdinalIgnoreCase)
+            || action.Type.Equals("ui", StringComparison.OrdinalIgnoreCase)
+            || action.Type.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || action.Type.Equals("https", StringComparison.OrdinalIgnoreCase);
     }
 
     private static Task OpenExternalAsync(Uri uri)
