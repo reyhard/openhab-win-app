@@ -942,8 +942,10 @@ public partial class App : Application
                 var executor = notificationActionExecutor;
                 if (executor is not null)
                 {
-                    await executor.ExecuteAsync(parsed, CancellationToken.None);
-                    return;
+                    if (await TryExecuteNotificationActionAsync(executor, parsed))
+                    {
+                        return;
+                    }
                 }
             }
         }
@@ -955,8 +957,10 @@ public partial class App : Application
                 var executor = notificationActionExecutor;
                 if (executor is not null)
                 {
-                    await executor.ExecuteAsync(parsed, CancellationToken.None);
-                    return;
+                    if (await TryExecuteNotificationActionAsync(executor, parsed))
+                    {
+                        return;
+                    }
                 }
             }
         }
@@ -967,6 +971,23 @@ public partial class App : Application
             shellController.HandleNotificationActivated();
             _ = ApplyShellStateAsync();
         });
+    }
+
+    private static async Task<bool> TryExecuteNotificationActionAsync(
+        NotificationActionExecutor executor,
+        NotificationAction action)
+    {
+        try
+        {
+            await executor.ExecuteAsync(action, CancellationToken.None);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn(
+                $"Notification activation action failed: type='{action.Type}', error={ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
     }
 
     private static bool TryExtractToastActionArgument(string? arguments, out string actionArgument)
