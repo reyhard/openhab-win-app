@@ -126,6 +126,16 @@ public partial class App : Application
             {
                 shellController.HandleWindowCloseRequested(TrayShellSurface.MainWindow);
                 _ = ApplyShellStateAsync();
+            },
+            openHabClientFactory: (transportKind, endpoint) =>
+            {
+                var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
+                return new OpenHabHttpClient(
+                    httpClient,
+                    endpoint,
+                    apiToken: auth.ApiToken,
+                    basicUserName: auth.BasicUserName,
+                    basicPassword: auth.BasicPassword);
             });
         flyoutWindow = new FlyoutWindow(
             settingsController,
@@ -513,6 +523,14 @@ public partial class App : Application
                     settingsController.SetSitemapName(string.Empty);
                 }
             }
+
+            _ = uiDispatcherQueue?.TryEnqueue(() =>
+            {
+                if (mainWindow is not null)
+                {
+                    _ = mainWindow.RefreshPromotedMainUiPagesAsync();
+                }
+            });
         }
         catch
         {

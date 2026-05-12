@@ -1,6 +1,7 @@
 
 using System;
 using System.IO;
+using System.Net.Http;
 using System.Threading;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
@@ -12,6 +13,8 @@ using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Shell;
 using OpenHab.App.Settings;
+using OpenHab.App.MainUi;
+using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
@@ -26,6 +29,7 @@ public sealed partial class MainWindow : Window
     private readonly OpenHab.App.Shell.MainWindowShellController shellController;
     private readonly NotificationStore? notificationStore;
     private readonly Action requestHideToTray;
+    private readonly Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
@@ -54,7 +58,12 @@ public sealed partial class MainWindow : Window
 
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
-        : this(settingsController, runtimeController, notificationStore: null, () => { })
+        : this(
+            settingsController,
+            runtimeController,
+            notificationStore: null,
+            () => { },
+            (transportKind, endpoint) => new OpenHabHttpClient(new HttpClient(), endpoint))
     {
     }
 
@@ -62,7 +71,12 @@ public sealed partial class MainWindow : Window
         AppSettingsController settingsController,
         SitemapRuntimeController runtimeController,
         Action requestHideToTray)
-        : this(settingsController, runtimeController, notificationStore: null, requestHideToTray)
+        : this(
+            settingsController,
+            runtimeController,
+            notificationStore: null,
+            requestHideToTray,
+            (transportKind, endpoint) => new OpenHabHttpClient(new HttpClient(), endpoint))
     {
     }
 
@@ -70,12 +84,14 @@ public sealed partial class MainWindow : Window
         AppSettingsController settingsController,
         SitemapRuntimeController runtimeController,
         NotificationStore? notificationStore,
-        Action requestHideToTray)
+        Action requestHideToTray,
+        Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
         this.notificationStore = notificationStore;
         this.requestHideToTray = requestHideToTray;
+        this.openHabClientFactory = openHabClientFactory;
         sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
         sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
             settingsController,
@@ -330,9 +346,45 @@ public sealed partial class MainWindow : Window
         return normalized.StartsWith("/", StringComparison.Ordinal) ? normalized : "/" + normalized;
     }
 
-    private void RefreshPromotedMainUiPagesList()
+    public async Task RefreshPromotedMainUiPagesAsync(CancellationToken cancellationToken = default)
     {
-        promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
+        try
+        {
+            var settings = settingsController.Current;
+            var selectedTransport = runtimeController.Current.ActiveTransport switch
+            {
+                TransportKind.Cloud => TransportKind.Cloud,
+                TransportKind.Local => TransportKind.Local,
+                _ => settings.EndpointMode == EndpointMode.CloudOnly ? TransportKind.Cloud : TransportKind.Local
+            };
+            var endpoint = selectedTransport == TransportKind.Cloud
+                ? settings.CloudEndpoint
+                : settings.LocalEndpoint;
+            var client = openHabClientFactory(selectedTransport, endpoint);
+            var discoveryService = new MainUiPageDiscoveryService(client);
+            promotedMainUiPages = await discoveryService.DiscoverPromotedLinksAsync(cancellationToken);
+            settingsController.SetCachedMainUiPageLinks(promotedMainUiPages);
+            if (promotedMainUiPages.Count > 0 && !settingsController.Current.MainUiPagesExpanded)
+            {
+                settingsController.SetMainUiPagesExpanded(true);
+            }
+
+            RefreshPromotedMainUiPagesList();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Main UI page discovery failed: {ex.GetType().Name}: {ex.Message}");
+            promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
+            RefreshPromotedMainUiPagesList(discoveryError: true);
+        }
+    }
+
+    private void RefreshPromotedMainUiPagesList(bool discoveryError = false)
+    {
         var isExpanded = settingsController.Current.MainUiPagesExpanded;
         MainUiPagesChevron.Glyph = isExpanded ? "\uE70E" : "\uE70D";
         MainUiPagesList.Children.Clear();
@@ -342,17 +394,47 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        foreach (var page in promotedMainUiPages)
+        if (discoveryError)
         {
-            var route = page.Route;
+            MainUiPagesList.Children.Add(new TextBlock
+            {
+                Text = "Could not refresh pages. Showing cached links.",
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+        }
+
+        var linksToRender = promotedMainUiPages.Count > 0
+            ? promotedMainUiPages
+            : settingsController.Current.CachedMainUiPageLinks;
+        if (linksToRender.Count == 0)
+        {
+            MainUiPagesList.Children.Add(new TextBlock
+            {
+                Text = "No promoted pages"
+            });
+            return;
+        }
+
+        foreach (var page in linksToRender)
+        {
             var button = new Button
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
-                Content = new TextBlock { Text = page.Label }
+                Content = page.Label,
+                Tag = page.Route
             };
-            button.Click += (_, _) => shellController.SelectPromotedMainUiPage(route);
+            button.Click += PromotedMainUiPageButton_Click;
             MainUiPagesList.Children.Add(button);
+        }
+    }
+
+    private void PromotedMainUiPageButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string route } && !string.IsNullOrWhiteSpace(route))
+        {
+            shellController.SelectPromotedMainUiPage(route);
         }
     }
 
