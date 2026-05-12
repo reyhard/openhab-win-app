@@ -1,3 +1,5 @@
+using OpenHab.Core.Ui;
+
 namespace OpenHab.Core.Api;
 
 public sealed record SitemapInfo(string Name, string Label);
@@ -8,4 +10,5 @@ public interface IOpenHabClient
     Task SetItemStateAsync(string itemName, string state, CancellationToken cancellationToken);
     Task<string> GetSitemapJsonAsync(string sitemapName, CancellationToken cancellationToken);
     Task<IReadOnlyList<SitemapInfo>> GetSitemapsAsync(CancellationToken ct);
+    Task<IReadOnlyList<MainUiPageComponent>> GetMainUiPageComponentsAsync(CancellationToken ct);
 }
