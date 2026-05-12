@@ -42,6 +42,7 @@ public sealed partial class MainWindow : Window
     private bool isMainUiNavigationInProgress;
     private TransportKind? activeMainUiNavigationTransport;
     private bool pendingMainUiTransportResync;
+    private string? pendingExplicitMainUiRoute;
 
     private Notifications.NotificationsPageControl? notificationsPage;
     private Settings.SettingsPageControl? settingsPage;
@@ -229,13 +230,21 @@ public sealed partial class MainWindow : Window
     {
         var normalizedRoute = NormalizeMainUiRoute(route);
         currentMainUiRoute = normalizedRoute;
+        if (!string.IsNullOrWhiteSpace(pendingExplicitMainUiRoute)
+            && !string.Equals(pendingExplicitMainUiRoute, normalizedRoute, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         shellController.SyncCurrentMainUiRoute(normalizedRoute);
     }
 
     private async Task NavigateMainUiAsync(string route)
     {
+        var normalizedRoute = NormalizeMainUiRoute(route);
         if (isMainUiNavigationInProgress)
         {
+            pendingExplicitMainUiRoute = normalizedRoute;
             return;
         }
 
@@ -248,7 +257,8 @@ public sealed partial class MainWindow : Window
         var endpoint = selectedTransport == TransportKind.Cloud
             ? settings.CloudEndpoint
             : settings.LocalEndpoint;
-        var normalizedRoute = NormalizeMainUiRoute(route);
+        string? followUpRoute = null;
+        var runTransportResync = false;
         try
         {
             await MainUiHost.NavigateAsync(endpoint, normalizedRoute);
@@ -267,11 +277,34 @@ public sealed partial class MainWindow : Window
         {
             activeMainUiNavigationTransport = null;
             isMainUiNavigationInProgress = false;
+
+            var queuedRoute = pendingExplicitMainUiRoute;
+            if (!string.IsNullOrWhiteSpace(queuedRoute))
+            {
+                pendingExplicitMainUiRoute = null;
+                var currentHostRoute = NormalizeMainUiRoute(MainUiHost.CurrentRoute);
+                if (!string.Equals(currentHostRoute, queuedRoute, StringComparison.Ordinal))
+                {
+                    followUpRoute = queuedRoute;
+                }
+            }
+
             if (pendingMainUiTransportResync)
             {
                 pendingMainUiTransportResync = false;
-                EnsureMainUiEndpointMatchesActiveTransport(runtimeController.Current);
+                runTransportResync = true;
             }
+        }
+
+        if (!string.IsNullOrWhiteSpace(followUpRoute))
+        {
+            _ = NavigateMainUiAsync(followUpRoute);
+            return;
+        }
+
+        if (runTransportResync)
+        {
+            EnsureMainUiEndpointMatchesActiveTransport(runtimeController.Current);
         }
     }
 
