@@ -1,14 +1,17 @@
-using System.Net;
 using System.Security;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Windows.Data.Xml.Dom;
 
 namespace OpenHab.Windows.Notifications;
 
 public sealed record ToastTagGroup(string? Tag, string? Group);
 
-public static class ToastNotificationXmlBuilder
+public static partial class ToastNotificationXmlBuilder
 {
+    private const int HashPrefixLength = 16;
+
     public static XmlDocument Build(ToastNotificationRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -23,7 +26,7 @@ public static class ToastNotificationXmlBuilder
         if (!string.IsNullOrWhiteSpace(request.LaunchAction))
         {
             builder.Append(" launch=\"");
-            builder.Append(XmlEscape(BuildActionArguments(request.LaunchAction!)));
+            builder.Append(XmlEscape(request.LaunchAction!.Trim()));
             builder.Append("\"");
         }
 
@@ -69,7 +72,7 @@ public static class ToastNotificationXmlBuilder
                 builder.Append("<action content=\"");
                 builder.Append(XmlEscape(button.Title));
                 builder.Append("\" activationType=\"foreground\" arguments=\"");
-                builder.Append(XmlEscape(BuildActionArguments($"{button.Type}:{button.Payload}")));
+                builder.Append(XmlEscape($"{button.Type}:{button.Payload}"));
                 builder.Append("\" />");
             }
 
@@ -89,12 +92,12 @@ public static class ToastNotificationXmlBuilder
 
         if (!string.IsNullOrWhiteSpace(request.ReferenceId))
         {
-            return new ToastTagGroup(request.ReferenceId.Trim(), "openhab-ref");
+            return new ToastTagGroup(BuildStableId("ref", request.ReferenceId), "openhab-ref");
         }
 
         if (!string.IsNullOrWhiteSpace(request.Tag))
         {
-            return new ToastTagGroup(request.Tag.Trim(), "openhab-tag");
+            return new ToastTagGroup(BuildStableId("tag", request.Tag), "openhab-tag");
         }
 
         return new ToastTagGroup(null, null);
@@ -104,20 +107,22 @@ public static class ToastNotificationXmlBuilder
     {
         if (!string.IsNullOrWhiteSpace(request.ReferenceId))
         {
-            return $"ref-{request.ReferenceId.Trim()}";
+            return BuildStableId("hdr-ref", request.ReferenceId);
         }
 
         if (!string.IsNullOrWhiteSpace(request.Tag))
         {
-            return $"tag-{request.Tag.Trim()}";
+            return BuildStableId("hdr-tag", request.Tag);
         }
 
         return "openhab";
     }
 
-    private static string BuildActionArguments(string rawAction)
+    private static string BuildStableId(string prefix, string value)
     {
-        return $"action={WebUtility.UrlEncode(rawAction)}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value.Trim()));
+        var hex = Convert.ToHexString(bytes).ToLowerInvariant();
+        return $"{prefix}-{hex[..HashPrefixLength]}";
     }
 
     private static string XmlEscape(string value)
@@ -125,4 +130,3 @@ public static class ToastNotificationXmlBuilder
         return SecurityElement.Escape(value) ?? string.Empty;
     }
 }
-
