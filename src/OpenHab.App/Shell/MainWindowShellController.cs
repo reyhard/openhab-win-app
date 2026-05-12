@@ -58,6 +58,18 @@ public sealed class MainWindowShellController
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    public void SyncCurrentMainUiRoute(string route)
+    {
+        var normalizedRoute = NormalizeRoute(route);
+        if (string.Equals(Current.PendingMainUiRoute, normalizedRoute, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Current = Current with { PendingMainUiRoute = normalizedRoute };
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     private static string NormalizeRoute(string? route)
     {
         if (string.IsNullOrWhiteSpace(route))

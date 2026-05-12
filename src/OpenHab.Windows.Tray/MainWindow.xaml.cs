@@ -85,6 +85,7 @@ public sealed partial class MainWindow : Window
         snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        MainUiHost.CurrentRouteChanged += MainUiHost_CurrentRouteChanged;
         shellController = new OpenHab.App.Shell.MainWindowShellController(settingsController.Current.MainWindowSitemapPaneVisible);
         shellController.Changed += (_, _) => ApplyMainWindowShellState();
         promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
@@ -219,6 +220,13 @@ public sealed partial class MainWindow : Window
             CenterContentHost.Children.Clear();
             CenterContentHost.Children.Add(MainUiHost);
         }
+    }
+
+    private void MainUiHost_CurrentRouteChanged(object? sender, string route)
+    {
+        var normalizedRoute = NormalizeMainUiRoute(route);
+        currentMainUiRoute = normalizedRoute;
+        shellController.SyncCurrentMainUiRoute(normalizedRoute);
     }
 
     private async Task NavigateMainUiAsync(string route)

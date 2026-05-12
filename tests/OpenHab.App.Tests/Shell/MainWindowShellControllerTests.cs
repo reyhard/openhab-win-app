@@ -63,4 +63,32 @@ public sealed class MainWindowShellControllerTests
         Assert.Equal(1, changedCount);
         Assert.Equal("/page/energy", controller.Current.PendingMainUiRoute);
     }
+
+    [Fact]
+    public void SyncCurrentMainUiRouteUpdatesRouteWithoutChangingShellSections()
+    {
+        var controller = new MainWindowShellController(initialSitemapVisible: true);
+        controller.SelectCenterPage(MainWindowCenterPage.Settings);
+
+        controller.SyncCurrentMainUiRoute("page/lights");
+
+        Assert.Equal(MainWindowCenterPage.Settings, controller.Current.CenterPage);
+        Assert.True(controller.Current.IsSitemapVisible);
+        Assert.Equal("/page/lights", controller.Current.PendingMainUiRoute);
+    }
+
+    [Fact]
+    public void SyncCurrentMainUiRouteDoesNotRaiseChangedWhenRouteUnchanged()
+    {
+        var controller = new MainWindowShellController(initialSitemapVisible: true);
+        controller.SelectPromotedMainUiPage("/page/energy");
+
+        var changedCount = 0;
+        controller.Changed += (_, _) => changedCount++;
+
+        controller.SyncCurrentMainUiRoute("/page/energy");
+
+        Assert.Equal(0, changedCount);
+        Assert.Equal("/page/energy", controller.Current.PendingMainUiRoute);
+    }
 }

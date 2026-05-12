@@ -15,6 +15,8 @@ public sealed partial class MainUiWebViewHost : UserControl
     private string pendingRoute = "/";
     private bool initialized;
 
+    public event EventHandler<string>? CurrentRouteChanged;
+
     public MainUiWebViewHost()
     {
         InitializeComponent();
@@ -188,7 +190,14 @@ public sealed partial class MainUiWebViewHost : UserControl
         }
 
         var route = uri.PathAndQuery + uri.Fragment;
-        pendingRoute = NormalizeRouteForRetry(route);
+        var normalizedRoute = NormalizeRouteForRetry(route);
+        if (string.Equals(pendingRoute, normalizedRoute, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        pendingRoute = normalizedRoute;
+        CurrentRouteChanged?.Invoke(this, pendingRoute);
     }
 
     private static string NormalizeRouteForRetry(string? route)
