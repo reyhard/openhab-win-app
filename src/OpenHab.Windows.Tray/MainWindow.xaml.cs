@@ -84,6 +84,7 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += AppWindow_Closing;
         this.Content.KeyDown += MainContent_KeyDown;
         this.Content.PointerPressed += MainContent_PointerPressed;
+        ShowNotificationsPage();
         runtimeController.SnapshotChanged += (_, _) =>
         {
             if (_suppressNextSnapshotRefresh)
