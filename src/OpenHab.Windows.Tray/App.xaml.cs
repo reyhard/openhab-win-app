@@ -1016,17 +1016,19 @@ public partial class App : Application
             return;
         }
 
-        _ = uiDispatcherQueue?.TryEnqueue(() =>
-        {
-            if (shellController is null)
-            {
-                return;
-            }
+        var startupArguments = ExtractStartupToastArguments(activatedEventArgs);
+        DiagnosticLogger.Info("Processing startup toast activation");
+        _ = HandleNotificationActivationAsync(startupArguments);
+    }
 
-            DiagnosticLogger.Info("Processing startup toast activation");
-            shellController.HandleNotificationActivated();
-            _ = ApplyShellStateAsync();
-        });
+    private static string? ExtractStartupToastArguments(AppActivationArguments activatedEventArgs)
+    {
+        if (activatedEventArgs.Data is global::Windows.ApplicationModel.Activation.ToastNotificationActivatedEventArgs toastArgs)
+        {
+            return toastArgs.Argument;
+        }
+
+        return activatedEventArgs.Data as string;
     }
 
     // ── Crash diagnostics ──────────────────────────────────────────
