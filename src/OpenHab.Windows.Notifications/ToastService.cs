@@ -13,7 +13,6 @@ public static class ToastService
     private static bool isPackaged;
     private static bool isInitialized;
     private static int _toastSequence;
-    private static int _toastHeaderSequence;
 
     public static bool IsAvailable => isAvailable;
 
@@ -21,8 +20,6 @@ public static class ToastService
     {
         try
         {
-            // Package.Current throws if the app is not running in a package context.
-            // In unpackaged mode, this property access fails.
             _ = Package.Current;
             return true;
         }
@@ -42,9 +39,6 @@ public static class ToastService
 
         if (isPackaged)
         {
-            // In a packaged (MSIX) app, use the native ToastNotificationManager.
-            // The package manifest provides identity and COM activation via
-            // desktop:toastNotificationActivation extension — no compat layer needed.
             try
             {
                 _ = ToastNotificationManager.CreateToastNotifier();
@@ -61,7 +55,6 @@ public static class ToastService
             }
         }
 
-        // Unpackaged: use CommunityToolkit compat layer
         try
         {
             var notifier = ToastNotificationManagerCompat.CreateToastNotifier();
@@ -81,13 +74,13 @@ public static class ToastService
     public static void Show(string title, string body)
     {
         if (!isAvailable || !isInitialized) return;
-        ShowInternal(title, body, null, important: false, header: null, tag: null, appLogoOverrideUri: null);
+        Show(new ToastNotificationRequest(title, body));
     }
 
     public static void Show(string title, string body, IReadOnlyList<NotificationActionButton>? actions)
     {
         if (!isAvailable || !isInitialized) return;
-        ShowInternal(title, body, actions, important: false, header: null, tag: null, appLogoOverrideUri: null);
+        Show(new ToastNotificationRequest(title, body, actions));
     }
 
     public static void Show(
@@ -100,63 +93,47 @@ public static class ToastService
         Uri? appLogoOverrideUri)
     {
         if (!isAvailable || !isInitialized) return;
-        ShowInternal(title, body, actions, important, header, tag, appLogoOverrideUri);
+        Show(new ToastNotificationRequest(
+            title,
+            body,
+            actions,
+            LaunchAction: null,
+            Important: important,
+            Header: header,
+            Tag: tag,
+            ReferenceId: null,
+            AppLogoOverrideUri: appLogoOverrideUri,
+            HeroImageUri: null));
     }
 
-    private static void ShowInternal(
-        string title,
-        string body,
-        IReadOnlyList<NotificationActionButton>? actions,
-        bool important,
-        string? header,
-        string? tag,
-        Uri? appLogoOverrideUri)
+    public static void Show(ToastNotificationRequest request)
     {
+        if (!isAvailable || !isInitialized) return;
+        ArgumentNullException.ThrowIfNull(request);
+
         var seq = Interlocked.Increment(ref _toastSequence);
-        var actionCount = actions?.Count ?? 0;
+        var actionCount = request.Actions?.Count ?? 0;
         DiagnosticLogger.Info(
-            $"Toast.Show#{seq} begin title=\"{title}\" actions={actionCount} " +
-            $"packaged={isPackaged} important={important} tag={tag ?? "<none>"} threadId={Environment.CurrentManagedThreadId}");
+            $"Toast.Show#{seq} begin title=\"{request.Title}\" actions={actionCount} " +
+            $"packaged={isPackaged} important={request.Important} tag={request.Tag ?? "<none>"} threadId={Environment.CurrentManagedThreadId}");
 
         try
         {
-            var builder = new ToastContentBuilder()
-                .AddText(title)
-                .AddText(body);
-
-            if (!string.IsNullOrWhiteSpace(header))
-            {
-                var headerId = Interlocked.Increment(ref _toastHeaderSequence).ToString();
-                builder.AddHeader(headerId, header.Trim(), "openhab:open");
-            }
-
-            if (appLogoOverrideUri is not null)
-            {
-                builder.AddAppLogoOverride(appLogoOverrideUri);
-            }
-
-            if (actions is not null)
-            {
-                foreach (var action in actions)
-                {
-                    builder.AddButton(action.Title, ToastActivationType.Foreground,
-                        $"{action.Type}:{action.Payload}");
-                }
-            }
-
-            var xml = builder.GetXml();
-            if (important)
-            {
-                xml.DocumentElement.SetAttribute("scenario", "urgent");
-            }
-
+            var xml = ToastNotificationXmlBuilder.Build(request);
             var toast = new ToastNotification(xml);
-            if (!string.IsNullOrWhiteSpace(tag))
+            var tagGroup = ToastNotificationXmlBuilder.BuildTagAndGroup(request);
+
+            if (!string.IsNullOrWhiteSpace(tagGroup.Tag))
             {
-                toast.Tag = tag.Trim();
+                toast.Tag = tagGroup.Tag;
             }
 
-            if (important)
+            if (!string.IsNullOrWhiteSpace(tagGroup.Group))
+            {
+                toast.Group = tagGroup.Group;
+            }
+
+            if (request.Important)
             {
                 toast.Priority = ToastNotificationPriority.High;
             }
@@ -177,7 +154,6 @@ public static class ToastService
             DiagnosticLogger.Error(
                 $"Toast.Show#{seq} FAILED — {ex.GetType().FullName}: {ex.Message}{Environment.NewLine}{ex.StackTrace}",
                 ex);
-            // Mark as unavailable on persistent failures so we don't keep crashing
             if (ex is InvalidOperationException || ex is COMException)
             {
                 isAvailable = false;
@@ -188,16 +164,8 @@ public static class ToastService
 
     public static event EventHandler<ToastNotificationActivatedEventArgsCompat>? NotificationActivated;
 
-    /// <summary>
-    /// Raised when a toast notification is activated in packaged (MSIX) mode.
-    /// The string argument is the activation payload from the COM server.
-    /// </summary>
     public static event Action<string>? PackagedActivated;
 
-    /// <summary>
-    /// Called by the COM notification activator (registered via Package.appxmanifest)
-    /// when the user interacts with a toast notification in packaged mode.
-    /// </summary>
     public static void HandlePackagedActivation(string arguments)
     {
         DiagnosticLogger.Info(
@@ -205,9 +173,6 @@ public static class ToastService
         PackagedActivated?.Invoke(arguments);
     }
 
-    /// <summary>
-    /// Called by CommunityToolkit for unpackaged toast activation.
-    /// </summary>
     private static void HandleToastActivated(ToastNotificationActivatedEventArgsCompat args)
     {
         DiagnosticLogger.Info(
