@@ -166,6 +166,7 @@ public sealed class NotificationStore
                     Severity = severity ?? existing.Severity,
                     Created = created,
                     ReferenceId = normalizedReferenceId ?? existing.ReferenceId,
+                    IsRead = existing.IsDismissed || existing.IsRead,
                     OnClickAction = onClickAction ?? existing.OnClickAction,
                     MediaAttachmentUrl = mediaAttachmentUrl ?? existing.MediaAttachmentUrl,
                     ActionButton1 = actionButton1 ?? existing.ActionButton1,

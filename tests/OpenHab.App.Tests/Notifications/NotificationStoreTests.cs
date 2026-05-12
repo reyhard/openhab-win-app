@@ -262,6 +262,30 @@ public sealed class NotificationStoreTests
     }
 
     [Fact]
+    public void AddOrUpdate_ReplacesHiddenUnreadNotificationAndForcesRead()
+    {
+        var store = new NotificationStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("cloud-1", "Original", created1, referenceId: "Ref-123");
+        store.Hide("cloud-1");
+        store.MarkUnread("cloud-1");
+
+        store.AddOrUpdate("cloud-2", "Replacement", created2, referenceId: "ref-123");
+
+        var all = store.GetAll();
+        Assert.Single(all);
+
+        var notification = all[0];
+        Assert.Equal("cloud-2", notification.Id);
+        Assert.Equal("Replacement", notification.Message);
+        Assert.Equal("ref-123", notification.ReferenceId);
+        Assert.True(notification.IsDismissed);
+        Assert.True(notification.IsRead);
+    }
+
+    [Fact]
     public void AddOrUpdate_WhitespaceReferenceIdPreservesExistingReference()
     {
         var store = new NotificationStore();
