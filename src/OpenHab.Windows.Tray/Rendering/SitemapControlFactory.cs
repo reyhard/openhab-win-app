@@ -231,6 +231,11 @@ public static partial class SitemapControlFactory
     {
         ArgumentNullException.ThrowIfNull(row);
 
+        if (!string.IsNullOrWhiteSpace(row.SearchResultKey))
+        {
+            return row.SearchResultKey;
+        }
+
         if (!string.IsNullOrWhiteSpace(row.WidgetId))
         {
             return $"widget:{row.WidgetId}";

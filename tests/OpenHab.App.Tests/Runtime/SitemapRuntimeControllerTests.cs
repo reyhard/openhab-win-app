@@ -4,7 +4,9 @@ using OpenHab.App.Sitemaps;
 using OpenHab.Core.Api;
 using OpenHab.Core.Events;
 using OpenHab.Core.Profiles;
+using OpenHab.Rendering.Descriptors;
 using System.IO;
+using System.Reflection;
 
 namespace OpenHab.App.Tests.Runtime;
 
@@ -195,6 +197,321 @@ public sealed class SitemapRuntimeControllerTests
         Assert.False(controller.CanGoBack);
     }
 
+    [Fact]
+    public async Task ApplySearchQueryBuildsVirtualDescriptorWithoutChangingBreadcrumbs()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var breadcrumbsBefore = controller.Current.Breadcrumbs.ToArray();
+        var descriptorBefore = controller.Current.Descriptor;
+        var snapshotChangedCount = 0;
+        controller.SnapshotChanged += (_, _) => snapshotChangedCount++;
+
+        controller.ApplySearchQuery("Temperature");
+
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.NotEqual(descriptorBefore, controller.Current.Descriptor);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+        Assert.Equal(breadcrumbsBefore, controller.Current.Breadcrumbs);
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Temperature", controller.Current.SearchQuery);
+        Assert.True(controller.Current.SearchResultCount > 0);
+        Assert.True(snapshotChangedCount > 0);
+    }
+
+    [Fact]
+    public async Task ApplySearchQueryPreservesTrailingSpaceForSearchInput()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Temperature ");
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Temperature ", controller.Current.SearchQuery);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+
+        await controller.RefreshAsync();
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Temperature ", controller.Current.SearchQuery);
+    }
+
+    [Fact]
+    public async Task ApplySearchQueryAsyncKeepsLatestSubmittedQuery()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var first = controller.ApplySearchQueryAsync("Hallway");
+        var second = controller.ApplySearchQueryAsync("Living");
+
+        await Task.WhenAll(first, second);
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Living", controller.Current.SearchQuery);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+        Assert.Contains(controller.Current.Descriptor.Rows, row => row.Label == "Living Room Light");
+        Assert.DoesNotContain(controller.Current.Descriptor.Rows, row => row.Label == "Hallway Temperature");
+    }
+
+    [Fact]
+    public async Task ClearSearchRestoresNormalDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var normalDescriptor = controller.Current.Descriptor;
+        controller.ApplySearchQuery("Temperature");
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+
+        var snapshotChangedCount = 0;
+        controller.SnapshotChanged += (_, _) => snapshotChangedCount++;
+        controller.ClearSearch();
+
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.Equal(normalDescriptor!.PageId, controller.Current.Descriptor!.PageId);
+        Assert.Equal(normalDescriptor.Rows.Count, controller.Current.Descriptor.Rows.Count);
+        Assert.NotEqual("__search__", controller.Current.Descriptor.PageId);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+        Assert.Equal(0, controller.Current.SearchResultCount);
+        Assert.True(snapshotChangedCount > 0);
+    }
+
+    [Fact]
+    public async Task EmptySearchQueryRestoresNormalDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var normalDescriptor = controller.Current.Descriptor;
+        controller.ApplySearchQuery("Temperature");
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+
+        controller.ApplySearchQuery("   ");
+
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.Equal(normalDescriptor!.PageId, controller.Current.Descriptor!.PageId);
+        Assert.Equal(normalDescriptor.Rows.Count, controller.Current.Descriptor.Rows.Count);
+        Assert.NotEqual("__search__", controller.Current.Descriptor.PageId);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+        Assert.Equal(0, controller.Current.SearchResultCount);
+    }
+
+    [Fact]
+    public async Task NavigationClearsActiveSearch()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Kitchen");
+        Assert.True(controller.Current.IsSearchActive);
+
+        var navigated = await controller.NavigateToChildAsync(0);
+        Assert.True(navigated);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+        Assert.Equal(0, controller.Current.SearchResultCount);
+
+        controller.ApplySearchQuery("Temperature");
+        Assert.True(controller.Current.IsSearchActive);
+
+        var navigatedBack = controller.NavigateBack();
+        Assert.True(navigatedBack);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+
+        controller.ApplySearchQuery("Kitchen");
+        var jumped = controller.NavigateToBreadcrumb(0);
+        Assert.True(jumped);
+        Assert.False(controller.Current.IsSearchActive);
+        Assert.Equal(string.Empty, controller.Current.SearchQuery);
+    }
+
+    [Fact]
+    public async Task RefreshWhileSearchActiveKeepsQueryAndRecomputesDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        localClient.EnqueueSitemapJson(HomepageJson("ON"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Living Room Light");
+        var searchDescriptorBeforeRefresh = controller.Current.Descriptor;
+
+        await controller.RefreshAsync();
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Living Room Light", controller.Current.SearchQuery);
+        Assert.NotNull(controller.Current.Descriptor);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+        Assert.NotEqual(searchDescriptorBeforeRefresh, controller.Current.Descriptor);
+        Assert.Equal("ON", controller.Current.Descriptor.Rows[1].State);
+    }
+
+    [Fact]
+    public async Task RefreshWhileSearchActiveRecomputesFromLatestSitemapOrder()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", reversed: true));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka");
+        await controller.RefreshAsync();
+
+        var labels = controller.Current.Descriptor!.Rows
+            .Where(row => row.Label.StartsWith("Lampka", StringComparison.Ordinal))
+            .Select(row => row.Label)
+            .ToArray();
+        Assert.Equal(["Lampka mobilna", "Lampka nocna"], labels);
+    }
+
+    [Fact]
+    public async Task ActivateSearchResultSendsCommandToSourceWidget()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("ON"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka nocna");
+        var row = Assert.Single(controller.Current.Descriptor!.Rows, r => r.Label == "Lampka nocna");
+
+        var activated = await controller.ActivateRowByKeyAsync(row.SearchResultKey!);
+
+        Assert.True(activated);
+        var command = Assert.Single(localClient.CommandsSent);
+        Assert.Equal("Bedroom_Lamp", command.ItemName);
+        Assert.Equal("ON", command.Command);
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+    }
+
+    [Fact]
+    public async Task StaleSearchResultDoesNotCommandWrongWidget()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false, sameLabels: true));
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF", includeWidgetIds: false, reversed: true, sameLabels: true));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka");
+        var row = controller.Current.Descriptor!.Rows.First(r => r.Label == "Lampka");
+        await controller.RefreshAsync();
+
+        var activated = await controller.ActivateRowByKeyAsync(row.SearchResultKey!);
+
+        Assert.False(activated);
+        Assert.Empty(localClient.CommandsSent);
+    }
+
+    [Fact]
+    public async Task SearchHeaderRowDoesNotFallBackToCurrentPageIndex()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Lampka");
+        var header = Assert.Single(controller.Current.Descriptor!.Rows, r => r.IsSectionHeader && r.Label == "Search results");
+
+        var activated = await controller.ActivateRowByKeyAsync(header.SearchResultKey!);
+
+        Assert.False(activated);
+        Assert.Empty(localClient.CommandsSent);
+    }
+
+    [Fact]
+    public void ChangedRowsIncludeSearchMetadataChanges()
+    {
+        var oldDescriptor = new SitemapRenderDescriptor(
+            SitemapSkinKind.Windows11,
+            "search",
+            "Search results",
+            [
+                new SitemapRowDescriptor(
+                    "Lampka nocna",
+                    "OFF",
+                    RenderControlKind.Toggle,
+                    RenderActionKind.SendCommand,
+                    RenderDensity.Comfortable,
+                    [],
+                    SearchResultKey: "search:widget:old",
+                    SourcePageId: "home",
+                    SourceWidgetId: "old")
+            ]);
+        var newDescriptor = oldDescriptor with
+        {
+            Rows =
+            [
+                oldDescriptor.Rows[0] with
+                {
+                    SearchResultKey = "search:widget:new",
+                    SourcePageId = "lights",
+                    SourceWidgetId = "new"
+                }
+            ]
+        };
+
+        var changed = InvokeComputeChangedRowIndices(oldDescriptor, newDescriptor);
+
+        Assert.Equal([0], changed);
+    }
+
     private static SitemapRuntimeController CreateRuntimeController(
         AppSettingsController settings,
         FakeOpenHabClient localClient,
@@ -264,6 +581,57 @@ public sealed class SitemapRuntimeControllerTests
                         }
                       ]
                     }
+                  }
+                ]
+              }
+            }
+            """;
+    }
+
+    private static string HomepageSearchActionJson(
+        string lampState,
+        bool includeWidgetIds = true,
+        bool reversed = false,
+        bool sameLabels = false)
+    {
+        var firstLabel = sameLabels ? "Lampka" : reversed ? "Lampka mobilna" : "Lampka nocna";
+        var firstItem = reversed ? "Mobile_Lamp" : "Bedroom_Lamp";
+        var firstId = reversed ? "lamp-mobile" : "lamp-night";
+        var secondLabel = sameLabels ? "Lampka" : reversed ? "Lampka nocna" : "Lampka mobilna";
+        var secondItem = reversed ? "Bedroom_Lamp" : "Mobile_Lamp";
+        var secondId = reversed ? "lamp-night" : "lamp-mobile";
+        var firstWidgetId = includeWidgetIds
+            ? $"                    \"widgetId\": \"{firstId}\",{Environment.NewLine}"
+            : string.Empty;
+        var secondWidgetId = includeWidgetIds
+            ? $"                    \"widgetId\": \"{secondId}\",{Environment.NewLine}"
+            : string.Empty;
+
+        return $$"""
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  {
+                    {{firstWidgetId}}
+                    "type": "Switch",
+                    "label": "{{firstLabel}} [{{lampState}}]",
+                    "item": {
+                      "name": "{{firstItem}}",
+                      "state": "{{lampState}}"
+                    },
+                    "visibility": true
+                  },
+                  {
+                    {{secondWidgetId}}
+                    "type": "Switch",
+                    "label": "{{secondLabel}} [OFF]",
+                    "item": {
+                      "name": "{{secondItem}}",
+                      "state": "OFF"
+                    },
+                    "visibility": true
                   }
                 ]
               }
@@ -452,6 +820,72 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task WidgetEventWhileSearchActivePublishesSearchDescriptor()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        controller.ApplySearchQuery("Living Room Light");
+
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "w1",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "LivingRoom_Light",
+            ItemState: "ON",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        var eventSnapshot = Assert.Single(snapshots);
+        Assert.True(eventSnapshot.IsSearchActive);
+        Assert.Equal("__search__", eventSnapshot.Descriptor!.PageId);
+        Assert.Contains(eventSnapshot.Descriptor.Rows, row => row.Label == "Living Room Light" && row.State == "ON");
+    }
+
+    [Fact]
+    public async Task SearchDescriptorRemovesResultWhenSitemapWidgetEventHidesIt()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageSearchActionJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        controller.ApplySearchQuery("Lampka nocna");
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "lamp-night",
+            Label: null,
+            Icon: null,
+            Visibility: false,
+            ItemName: "Bedroom_Lamp",
+            ItemState: "OFF",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.DoesNotContain(controller.Current.Descriptor!.Rows, row => row.Label == "Lampka nocna");
+        Assert.Contains(controller.Current.Descriptor.Rows, row => row.Label == "No matching sitemap elements");
+    }
+
+    [Fact]
     public async Task WidgetEventNoChangeIsIgnored()
     {
         var settings = CreateSettingsController();
@@ -546,6 +980,18 @@ public sealed class SitemapRuntimeControllerTests
         }
 
         Assert.True(condition());
+    }
+
+    private static IReadOnlyList<int> InvokeComputeChangedRowIndices(
+        SitemapRenderDescriptor? oldDescriptor,
+        SitemapRenderDescriptor newDescriptor)
+    {
+        var method = typeof(SitemapRuntimeController).GetMethod(
+            "ComputeChangedRowIndices",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        return (IReadOnlyList<int>)method.Invoke(null, [oldDescriptor, newDescriptor])!;
     }
 }
 

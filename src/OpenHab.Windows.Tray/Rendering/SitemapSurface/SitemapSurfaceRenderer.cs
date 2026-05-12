@@ -12,8 +12,7 @@ public sealed class SitemapSurfaceRenderer(
     SitemapIconAuthResolver iconAuthResolver,
     Func<string, Task> activateByRowKey,
     Func<string, Task> navigateByRowKey,
-    Func<string, string, Task> sendCommandByRowKey,
-    Func<int, string, Task> sendCommandByRowIndex)
+    Func<string, string, Task> sendCommandByRowKey)
 {
     private sealed record RenderedRowTag(int RowIndex, string RowKey, string VisualStateKey);
     private sealed record ExistingRenderedRow(FrameworkElement Element, int ChildIndex);
@@ -245,9 +244,15 @@ public sealed class SitemapSurfaceRenderer(
                     return Task.CompletedTask;
                 }
 
-                return option.SourceRowIndex.HasValue
-                    ? sendCommandByRowIndex(option.SourceRowIndex.Value, expectedCommand)
-                    : sendCommandByRowIndex(index, expectedCommand);
+                var sourceRowIndex = option.SourceRowIndex ?? index;
+                var sourceRows = snapshot.Descriptor?.Rows;
+                if (sourceRows is null || sourceRowIndex < 0 || sourceRowIndex >= sourceRows.Count)
+                {
+                    return Task.CompletedTask;
+                }
+
+                var sourceRowKey = SitemapControlFactory.BuildRowIdentityKey(sourceRows[sourceRowIndex]);
+                return sendCommandByRowKey(sourceRowKey, expectedCommand);
             };
 
             var element = SitemapControlFactory.Create(

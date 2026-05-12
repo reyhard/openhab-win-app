@@ -1,3 +1,5 @@
+#define ENABLE_WINUI_FACTORY_TESTS
+
 using OpenHab.Windows.Tray.Rendering;
 using Microsoft.UI.Xaml;
 using OpenHab.Rendering.Descriptors;
@@ -277,6 +279,23 @@ public class SitemapControlFactoryTests
             WidgetId: "0101");
 
         Assert.Equal("widget:0101", SitemapControlFactory.BuildRowIdentityKey(row));
+    }
+
+    [Fact]
+    public void BuildRowIdentityKey_PrefersSearchResultKey()
+    {
+        var row = new SitemapRowDescriptor(
+            "Lampka nocna",
+            "OFF",
+            RenderControlKind.Toggle,
+            RenderActionKind.SendCommand,
+            RenderDensity.Comfortable,
+            [],
+            ItemName: "Bedroom_Lamp",
+            WidgetId: "real-widget-id",
+            SearchResultKey: "search:home/lights/bedroom-lamp");
+
+        Assert.Equal("search:home/lights/bedroom-lamp", SitemapControlFactory.BuildRowIdentityKey(row));
     }
 
     [Fact]

@@ -11,7 +11,10 @@ public sealed record SitemapRuntimeSnapshot(
     string StatusText,
     bool IsBusy,
     bool HasError,
-    IReadOnlyList<int> ChangedRowIndices)
+    IReadOnlyList<int> ChangedRowIndices,
+    bool IsSearchActive = false,
+    string SearchQuery = "",
+    int SearchResultCount = 0)
 {
     public static SitemapRuntimeSnapshot Initial { get; } = new(
         Descriptor: null,
@@ -21,5 +24,8 @@ public sealed record SitemapRuntimeSnapshot(
         StatusText: "Not connected.",
         IsBusy: false,
         HasError: false,
-        ChangedRowIndices: []);
+        ChangedRowIndices: [],
+        IsSearchActive: false,
+        SearchQuery: string.Empty,
+        SearchResultCount: 0);
 }

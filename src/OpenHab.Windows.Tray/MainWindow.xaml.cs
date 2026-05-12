@@ -129,8 +129,7 @@ public sealed partial class MainWindow : Window
             sitemapIconAuthResolver,
             activateByRowKey: OnRowActivatedByKeyAsync,
             navigateByRowKey: OnRowNavigateByKeyAsync,
-            sendCommandByRowKey: SendCommandForRowKeyAsync,
-            sendCommandByRowIndex: (rowIndex, command) => runtimeController.SendCommandForRowAsync(rowIndex, command));
+            sendCommandByRowKey: SendCommandForRowKeyAsync);
         snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
@@ -1365,22 +1364,34 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private Task OnRowActivatedByKeyAsync(string rowKey)
+    private async Task OnRowActivatedByKeyAsync(string rowKey)
     {
-        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out var rowIndex)
-            ? OnRowActivatedAsync(rowIndex)
-            : Task.CompletedTask;
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        await RunRuntimeOperationAsync(ct => runtimeController.ActivateRowByKeyAsync(rowKey, ct));
     }
 
     private async Task OnRowNavigateAsync(int rowIndex)
     {
         if (isRefreshing) return;
+        await RunNavigateTransitionAsync(ct => runtimeController.NavigateToChildAsync(rowIndex, ct));
+    }
+
+    private async Task RunNavigateTransitionAsync(Func<CancellationToken, Task<bool>> navigateAsync)
+    {
         isRefreshing = true;
         _isPageTransitionRunning = true;
         try
         {
             _suppressNextSnapshotRefresh = true;
-            await runtimeController.NavigateToChildAsync(rowIndex, CancellationToken.None);
+            if (!await navigateAsync(CancellationToken.None))
+            {
+                _suppressNextSnapshotRefresh = false;
+                return;
+            }
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             RefreshRuntimeBindings(InactiveRows);
@@ -1408,18 +1419,26 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private Task OnRowNavigateByKeyAsync(string rowKey)
+    private async Task OnRowNavigateByKeyAsync(string rowKey)
     {
-        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out var rowIndex)
-            ? OnRowNavigateAsync(rowIndex)
-            : Task.CompletedTask;
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        if (runtimeController.Current.IsSearchActive)
+        {
+            await RunRuntimeOperationAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
+            RefreshRuntimeBindings(ActiveRows);
+            return;
+        }
+
+        await RunNavigateTransitionAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
     }
 
     private Task SendCommandForRowKeyAsync(string rowKey, string command)
     {
-        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out var rowIndex)
-            ? runtimeController.SendCommandForRowAsync(rowIndex, command)
-            : Task.CompletedTask;
+        return runtimeController.SendCommandForRowKeyAsync(rowKey, command);
     }
 
     private async void SkinCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

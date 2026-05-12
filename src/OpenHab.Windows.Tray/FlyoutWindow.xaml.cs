@@ -20,6 +20,7 @@ using Windows.UI;
 using Windows.UI.ViewManagement;
 using Windows.Graphics;
 using Microsoft.UI.Dispatching;
+using Windows.System;
 
 namespace OpenHab.Windows.Tray;
 
@@ -46,6 +47,11 @@ public sealed partial class FlyoutWindow : Window
     private bool _isPageTransitionRunning;
     private bool _pendingSnapshotRefresh;
     private bool _useActivationFallbackDismiss;
+    private bool isUpdatingSearchBox;
+    private bool isSearchChromeOpen;
+    private bool isSitemapSearchBoxFocused;
+    private readonly DispatcherTimer sitemapSearchDebounceTimer = new();
+    private string pendingSitemapSearchQuery = string.Empty;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -74,18 +80,25 @@ public sealed partial class FlyoutWindow : Window
             iconAuthResolver,
             activateByRowKey: OnRowActivatedByKeyAsync,
             navigateByRowKey: OnRowNavigateByKeyAsync,
-            sendCommandByRowKey: SendCommandForRowKeyAsync,
-            sendCommandByRowIndex: (rowIndex, command) => runtimeController.SendCommandForRowAsync(rowIndex, command));
+            sendCommandByRowKey: SendCommandForRowKeyAsync);
         snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
+        this.Content.AddHandler(
+            UIElement.KeyDownEvent,
+            new Microsoft.UI.Xaml.Input.KeyEventHandler(MainContent_KeyDown),
+            handledEventsToo: true);
         FlyoutChrome.PointerPressed += OnFlyoutChromePointerPressed;
         Activated += OnFlyoutWindowActivated;
         EnsureLightDismissInitialized();
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
+        sitemapSearchDebounceTimer.Interval = TimeSpan.FromMilliseconds(150);
+        sitemapSearchDebounceTimer.Tick += SitemapSearchDebounceTimer_Tick;
+        SitemapSearchBox.GotFocus += (_, _) => isSitemapSearchBoxFocused = true;
+        SitemapSearchBox.LostFocus += (_, _) => isSitemapSearchBoxFocused = false;
         runtimeController.SnapshotChanged += (_, _) =>
         {
             if (_suppressNextSnapshotRefresh)
@@ -225,9 +238,26 @@ public sealed partial class FlyoutWindow : Window
             .ToList();
 
         BreadcrumbBar.ItemsSource = breadcrumbItems;
-        BreadcrumbBar.Visibility = rawBreadcrumbs.Count > 1
+        var searchVisible = isSearchChromeOpen || snapshot.IsSearchActive;
+        BreadcrumbBar.Visibility = !searchVisible && rawBreadcrumbs.Count > 1
             ? Visibility.Visible
             : Visibility.Collapsed;
+        SitemapSearchBox.Visibility = searchVisible
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        SearchButtonIcon.Foreground = searchVisible
+            ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
+            : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+
+        if (!isUpdatingSearchBox &&
+            !sitemapSearchDebounceTimer.IsEnabled &&
+            !isSitemapSearchBoxFocused &&
+            SitemapSearchBox.Text != snapshot.SearchQuery)
+        {
+            isUpdatingSearchBox = true;
+            SitemapSearchBox.Text = snapshot.SearchQuery;
+            isUpdatingSearchBox = false;
+        }
     }
 
     internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
@@ -235,8 +265,21 @@ public sealed partial class FlyoutWindow : Window
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
+        if (ShouldSkipStaleSearchRender(snapshot))
+        {
+            snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+            return;
+        }
+
         sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+    }
+
+    private bool ShouldSkipStaleSearchRender(SitemapRuntimeSnapshot snapshot)
+    {
+        return snapshot.IsSearchActive &&
+               (isSitemapSearchBoxFocused || sitemapSearchDebounceTimer.IsEnabled) &&
+               !string.Equals(SitemapSearchBox.Text, snapshot.SearchQuery, StringComparison.Ordinal);
     }
 
     private async Task OnRowActivatedAsync(int rowIndex)
@@ -249,22 +292,35 @@ public sealed partial class FlyoutWindow : Window
         await RunRuntimeOperationAsync(async ct => await runtimeController.ActivateRowAsync(rowIndex, ct));
     }
 
-    private Task OnRowActivatedByKeyAsync(string rowKey)
+    private async Task OnRowActivatedByKeyAsync(string rowKey)
     {
-        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
-            ? OnRowActivatedAsync(rowIndex)
-            : Task.CompletedTask;
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        await RunRuntimeOperationAsync(ct => runtimeController.ActivateRowByKeyAsync(rowKey, ct));
     }
 
     private async Task OnRowNavigateAsync(int rowIndex)
     {
         if (isRefreshing) return;
+        await RunNavigateTransitionAsync(ct => runtimeController.NavigateToChildAsync(rowIndex, ct));
+    }
+
+    private async Task RunNavigateTransitionAsync(Func<CancellationToken, Task<bool>> navigateAsync)
+    {
         isRefreshing = true;
         _isPageTransitionRunning = true;
         try
         {
             _suppressNextSnapshotRefresh = true;
-            await runtimeController.NavigateToChildAsync(rowIndex, CancellationToken.None);
+            if (!await navigateAsync(CancellationToken.None))
+            {
+                _suppressNextSnapshotRefresh = false;
+                return;
+            }
+            isSearchChromeOpen = false;
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
@@ -296,23 +352,89 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    private Task OnRowNavigateByKeyAsync(string rowKey)
+    private async Task OnRowNavigateByKeyAsync(string rowKey)
     {
-        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
-            ? OnRowNavigateAsync(rowIndex)
-            : Task.CompletedTask;
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        if (runtimeController.Current.IsSearchActive)
+        {
+            await RunRuntimeOperationAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
+            isSearchChromeOpen = runtimeController.Current.IsSearchActive;
+            RefreshRuntimeBindings(ActiveRows);
+            return;
+        }
+
+        await RunNavigateTransitionAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
     }
 
     private Task SendCommandForRowKeyAsync(string rowKey, string command)
     {
-        return TryResolveCurrentRowIndex(rowKey, out var rowIndex)
-            ? runtimeController.SendCommandForRowAsync(rowIndex, command)
-            : Task.CompletedTask;
+        return runtimeController.SendCommandForRowKeyAsync(rowKey, command);
     }
 
-    private bool TryResolveCurrentRowIndex(string rowKey, out int rowIndex)
+    private bool HasVisibleSearchChrome => isSearchChromeOpen || runtimeController.Current.IsSearchActive;
+
+    private void CloseSearchChrome()
     {
-        return SitemapRowPlanner.TryResolveRowIndex(runtimeController.Current.Descriptor?.Rows, rowKey, out rowIndex);
+        sitemapSearchDebounceTimer.Stop();
+        isSearchChromeOpen = false;
+        runtimeController.ClearSearch();
+    }
+
+    private async void SearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (HasVisibleSearchChrome)
+        {
+            CloseSearchChrome();
+            return;
+        }
+
+        isSearchChromeOpen = true;
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(SitemapSearchBox.Text);
+        RefreshChromeBindings(runtimeController.Current);
+        SitemapSearchBox.Focus(FocusState.Programmatic);
+    }
+
+    private void SitemapSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (isUpdatingSearchBox || args.Reason != AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            return;
+        }
+
+        pendingSitemapSearchQuery = sender.Text;
+        isSearchChromeOpen = true;
+        sitemapSearchDebounceTimer.Stop();
+        sitemapSearchDebounceTimer.Start();
+    }
+
+    private async void SitemapSearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(sender.Text);
+        isSearchChromeOpen = true;
+    }
+
+    private async void SitemapSearchDebounceTimer_Tick(object? sender, object e)
+    {
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(pendingSitemapSearchQuery);
+    }
+
+    private async Task ApplySitemapSearchQueryAsync(string query)
+    {
+        try
+        {
+            await runtimeController.ApplySearchQueryAsync(query);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Sitemap search failed: {ex.Message}");
+        }
     }
 
     private async void SitemapMenuItem_Click(object sender, RoutedEventArgs e)
@@ -320,6 +442,11 @@ public sealed partial class FlyoutWindow : Window
         if (sender is MenuFlyoutItem item && item.Tag is string name)
         {
             if (isRefreshing) return;
+            if (HasVisibleSearchChrome)
+            {
+                CloseSearchChrome();
+            }
+
             settingsController.SetSitemapName(name);
             await LoadRuntimeAsync();
         }
@@ -371,6 +498,7 @@ public sealed partial class FlyoutWindow : Window
 
         if (runtimeController.NavigateToBreadcrumb(args.Index))
         {
+            isSearchChromeOpen = false;
             isRefreshing = true;
             _isPageTransitionRunning = true;
             try
@@ -748,7 +876,42 @@ public sealed partial class FlyoutWindow : Window
     private void OnFlyoutChromePointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         var props = e.GetCurrentPoint(sender as UIElement).Properties;
-        if (props.IsXButton1Pressed && runtimeController.CanGoBack && !isRefreshing)
+        if (!props.IsXButton1Pressed || isRefreshing)
+        {
+            return;
+        }
+
+        if (HasVisibleSearchChrome)
+        {
+            e.Handled = true;
+            CloseSearchChrome();
+            return;
+        }
+
+        if (runtimeController.CanGoBack)
+        {
+            e.Handled = true;
+            _ = NavigateBackWithAnimationAsync();
+        }
+    }
+
+    private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Escape && HasVisibleSearchChrome)
+        {
+            e.Handled = true;
+            CloseSearchChrome();
+            return;
+        }
+
+        if (e.Key == VirtualKey.GoBack && HasVisibleSearchChrome && !isRefreshing)
+        {
+            e.Handled = true;
+            CloseSearchChrome();
+            return;
+        }
+
+        if (e.Key == VirtualKey.GoBack && runtimeController.CanGoBack && !isRefreshing)
         {
             e.Handled = true;
             _ = NavigateBackWithAnimationAsync();
@@ -764,6 +927,7 @@ public sealed partial class FlyoutWindow : Window
         {
             _suppressNextSnapshotRefresh = true;
             runtimeController.NavigateBack();
+            isSearchChromeOpen = false;
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
