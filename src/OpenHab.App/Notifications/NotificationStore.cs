@@ -126,10 +126,29 @@ public sealed class NotificationStore
         bool mutated;
         lock (syncRoot)
         {
-            if (notifications.TryGetValue(id, out var existing))
+            var existingKey = id;
+            var existing = notifications.TryGetValue(id, out var directMatch)
+                ? directMatch
+                : null;
+
+            if (existing is null && !string.IsNullOrWhiteSpace(referenceId))
+            {
+                var referenceMatch = notifications.FirstOrDefault(entry =>
+                    !string.IsNullOrWhiteSpace(entry.Value.ReferenceId)
+                    && string.Equals(entry.Value.ReferenceId, referenceId, StringComparison.Ordinal));
+
+                if (!referenceMatch.Equals(default(KeyValuePair<string, StoredNotification>)))
+                {
+                    existingKey = referenceMatch.Key;
+                    existing = referenceMatch.Value;
+                }
+            }
+
+            if (existing is not null)
             {
                 var updated = existing with
                 {
+                    Id = id,
                     Message = message,
                     Title = title ?? existing.Title,
                     Icon = icon ?? existing.Icon,
@@ -142,6 +161,12 @@ public sealed class NotificationStore
                     ActionButton2 = actionButton2 ?? existing.ActionButton2,
                     ActionButton3 = actionButton3 ?? existing.ActionButton3
                 };
+
+                if (!string.Equals(existingKey, id, StringComparison.Ordinal))
+                {
+                    notifications.Remove(existingKey);
+                }
+
                 notifications[id] = updated;
                 mutated = true;
             }
@@ -169,6 +194,34 @@ public sealed class NotificationStore
                 if (notifications.Count > MaxEntries)
                 {
                     TrimExcessLocked();
+                }
+            }
+        }
+
+        if (mutated)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+            _ = SaveAsync();
+        }
+    }
+
+    private void HideMatchingNotifications(Func<StoredNotification, bool> matches)
+    {
+        bool mutated = false;
+        lock (syncRoot)
+        {
+            foreach (var key in notifications.Keys.ToList())
+            {
+                var existing = notifications[key];
+                if (!matches(existing))
+                {
+                    continue;
+                }
+
+                if (!existing.IsDismissed || !existing.IsRead)
+                {
+                    notifications[key] = existing with { IsDismissed = true, IsRead = true };
+                    mutated = true;
                 }
             }
         }
@@ -240,6 +293,20 @@ public sealed class NotificationStore
     public void Dismiss(string id)
     {
         Hide(id);
+    }
+
+    public void HideByReferenceId(string referenceId)
+    {
+        HideMatchingNotifications(notification =>
+            !string.IsNullOrWhiteSpace(notification.ReferenceId)
+            && string.Equals(notification.ReferenceId, referenceId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void HideByTag(string tag)
+    {
+        HideMatchingNotifications(notification =>
+            !string.IsNullOrWhiteSpace(notification.Severity)
+            && string.Equals(notification.Severity, tag, StringComparison.OrdinalIgnoreCase));
     }
 
     public void Unhide(string id)
