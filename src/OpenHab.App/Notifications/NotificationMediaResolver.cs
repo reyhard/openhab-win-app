@@ -5,7 +5,7 @@ using OpenHab.App.Settings;
 using OpenHab.Core;
 using OpenHab.Core.Profiles;
 
-namespace OpenHab.Windows.Tray.Notifications;
+namespace OpenHab.App.Notifications;
 
 public sealed class NotificationMediaResolver
 {

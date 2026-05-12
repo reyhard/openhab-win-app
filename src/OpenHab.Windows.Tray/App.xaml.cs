@@ -16,7 +16,6 @@ using OpenHab.Core;
 using OpenHab.Core.Events;
 using OpenHab.App.DeviceInfo;
 using OpenHab.Windows.Notifications;
-using OpenHab.Windows.Tray.Notifications;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Tray;
 using OpenHab.Windows.Tray.Startup;

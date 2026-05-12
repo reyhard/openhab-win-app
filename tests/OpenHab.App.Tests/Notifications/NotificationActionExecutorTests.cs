@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using OpenHab.App.Notifications;
 using OpenHab.App.Settings;
 using OpenHab.Core.Profiles;
 using OpenHab.Windows.Notifications;
-using OpenHab.Windows.Tray.Notifications;
 
 namespace OpenHab.App.Tests.Notifications;
 
@@ -13,13 +13,13 @@ public sealed class NotificationActionExecutorTests
     [Fact]
     public async Task ExecuteAsync_CommandInLocalMode_PostsCommandWithBearerAuth()
     {
-        var handler = new CaptureHandler(req =>
+        var handler = new CaptureHandler(async req =>
         {
             Assert.Equal(HttpMethod.Post, req.Method);
             Assert.Equal("http://openhab.local:8080/rest/items/KitchenLight", req.RequestUri!.ToString());
             Assert.Equal("Bearer", req.Headers.Authorization?.Scheme);
             Assert.Equal("local-token", req.Headers.Authorization?.Parameter);
-            Assert.Equal("ON", req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            Assert.Equal("ON", await req.Content!.ReadAsStringAsync());
             Assert.Equal("text/plain", req.Content.Headers.ContentType?.MediaType);
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
@@ -40,14 +40,14 @@ public sealed class NotificationActionExecutorTests
     [Fact]
     public async Task ExecuteAsync_CommandInCloudMode_PostsCommandWithBasicAuth()
     {
-        var handler = new CaptureHandler(req =>
+        var handler = new CaptureHandler(async req =>
         {
             Assert.Equal(HttpMethod.Post, req.Method);
             Assert.Equal("https://myopenhab.org/rest/items/KitchenLight", req.RequestUri!.ToString());
             Assert.Equal("Basic", req.Headers.Authorization?.Scheme);
             var expected = Convert.ToBase64String(Encoding.UTF8.GetBytes("user@example.com:secret"));
             Assert.Equal(expected, req.Headers.Authorization?.Parameter);
-            Assert.Equal("OFF", req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            Assert.Equal("OFF", await req.Content!.ReadAsStringAsync());
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
 
@@ -94,10 +94,10 @@ public sealed class NotificationActionExecutorTests
     [Fact]
     public async Task ExecuteAsync_CommandPayload_TrimmedAroundItemAndCommand()
     {
-        var handler = new CaptureHandler(req =>
+        var handler = new CaptureHandler(async req =>
         {
             Assert.Equal("http://openhab.local:8080/rest/items/KitchenLight", req.RequestUri!.ToString());
-            Assert.Equal("ON", req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            Assert.Equal("ON", await req.Content!.ReadAsStringAsync());
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         var opened = new List<Uri>();
@@ -141,7 +141,8 @@ public sealed class NotificationActionExecutorTests
     public async Task ExecuteAsync_HttpAndHttpsActions_OpenExternalUri(string type, string url)
     {
         var opened = new List<Uri>();
-        var executor = CreateExecutor(new CaptureHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)), opened: opened);
+        var handler = new CaptureHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var executor = CreateExecutor(handler, opened: opened);
 
         await executor.ExecuteAsync(new NotificationAction(type, url), CancellationToken.None);
 
@@ -191,11 +192,11 @@ public sealed class NotificationActionExecutorTests
     public async Task ExecuteAsync_MixedCaseCommandAction_Executes()
     {
         var called = false;
-        var handler = new CaptureHandler(req =>
+        var handler = new CaptureHandler(async req =>
         {
             called = true;
             Assert.Equal("http://openhab.local:8080/rest/items/KitchenLight", req.RequestUri!.ToString());
-            Assert.Equal("ON", req.Content!.ReadAsStringAsync().GetAwaiter().GetResult());
+            Assert.Equal("ON", await req.Content!.ReadAsStringAsync());
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
         var executor = CreateExecutor(
@@ -317,7 +318,7 @@ public sealed class NotificationActionExecutorTests
         var httpClient = new HttpClient(handler);
         opened ??= new List<Uri>();
 
-        return new NotificationActionExecutor(
+        var executor = new NotificationActionExecutor(
             httpClient,
             getSettings ?? (() => AppSettings.Default),
             getApiToken ?? (_ => null),
@@ -327,13 +328,26 @@ public sealed class NotificationActionExecutorTests
                 opened.Add(uri);
                 return Task.CompletedTask;
             });
+        return executor;
     }
 
-    private sealed class CaptureHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    private sealed class CaptureHandler : HttpMessageHandler
     {
+        private readonly Func<HttpRequestMessage, Task<HttpResponseMessage>> responder;
+
+        public CaptureHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
+            : this(request => Task.FromResult(responder(request)))
+        {
+        }
+
+        public CaptureHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> responder)
+        {
+            this.responder = responder;
+        }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            return Task.FromResult(responder(request));
+            return responder(request);
         }
     }
 }

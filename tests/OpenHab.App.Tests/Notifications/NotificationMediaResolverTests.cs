@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using OpenHab.App.Notifications;
 using OpenHab.App.Settings;
 using OpenHab.Core.Profiles;
-using OpenHab.Windows.Tray.Notifications;
 
 namespace OpenHab.App.Tests.Notifications;
 

@@ -4,7 +4,7 @@ using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Windows.Notifications;
 
-namespace OpenHab.Windows.Tray.Notifications;
+namespace OpenHab.App.Notifications;
 
 public sealed class NotificationActionExecutor
 {

@@ -33,11 +33,13 @@ public sealed class NotificationStore
 {
     private const int MaxEntries = 500;
 
-    private static readonly string StorageFilePath = Path.Combine(
+    private static readonly string DefaultStorageFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "OpenHab.WinApp",
         "notifications.json");
 
+    private readonly string storageFilePath;
+    private readonly bool persistChanges;
     private readonly object syncRoot = new();
     private readonly Dictionary<string, StoredNotification> notifications = new();
 
@@ -53,8 +55,12 @@ public sealed class NotificationStore
         }
     }
 
-    public NotificationStore()
+    public NotificationStore(string? storageFilePath = null, bool persistChanges = true)
     {
+        this.storageFilePath = string.IsNullOrWhiteSpace(storageFilePath)
+            ? DefaultStorageFilePath
+            : storageFilePath;
+        this.persistChanges = persistChanges;
         TryLoad();
     }
 
@@ -217,7 +223,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -245,7 +251,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -264,7 +270,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -283,7 +289,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -302,7 +308,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -340,7 +346,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -363,7 +369,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -386,7 +392,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -450,11 +456,19 @@ public sealed class NotificationStore
         return value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
     }
 
+    private void SaveIfEnabled()
+    {
+        if (persistChanges)
+        {
+            _ = SaveAsync();
+        }
+    }
+
     private async Task SaveAsync()
     {
         try
         {
-            var directory = Path.GetDirectoryName(StorageFilePath)!;
+            var directory = Path.GetDirectoryName(storageFilePath)!;
             Directory.CreateDirectory(directory);
 
             List<StoredNotification> snapshot;
@@ -465,7 +479,7 @@ public sealed class NotificationStore
 
             var data = new NotificationStoreData(snapshot);
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(StorageFilePath, json);
+            await File.WriteAllTextAsync(storageFilePath, json);
         }
         catch
         {
@@ -477,8 +491,8 @@ public sealed class NotificationStore
     {
         try
         {
-            if (!File.Exists(StorageFilePath)) return;
-            var json = File.ReadAllText(StorageFilePath);
+            if (!File.Exists(storageFilePath)) return;
+            var json = File.ReadAllText(storageFilePath);
             var loaded = JsonSerializer.Deserialize<NotificationStoreData>(json);
             if (loaded?.Notifications is not null)
             {
@@ -499,3 +513,4 @@ public sealed class NotificationStore
 
     private sealed record NotificationStoreData(List<StoredNotification> Notifications);
 }
+
