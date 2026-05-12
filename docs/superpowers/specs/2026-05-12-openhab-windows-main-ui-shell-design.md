@@ -71,6 +71,7 @@ The right sitemap pane:
 - Is toggled by a native shell button.
 - Appears inside the existing window width, splitting space with the center surface.
 - Does not resize the outer window.
+- Remains visible across center-surface changes when enabled, including Settings and Notifications.
 
 The openHAB Main UI bottom navigation, such as Overview, Locations, and Devices, remains inside the WebView. The Windows shell must not duplicate those bottom tabs.
 
@@ -149,6 +150,7 @@ Sitemap pane behavior:
 
 - Hidden by default in Main Window.
 - Toggled from the shell header.
+- Visibility is independent of the selected center page.
 - Shows the currently selected sitemap.
 - Keeps its own back stack independently from Main UI.
 - Continues receiving sitemap event updates independently from WebView.
@@ -170,6 +172,7 @@ Behavior:
 
 - `Notifications` opens a native center page.
 - `Settings` opens a native center page.
+- If the sitemap pane is visible, it stays visible while `Notifications`, `Settings`, diagnostics/about, or Main UI pages are active.
 - Returning to Main UI restores the existing WebView instance.
 - App-owned pages remain outside `Main UI Pages`.
 - Settings and notification logic remain in `OpenHab.App` and `OpenHab.Windows.Tray`.
@@ -244,7 +247,8 @@ Settings/notifications:
 1. User selects an app-owned left-rail entry.
 2. Shell swaps the center content to the native page.
 3. WebView instance is retained.
-4. Returning to Home/Main UI reveals the retained WebView.
+4. Sitemap pane visibility is preserved.
+5. Returning to Home/Main UI reveals the retained WebView.
 
 ## Verification
 
@@ -266,6 +270,7 @@ Manual smoke checks:
 - Non-promoted pages do not appear.
 - Promoted page click navigates WebView only.
 - Sitemap toggle shows/hides native sitemap without resizing the outer window.
+- Visible sitemap remains visible when switching to Settings or Notifications.
 - Sitemap navigation does not alter WebView history.
 - Settings and notifications open as native center pages and returning to Main UI preserves WebView state.
 - WebView failure shows retry/open-browser state.
