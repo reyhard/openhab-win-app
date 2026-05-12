@@ -197,13 +197,14 @@ public sealed partial class MainWindow : Window
             if (!string.IsNullOrWhiteSpace(targetRoute))
             {
                 var normalizedRoute = NormalizeMainUiRoute(targetRoute);
+                var isExplicitRouteRequest = !string.IsNullOrWhiteSpace(state.PendingMainUiRoute);
                 var activeTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
                     ? TransportKind.Cloud
                     : TransportKind.Local;
                 if (!string.Equals(currentMainUiRoute, normalizedRoute, StringComparison.Ordinal)
                     || currentMainUiTransport != activeTransport)
                 {
-                    _ = NavigateMainUiAsync(normalizedRoute);
+                    _ = NavigateMainUiAsync(normalizedRoute, isExplicitRouteRequest);
                 }
             }
         }
@@ -239,11 +240,16 @@ public sealed partial class MainWindow : Window
         shellController.SyncCurrentMainUiRoute(normalizedRoute);
     }
 
-    private async Task NavigateMainUiAsync(string route)
+    private async Task NavigateMainUiAsync(string route, bool isExplicitRouteRequest = false)
     {
         var normalizedRoute = NormalizeMainUiRoute(route);
         if (isMainUiNavigationInProgress)
         {
+            if (!isExplicitRouteRequest && !string.IsNullOrWhiteSpace(pendingExplicitMainUiRoute))
+            {
+                return;
+            }
+
             pendingExplicitMainUiRoute = normalizedRoute;
             return;
         }
@@ -303,7 +309,7 @@ public sealed partial class MainWindow : Window
 
         if (!string.IsNullOrWhiteSpace(followUpRoute))
         {
-            _ = NavigateMainUiAsync(followUpRoute);
+            _ = NavigateMainUiAsync(followUpRoute, isExplicitRouteRequest: true);
             return;
         }
 
