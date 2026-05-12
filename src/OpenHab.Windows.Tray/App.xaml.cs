@@ -528,11 +528,8 @@ public partial class App : Application
 
             _ = uiDispatcherQueue?.TryEnqueue(() =>
             {
-                if (mainWindow is not null)
-                {
-                    _ = mainWindow.RefreshPromotedMainUiPagesAsync(
-                        promotedMainUiDiscoveryCts?.Token ?? CancellationToken.None);
-                }
+                var cancellationToken = promotedMainUiDiscoveryCts?.Token ?? CancellationToken.None;
+                _ = RefreshPromotedMainUiPagesOnStartupAsync(cancellationToken);
             });
         }
         catch
@@ -543,6 +540,25 @@ public partial class App : Application
         DiagnosticLogger.Info("Completing startup — starting notification polling");
         StartNotificationPolling(settingsController);
         HandleStartupActivation(activatedEventArgs);
+    }
+
+    private async Task RefreshPromotedMainUiPagesOnStartupAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (mainWindow is not null)
+            {
+                await mainWindow.RefreshPromotedMainUiPagesAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Expected when the app exits while startup discovery is still in flight.
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Startup Main UI page discovery failed: {ex.GetType().Name}");
+        }
     }
 
     private void ShutdownTrayResources()
