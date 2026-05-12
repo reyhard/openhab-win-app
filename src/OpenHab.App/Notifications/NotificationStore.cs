@@ -135,9 +135,13 @@ public sealed class NotificationStore
                 && !notifications.ContainsKey(id)
                 && !string.IsNullOrWhiteSpace(referenceId))
             {
-                var referenceMatch = notifications.FirstOrDefault(entry =>
-                    !string.IsNullOrWhiteSpace(entry.Value.ReferenceId)
-                    && string.Equals(entry.Value.ReferenceId, referenceId, StringComparison.OrdinalIgnoreCase));
+                var referenceMatch = notifications
+                    .Where(entry =>
+                        !string.IsNullOrWhiteSpace(entry.Value.ReferenceId)
+                        && string.Equals(entry.Value.ReferenceId, referenceId, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(entry => entry.Value.IsDismissed ? 1 : 0)
+                    .ThenByDescending(entry => entry.Value.Created)
+                    .FirstOrDefault();
 
                 if (!referenceMatch.Equals(default(KeyValuePair<string, StoredNotification>)))
                 {

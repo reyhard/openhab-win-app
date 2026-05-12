@@ -103,6 +103,63 @@ public sealed class NotificationStoreTests
     }
 
     [Fact]
+    public void AddOrUpdate_PrefersVisibleReferenceMatchOverDismissedMatch()
+    {
+        var hiddenCreated = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var visibleCreated = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+        var replacementCreated = new DateTimeOffset(2026, 5, 7, 12, 0, 0, TimeSpan.Zero);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(StorageFilePath)!);
+
+        var hidden = new StoredNotification(
+            "cloud-hidden",
+            "Hidden original",
+            null,
+            null,
+            "info",
+            hiddenCreated,
+            DateTimeOffset.UtcNow,
+            true,
+            true,
+            "ref-1",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        var visible = new StoredNotification(
+            "cloud-visible",
+            "Visible original",
+            null,
+            null,
+            "info",
+            visibleCreated,
+            DateTimeOffset.UtcNow,
+            false,
+            false,
+            "ref-1",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        File.WriteAllText(
+            StorageFilePath,
+            JsonSerializer.Serialize(new { Notifications = new[] { hidden, visible } }));
+
+        var store = new NotificationStore();
+        store.AddOrUpdate("cloud-new", "Replacement", replacementCreated, referenceId: "ref-1");
+
+        var all = store.GetAll();
+        Assert.Equal(2, all.Count);
+        Assert.Contains(all, n => n.Id == "cloud-hidden" && n.IsDismissed && n.IsRead);
+        Assert.Contains(all, n => n.Id == "cloud-new" && !n.IsDismissed && !n.IsRead);
+        Assert.DoesNotContain(all, n => n.Id == "cloud-visible");
+    }
+
+    [Fact]
     public void AddOrUpdate_ReplacesVisibleNotificationWithSameReferenceId()
     {
         var store = new NotificationStore();
@@ -650,4 +707,3 @@ public sealed class NotificationStoreTests
         Assert.Contains(store.GetNotifications(NotificationVisibilityFilter.All, null), n => n.Id == seeded.Id);
     }
 }
-
