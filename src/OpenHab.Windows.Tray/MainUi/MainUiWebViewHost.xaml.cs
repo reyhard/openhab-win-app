@@ -14,6 +14,7 @@ public sealed partial class MainUiWebViewHost : UserControl
     private Uri? currentUri;
     private string pendingRoute = "/";
     private bool initialized;
+    private bool suppressNextNavigationError;
     private TaskCompletionSource? navigationCompletion;
 
     public event EventHandler<string>? CurrentRouteChanged;
@@ -121,6 +122,7 @@ public sealed partial class MainUiWebViewHost : UserControl
 
         if (!MainUiUrlBuilder.IsSameHost(currentBaseUri, uri))
         {
+            suppressNextNavigationError = true;
             args.Cancel = true;
             OpenExternal(uri);
             return;
@@ -148,7 +150,14 @@ public sealed partial class MainUiWebViewHost : UserControl
         }
 
         DiagnosticLogger.Warn($"Main UI navigation failed: webError={args.WebErrorStatus}");
-        ShowError("Check the configured endpoint and credentials, then retry.");
+        if (suppressNextNavigationError)
+        {
+            suppressNextNavigationError = false;
+        }
+        else
+        {
+            ShowError("Check the configured endpoint and credentials, then retry.");
+        }
         navigationCompletion?.TrySetResult();
         navigationCompletion = null;
     }
