@@ -22,6 +22,8 @@ public sealed partial class MainUiWebViewHost : UserControl
 
     public bool CanGoBack => MainWebView.CanGoBack;
 
+    public string CurrentRoute => pendingRoute;
+
     public async Task NavigateAsync(Uri endpoint, string? route, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(endpoint);

@@ -241,7 +241,7 @@ public sealed partial class MainWindow : Window
         try
         {
             await MainUiHost.NavigateAsync(endpoint, normalizedRoute);
-            currentMainUiRoute = normalizedRoute;
+            currentMainUiRoute = MainUiHost.CurrentRoute;
             currentMainUiTransport = selectedTransport;
         }
         catch (OperationCanceledException)
@@ -356,10 +356,11 @@ public sealed partial class MainWindow : Window
 
         if (currentMainUiTransport == desiredTransport)
         {
+            currentMainUiRoute = MainUiHost.CurrentRoute;
             return;
         }
 
-        var route = currentMainUiRoute ?? shellController.Current.PendingMainUiRoute ?? "/";
+        var route = MainUiHost.CurrentRoute;
         _ = NavigateMainUiAsync(route);
     }
 
