@@ -287,6 +287,11 @@ public sealed partial class MainWindow : Window
                 {
                     followUpRoute = queuedRoute;
                 }
+                else
+                {
+                    currentMainUiRoute = currentHostRoute;
+                    shellController.SyncCurrentMainUiRoute(currentHostRoute);
+                }
             }
 
             if (pendingMainUiTransportResync)
