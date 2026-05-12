@@ -39,9 +39,13 @@ public sealed class SitemapRuntimeController
     private string? _sitemapEventStreamPageId;
     private long _sitemapEventStreamAttempt;
     private string _activeSearchQuery = string.Empty;
+    private string _searchInputQuery = string.Empty;
     private IReadOnlyDictionary<string, SitemapSearchSource> _activeSearchSources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
     private static readonly TimeSpan WidgetEventReconcileDebounce = TimeSpan.FromMilliseconds(250);
     public bool CanGoBack => backStack.Count > 0;
+    private bool HasActiveSearch => _activeSearchQuery.Length > 0;
+    private string SearchSnapshotQuery => HasActiveSearch ? _searchInputQuery : string.Empty;
+    private int SearchSnapshotResultCount => HasActiveSearch ? _activeSearchSources.Count : 0;
 
     private sealed record ResolvedSearchWidget(
         NormalizedSitemapPage Page,
@@ -82,14 +86,16 @@ public sealed class SitemapRuntimeController
 
     public void ApplySearchQuery(string? query)
     {
+        var inputQuery = query ?? string.Empty;
         var descriptor = BuildDescriptorForQuery(query, out var normalizedQuery, out var resultCount, out var sources);
         _activeSearchQuery = normalizedQuery;
+        _searchInputQuery = normalizedQuery.Length > 0 ? inputQuery : string.Empty;
         _activeSearchSources = sources;
         Current = Current with
         {
             Descriptor = descriptor,
-            IsSearchActive = normalizedQuery.Length > 0,
-            SearchQuery = normalizedQuery,
+            IsSearchActive = HasActiveSearch,
+            SearchQuery = SearchSnapshotQuery,
             SearchResultCount = resultCount,
             ChangedRowIndices = []
         };
@@ -143,9 +149,9 @@ public sealed class SitemapRuntimeController
                 IsBusy = false,
                 HasError = false,
                 ChangedRowIndices = changedRowIndices,
-                IsSearchActive = _activeSearchQuery.Length > 0,
-                SearchQuery = _activeSearchQuery,
-                SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
+                IsSearchActive = HasActiveSearch,
+                SearchQuery = SearchSnapshotQuery,
+                SearchResultCount = SearchSnapshotResultCount
             };
 
             // Live updates via sitemap events only.
@@ -177,9 +183,9 @@ public sealed class SitemapRuntimeController
                     IsBusy = false,
                     HasError = false,
                     ChangedRowIndices = changedRowIndices,
-                    IsSearchActive = _activeSearchQuery.Length > 0,
-                    SearchQuery = _activeSearchQuery,
-                    SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
+                    IsSearchActive = HasActiveSearch,
+                    SearchQuery = SearchSnapshotQuery,
+                    SearchResultCount = SearchSnapshotResultCount
                 };
 
                 _ = StartSitemapEventStreamAsync(fallback.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
@@ -812,10 +818,10 @@ public sealed class SitemapRuntimeController
         Current = Current with
         {
             Descriptor = effectiveDescriptor,
-            ChangedRowIndices = _activeSearchQuery.Length > 0 ? [] : changedIndices,
-            IsSearchActive = _activeSearchQuery.Length > 0,
-            SearchQuery = _activeSearchQuery,
-            SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
+            ChangedRowIndices = HasActiveSearch ? [] : changedIndices,
+            IsSearchActive = HasActiveSearch,
+            SearchQuery = SearchSnapshotQuery,
+            SearchResultCount = SearchSnapshotResultCount
         };
 
         DiagnosticLogger.Info(
@@ -1011,9 +1017,9 @@ public sealed class SitemapRuntimeController
                 Descriptor = effectiveDescriptor,
                 Breadcrumbs = breadcrumbs,
                 ChangedRowIndices = changedRowIndices,
-                IsSearchActive = _activeSearchQuery.Length > 0,
-                SearchQuery = _activeSearchQuery,
-                SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
+                IsSearchActive = HasActiveSearch,
+                SearchQuery = SearchSnapshotQuery,
+                SearchResultCount = SearchSnapshotResultCount
             };
         }
 
@@ -1295,9 +1301,9 @@ public sealed class SitemapRuntimeController
         {
             Descriptor = effectiveDescriptor,
             ChangedRowIndices = [],
-            IsSearchActive = _activeSearchQuery.Length > 0,
-            SearchQuery = _activeSearchQuery,
-            SearchResultCount = _activeSearchQuery.Length > 0 ? _activeSearchSources.Count : 0
+            IsSearchActive = HasActiveSearch,
+            SearchQuery = SearchSnapshotQuery,
+            SearchResultCount = SearchSnapshotResultCount
         };
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -1431,6 +1437,7 @@ public sealed class SitemapRuntimeController
     private void ClearSearchState()
     {
         _activeSearchQuery = string.Empty;
+        _searchInputQuery = string.Empty;
         _activeSearchSources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
     }
 
@@ -1471,6 +1478,14 @@ public sealed class SitemapRuntimeController
 
         var search = SitemapSearchDescriptorBuilder.Build(currentPage, normalDescriptor, _activeSearchQuery, renderController);
         _activeSearchQuery = search.Query;
+        if (_activeSearchQuery.Length == 0)
+        {
+            _searchInputQuery = string.Empty;
+        }
+        else if (_searchInputQuery.Length == 0)
+        {
+            _searchInputQuery = _activeSearchQuery;
+        }
         _activeSearchSources = new Dictionary<string, SitemapSearchSource>(search.SourcesByResultKey, StringComparer.Ordinal);
         return search.Descriptor;
     }

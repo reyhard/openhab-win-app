@@ -98,6 +98,23 @@ public sealed class SitemapSearchDescriptorBuilderTests
     }
 
     [Fact]
+    public void TextLabelMatchIncludesLinkedPageChildren()
+    {
+        var page = CreateTextLinkedPage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Czajnik", renderController);
+
+        Assert.True(result.IsSearchActive);
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Czajnik");
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Ogolne");
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Stan");
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Akcja");
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Tryb pokretla");
+        Assert.Equal(5, result.ResultCount);
+    }
+
+    [Fact]
     public void FlattenedFrameLabelMatchIncludesFollowingVisibleFrameChildren()
     {
         var page = CreateFlattenedFramePage();
@@ -454,6 +471,59 @@ public sealed class SitemapSearchDescriptorBuilderTests
                     true,
                     [],
                     WidgetId: "desk-light")
+            ]));
+    }
+
+    private static NormalizedSitemapPage CreateTextLinkedPage()
+    {
+        return SitemapNormalizer.Normalize(new SitemapPage(
+            "home",
+            "Home",
+            [
+                new SitemapWidget(
+                    "Czajnik",
+                    SitemapWidgetType.Text,
+                    "Kettle_01_Temperature",
+                    "83",
+                    [],
+                    true,
+                    [
+                        new SitemapPage("kettle", "Czajnik", [
+                            new SitemapWidget(
+                                "Ogolne",
+                                SitemapWidgetType.Frame,
+                                null,
+                                null,
+                                [],
+                                true,
+                                []),
+                            new SitemapWidget(
+                                "Stan",
+                                SitemapWidgetType.Text,
+                                "Kettle_01_Status",
+                                "Idle",
+                                [],
+                                true,
+                                []),
+                            new SitemapWidget(
+                                "Akcja",
+                                SitemapWidgetType.Switch,
+                                "Kettle_01_SwitchMode",
+                                "0",
+                                [new SitemapMapping("0", "Stop"), new SitemapMapping("1", "Keep Warm"), new SitemapMapping("2", "Boil")],
+                                true,
+                                []),
+                            new SitemapWidget(
+                                "Tryb pokretla",
+                                SitemapWidgetType.Switch,
+                                "Kettle_01_Function_Custom_Knob_Temp",
+                                "OFF",
+                                [new SitemapMapping("OFF", "Precyzyjny"), new SitemapMapping("ON", "Presety")],
+                                true,
+                                [])
+                        ])
+                    ],
+                    WidgetId: "kettle")
             ]));
     }
 

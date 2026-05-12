@@ -226,6 +226,29 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task ApplySearchQueryPreservesTrailingSpaceForSearchInput()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        controller.ApplySearchQuery("Temperature ");
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Temperature ", controller.Current.SearchQuery);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+
+        await controller.RefreshAsync();
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Temperature ", controller.Current.SearchQuery);
+    }
+
+    [Fact]
     public async Task ClearSearchRestoresNormalDescriptor()
     {
         var settings = CreateSettingsController();

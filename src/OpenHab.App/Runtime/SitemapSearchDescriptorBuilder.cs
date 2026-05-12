@@ -135,6 +135,8 @@ public static class SitemapSearchDescriptorBuilder
 
         var labelMatches = LabelMatches(widget.Label, query);
         var frameMatch = widget.Type == SitemapWidgetType.Frame && labelMatches;
+        var linkedPageMatch = labelMatches && widget.Children.Count > 0;
+        var includeLinkedPageChildren = linkedPageMatch || frameMatch || inheritedFrameMatch;
         var includeSelf = forcedChildInclusion || labelMatches || inheritedFrameMatch;
         var sourceWidgetPath = BuildWidgetPath(widgetPathPrefix, widgetIndex);
         var hasAnyDescendantIncluded = false;
@@ -196,12 +198,12 @@ public static class SitemapSearchDescriptorBuilder
                     childWidgetPathPrefix,
                     parentNavigationLabel: widget.Label,
                     currentPageRowIndex: null,
-                    forcedChildInclusion: frameMatch || inheritedFrameMatch,
-                    inheritedFrameMatch: frameMatch || inheritedFrameMatch);
+                    forcedChildInclusion: includeLinkedPageChildren,
+                    inheritedFrameMatch: includeLinkedPageChildren);
 
                 anyIncludedFromChildPage |= childIncluded;
 
-                if (childFrameMatch || frameMatch || inheritedFrameMatch)
+                if (childFrameMatch || includeLinkedPageChildren)
                 {
                     var nextIndex = AddFlattenedFrameChildren(
                         normalizedChildPage,
