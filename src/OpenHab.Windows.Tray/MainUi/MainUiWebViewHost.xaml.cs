@@ -132,6 +132,13 @@ public sealed partial class MainUiWebViewHost : UserControl
 
     private static void OpenExternal(Uri uri)
     {
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            DiagnosticLogger.Warn("Open external URL blocked: unsupported URI scheme.");
+            return;
+        }
+
         try
         {
             _ = Process.Start(new ProcessStartInfo

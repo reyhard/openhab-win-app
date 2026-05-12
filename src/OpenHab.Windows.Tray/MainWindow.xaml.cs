@@ -39,6 +39,7 @@ public sealed partial class MainWindow : Window
     private bool _lastRefreshUseWindows11Icons;
     private string? currentMainUiRoute;
     private TransportKind? currentMainUiTransport;
+    private bool isMainUiNavigationInProgress;
 
     private Notifications.NotificationsPageControl? notificationsPage;
     private Settings.SettingsPageControl? settingsPage;
@@ -178,7 +179,10 @@ public sealed partial class MainWindow : Window
         var state = shellController.Current;
         SitemapPaneColumn.Width = state.IsSitemapVisible ? new GridLength(380) : new GridLength(0);
         SitemapContentRoot.Visibility = state.IsSitemapVisible ? Visibility.Visible : Visibility.Collapsed;
-        settingsController.SetMainWindowSitemapPaneVisible(state.IsSitemapVisible);
+        if (settingsController.Current.MainWindowSitemapPaneVisible != state.IsSitemapVisible)
+        {
+            settingsController.SetMainWindowSitemapPaneVisible(state.IsSitemapVisible);
+        }
 
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
@@ -217,6 +221,12 @@ public sealed partial class MainWindow : Window
 
     private async Task NavigateMainUiAsync(string route)
     {
+        if (isMainUiNavigationInProgress)
+        {
+            return;
+        }
+
+        isMainUiNavigationInProgress = true;
         var settings = settingsController.Current;
         var endpoint = runtimeController.Current.ActiveTransport == TransportKind.Cloud
             ? settings.CloudEndpoint
@@ -237,6 +247,10 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             StatusText.Text = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isMainUiNavigationInProgress = false;
         }
     }
 
@@ -305,8 +319,28 @@ public sealed partial class MainWindow : Window
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
+        EnsureMainUiEndpointMatchesActiveTransport(snapshot);
         sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+    }
+
+    private void EnsureMainUiEndpointMatchesActiveTransport(SitemapRuntimeSnapshot snapshot)
+    {
+        if (shellController.Current.CenterPage != MainWindowCenterPage.MainUi || isMainUiNavigationInProgress)
+        {
+            return;
+        }
+
+        var desiredTransport = snapshot.ActiveTransport == TransportKind.Cloud
+            ? TransportKind.Cloud
+            : TransportKind.Local;
+        if (currentMainUiTransport == desiredTransport)
+        {
+            return;
+        }
+
+        var route = currentMainUiRoute ?? shellController.Current.PendingMainUiRoute ?? "/";
+        _ = NavigateMainUiAsync(route);
     }
 
     private async Task OnRowActivatedAsync(int rowIndex)
