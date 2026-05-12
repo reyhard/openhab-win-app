@@ -18,13 +18,8 @@ public static class MainUiUrlBuilder
             builder.Host = "home.myopenhab.org";
         }
 
-        var normalizedRoute = string.IsNullOrWhiteSpace(route) ? "/" : route.Trim();
-        if (!normalizedRoute.StartsWith("/", StringComparison.Ordinal))
-        {
-            normalizedRoute = "/" + normalizedRoute;
-        }
-
-        return new Uri(builder.Uri, normalizedRoute.TrimStart('/'));
+        var normalizedRoute = NormalizeInternalRoute(route);
+        return new Uri(builder.Uri, normalizedRoute);
     }
 
     public static bool IsSameHost(Uri expectedBase, Uri candidate)
@@ -33,7 +28,42 @@ public static class MainUiUrlBuilder
         ArgumentNullException.ThrowIfNull(candidate);
 
         return string.Equals(expectedBase.Scheme, candidate.Scheme, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(expectedBase.Host, candidate.Host, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(CanonicalizeHost(expectedBase.Host), CanonicalizeHost(candidate.Host), StringComparison.OrdinalIgnoreCase)
             && expectedBase.Port == candidate.Port;
+    }
+
+    private static string NormalizeInternalRoute(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route))
+        {
+            return "/";
+        }
+
+        var normalized = route.Trim();
+        if (normalized.StartsWith("//", StringComparison.Ordinal))
+        {
+            return "/" + normalized.TrimStart('/');
+        }
+
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out _))
+        {
+            return "/" + normalized;
+        }
+
+        if (!normalized.StartsWith("/", StringComparison.Ordinal)
+            && !normalized.StartsWith("?", StringComparison.Ordinal)
+            && !normalized.StartsWith("#", StringComparison.Ordinal))
+        {
+            return "/" + normalized;
+        }
+
+        return normalized;
+    }
+
+    private static string CanonicalizeHost(string host)
+    {
+        return string.Equals(host, "myopenhab.org", StringComparison.OrdinalIgnoreCase)
+            ? "home.myopenhab.org"
+            : host;
     }
 }

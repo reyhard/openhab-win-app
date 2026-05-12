@@ -13,27 +13,37 @@ public sealed class MainWindowShellController
 
     public void SelectCenterPage(MainWindowCenterPage page)
     {
-        Current = Current with
+        var next = Current with
         {
             CenterPage = page,
             PendingMainUiRoute = page == MainWindowCenterPage.MainUi ? Current.PendingMainUiRoute : null
         };
+
+        if (EqualityComparer<MainWindowShellState>.Default.Equals(Current, next))
+        {
+            return;
+        }
+
+        Current = next;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     public void SelectPromotedMainUiPage(string route)
     {
-        var normalizedRoute = string.IsNullOrWhiteSpace(route) ? "/" : route.Trim();
-        if (!normalizedRoute.StartsWith("/", StringComparison.Ordinal))
-        {
-            normalizedRoute = "/" + normalizedRoute;
-        }
+        var normalizedRoute = NormalizeRoute(route);
 
-        Current = Current with
+        var next = Current with
         {
             CenterPage = MainWindowCenterPage.MainUi,
             PendingMainUiRoute = normalizedRoute
         };
+
+        if (EqualityComparer<MainWindowShellState>.Default.Equals(Current, next))
+        {
+            return;
+        }
+
+        Current = next;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -46,5 +56,21 @@ public sealed class MainWindowShellController
 
         Current = Current with { IsSitemapVisible = visible };
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static string NormalizeRoute(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route))
+        {
+            return "/";
+        }
+
+        var normalized = route.Trim();
+        if (!normalized.StartsWith("/", StringComparison.Ordinal))
+        {
+            normalized = "/" + normalized;
+        }
+
+        return normalized;
     }
 }

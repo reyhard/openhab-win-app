@@ -14,6 +14,19 @@ public sealed class MainWindowShellControllerTests
     }
 
     [Fact]
+    public void SelectingCurrentCenterPageDoesNotRaiseChanged()
+    {
+        var controller = new MainWindowShellController(initialSitemapVisible: false);
+        var changedCount = 0;
+        controller.Changed += (_, _) => changedCount++;
+
+        controller.SelectCenterPage(MainWindowCenterPage.MainUi);
+
+        Assert.Equal(0, changedCount);
+        Assert.Equal(MainWindowCenterPage.MainUi, controller.Current.CenterPage);
+    }
+
+    [Fact]
     public void SitemapVisibilitySurvivesSettingsNavigation()
     {
         var controller = new MainWindowShellController(initialSitemapVisible: false);
@@ -34,6 +47,20 @@ public sealed class MainWindowShellControllerTests
 
         Assert.Equal(MainWindowCenterPage.MainUi, controller.Current.CenterPage);
         Assert.True(controller.Current.IsSitemapVisible);
+        Assert.Equal("/page/energy", controller.Current.PendingMainUiRoute);
+    }
+
+    [Fact]
+    public void SelectingCurrentPromotedMainUiRouteDoesNotRaiseChanged()
+    {
+        var controller = new MainWindowShellController(initialSitemapVisible: true);
+        var changedCount = 0;
+        controller.Changed += (_, _) => changedCount++;
+
+        controller.SelectPromotedMainUiPage("/page/energy");
+        controller.SelectPromotedMainUiPage("/page/energy");
+
+        Assert.Equal(1, changedCount);
         Assert.Equal("/page/energy", controller.Current.PendingMainUiRoute);
     }
 }
