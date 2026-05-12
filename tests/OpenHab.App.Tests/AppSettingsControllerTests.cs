@@ -624,4 +624,27 @@ public sealed class AppSettingsControllerTests
         Assert.Equal("energy", link.Label);
         Assert.Equal("/page/energy", link.Route);
     }
+
+    [Fact]
+    public void CachedMainUiPageLinksLoadedFromJsonAreNormalized()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            AppSettings.Default with
+            {
+                CachedMainUiPageLinks =
+                [
+                    new OpenHab.App.MainUi.MainUiPageLink(" ", "Ignored", "/page/ignored", null, null, null),
+                    new OpenHab.App.MainUi.MainUiPageLink(" energy ", " ", "page/energy", null, null, null)
+                ]
+            });
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        var link = Assert.Single(controller.Current.CachedMainUiPageLinks);
+        Assert.Equal("energy", link.Uid);
+        Assert.Equal("energy", link.Label);
+        Assert.Equal("/page/energy", link.Route);
+    }
 }

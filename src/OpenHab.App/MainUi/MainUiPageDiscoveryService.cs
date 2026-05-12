@@ -17,6 +17,8 @@ public sealed class MainUiPageDiscoveryService(IOpenHabClient client)
 
         return pages
             .Where(page => page.GetConfigBoolean("sidebar"))
+            .Select(static page => page with { Uid = page.Uid.Trim() })
+            .Where(static page => !string.IsNullOrWhiteSpace(page.Uid))
             .Select(ToLink)
             .OrderBy(link => link.Order ?? int.MaxValue)
             .ThenBy(link => link.Label, StringComparer.CurrentCultureIgnoreCase)

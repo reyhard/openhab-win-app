@@ -59,6 +59,27 @@ public sealed class MainUiPageDiscoveryServiceTests
         Assert.Equal("/page/Floor%20Plan", link.Route);
     }
 
+    [Fact]
+    public void BuildPromotedLinks_TrimsUidBeforeMapping()
+    {
+        var pages = new[] { Page("  energy  ", "Energy", sidebar: true, order: null, icon: null) };
+
+        var link = Assert.Single(MainUiPageDiscoveryService.BuildPromotedLinks(pages));
+
+        Assert.Equal("energy", link.Uid);
+        Assert.Equal("/page/energy", link.Route);
+    }
+
+    [Fact]
+    public void BuildPromotedLinks_RejectsBlankUid()
+    {
+        var pages = new[] { Page("   ", "Ignored", sidebar: true, order: null, icon: null) };
+
+        var links = MainUiPageDiscoveryService.BuildPromotedLinks(pages);
+
+        Assert.Empty(links);
+    }
+
     private static MainUiPageComponent Page(string uid, string? label, bool sidebar, string? order, string? icon)
     {
         var values = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
