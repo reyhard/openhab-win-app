@@ -1,10 +1,12 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Dispatching;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Diagnostics;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using System.Threading;
 
 namespace OpenHab.Windows.Tray.Rendering.SitemapSurface;
 
@@ -15,6 +17,9 @@ public sealed class SitemapSurfaceRenderer(
     Func<string, Task> navigateByRowKey,
     Func<string, string, Task> sendCommandByRowKey)
 {
+    private const int SearchChunkThreshold = 40;
+    private const int SearchFirstChunkSize = 30;
+    private const int SearchBatchChunkSize = 30;
     private sealed record RenderedRowTag(int RowIndex, string RowKey, string VisualStateKey);
     private sealed record ExistingRenderedRow(FrameworkElement Element, int ChildIndex);
     private sealed record PendingRowUpdate(FrameworkElement Element, int RowIndex, SitemapRowDescriptor Row);
@@ -24,6 +29,7 @@ public sealed class SitemapSurfaceRenderer(
         SitemapControlFactory.IconAuthContext IconAuth,
         int ChartDpi);
     private bool forceFullRebuild;
+    private int renderGeneration;
 
     public void ForceFullRebuild()
     {
@@ -57,6 +63,12 @@ public sealed class SitemapSurfaceRenderer(
 
         var context = CreateRenderContext(snapshot);
         var visualRows = SitemapRowPlanner.BuildVisualRows(rows);
+        if (ShouldUseChunkedSearchRender(snapshot, visualRows.Count))
+        {
+            StartChunkedSearchRender(rowsPanel, visualRows, snapshot, context);
+            return;
+        }
+
         if (rowsPanel.Children.Count == visualRows.Count)
         {
             RefreshExistingRows(rowsPanel, visualRows, snapshot, context);
@@ -72,6 +84,84 @@ public sealed class SitemapSurfaceRenderer(
         rowsPanel.Children.Clear();
         foreach (var visualRow in visualRows)
         {
+            var element = CreateRowElement(visualRow.RowIndex, visualRow.Row, snapshot, context);
+            rowsPanel.Children.Add(element);
+            SitemapControlFactory.SetVisibility(element, visualRow.Row.IsVisible);
+        }
+    }
+
+    private bool ShouldUseChunkedSearchRender(SitemapRuntimeSnapshot snapshot, int visualRowCount)
+    {
+        return snapshot.IsSearchActive && visualRowCount > SearchChunkThreshold;
+    }
+
+    private void StartChunkedSearchRender(
+        StackPanel rowsPanel,
+        IReadOnlyList<SitemapVisualRow> visualRows,
+        SitemapRuntimeSnapshot snapshot,
+        RenderContext context)
+    {
+        var generation = Interlocked.Increment(ref renderGeneration);
+        rowsPanel.Children.Clear();
+
+        var firstCount = Math.Min(SearchFirstChunkSize, visualRows.Count);
+        AppendVisualRows(rowsPanel, visualRows, snapshot, context, startIndex: 0, count: firstCount);
+        if (firstCount >= visualRows.Count)
+        {
+            return;
+        }
+
+        ScheduleChunk(rowsPanel, visualRows, snapshot, context, generation, firstCount);
+    }
+
+    private void ScheduleChunk(
+        StackPanel rowsPanel,
+        IReadOnlyList<SitemapVisualRow> visualRows,
+        SitemapRuntimeSnapshot snapshot,
+        RenderContext context,
+        int generation,
+        int startIndex)
+    {
+        var queue = DispatcherQueue.GetForCurrentThread();
+        if (queue is null)
+        {
+            return;
+        }
+
+        _ = queue.TryEnqueue(() =>
+        {
+            if (generation != Volatile.Read(ref renderGeneration))
+            {
+                return;
+            }
+
+            var count = Math.Min(SearchBatchChunkSize, visualRows.Count - startIndex);
+            if (count <= 0)
+            {
+                return;
+            }
+
+            AppendVisualRows(rowsPanel, visualRows, snapshot, context, startIndex, count);
+            var nextStart = startIndex + count;
+            if (nextStart < visualRows.Count)
+            {
+                ScheduleChunk(rowsPanel, visualRows, snapshot, context, generation, nextStart);
+            }
+        });
+    }
+
+    private void AppendVisualRows(
+        StackPanel rowsPanel,
+        IReadOnlyList<SitemapVisualRow> visualRows,
+        SitemapRuntimeSnapshot snapshot,
+        RenderContext context,
+        int startIndex,
+        int count)
+    {
+        var end = Math.Min(startIndex + count, visualRows.Count);
+        for (var i = startIndex; i < end; i++)
+        {
+            var visualRow = visualRows[i];
             var element = CreateRowElement(visualRow.RowIndex, visualRow.Row, snapshot, context);
             rowsPanel.Children.Add(element);
             SitemapControlFactory.SetVisibility(element, visualRow.Row.IsVisible);
