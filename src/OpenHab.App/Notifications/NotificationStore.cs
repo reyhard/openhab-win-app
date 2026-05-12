@@ -131,11 +131,13 @@ public sealed class NotificationStore
                 ? directMatch
                 : null;
 
-            if (existing is null && !string.IsNullOrWhiteSpace(referenceId))
+            if (existing is null
+                && !notifications.ContainsKey(id)
+                && !string.IsNullOrWhiteSpace(referenceId))
             {
                 var referenceMatch = notifications.FirstOrDefault(entry =>
                     !string.IsNullOrWhiteSpace(entry.Value.ReferenceId)
-                    && string.Equals(entry.Value.ReferenceId, referenceId, StringComparison.Ordinal));
+                    && string.Equals(entry.Value.ReferenceId, referenceId, StringComparison.OrdinalIgnoreCase));
 
                 if (!referenceMatch.Equals(default(KeyValuePair<string, StoredNotification>)))
                 {
