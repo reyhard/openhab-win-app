@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using OpenHab.Core;
@@ -189,7 +190,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
     {
         if (!element.TryGetProperty("config", out var configElement) || configElement.ValueKind != JsonValueKind.Object)
         {
-            return new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            return new ReadOnlyDictionary<string, JsonElement>(new Dictionary<string, JsonElement>(StringComparer.Ordinal));
         }
 
         var config = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
@@ -198,7 +199,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
             config[property.Name] = property.Value.Clone();
         }
 
-        return config;
+        return new ReadOnlyDictionary<string, JsonElement>(config);
     }
 
     private static async Task ThrowIfFailedAsync(HttpResponseMessage response, CancellationToken cancellationToken)
