@@ -153,6 +153,9 @@ public sealed partial class MainUiWebViewHost : UserControl
         if (suppressNextNavigationError)
         {
             suppressNextNavigationError = false;
+            MainWebView.Visibility = Visibility.Visible;
+            LoadingView.Visibility = Visibility.Collapsed;
+            ErrorView.Visibility = Visibility.Collapsed;
         }
         else
         {
