@@ -1,6 +1,7 @@
 using OpenHab.Core;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
+using OpenHab.App.MainUi;
 using OpenHab.Rendering.Descriptors;
 using System.Collections.Immutable;
 using System.Collections.Generic;
@@ -215,6 +216,25 @@ public sealed class AppSettingsController
         }
 
         UpdateSettings(appSettings => appSettings with { DeviceInfoSync = settings.Normalized() });
+    }
+
+    public void SetMainUiPagesExpanded(bool expanded)
+    {
+        UpdateSettings(settings => settings with { MainUiPagesExpanded = expanded });
+    }
+
+    public void SetMainWindowSitemapPaneVisible(bool visible)
+    {
+        UpdateSettings(settings => settings with { MainWindowSitemapPaneVisible = visible });
+    }
+
+    public void SetCachedMainUiPageLinks(IEnumerable<MainUiPageLink> links)
+    {
+        ArgumentNullException.ThrowIfNull(links);
+        UpdateSettings(settings => settings with
+        {
+            CachedMainUiPageLinks = NormalizeMainUiPageLinks(links)
+        });
     }
 
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
@@ -476,8 +496,42 @@ public sealed class AppSettingsController
             FlyoutWidth = width,
             NotificationPollIntervalSeconds = interval,
             ImportantNotificationTags = NormalizeImportantNotificationTags(settings.ImportantNotificationTags),
-            DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default
+            DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default,
+            CachedMainUiPageLinks = NormalizeMainUiPageLinks(settings.CachedMainUiPageLinks)
         };
+    }
+
+    private static ImmutableArray<MainUiPageLink> NormalizeMainUiPageLinks(IEnumerable<MainUiPageLink>? links)
+    {
+        if (links is null)
+        {
+            return [];
+        }
+
+        return links
+            .Where(static link => !string.IsNullOrWhiteSpace(link.Uid))
+            .Select(static link =>
+            {
+                var uid = link.Uid.Trim();
+                var label = string.IsNullOrWhiteSpace(link.Label) ? uid : link.Label.Trim();
+                var route = string.IsNullOrWhiteSpace(link.Route) ? "/page/" + Uri.EscapeDataString(uid) : link.Route.Trim();
+                if (!route.StartsWith("/", StringComparison.Ordinal))
+                {
+                    route = "/" + route;
+                }
+
+                return link with
+                {
+                    Uid = uid,
+                    Label = label,
+                    Route = route
+                };
+            })
+            .DistinctBy(static link => link.Uid, StringComparer.Ordinal)
+            .OrderBy(static link => link.Order ?? int.MaxValue)
+            .ThenBy(static link => link.Label, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(static link => link.Uid, StringComparer.Ordinal)
+            .ToImmutableArray();
     }
 
     private static ImmutableArray<string> NormalizeImportantNotificationTags(IEnumerable<string>? tags)
