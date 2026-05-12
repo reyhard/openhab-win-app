@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
 using OpenHab.App.MainUi;
 using OpenHab.Core;
+using System.Text;
 
 namespace OpenHab.Windows.Tray.MainUi;
 
@@ -12,6 +13,7 @@ public sealed partial class MainUiWebViewHost : UserControl
     private Uri? currentEndpoint;
     private Uri? currentBaseUri;
     private Uri? currentUri;
+    private MainUiAuthContext currentAuth = MainUiAuthContext.None;
     private string pendingRoute = "/";
     private bool initialized;
     private bool suppressNextNavigationError;
@@ -28,11 +30,16 @@ public sealed partial class MainUiWebViewHost : UserControl
 
     public string CurrentRoute => pendingRoute;
 
-    public async Task NavigateAsync(Uri endpoint, string? route, CancellationToken cancellationToken = default)
+    public async Task NavigateAsync(
+        Uri endpoint,
+        string? route,
+        MainUiAuthContext? authContext = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
         currentEndpoint = endpoint;
+        currentAuth = authContext ?? MainUiAuthContext.None;
         currentUri = MainUiUrlBuilder.Build(endpoint, route);
         currentBaseUri = MainUiUrlBuilder.Build(endpoint, "/");
         pendingRoute = NormalizeRouteForRetry(route);
@@ -45,7 +52,13 @@ public sealed partial class MainUiWebViewHost : UserControl
             cancellationToken.ThrowIfCancellationRequested();
             var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             navigationCompletion = completion;
-            MainWebView.Source = currentUri;
+            var request = MainWebView.CoreWebView2.Environment.CreateWebResourceRequest(
+                currentUri.ToString(),
+                "GET",
+                null,
+                null);
+            ApplyAuthHeader(request.Headers, currentAuth);
+            MainWebView.CoreWebView2.NavigateWithWebResourceRequest(request);
             using var registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
             try
             {
@@ -65,7 +78,7 @@ public sealed partial class MainUiWebViewHost : UserControl
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Main UI WebView initialization failed: {ex.GetType().Name}: {ex.Message}");
+            DiagnosticLogger.Warn($"Main UI WebView initialization failed: {ex.GetType().Name}");
             ShowError("Main UI could not be loaded. WebView2 may be unavailable.");
         }
     }
@@ -89,9 +102,40 @@ public sealed partial class MainUiWebViewHost : UserControl
         MainWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
         MainWebView.CoreWebView2.Settings.IsScriptEnabled = true;
         MainWebView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
+        MainWebView.CoreWebView2.BasicAuthenticationRequested += CoreWebView2_BasicAuthenticationRequested;
+        MainWebView.CoreWebView2.WebResourceRequested += CoreWebView2_WebResourceRequested;
+        MainWebView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
         MainWebView.NavigationStarting += MainWebView_NavigationStarting;
         MainWebView.NavigationCompleted += MainWebView_NavigationCompleted;
         initialized = true;
+    }
+
+    private void CoreWebView2_BasicAuthenticationRequested(
+        CoreWebView2 sender,
+        CoreWebView2BasicAuthenticationRequestedEventArgs args)
+    {
+        if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri)
+            || currentBaseUri is null
+            || !MainUiUrlBuilder.IsSameHost(currentBaseUri, uri)
+            || string.IsNullOrWhiteSpace(currentAuth.BasicUserName))
+        {
+            return;
+        }
+
+        args.Response.UserName = currentAuth.BasicUserName;
+        args.Response.Password = currentAuth.BasicPassword ?? string.Empty;
+    }
+
+    private void CoreWebView2_WebResourceRequested(CoreWebView2 sender, CoreWebView2WebResourceRequestedEventArgs args)
+    {
+        if (!Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var uri)
+            || currentBaseUri is null
+            || !MainUiUrlBuilder.IsSameHost(currentBaseUri, uri))
+        {
+            return;
+        }
+
+        ApplyAuthHeader(args.Request.Headers, currentAuth);
     }
 
     private void CoreWebView2_NewWindowRequested(CoreWebView2 sender, CoreWebView2NewWindowRequestedEventArgs args)
@@ -174,11 +218,11 @@ public sealed partial class MainUiWebViewHost : UserControl
 
         try
         {
-            await NavigateAsync(currentEndpoint, pendingRoute);
+            await NavigateAsync(currentEndpoint, pendingRoute, currentAuth);
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Main UI retry failed: {ex.GetType().Name}: {ex.Message}");
+            DiagnosticLogger.Warn($"Main UI retry failed: {ex.GetType().Name}");
         }
     }
 
@@ -192,6 +236,7 @@ public sealed partial class MainUiWebViewHost : UserControl
 
     private static void OpenExternal(Uri uri)
     {
+        uri = MainUiUrlBuilder.StripUserInfo(uri);
         if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
             && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
@@ -209,7 +254,23 @@ public sealed partial class MainUiWebViewHost : UserControl
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Open external URL failed: {ex.GetType().Name}: {ex.Message}");
+            DiagnosticLogger.Warn($"Open external URL failed: {ex.GetType().Name}");
+        }
+    }
+
+    private static void ApplyAuthHeader(CoreWebView2HttpRequestHeaders headers, MainUiAuthContext authContext)
+    {
+        if (!string.IsNullOrWhiteSpace(authContext.ApiToken))
+        {
+            headers.SetHeader("Authorization", $"Bearer {authContext.ApiToken}");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(authContext.BasicUserName))
+        {
+            var raw = $"{authContext.BasicUserName}:{authContext.BasicPassword ?? string.Empty}";
+            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
+            headers.SetHeader("Authorization", $"Basic {base64}");
         }
     }
 

@@ -102,6 +102,11 @@ public sealed class AppSettingsController
             throw new ArgumentException("Local endpoint must use HTTP or HTTPS.", nameof(localEndpoint));
         }
 
+        if (!string.IsNullOrEmpty(localEndpoint.UserInfo))
+        {
+            throw new ArgumentException("Local endpoint must not contain user information.", nameof(localEndpoint));
+        }
+
         if (!cloudEndpoint.IsAbsoluteUri)
         {
             throw new ArgumentException("Cloud endpoint must be an absolute URI.", nameof(cloudEndpoint));
@@ -110,6 +115,11 @@ public sealed class AppSettingsController
         if (!IsHttpOrHttps(cloudEndpoint))
         {
             throw new ArgumentException("Cloud endpoint must use HTTP or HTTPS.", nameof(cloudEndpoint));
+        }
+
+        if (!string.IsNullOrEmpty(cloudEndpoint.UserInfo))
+        {
+            throw new ArgumentException("Cloud endpoint must not contain user information.", nameof(cloudEndpoint));
         }
 
         UpdateSettings(settings =>

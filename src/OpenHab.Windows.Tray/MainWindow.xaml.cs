@@ -18,6 +18,7 @@ using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Windows.Tray.MainUi;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Rendering.SitemapSurface;
 namespace OpenHab.Windows.Tray;
@@ -31,6 +32,7 @@ public sealed partial class MainWindow : Window
     private readonly NotificationStore? notificationStore;
     private readonly Action requestHideToTray;
     private readonly Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory;
+    private readonly Func<TransportKind, MainUiAuthContext> mainUiAuthResolver;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
@@ -64,7 +66,8 @@ public sealed partial class MainWindow : Window
             runtimeController,
             notificationStore: null,
             () => { },
-            (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint))
+            (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint),
+            _ => MainUiAuthContext.None)
     {
     }
 
@@ -77,7 +80,8 @@ public sealed partial class MainWindow : Window
             runtimeController,
             notificationStore: null,
             requestHideToTray,
-            (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint))
+            (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint),
+            _ => MainUiAuthContext.None)
     {
     }
 
@@ -86,13 +90,15 @@ public sealed partial class MainWindow : Window
         SitemapRuntimeController runtimeController,
         NotificationStore? notificationStore,
         Action requestHideToTray,
-        Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory)
+        Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory,
+        Func<TransportKind, MainUiAuthContext>? mainUiAuthResolver = null)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
         this.notificationStore = notificationStore;
         this.requestHideToTray = requestHideToTray;
         this.openHabClientFactory = openHabClientFactory;
+        this.mainUiAuthResolver = mainUiAuthResolver ?? (_ => MainUiAuthContext.None);
         sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
         sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
             settingsController,
@@ -215,9 +221,7 @@ public sealed partial class MainWindow : Window
             {
                 var normalizedRoute = NormalizeMainUiRoute(targetRoute);
                 var isExplicitRouteRequest = !string.IsNullOrWhiteSpace(state.PendingMainUiRoute);
-                var activeTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
-                    ? TransportKind.Cloud
-                    : TransportKind.Local;
+                var activeTransport = GetPreferredMainUiTransport();
                 if (!string.Equals(currentMainUiRoute, normalizedRoute, StringComparison.Ordinal)
                     || currentMainUiTransport != activeTransport)
                 {
@@ -273,18 +277,17 @@ public sealed partial class MainWindow : Window
 
         isMainUiNavigationInProgress = true;
         var settings = settingsController.Current;
-        var selectedTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
-            ? TransportKind.Cloud
-            : TransportKind.Local;
+        var selectedTransport = GetPreferredMainUiTransport();
         activeMainUiNavigationTransport = selectedTransport;
         var endpoint = selectedTransport == TransportKind.Cloud
             ? settings.CloudEndpoint
             : settings.LocalEndpoint;
+        var authContext = mainUiAuthResolver(selectedTransport);
         string? followUpRoute = null;
         var runTransportResync = false;
         try
         {
-            await MainUiHost.NavigateAsync(endpoint, normalizedRoute);
+            await MainUiHost.NavigateAsync(endpoint, normalizedRoute, authContext);
             currentMainUiRoute = MainUiHost.CurrentRoute;
             currentMainUiTransport = selectedTransport;
         }
@@ -294,7 +297,8 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            DiagnosticLogger.Warn($"Main UI navigation failed: {ex.GetType().Name}");
+            StatusText.Text = "Error: Main UI could not be loaded.";
         }
         finally
         {
@@ -345,6 +349,21 @@ public sealed partial class MainWindow : Window
 
         var normalized = route.Trim();
         return normalized.StartsWith("/", StringComparison.Ordinal) ? normalized : "/" + normalized;
+    }
+
+    private TransportKind GetPreferredMainUiTransport()
+    {
+        return GetPreferredMainUiTransport(runtimeController.Current);
+    }
+
+    private TransportKind GetPreferredMainUiTransport(SitemapRuntimeSnapshot snapshot)
+    {
+        return snapshot.ActiveTransport switch
+        {
+            TransportKind.Cloud => TransportKind.Cloud,
+            TransportKind.Local => TransportKind.Local,
+            _ => settingsController.Current.EndpointMode == EndpointMode.CloudOnly ? TransportKind.Cloud : TransportKind.Local
+        };
     }
 
     public async Task RefreshPromotedMainUiPagesAsync(CancellationToken cancellationToken = default)
@@ -479,9 +498,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var desiredTransport = snapshot.ActiveTransport == TransportKind.Cloud
-            ? TransportKind.Cloud
-            : TransportKind.Local;
+        var desiredTransport = GetPreferredMainUiTransport(snapshot);
         if (isMainUiNavigationInProgress)
         {
             var inFlightTransport = activeMainUiNavigationTransport ?? currentMainUiTransport;

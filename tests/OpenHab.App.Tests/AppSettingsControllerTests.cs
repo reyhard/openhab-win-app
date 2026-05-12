@@ -195,6 +195,28 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void SetEndpointsRejectsLocalUriUserInfo()
+    {
+        var controller = CreateController();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            controller.SetEndpoints(new Uri("http://user:pass@openhab:8080"), new Uri("https://myopenhab.org")));
+
+        Assert.Contains("user information", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SetEndpointsRejectsCloudUriUserInfo()
+    {
+        var controller = CreateController();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            controller.SetEndpoints(new Uri("http://openhab:8080"), new Uri("https://user:pass@myopenhab.org")));
+
+        Assert.Contains("user information", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void DefaultsHaveNoTokensOrCloudCredentials()
     {
         var controller = CreateController();

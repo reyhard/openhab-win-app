@@ -138,6 +138,11 @@ public partial class App : Application
                     apiToken: auth.ApiToken,
                     basicUserName: auth.BasicUserName,
                     basicPassword: auth.BasicPassword);
+            },
+            mainUiAuthResolver: transportKind =>
+            {
+                var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
+                return new MainUi.MainUiAuthContext(auth.ApiToken, auth.BasicUserName, auth.BasicPassword);
             });
         flyoutWindow = new FlyoutWindow(
             settingsController,

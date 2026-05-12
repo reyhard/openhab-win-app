@@ -21,6 +21,24 @@ public sealed class MainUiUrlBuilderTests
     }
 
     [Fact]
+    public void Build_StripsEndpointUserInfo()
+    {
+        var uri = MainUiUrlBuilder.Build(new Uri("http://user:pass@openhab:8080/base/"), "/page/energy");
+
+        Assert.Equal(new Uri("http://openhab:8080/page/energy"), uri);
+        Assert.Equal(string.Empty, uri.UserInfo);
+    }
+
+    [Fact]
+    public void StripUserInfo_RemovesCredentialsFromAbsoluteUri()
+    {
+        var uri = MainUiUrlBuilder.StripUserInfo(new Uri("https://user:pass@example.com/path?q=1#frag"));
+
+        Assert.Equal(new Uri("https://example.com/path?q=1#frag"), uri);
+        Assert.Equal(string.Empty, uri.UserInfo);
+    }
+
+    [Fact]
     public void Build_TreatsAbsoluteRouteAsInternalPath()
     {
         var uri = MainUiUrlBuilder.Build(new Uri("http://openhab:8080/"), "http://evil.example");

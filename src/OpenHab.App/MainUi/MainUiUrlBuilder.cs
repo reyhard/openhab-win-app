@@ -10,7 +10,9 @@ public static class MainUiUrlBuilder
         {
             Path = "/",
             Query = string.Empty,
-            Fragment = string.Empty
+            Fragment = string.Empty,
+            UserName = string.Empty,
+            Password = string.Empty
         };
 
         if (string.Equals(builder.Host, "myopenhab.org", StringComparison.OrdinalIgnoreCase))
@@ -30,6 +32,23 @@ public static class MainUiUrlBuilder
         return string.Equals(expectedBase.Scheme, candidate.Scheme, StringComparison.OrdinalIgnoreCase)
             && string.Equals(CanonicalizeHost(expectedBase.Host), CanonicalizeHost(candidate.Host), StringComparison.OrdinalIgnoreCase)
             && expectedBase.Port == candidate.Port;
+    }
+
+    public static Uri StripUserInfo(Uri uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+
+        if (string.IsNullOrEmpty(uri.UserInfo))
+        {
+            return uri;
+        }
+
+        var builder = new UriBuilder(uri)
+        {
+            UserName = string.Empty,
+            Password = string.Empty
+        };
+        return builder.Uri;
     }
 
     private static string NormalizeInternalRoute(string? route)
