@@ -5,12 +5,10 @@
     xmlns:local="using:OpenHab.Windows.Tray"
     Title="openHAB">
     <Border x:Name="FlyoutChrome"
-            Margin="1"
             Padding="5"
             Background="Transparent"
             BorderBrush="Transparent"
-            BorderThickness="0"
-            CornerRadius="14">
+            BorderThickness="0">
         <Grid RowSpacing="8">
             <Grid.Resources>
                 <MenuFlyout x:Name="SitemapMenuFlyout" />

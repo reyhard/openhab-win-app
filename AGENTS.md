@@ -79,6 +79,7 @@ Prefer preserving the existing project split. Do not push WinUI-specific concern
 - When adding new functionality, extend the existing layer that owns the concern rather than bypassing it from the tray app.
 - For openHAB behavior, prefer contracts and tests around parsers, runtime controllers, and render descriptors before wiring UI.
 - Be careful with logs and diagnostics: do not expose credentials, tokens, or sensitive endpoint data.
+- Do not use PowerShell reflection against built assemblies for diagnostics, especially patterns such as `Assembly.LoadFrom`, `GetType`, `GetMethod`, and `Invoke` on private methods. Windows Defender has flagged these command lines as trojan-like behavior. Prefer normal tests, small temporary test cases, public APIs, logs, or debugger-free repro code instead.
 - The repo may contain untracked planning or local-reference files under `.docs/` and `docs/`; do not delete or rewrite them unless the task requires it.
 
 ## Verification

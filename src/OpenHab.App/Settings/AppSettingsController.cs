@@ -40,6 +40,8 @@ public sealed class AppSettingsController
 
     public AppSettings Current { get; private set; } = AppSettings.Default;
 
+    public event EventHandler? SettingsChanged;
+
     public AppSettingsController(ICredentialStore? credentialStore = null, string? settingsFilePath = null)
     {
         this.credentialStore = credentialStore;
@@ -134,9 +136,14 @@ public sealed class AppSettingsController
         UpdateSettings(settings => settings with { SitemapName = sitemapName });
     }
 
-    public void SetFollowSystemTheme(bool follow)
+    public void SetAppColorTheme(AppColorTheme theme)
     {
-        UpdateSettings(settings => settings with { FollowSystemTheme = follow });
+        if (!Enum.IsDefined(theme))
+        {
+            throw new ArgumentOutOfRangeException(nameof(theme));
+        }
+
+        UpdateSettings(settings => settings with { AppColorTheme = theme });
     }
 
     public void SetUseWindows11Icons(bool use)
@@ -343,6 +350,8 @@ public sealed class AppSettingsController
                 QueueSave(saveQueue, Current);
             }
         }
+
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void QueueSave(SaveQueue saveQueue, AppSettings snapshot)
@@ -402,10 +411,11 @@ public sealed class AppSettingsController
         {
             if (!File.Exists(settingsFilePath)) return;
             var json = File.ReadAllText(settingsFilePath);
+            var legacyFollowSystemTheme = ReadLegacyFollowSystemTheme(json);
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
-                var normalized = NormalizeLoadedSettings(loaded);
+                var normalized = NormalizeLoadedSettings(loaded, legacyFollowSystemTheme);
                 // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
                 {
@@ -430,10 +440,11 @@ public sealed class AppSettingsController
         {
             if (!File.Exists(settingsFilePath)) return;
             var json = await File.ReadAllTextAsync(settingsFilePath);
+            var legacyFollowSystemTheme = ReadLegacyFollowSystemTheme(json);
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
-                var normalized = NormalizeLoadedSettings(loaded);
+                var normalized = NormalizeLoadedSettings(loaded, legacyFollowSystemTheme);
                 // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
                 {
@@ -457,7 +468,7 @@ public sealed class AppSettingsController
         return endpoint.Scheme == Uri.UriSchemeHttp || endpoint.Scheme == Uri.UriSchemeHttps;
     }
 
-    private static AppSettings NormalizeLoadedSettings(AppSettings settings)
+    private static AppSettings NormalizeLoadedSettings(AppSettings settings, bool? legacyFollowSystemTheme = null)
     {
         var width = settings.FlyoutWidth;
         if (width < MinFlyoutWidth || width > MaxFlyoutWidth)
@@ -471,8 +482,23 @@ public sealed class AppSettingsController
             interval = AppSettings.Default.NotificationPollIntervalSeconds;
         }
 
+        var appColorTheme = settings.AppColorTheme;
+        var legacyTheme = settings.FollowSystemTheme ?? legacyFollowSystemTheme;
+        if (legacyTheme is bool followSystemTheme)
+        {
+            appColorTheme = followSystemTheme
+                ? AppColorTheme.FollowSystemSettings
+                : AppColorTheme.Dark;
+        }
+        else if (!Enum.IsDefined(appColorTheme))
+        {
+            appColorTheme = AppSettings.Default.AppColorTheme;
+        }
+
         return settings with
         {
+            AppColorTheme = appColorTheme,
+            FollowSystemTheme = null,
             FlyoutWidth = width,
             NotificationPollIntervalSeconds = interval,
             ImportantNotificationTags = NormalizeImportantNotificationTags(settings.ImportantNotificationTags),
@@ -480,9 +506,43 @@ public sealed class AppSettingsController
         };
     }
 
+    private static bool? ReadLegacyFollowSystemTheme(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || root.TryGetProperty(nameof(AppSettings.AppColorTheme), out _))
+            {
+                return null;
+            }
+
+            if (!root.TryGetProperty("FollowSystemTheme", out var legacyProperty))
+            {
+                return null;
+            }
+
+            return legacyProperty.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => null
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static ImmutableArray<string> NormalizeImportantNotificationTags(IEnumerable<string>? tags)
     {
         if (tags is null)
+        {
+            return [];
+        }
+
+        if (tags is ImmutableArray<string> immutableTags && immutableTags.IsDefault)
         {
             return [];
         }

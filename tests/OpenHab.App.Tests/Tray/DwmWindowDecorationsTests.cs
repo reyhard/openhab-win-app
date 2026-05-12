@@ -1,4 +1,5 @@
 using OpenHab.Windows.Tray;
+using OpenHab.App.Settings;
 
 namespace OpenHab.App.Tests.Tray;
 
@@ -48,18 +49,14 @@ public sealed class DwmWindowDecorationsTests
             r.IntValue == 0);
     }
 
-    [Theory]
-    [InlineData(true, true, true)]
-    [InlineData(true, false, false)]
-    [InlineData(false, true, true)]
-    [InlineData(false, false, true)]
-    public void ResolveFlyoutThemeUsesSystemModeOnlyWhenFollowingIsEnabled(
-        bool followSystemTheme,
-        bool isSystemDark,
-        bool expectDark)
+    [Fact]
+    public void ResolveFlyoutThemeUsesSelectedColorTheme()
     {
-        var theme = DwmWindowDecorations.ResolveFlyoutTheme(followSystemTheme, isSystemDark);
-
-        Assert.Equal(expectDark ? FlyoutTheme.Dark : FlyoutTheme.Light, theme);
+        Assert.Equal(FlyoutTheme.Dark, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.FollowSystemSettings, true));
+        Assert.Equal(FlyoutTheme.Light, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.FollowSystemSettings, false));
+        Assert.Equal(FlyoutTheme.Dark, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Dark, true));
+        Assert.Equal(FlyoutTheme.Dark, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Dark, false));
+        Assert.Equal(FlyoutTheme.Light, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Bright, true));
+        Assert.Equal(FlyoutTheme.Light, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Bright, false));
     }
 }

@@ -86,6 +86,7 @@ public sealed partial class FlyoutWindow : Window
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        settingsController.SettingsChanged += OnSettingsChanged;
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
         this.Content.AddHandler(
@@ -246,9 +247,7 @@ public sealed partial class FlyoutWindow : Window
         SitemapSearchBox.Visibility = searchVisible
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SearchButtonIcon.Foreground = searchVisible
-            ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
-            : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        SearchButtonIcon.Foreground = CreateChromeIconBrush(searchVisible);
 
         if (!isUpdatingSearchBox &&
             !sitemapSearchDebounceTimer.IsEnabled &&
@@ -589,7 +588,7 @@ public sealed partial class FlyoutWindow : Window
 
         appWindow.IsShownInSwitchers = false;
         var theme = DwmWindowDecorations.ResolveFlyoutTheme(
-            settingsController.Current.FollowSystemTheme,
+            settingsController.Current.AppColorTheme,
             IsSystemBackgroundDark());
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         StripNonClientFrame(hwnd);
@@ -781,10 +780,21 @@ public sealed partial class FlyoutWindow : Window
         });
     }
 
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            ApplyFlyoutTheme();
+            ScheduleNativeDecorationApply();
+            sitemapSurfaceRenderer.ForceFullRebuild();
+            RefreshRuntimeBindings();
+        });
+    }
+
     private void ApplyFlyoutTheme()
     {
         var theme = DwmWindowDecorations.ResolveFlyoutTheme(
-            settingsController.Current.FollowSystemTheme,
+            settingsController.Current.AppColorTheme,
             IsSystemBackgroundDark());
 
         if (Content is FrameworkElement contentRoot)
@@ -797,13 +807,26 @@ public sealed partial class FlyoutWindow : Window
         ApplySurfaceStyle(theme);
     }
 
+    private Brush CreateChromeIconBrush(bool isAccent)
+    {
+        if (isAccent)
+        {
+            return new SolidColorBrush(Color.FromArgb(255, 96, 205, 255));
+        }
+
+        var theme = DwmWindowDecorations.ResolveFlyoutTheme(
+            settingsController.Current.AppColorTheme,
+            IsSystemBackgroundDark());
+        return new SolidColorBrush(theme == FlyoutTheme.Dark
+            ? Color.FromArgb(255, 255, 255, 255)
+            : Color.FromArgb(255, 32, 32, 32));
+    }
+
     private void ApplySurfaceStyle(FlyoutTheme theme)
     {
-        // Keep the root surface theme-aware while avoiding bright halo borders in dark mode.
-        if (Application.Current.Resources["LayerFillColorAltBrush"] is Brush backgroundBrush)
-        {
-            FlyoutChrome.Background = backgroundBrush;
-        }
+        FlyoutChrome.Background = new SolidColorBrush(theme == FlyoutTheme.Dark
+            ? Color.FromArgb(245, 32, 32, 32)
+            : Color.FromArgb(245, 250, 250, 250));
         FlyoutChrome.BorderBrush = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0));
         FlyoutChrome.BorderThickness = new Thickness(0);
 
@@ -1131,7 +1154,7 @@ public sealed partial class FlyoutWindow : Window
     private void ScheduleNativeDecorationApply()
     {
         var theme = DwmWindowDecorations.ResolveFlyoutTheme(
-            settingsController.Current.FollowSystemTheme,
+            settingsController.Current.AppColorTheme,
             IsSystemBackgroundDark());
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         DwmWindowDecorations.TryApply(hwnd, theme);

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using OpenHab.App.Settings;
 
 namespace OpenHab.Windows.Tray;
 
@@ -8,14 +9,15 @@ internal static class DwmWindowDecorations
     private const uint ColorBlack = 0x00000000;
     private const uint ColorWhite = 0x00FFFFFF;
 
-    internal static FlyoutTheme ResolveFlyoutTheme(bool followSystemTheme, bool isSystemDark)
+    internal static FlyoutTheme ResolveFlyoutTheme(AppColorTheme appColorTheme, bool isSystemDark)
     {
-        if (!followSystemTheme)
+        return appColorTheme switch
         {
-            return FlyoutTheme.Dark;
-        }
-
-        return isSystemDark ? FlyoutTheme.Dark : FlyoutTheme.Light;
+            AppColorTheme.Dark => FlyoutTheme.Dark,
+            AppColorTheme.Bright => FlyoutTheme.Light,
+            AppColorTheme.FollowSystemSettings => isSystemDark ? FlyoutTheme.Dark : FlyoutTheme.Light,
+            _ => FlyoutTheme.Dark
+        };
     }
 
     internal static IReadOnlyList<DwmAttributeRequest> BuildRequests(bool isWindows11OrLater, FlyoutTheme theme = FlyoutTheme.Dark)

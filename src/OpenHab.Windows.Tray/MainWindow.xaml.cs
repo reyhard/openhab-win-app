@@ -17,6 +17,8 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
 using Windows.System;
+using Windows.UI;
+using Windows.UI.ViewManagement;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
@@ -49,6 +51,18 @@ public sealed partial class MainWindow : Window
         About
     }
 
+    private sealed record AppColorThemeOption(string Label, AppColorTheme Theme)
+    {
+        public override string ToString() => Label;
+    }
+
+    private static readonly AppColorThemeOption[] AppColorThemeOptions =
+    [
+        new("Dark", AppColorTheme.Dark),
+        new("Bright", AppColorTheme.Bright),
+        new("Follow System Settings", AppColorTheme.FollowSystemSettings)
+    ];
+
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
     private readonly NotificationStore? notificationStore;
@@ -57,6 +71,7 @@ public sealed partial class MainWindow : Window
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
     private readonly DispatcherRefreshGate notificationRefreshGate;
+    private readonly UISettings uiSettings = new();
     private bool isRefreshing;
     private bool suppressTokenEditTracking;
     private bool isRefreshingSettingsBindings;
@@ -80,7 +95,7 @@ public sealed partial class MainWindow : Window
     private PasswordBox? LocalTokenBox;
     private TextBox? CloudUserNameText;
     private PasswordBox? CloudPasswordBox;
-    private ToggleSwitch? FollowThemeToggle;
+    private ComboBox? AppColorThemeCombo;
     private ToggleSwitch? UseWin11IconsToggle;
     private ToggleSwitch? LaunchAtStartupToggle;
     private NumberBox? FlyoutWidthBox;
@@ -134,6 +149,9 @@ public sealed partial class MainWindow : Window
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        settingsController.SettingsChanged += OnSettingsChanged;
+        uiSettings.ColorValuesChanged += OnColorValuesChanged;
+        ApplyWindowTheme();
         notificationControlsReady = true;
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openhab-icon.ico");
@@ -504,17 +522,17 @@ public sealed partial class MainWindow : Window
             "Choose the sitemap rendering style",
             SkinCombo);
 
-        FollowThemeToggle = new ToggleSwitch
+        AppColorThemeCombo = new ComboBox
         {
-            OnContent = string.Empty,
-            OffContent = string.Empty
+            Width = 220,
+            ItemsSource = AppColorThemeOptions
         };
-        FollowThemeToggle.Toggled += FollowThemeToggle_Toggled;
-        var followThemeRow = CreateSettingsToggleRow(
+        AppColorThemeCombo.SelectionChanged += AppColorThemeCombo_SelectionChanged;
+        var appColorThemeRow = CreateSettingsControlRow(
             "\uE771",
-            "Follow Windows color scheme",
-            "Use the current Windows app theme preference",
-            FollowThemeToggle);
+            "Color theme",
+            "Choose the app theme or follow Windows",
+            AppColorThemeCombo);
 
         UseWin11IconsToggle = new ToggleSwitch
         {
@@ -528,7 +546,7 @@ public sealed partial class MainWindow : Window
             "Prefer Fluent-style symbols for sitemap widgets",
             UseWin11IconsToggle);
 
-        SettingsContent.Children.Add(CreateSettingsGroup(skinRow, followThemeRow, iconStyleRow));
+        SettingsContent.Children.Add(CreateSettingsGroup(skinRow, appColorThemeRow, iconStyleRow));
     }
 
     private void BuildDeviceInfoSyncSettingsPage()
@@ -814,7 +832,7 @@ public sealed partial class MainWindow : Window
         LocalTokenBox = null;
         CloudUserNameText = null;
         CloudPasswordBox = null;
-        FollowThemeToggle = null;
+        AppColorThemeCombo = null;
         UseWin11IconsToggle = null;
         LaunchAtStartupToggle = null;
         FlyoutWidthBox = null;
@@ -1265,9 +1283,9 @@ public sealed partial class MainWindow : Window
             }
             suppressTokenEditTracking = false;
 
-            if (FollowThemeToggle is not null)
+            if (AppColorThemeCombo is not null)
             {
-                FollowThemeToggle.IsOn = settingsController.Current.FollowSystemTheme;
+                AppColorThemeCombo.SelectedItem = AppColorThemeOptions.First(option => option.Theme == settingsController.Current.AppColorTheme);
             }
             if (UseWin11IconsToggle is not null)
             {
@@ -1803,12 +1821,99 @@ public sealed partial class MainWindow : Window
         RefreshNotificationList();
     }
 
-    private void FollowThemeToggle_Toggled(object sender, RoutedEventArgs e)
+    private void AppColorThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!isRefreshingSettingsBindings && sender is ToggleSwitch toggle)
+        if (!isRefreshingSettingsBindings
+            && sender is ComboBox combo
+            && combo.SelectedItem is AppColorThemeOption option)
         {
-            settingsController.SetFollowSystemTheme(toggle.IsOn);
+            settingsController.SetAppColorTheme(option.Theme);
         }
+    }
+
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            ApplyWindowTheme();
+            sitemapSurfaceRenderer.ForceFullRebuild();
+            RefreshRuntimeBindings();
+        });
+    }
+
+    private void OnColorValuesChanged(UISettings sender, object args)
+    {
+        _ = DispatcherQueue.TryEnqueue(ApplyWindowTheme);
+    }
+
+    private void ApplyWindowTheme()
+    {
+        var theme = DwmWindowDecorations.ResolveFlyoutTheme(
+            settingsController.Current.AppColorTheme,
+            IsSystemBackgroundDark());
+
+        if (Content is FrameworkElement contentRoot)
+        {
+            contentRoot.RequestedTheme = theme == FlyoutTheme.Dark
+                ? ElementTheme.Dark
+                : ElementTheme.Light;
+        }
+
+        MainWindowChrome.Background = new SolidColorBrush(theme == FlyoutTheme.Dark
+            ? Color.FromArgb(255, 32, 32, 32)
+            : Color.FromArgb(255, 250, 250, 250));
+
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        DwmWindowDecorations.TryApply(hwnd, theme);
+        ApplyTitleBarStyle(theme);
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            DwmWindowDecorations.TryApply(hwnd, theme);
+            ApplyTitleBarStyle(theme);
+        });
+    }
+
+    private void ApplyTitleBarStyle(FlyoutTheme theme)
+    {
+        var titleBar = AppWindow.TitleBar;
+        var isDark = theme == FlyoutTheme.Dark;
+        var background = isDark
+            ? Color.FromArgb(255, 28, 28, 28)
+            : Color.FromArgb(255, 250, 250, 250);
+        var foreground = isDark
+            ? Color.FromArgb(255, 255, 255, 255)
+            : Color.FromArgb(255, 32, 32, 32);
+        var hover = isDark
+            ? Color.FromArgb(255, 44, 44, 44)
+            : Color.FromArgb(255, 232, 232, 232);
+        var pressed = isDark
+            ? Color.FromArgb(255, 58, 58, 58)
+            : Color.FromArgb(255, 218, 218, 218);
+
+        titleBar.BackgroundColor = background;
+        titleBar.ForegroundColor = foreground;
+        titleBar.InactiveBackgroundColor = background;
+        titleBar.InactiveForegroundColor = foreground;
+        titleBar.ButtonBackgroundColor = background;
+        titleBar.ButtonForegroundColor = foreground;
+        titleBar.ButtonInactiveBackgroundColor = background;
+        titleBar.ButtonInactiveForegroundColor = foreground;
+        titleBar.ButtonHoverBackgroundColor = hover;
+        titleBar.ButtonHoverForegroundColor = foreground;
+        titleBar.ButtonPressedBackgroundColor = pressed;
+        titleBar.ButtonPressedForegroundColor = foreground;
+    }
+
+    private bool IsSystemBackgroundDark()
+    {
+        var background = uiSettings.GetColorValue(UIColorType.Background);
+        return IsDark(background);
+    }
+
+    private static bool IsDark(Color color)
+    {
+        var brightness = ((color.R * 299) + (color.G * 587) + (color.B * 114)) / 1000;
+        return brightness < 128;
     }
 
     private void UseWin11IconsToggle_Toggled(object sender, RoutedEventArgs e)

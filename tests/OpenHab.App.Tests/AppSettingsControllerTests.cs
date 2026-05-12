@@ -33,6 +33,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(460, controller.Current.FlyoutWidth);
         Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
         Assert.Equal(ChartQuality.High, controller.Current.ChartQuality);
+        Assert.Equal(AppColorTheme.FollowSystemSettings, controller.Current.AppColorTheme);
         Assert.Empty(controller.Current.ImportantNotificationTags);
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
@@ -426,6 +427,73 @@ public sealed class AppSettingsControllerTests
         controller.SetChartQuality(ChartQuality.Normal);
 
         Assert.Equal(ChartQuality.Normal, controller.Current.ChartQuality);
+    }
+
+    [Fact]
+    public async Task AppColorThemeRoundTripsThroughJson()
+    {
+        var controller = CreateController();
+
+        controller.SetAppColorTheme(AppColorTheme.Bright);
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        Assert.Equal(AppColorTheme.Bright, reloaded.Current.AppColorTheme);
+    }
+
+    [Fact]
+    public async Task AppColorThemePersistsWithoutLegacyFollowSystemThemeFlag()
+    {
+        var controller = CreateController();
+
+        controller.SetAppColorTheme(AppColorTheme.Bright);
+        await controller.FlushAsync();
+
+        var json = File.ReadAllText(settingsFilePath);
+        Assert.Contains("\"AppColorTheme\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"FollowSystemTheme\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsChangedFiresWhenAppColorThemeChanges()
+    {
+        var controller = CreateController();
+        var changedCount = 0;
+        controller.SettingsChanged += (_, _) => changedCount++;
+
+        controller.SetAppColorTheme(AppColorTheme.Dark);
+
+        Assert.Equal(1, changedCount);
+    }
+
+    [Theory]
+    [InlineData(true, "FollowSystemSettings")]
+    [InlineData(false, "Dark")]
+    public void LegacyFollowSystemThemeLoadsAsAppColorTheme(bool followSystemTheme, string expectedThemeName)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var legacyJson = $$"""
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "FollowSystemTheme": {{followSystemTheme.ToString().ToLowerInvariant()}},
+          "UseWindows11Icons": false,
+          "FlyoutWidth": 460,
+          "AnimationSpeed": 2,
+          "NotificationPollIntervalSeconds": 30,
+          "LaunchAtStartup": true,
+          "ChartQuality": 192
+        }
+        """;
+        File.WriteAllText(settingsFilePath, legacyJson);
+
+        var controller = CreateController();
+
+        var expectedTheme = Enum.Parse<AppColorTheme>(expectedThemeName);
+        Assert.Equal(expectedTheme, controller.Current.AppColorTheme);
     }
 
     [Fact]

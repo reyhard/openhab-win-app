@@ -19,13 +19,22 @@ public enum ChartQuality
     High = 192
 }
 
+public enum AppColorTheme
+{
+    Dark,
+    Bright,
+    FollowSystemSettings
+}
+
 public sealed record AppSettings(
     SitemapSkinKind Skin,
     EndpointMode EndpointMode,
     Uri LocalEndpoint,
     Uri CloudEndpoint,
     string SitemapName,
-    bool FollowSystemTheme = true,
+    AppColorTheme AppColorTheme = AppColorTheme.FollowSystemSettings,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    bool? FollowSystemTheme = null,
     bool UseWindows11Icons = false,
     int FlyoutWidth = 460,
     FlyoutAnimationSpeed AnimationSpeed = FlyoutAnimationSpeed.Default,
