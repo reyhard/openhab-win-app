@@ -29,7 +29,7 @@ public sealed partial class MainUiWebViewHost : UserControl
         currentEndpoint = endpoint;
         currentUri = MainUiUrlBuilder.Build(endpoint, route);
         currentBaseUri = MainUiUrlBuilder.Build(endpoint, "/");
-        pendingRoute = string.IsNullOrWhiteSpace(route) ? "/" : route.Trim();
+        pendingRoute = NormalizeRouteForRetry(route);
 
         ShowLoading();
 
@@ -85,6 +85,7 @@ public sealed partial class MainUiWebViewHost : UserControl
         if (currentBaseUri is not null && MainUiUrlBuilder.IsSameHost(currentBaseUri, uri))
         {
             currentUri = uri;
+            UpdatePendingRouteFromInternalUri(uri);
             MainWebView.Source = uri;
             return;
         }
@@ -107,6 +108,7 @@ public sealed partial class MainUiWebViewHost : UserControl
         }
 
         currentUri = uri;
+        UpdatePendingRouteFromInternalUri(uri);
     }
 
     private void MainWebView_NavigationCompleted(WebView2 sender, CoreWebView2NavigationCompletedEventArgs args)
@@ -114,6 +116,10 @@ public sealed partial class MainUiWebViewHost : UserControl
         if (args.IsSuccess)
         {
             currentUri = MainWebView.Source;
+            if (currentUri is not null)
+            {
+                UpdatePendingRouteFromInternalUri(currentUri);
+            }
             MainWebView.Visibility = Visibility.Visible;
             LoadingView.Visibility = Visibility.Collapsed;
             ErrorView.Visibility = Visibility.Collapsed;
@@ -170,6 +176,35 @@ public sealed partial class MainUiWebViewHost : UserControl
         {
             DiagnosticLogger.Warn($"Open external URL failed: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    private void UpdatePendingRouteFromInternalUri(Uri uri)
+    {
+        if (currentBaseUri is null || !MainUiUrlBuilder.IsSameHost(currentBaseUri, uri))
+        {
+            return;
+        }
+
+        var route = uri.PathAndQuery + uri.Fragment;
+        pendingRoute = NormalizeRouteForRetry(route);
+    }
+
+    private static string NormalizeRouteForRetry(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route))
+        {
+            return "/";
+        }
+
+        var normalized = route.Trim();
+        if (normalized.StartsWith("/", StringComparison.Ordinal)
+            || normalized.StartsWith("?", StringComparison.Ordinal)
+            || normalized.StartsWith("#", StringComparison.Ordinal))
+        {
+            return normalized;
+        }
+
+        return "/" + normalized;
     }
 
     private void ShowLoading()

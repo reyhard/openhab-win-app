@@ -40,6 +40,8 @@ public sealed partial class MainWindow : Window
     private string? currentMainUiRoute;
     private TransportKind? currentMainUiTransport;
     private bool isMainUiNavigationInProgress;
+    private TransportKind? activeMainUiNavigationTransport;
+    private bool pendingMainUiTransportResync;
 
     private Notifications.NotificationsPageControl? notificationsPage;
     private Settings.SettingsPageControl? settingsPage;
@@ -231,6 +233,7 @@ public sealed partial class MainWindow : Window
         var selectedTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
             ? TransportKind.Cloud
             : TransportKind.Local;
+        activeMainUiNavigationTransport = selectedTransport;
         var endpoint = selectedTransport == TransportKind.Cloud
             ? settings.CloudEndpoint
             : settings.LocalEndpoint;
@@ -251,7 +254,13 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            activeMainUiNavigationTransport = null;
             isMainUiNavigationInProgress = false;
+            if (pendingMainUiTransportResync)
+            {
+                pendingMainUiTransportResync = false;
+                EnsureMainUiEndpointMatchesActiveTransport(runtimeController.Current);
+            }
         }
     }
 
@@ -327,7 +336,7 @@ public sealed partial class MainWindow : Window
 
     private void EnsureMainUiEndpointMatchesActiveTransport(SitemapRuntimeSnapshot snapshot)
     {
-        if (shellController.Current.CenterPage != MainWindowCenterPage.MainUi || isMainUiNavigationInProgress)
+        if (shellController.Current.CenterPage != MainWindowCenterPage.MainUi)
         {
             return;
         }
@@ -335,6 +344,16 @@ public sealed partial class MainWindow : Window
         var desiredTransport = snapshot.ActiveTransport == TransportKind.Cloud
             ? TransportKind.Cloud
             : TransportKind.Local;
+        if (isMainUiNavigationInProgress)
+        {
+            var inFlightTransport = activeMainUiNavigationTransport ?? currentMainUiTransport;
+            if (inFlightTransport != desiredTransport)
+            {
+                pendingMainUiTransportResync = true;
+            }
+            return;
+        }
+
         if (currentMainUiTransport == desiredTransport)
         {
             return;
