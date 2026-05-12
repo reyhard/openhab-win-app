@@ -238,7 +238,7 @@ public sealed partial class FlyoutWindow : Window
             : Visibility.Collapsed;
         SearchButtonIcon.Foreground = searchVisible
             ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
-            : null;
+            : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
 
         if (!isUpdatingSearchBox && SitemapSearchBox.Text != snapshot.SearchQuery)
         {

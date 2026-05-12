@@ -98,6 +98,35 @@ public sealed class SitemapSearchDescriptorBuilderTests
     }
 
     [Fact]
+    public void FlattenedFrameLabelMatchIncludesFollowingVisibleFrameChildren()
+    {
+        var page = CreateFlattenedFramePage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Gniazdka", renderController);
+
+        Assert.True(result.IsSearchActive);
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Gniazdka");
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Gniazdko #1 (Mobilne)");
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Gniazdko #7 (Czajnik)");
+        Assert.DoesNotContain(result.Descriptor.Rows, row => row.Label == "Biurko");
+        Assert.Equal(3, result.ResultCount);
+    }
+
+    [Fact]
+    public void QueryTokensCanMatchDifferentPartsOfLabel()
+    {
+        var page = CreateFlattenedFramePage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "Gniazdko Czaj", renderController);
+
+        var row = Assert.Single(result.Descriptor.Rows, row => row.Label == "Gniazdko #7 (Czajnik)");
+        Assert.NotNull(row.SearchResultKey);
+        Assert.Equal(1, result.ResultCount);
+    }
+
+    [Fact]
     public void ChildPageOnlyMatchIncludesGroupingContextAndSourceMetadata()
     {
         var page = CreateSearchPage();
@@ -371,6 +400,60 @@ public sealed class SitemapSearchDescriptorBuilderTests
                         ])
                     ],
                     WidgetId: "second-group")
+            ]));
+    }
+
+    private static NormalizedSitemapPage CreateFlattenedFramePage()
+    {
+        return SitemapNormalizer.Normalize(new SitemapPage(
+            "home",
+            "Home",
+            [
+                new SitemapWidget(
+                    "Gniazdka",
+                    SitemapWidgetType.Frame,
+                    null,
+                    null,
+                    [],
+                    true,
+                    [],
+                    WidgetId: "outlets-frame"),
+                new SitemapWidget(
+                    "Gniazdko #1 (Mobilne)",
+                    SitemapWidgetType.Switch,
+                    "Outlet_1",
+                    "OFF",
+                    [],
+                    true,
+                    [],
+                    WidgetId: "outlet-1"),
+                new SitemapWidget(
+                    "Gniazdko #7 (Czajnik)",
+                    SitemapWidgetType.Switch,
+                    "Outlet_7",
+                    "OFF",
+                    [],
+                    true,
+                    [],
+                    WidgetId: "outlet-7"),
+                new SitemapWidget(
+                    "Oswietlenie",
+                    SitemapWidgetType.Frame,
+                    null,
+                    null,
+                    [],
+                    true,
+                    [],
+                    WidgetId: "lights-frame"),
+                new SitemapWidget(
+                    "Biurko",
+                    SitemapWidgetType.Switch,
+                    "Desk_Light",
+                    "OFF",
+                    [],
+                    true,
+                    [],
+                    WidgetId: "desk-light")
             ]));
     }
 

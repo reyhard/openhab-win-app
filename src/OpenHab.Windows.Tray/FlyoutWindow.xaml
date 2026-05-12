@@ -63,7 +63,8 @@
                         Click="SearchButton_Click">
                     <FontIcon x:Name="SearchButtonIcon"
                               Glyph="&#xE721;"
-                              FontSize="13" />
+                              FontSize="13"
+                              Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
 
                 <Button Grid.Column="3"

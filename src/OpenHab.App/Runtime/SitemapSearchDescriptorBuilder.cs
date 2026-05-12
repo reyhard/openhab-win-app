@@ -44,12 +44,14 @@ public static class SitemapSearchDescriptorBuilder
 
         for (var index = 0; index < currentPage.Widgets.Count; index++)
         {
+            var widget = currentPage.Widgets[index];
+            var frameMatch = widget.Type == SitemapWidgetType.Frame && LabelMatches(widget.Label, trimmedQuery);
             AddWidgetMatches(
                 currentPage,
                 normalDescriptor,
                 currentPage,
                 normalDescriptor,
-                currentPage.Widgets[index],
+                widget,
                 index,
                 trimmedQuery,
                 renderController,
@@ -62,6 +64,22 @@ public static class SitemapSearchDescriptorBuilder
                 currentPageRowIndex: index,
                 forcedChildInclusion: false,
                 inheritedFrameMatch: false);
+
+            if (frameMatch)
+            {
+                index = AddFlattenedFrameChildren(
+                    currentPage,
+                    normalDescriptor,
+                    trimmedQuery,
+                    renderController,
+                    rows,
+                    sources,
+                    ref resultCount,
+                    pagePath: [currentPage.Id],
+                    widgetPathPrefix: currentPage.Id,
+                    startIndex: index + 1,
+                    includeCurrentPageIndices: true);
+            }
         }
 
         if (resultCount == 0)
@@ -160,12 +178,14 @@ public static class SitemapSearchDescriptorBuilder
             var anyIncludedFromChildPage = false;
             for (var childWidgetIndex = 0; childWidgetIndex < normalizedChildPage.Widgets.Count; childWidgetIndex++)
             {
+                var childWidget = normalizedChildPage.Widgets[childWidgetIndex];
+                var childFrameMatch = childWidget.Type == SitemapWidgetType.Frame && LabelMatches(childWidget.Label, query);
                 var childIncluded = AddWidgetMatches(
                     rootPage,
                     rootDescriptor,
                     normalizedChildPage,
                     childDescriptor,
-                    normalizedChildPage.Widgets[childWidgetIndex],
+                    childWidget,
                     childWidgetIndex,
                     query,
                     renderController,
@@ -180,6 +200,24 @@ public static class SitemapSearchDescriptorBuilder
                     inheritedFrameMatch: frameMatch || inheritedFrameMatch);
 
                 anyIncludedFromChildPage |= childIncluded;
+
+                if (childFrameMatch || frameMatch || inheritedFrameMatch)
+                {
+                    var nextIndex = AddFlattenedFrameChildren(
+                        normalizedChildPage,
+                        childDescriptor,
+                        query,
+                        renderController,
+                        rows,
+                        sources,
+                        ref resultCount,
+                        childPagePath,
+                        childWidgetPathPrefix,
+                        childWidgetIndex + 1,
+                        includeCurrentPageIndices: false);
+                    anyIncludedFromChildPage |= nextIndex >= childWidgetIndex + 1;
+                    childWidgetIndex = nextIndex;
+                }
             }
 
             if (!anyIncludedFromChildPage)
@@ -200,6 +238,51 @@ public static class SitemapSearchDescriptorBuilder
         }
 
         return includeSelf || hasAnyDescendantIncluded;
+    }
+
+    private static int AddFlattenedFrameChildren(
+        NormalizedSitemapPage page,
+        SitemapRenderDescriptor pageDescriptor,
+        string query,
+        SitemapRenderController renderController,
+        List<SitemapRowDescriptor> rows,
+        Dictionary<string, SitemapSearchSource> sources,
+        ref int resultCount,
+        IReadOnlyList<string> pagePath,
+        string widgetPathPrefix,
+        int startIndex,
+        bool includeCurrentPageIndices)
+    {
+        var index = startIndex;
+        for (; index < page.Widgets.Count; index++)
+        {
+            var widget = page.Widgets[index];
+            if (widget.Type == SitemapWidgetType.Frame)
+            {
+                break;
+            }
+
+            AddWidgetMatches(
+                page,
+                pageDescriptor,
+                page,
+                pageDescriptor,
+                widget,
+                index,
+                query,
+                renderController,
+                rows,
+                sources,
+                ref resultCount,
+                pagePath,
+                widgetPathPrefix,
+                parentNavigationLabel: null,
+                currentPageRowIndex: includeCurrentPageIndices ? index : null,
+                forcedChildInclusion: true,
+                inheritedFrameMatch: true);
+        }
+
+        return index - 1;
     }
 
     private static SitemapSearchSource BuildSource(
@@ -286,7 +369,9 @@ public static class SitemapSearchDescriptorBuilder
 
     private static bool LabelMatches(string label, string query)
     {
-        return label.Contains(query, StringComparison.InvariantCultureIgnoreCase);
+        return query
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .All(token => label.Contains(token, StringComparison.InvariantCultureIgnoreCase));
     }
 
     private static string[] Append(IReadOnlyList<string> path, string segment)
