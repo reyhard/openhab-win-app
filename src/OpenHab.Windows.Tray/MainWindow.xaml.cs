@@ -10,8 +10,10 @@ using Windows.Graphics;
 using Windows.System;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
+using OpenHab.App.Shell;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
+using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Rendering.SitemapSurface;
@@ -21,11 +23,13 @@ public sealed partial class MainWindow : Window
 {
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
+    private readonly OpenHab.App.Shell.MainWindowShellController shellController;
     private readonly NotificationStore? notificationStore;
     private readonly Action requestHideToTray;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
+    private IReadOnlyList<OpenHab.App.MainUi.MainUiPageLink> promotedMainUiPages = [];
     private bool isRefreshing;
     private bool isHandlingCloseRequest;
     private bool _activeSlotIsA = true;
@@ -33,6 +37,8 @@ public sealed partial class MainWindow : Window
     private bool _isPageTransitionRunning;
     private bool _pendingSnapshotRefresh;
     private bool _lastRefreshUseWindows11Icons;
+    private string? currentMainUiRoute;
+    private TransportKind? currentMainUiTransport;
 
     private Notifications.NotificationsPageControl? notificationsPage;
     private Settings.SettingsPageControl? settingsPage;
@@ -76,6 +82,11 @@ public sealed partial class MainWindow : Window
         snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        shellController = new OpenHab.App.Shell.MainWindowShellController(settingsController.Current.MainWindowSitemapPaneVisible);
+        shellController.Changed += (_, _) => ApplyMainWindowShellState();
+        promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
+        ApplyMainWindowShellState();
+        RefreshPromotedMainUiPagesList();
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openhab-icon.ico");
         if (File.Exists(iconPath))
@@ -84,7 +95,6 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += AppWindow_Closing;
         this.Content.KeyDown += MainContent_KeyDown;
         this.Content.PointerPressed += MainContent_PointerPressed;
-        ShowNotificationsPage();
         runtimeController.SnapshotChanged += (_, _) =>
         {
             if (_suppressNextSnapshotRefresh)
@@ -100,6 +110,7 @@ public sealed partial class MainWindow : Window
             snapshotRefreshGate.Request(() => RefreshRuntimeBindings(targetRows: null));
         };
         _lastRefreshUseWindows11Icons = settingsController.Current.UseWindows11Icons;
+        RefreshChromeBindings(runtimeController.Current);
         // Initial load is deferred until sitemaps are resolved in CompleteStartupAsync.
     }
 
@@ -139,12 +150,12 @@ public sealed partial class MainWindow : Window
 
     public void ShowNotificationsTab()
     {
-        ShowNotificationsPage();
+        shellController.SelectCenterPage(MainWindowCenterPage.Notifications);
     }
 
     public void ShowSettingsTab()
     {
-        ShowSettingsPage();
+        shellController.SelectCenterPage(MainWindowCenterPage.Settings);
     }
 
     private void ShowNotificationsPage()
@@ -160,6 +171,110 @@ public sealed partial class MainWindow : Window
         settingsPage.ShowRoot();
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(settingsPage);
+    }
+
+    private void ApplyMainWindowShellState()
+    {
+        var state = shellController.Current;
+        SitemapPaneColumn.Width = state.IsSitemapVisible ? new GridLength(380) : new GridLength(0);
+        SitemapContentRoot.Visibility = state.IsSitemapVisible ? Visibility.Visible : Visibility.Collapsed;
+        settingsController.SetMainWindowSitemapPaneVisible(state.IsSitemapVisible);
+
+        if (state.CenterPage == MainWindowCenterPage.MainUi)
+        {
+            ShowMainUi();
+            if (!string.IsNullOrWhiteSpace(state.PendingMainUiRoute))
+            {
+                var normalizedRoute = NormalizeMainUiRoute(state.PendingMainUiRoute);
+                var activeTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
+                    ? TransportKind.Cloud
+                    : TransportKind.Local;
+                if (!string.Equals(currentMainUiRoute, normalizedRoute, StringComparison.Ordinal)
+                    || currentMainUiTransport != activeTransport)
+                {
+                    _ = NavigateMainUiAsync(normalizedRoute);
+                }
+            }
+        }
+        else if (state.CenterPage == MainWindowCenterPage.Notifications)
+        {
+            ShowNotificationsPage();
+        }
+        else if (state.CenterPage == MainWindowCenterPage.Settings)
+        {
+            ShowSettingsPage();
+        }
+    }
+
+    private void ShowMainUi()
+    {
+        if (!CenterContentHost.Children.Contains(MainUiHost))
+        {
+            CenterContentHost.Children.Clear();
+            CenterContentHost.Children.Add(MainUiHost);
+        }
+    }
+
+    private async Task NavigateMainUiAsync(string route)
+    {
+        var settings = settingsController.Current;
+        var endpoint = runtimeController.Current.ActiveTransport == TransportKind.Cloud
+            ? settings.CloudEndpoint
+            : settings.LocalEndpoint;
+        var normalizedRoute = NormalizeMainUiRoute(route);
+        try
+        {
+            await MainUiHost.NavigateAsync(endpoint, normalizedRoute);
+            currentMainUiRoute = normalizedRoute;
+            currentMainUiTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
+                ? TransportKind.Cloud
+                : TransportKind.Local;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error: {ex.Message}";
+        }
+    }
+
+    private static string NormalizeMainUiRoute(string? route)
+    {
+        if (string.IsNullOrWhiteSpace(route))
+        {
+            return "/";
+        }
+
+        var normalized = route.Trim();
+        return normalized.StartsWith("/", StringComparison.Ordinal) ? normalized : "/" + normalized;
+    }
+
+    private void RefreshPromotedMainUiPagesList()
+    {
+        promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
+        var isExpanded = settingsController.Current.MainUiPagesExpanded;
+        MainUiPagesChevron.Glyph = isExpanded ? "\uE70E" : "\uE70D";
+        MainUiPagesList.Children.Clear();
+        MainUiPagesList.Visibility = isExpanded ? Visibility.Visible : Visibility.Collapsed;
+        if (!isExpanded)
+        {
+            return;
+        }
+
+        foreach (var page in promotedMainUiPages)
+        {
+            var route = page.Route;
+            var button = new Button
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Content = new TextBlock { Text = page.Label }
+            };
+            button.Click += (_, _) => shellController.SelectPromotedMainUiPage(route);
+            MainUiPagesList.Children.Add(button);
+        }
     }
 
     private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
@@ -315,12 +430,28 @@ public sealed partial class MainWindow : Window
 
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
     {
+        if (TryNavigateMainUiBack())
+        {
+            return;
+        }
+
         _ = NavigateBackWithAnimationAsync();
     }
 
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.GoBack && runtimeController.CanGoBack && !isRefreshing)
+        if (e.Key != VirtualKey.GoBack)
+        {
+            return;
+        }
+
+        if (TryNavigateMainUiBack())
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (runtimeController.CanGoBack && !isRefreshing)
         {
             e.Handled = true;
             _ = NavigateBackWithAnimationAsync();
@@ -330,11 +461,38 @@ public sealed partial class MainWindow : Window
     private void MainContent_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
         var props = e.GetCurrentPoint(sender as UIElement).Properties;
-        if (props.IsXButton1Pressed && runtimeController.CanGoBack && !isRefreshing)
+        if (!props.IsXButton1Pressed)
+        {
+            return;
+        }
+
+        if (TryNavigateMainUiBack())
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (runtimeController.CanGoBack && !isRefreshing)
         {
             e.Handled = true;
             _ = NavigateBackWithAnimationAsync();
         }
+    }
+
+    private bool TryNavigateMainUiBack()
+    {
+        if (shellController.Current.CenterPage != MainWindowCenterPage.MainUi)
+        {
+            return false;
+        }
+
+        if (!MainUiHost.CanGoBack)
+        {
+            return false;
+        }
+
+        MainUiHost.GoBack();
+        return true;
     }
 
     private async Task NavigateBackWithAnimationAsync()
@@ -409,11 +567,43 @@ public sealed partial class MainWindow : Window
         await RefreshRuntimeAsync();
     }
 
+    private void HomeNavButton_Click(object sender, RoutedEventArgs e)
+    {
+        shellController.SelectPromotedMainUiPage("/");
+    }
+
+    private void NotificationsNavButton_Click(object sender, RoutedEventArgs e)
+    {
+        shellController.SelectCenterPage(MainWindowCenterPage.Notifications);
+    }
+
+    private void SettingsNavButton_Click(object sender, RoutedEventArgs e)
+    {
+        shellController.SelectCenterPage(MainWindowCenterPage.Settings);
+    }
+
+    private void MainUiPagesToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        settingsController.SetMainUiPagesExpanded(!settingsController.Current.MainUiPagesExpanded);
+        RefreshPromotedMainUiPagesList();
+    }
+
+    private void ToggleSitemapButton_Click(object sender, RoutedEventArgs e)
+    {
+        shellController.SetSitemapVisible(!shellController.Current.IsSitemapVisible);
+    }
+
     /// <summary>Updates header chrome independently of sitemap rows.</summary>
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
     {
         TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
         StatusText.Text = snapshot.StatusText;
+        ShellConnectionText.Text = snapshot.ActiveTransport switch
+        {
+            TransportKind.Cloud => $"Connected via cloud ({snapshot.ConnectionState})",
+            TransportKind.Local => $"Connected via local ({snapshot.ConnectionState})",
+            _ => $"Connection: {snapshot.ConnectionState}"
+        };
         BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
     }
 
