@@ -68,9 +68,28 @@ public sealed partial class MainUiWebViewHost : UserControl
         await MainWebView.EnsureCoreWebView2Async();
         MainWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
         MainWebView.CoreWebView2.Settings.IsScriptEnabled = true;
+        MainWebView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
         MainWebView.NavigationStarting += MainWebView_NavigationStarting;
         MainWebView.NavigationCompleted += MainWebView_NavigationCompleted;
         initialized = true;
+    }
+
+    private void CoreWebView2_NewWindowRequested(CoreWebView2 sender, CoreWebView2NewWindowRequestedEventArgs args)
+    {
+        args.Handled = true;
+        if (!Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri))
+        {
+            return;
+        }
+
+        if (currentBaseUri is not null && MainUiUrlBuilder.IsSameHost(currentBaseUri, uri))
+        {
+            currentUri = uri;
+            MainWebView.Source = uri;
+            return;
+        }
+
+        OpenExternal(uri);
     }
 
     private void MainWebView_NavigationStarting(WebView2 sender, CoreWebView2NavigationStartingEventArgs args)

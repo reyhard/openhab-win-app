@@ -228,7 +228,10 @@ public sealed partial class MainWindow : Window
 
         isMainUiNavigationInProgress = true;
         var settings = settingsController.Current;
-        var endpoint = runtimeController.Current.ActiveTransport == TransportKind.Cloud
+        var selectedTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
+            ? TransportKind.Cloud
+            : TransportKind.Local;
+        var endpoint = selectedTransport == TransportKind.Cloud
             ? settings.CloudEndpoint
             : settings.LocalEndpoint;
         var normalizedRoute = NormalizeMainUiRoute(route);
@@ -236,9 +239,7 @@ public sealed partial class MainWindow : Window
         {
             await MainUiHost.NavigateAsync(endpoint, normalizedRoute);
             currentMainUiRoute = normalizedRoute;
-            currentMainUiTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
-                ? TransportKind.Cloud
-                : TransportKind.Local;
+            currentMainUiTransport = selectedTransport;
         }
         catch (OperationCanceledException)
         {
