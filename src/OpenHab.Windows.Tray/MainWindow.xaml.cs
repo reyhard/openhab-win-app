@@ -377,7 +377,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Main UI page discovery failed: {ex.GetType().Name}: {ex.Message}");
+            DiagnosticLogger.Warn($"Main UI page discovery failed: {ex.GetType().Name}");
             promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
             RefreshPromotedMainUiPagesList(discoveryError: true);
         }
