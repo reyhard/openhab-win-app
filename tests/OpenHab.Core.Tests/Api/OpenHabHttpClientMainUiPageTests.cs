@@ -73,6 +73,18 @@ public sealed class OpenHabHttpClientMainUiPageTests
     }
 
     [Fact]
+    public async Task GetMainUiPageComponentsAsync_ThrowsFormatExceptionForNonArrayRoot()
+    {
+        var handler = new CapturingHandler { ResponseBody = "{}" };
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var exception = await Assert.ThrowsAsync<FormatException>(
+            () => client.GetMainUiPageComponentsAsync(CancellationToken.None));
+
+        Assert.Contains("must be a JSON array", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GetMainUiPageComponentsAsync_FiltersNonObjectEntriesAndBlankUid()
     {
         var handler = new CapturingHandler
