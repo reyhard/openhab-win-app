@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace OpenHab.Windows.Notifications;
@@ -15,4 +16,5 @@ public sealed record CloudNotification(
     [property: JsonPropertyName("mediaAttachmentUrl")] string? MediaAttachmentUrl,
     [property: JsonPropertyName("actionButton1")] string? ActionButton1,
     [property: JsonPropertyName("actionButton2")] string? ActionButton2,
-    [property: JsonPropertyName("actionButton3")] string? ActionButton3);
+    [property: JsonPropertyName("actionButton3")] string? ActionButton3,
+    [property: JsonPropertyName("payload")] JsonElement? Payload);
