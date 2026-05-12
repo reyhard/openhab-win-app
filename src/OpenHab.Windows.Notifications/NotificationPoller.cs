@@ -20,13 +20,14 @@ public sealed class NotificationPoller : IDisposable
     private readonly HashSet<string> seenIds = new();
     private readonly DispatcherQueue? dispatcher;
     private readonly Func<string, bool>? isDismissedFunc;
-    private readonly Action<CloudNotification>? onNewNotification;
+    private readonly Action<NormalizedCloudNotification>? onNewNotification;
+    private readonly Action<NotificationHideTarget>? onHideNotification;
 
     private int isStarted;
     private CancellationTokenSource? cts;
     private Task? pollingTask;
 
-    public event EventHandler<CloudNotification>? NotificationReceived;
+    public event EventHandler<NormalizedCloudNotification>? NotificationReceived;
 
     public NotificationPoller(
         HttpClient httpClient,
@@ -38,7 +39,8 @@ public sealed class NotificationPoller : IDisposable
         DispatcherQueue? dispatcher = null,
         IReadOnlySet<string>? preSeenIds = null,
         Func<string, bool>? isDismissedFunc = null,
-        Action<CloudNotification>? onNewNotification = null)
+        Action<NormalizedCloudNotification>? onNewNotification = null,
+        Action<NotificationHideTarget>? onHideNotification = null)
     {
         if (!string.IsNullOrWhiteSpace(apiToken) && !string.IsNullOrWhiteSpace(basicUserName))
         {
@@ -54,6 +56,7 @@ public sealed class NotificationPoller : IDisposable
         this.dispatcher = dispatcher;
         this.isDismissedFunc = isDismissedFunc;
         this.onNewNotification = onNewNotification;
+        this.onHideNotification = onHideNotification;
 
         if (preSeenIds is not null)
         {
@@ -118,6 +121,11 @@ public sealed class NotificationPoller : IDisposable
         }
     }
 
+    internal Task PollOnceForTestingAsync(CancellationToken cancellationToken)
+    {
+        return PollOnceAsync(cancellationToken);
+    }
+
     private async Task PollOnceAsync(CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get,
@@ -160,18 +168,34 @@ public sealed class NotificationPoller : IDisposable
         var newCount = 0;
         foreach (var notification in notifications.OrderBy(n => n.Created))
         {
-            if (seenIds.Add(notification.Id))
+            var normalized = CloudNotificationNormalizer.Normalize(notification);
+            if (normalized.Kind == CloudNotificationKind.Hide)
             {
-                if (isDismissedFunc is not null && isDismissedFunc(notification.Id))
+                foreach (var hideTarget in normalized.HideTargets)
                 {
-                    DiagnosticLogger.Info($"Skipping dismissed notification: Id={notification.Id}");
-                    continue;
+                    onHideNotification?.Invoke(hideTarget);
                 }
 
-                newCount++;
-                DiagnosticLogger.Info($"New notification: Id={notification.Id}, Severity={notification.Severity}");
-                RaiseNotification(notification);
-                onNewNotification?.Invoke(notification);
+                continue;
+            }
+
+            if (!seenIds.Add(normalized.Id))
+            {
+                continue;
+            }
+
+            if (isDismissedFunc is not null && isDismissedFunc(normalized.Id))
+            {
+                DiagnosticLogger.Info($"Skipping dismissed notification: Id={normalized.Id}");
+                continue;
+            }
+
+            newCount++;
+            DiagnosticLogger.Info($"New notification: Id={normalized.Id}, Kind={normalized.Kind}");
+            onNewNotification?.Invoke(normalized);
+            if (normalized.Kind == CloudNotificationKind.Push)
+            {
+                RaiseNotification(normalized);
             }
         }
 
@@ -183,7 +207,7 @@ public sealed class NotificationPoller : IDisposable
         }
     }
 
-    private void RaiseNotification(CloudNotification notification)
+    private void RaiseNotification(NormalizedCloudNotification notification)
     {
         if (dispatcher is not null)
             dispatcher.TryEnqueue(() => NotificationReceived?.Invoke(this, notification));

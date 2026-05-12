@@ -4,6 +4,15 @@ public sealed record NotificationAction(string Type, string Payload);
 
 public sealed record NotificationActionButton(string Title, string Type, string Payload);
 
+public static class NotificationActionButtonExtensions
+{
+    public static string ToRawButton(this NotificationActionButton button)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+        return $"{button.Title}={button.Type}:{button.Payload}";
+    }
+}
+
 public static class NotificationActionParser
 {
     public static NotificationAction? TryParse(string? rawAction)

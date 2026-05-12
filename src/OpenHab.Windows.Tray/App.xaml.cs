@@ -254,40 +254,35 @@ public partial class App : Application
                 isDismissedFunc: id => notificationStore?.IsDismissed(id) ?? false,
                 onNewNotification: n =>
                 {
-                    var tag = ResolveNotificationTag(n);
-                    var body = BuildNotificationBody(n);
                     notificationStore?.AddOrUpdate(
-                        n.Id, body, n.Created, n.Title, n.Icon, tag,
+                        n.Id, n.Message, n.Created, n.Title, n.Icon, n.Tag,
                         n.ReferenceId, n.OnClickAction, n.MediaAttachmentUrl,
-                        n.ActionButton1, n.ActionButton2, n.ActionButton3);
+                        n.ActionButtons.ElementAtOrDefault(0)?.ToRawButton(),
+                        n.ActionButtons.ElementAtOrDefault(1)?.ToRawButton(),
+                        n.ActionButtons.ElementAtOrDefault(2)?.ToRawButton());
+                },
+                onHideNotification: target =>
+                {
+                    if (target.Kind == NotificationHideTargetKind.ReferenceId)
+                    {
+                        notificationStore?.HideByReferenceId(target.Value);
+                    }
+                    else
+                    {
+                        notificationStore?.HideByTag(target.Value);
+                    }
                 });
 
             DiagnosticLogger.Info($"Notification poller created — polling {settings.CloudEndpoint.Host} every 60s");
 
             notificationPoller.NotificationReceived += (_, notification) =>
             {
-                DiagnosticLogger.Info($"Notification received — severity: {notification.Severity ?? "none"}");
-                var title = BuildNotificationHeader(notification);
-                var body = BuildNotificationBody(notification);
-                var tag = ResolveNotificationTag(notification);
+                DiagnosticLogger.Info($"Notification received - tag: {notification.Tag ?? "none"}");
                 var importantTags = settingsController.Current.ImportantNotificationTags;
-                var isImportant = IsImportantNotification(tag, importantTags);
-                var toastHeader = ResolveNotificationHeader(tag);
+                var isImportant = IsImportantNotification(notification.Tag, importantTags);
+                var toastHeader = ResolveNotificationHeader(notification.Tag);
 
-                // Parse action buttons from the notification data
-                var actionButtons = new List<NotificationActionButton>();
-                TryAddButton(notification.ActionButton1, actionButtons);
-                TryAddButton(notification.ActionButton2, actionButtons);
-                TryAddButton(notification.ActionButton3, actionButtons);
-
-                _ = ShowNotificationToastAsync(
-                    notification.Icon,
-                    title,
-                    body,
-                    actionButtons.Count > 0 ? actionButtons : null,
-                    isImportant,
-                    toastHeader,
-                    tag);
+                _ = ShowNotificationToastAsync(notification, isImportant, toastHeader);
             };
 
             notificationPoller.Start();
@@ -686,16 +681,9 @@ public partial class App : Application
         }
     }
 
-    private static void TryAddButton(string? rawButton, List<NotificationActionButton> buttons)
+    private static string BuildNotificationHeader(NormalizedCloudNotification notification)
     {
-        var parsed = NotificationActionParser.TryParseButton(rawButton);
-        if (parsed is not null)
-            buttons.Add(parsed);
-    }
-
-    private static string BuildNotificationHeader(CloudNotification notification)
-    {
-        var tag = ResolveNotificationTag(notification);
+        var tag = notification.Tag;
         if (!string.IsNullOrWhiteSpace(notification.Title))
         {
             var title = notification.Title;
@@ -710,10 +698,10 @@ public partial class App : Application
         return "openHAB";
     }
 
-    private static string BuildNotificationBody(CloudNotification notification)
+    private static string BuildNotificationBody(NormalizedCloudNotification notification)
     {
         var body = notification.Message ?? string.Empty;
-        var tag = ResolveNotificationTag(notification);
+        var tag = notification.Tag;
         if (!string.IsNullOrWhiteSpace(tag))
         {
             body = StripLeadingBracketToken(body, tag);
@@ -748,14 +736,6 @@ public partial class App : Application
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
-    // openHAB Cloud docs: "tag" supersedes/semsame as legacy "severity".
-    private static string? ResolveNotificationTag(CloudNotification notification)
-    {
-        return string.IsNullOrWhiteSpace(notification.Tag)
-            ? notification.Severity
-            : notification.Tag;
-    }
-
     private static string? ResolveNotificationHeader(string? tag)
     {
         if (string.IsNullOrWhiteSpace(tag))
@@ -778,19 +758,15 @@ public partial class App : Application
     }
 
     private async Task ShowNotificationToastAsync(
-        string? icon,
-        string title,
-        string body,
-        IReadOnlyList<NotificationActionButton>? actionButtons,
+        NormalizedCloudNotification notification,
         bool isImportant,
-        string? toastHeader,
-        string? tag)
+        string? toastHeader)
     {
         Uri? appLogoOverrideUri = null;
         try
         {
             using var iconCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            appLogoOverrideUri = await ResolveNotificationAppLogoOverrideUriAsync(icon, iconCts.Token);
+            appLogoOverrideUri = await ResolveNotificationAppLogoOverrideUriAsync(notification.Icon, iconCts.Token);
         }
         catch (Exception ex)
         {
@@ -798,12 +774,12 @@ public partial class App : Application
         }
 
         ToastService.Show(
-            title,
-            body,
-            actionButtons,
+            BuildNotificationHeader(notification),
+            BuildNotificationBody(notification),
+            notification.ActionButtons,
             important: isImportant,
             header: toastHeader,
-            tag: tag,
+            tag: notification.Tag,
             appLogoOverrideUri: appLogoOverrideUri);
     }
 
