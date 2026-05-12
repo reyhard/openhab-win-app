@@ -40,6 +40,7 @@ public sealed class SitemapRuntimeController
     private long _sitemapEventStreamAttempt;
     private string _activeSearchQuery = string.Empty;
     private string _searchInputQuery = string.Empty;
+    private long _searchSequence;
     private IReadOnlyDictionary<string, SitemapSearchSource> _activeSearchSources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
     private static readonly TimeSpan WidgetEventReconcileDebounce = TimeSpan.FromMilliseconds(250);
     public bool CanGoBack => backStack.Count > 0;
@@ -86,6 +87,7 @@ public sealed class SitemapRuntimeController
 
     public void ApplySearchQuery(string? query)
     {
+        Interlocked.Increment(ref _searchSequence);
         var inputQuery = query ?? string.Empty;
         var descriptor = BuildDescriptorForQuery(query, out var normalizedQuery, out var resultCount, out var sources);
         _activeSearchQuery = normalizedQuery;
@@ -97,6 +99,84 @@ public sealed class SitemapRuntimeController
             IsSearchActive = HasActiveSearch,
             SearchQuery = SearchSnapshotQuery,
             SearchResultCount = resultCount,
+            ChangedRowIndices = []
+        };
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public Task ApplySearchQueryAsync(string? query, CancellationToken cancellationToken = default)
+    {
+        var inputQuery = query ?? string.Empty;
+        var normalizedQuery = inputQuery.Trim();
+        if (normalizedQuery.Length == 0 || currentPage is null)
+        {
+            ApplySearchQuery(query);
+            return Task.CompletedTask;
+        }
+
+        var searchSequence = Interlocked.Increment(ref _searchSequence);
+        var pageSnapshot = currentPage;
+        var stateVersionAtStart = Volatile.Read(ref _sitemapStateVersion);
+        var refreshSequenceAtStart = Volatile.Read(ref _refreshSequence);
+
+        _activeSearchQuery = normalizedQuery;
+        _searchInputQuery = inputQuery;
+        Current = Current with
+        {
+            IsSearchActive = true,
+            SearchQuery = inputQuery,
+            ChangedRowIndices = []
+        };
+
+        return ApplySearchQueryAsyncCore(
+            inputQuery,
+            normalizedQuery,
+            pageSnapshot,
+            searchSequence,
+            stateVersionAtStart,
+            refreshSequenceAtStart,
+            cancellationToken);
+    }
+
+    private async Task ApplySearchQueryAsyncCore(
+        string inputQuery,
+        string normalizedQuery,
+        NormalizedSitemapPage pageSnapshot,
+        long searchSequence,
+        long stateVersionAtStart,
+        long refreshSequenceAtStart,
+        CancellationToken cancellationToken)
+    {
+        SitemapSearchBuildResult search;
+        try
+        {
+            search = await Task.Run(
+                () => BuildSearchResultForPage(pageSnapshot, normalizedQuery),
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (cancellationToken.IsCancellationRequested ||
+            searchSequence != Volatile.Read(ref _searchSequence) ||
+            !ReferenceEquals(pageSnapshot, currentPage) ||
+            stateVersionAtStart != Volatile.Read(ref _sitemapStateVersion) ||
+            refreshSequenceAtStart != Volatile.Read(ref _refreshSequence))
+        {
+            return;
+        }
+
+        _activeSearchQuery = search.Query;
+        _searchInputQuery = search.Query.Length > 0 ? inputQuery : string.Empty;
+        _activeSearchSources = new Dictionary<string, SitemapSearchSource>(search.SourcesByResultKey, StringComparer.Ordinal);
+        Current = Current with
+        {
+            Descriptor = search.Descriptor,
+            IsSearchActive = HasActiveSearch,
+            SearchQuery = SearchSnapshotQuery,
+            SearchResultCount = search.ResultCount,
             ChangedRowIndices = []
         };
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
@@ -1447,26 +1527,25 @@ public sealed class SitemapRuntimeController
         out int resultCount,
         out IReadOnlyDictionary<string, SitemapSearchSource> sources)
     {
-        normalizedQuery = (query ?? string.Empty).Trim();
-        resultCount = 0;
-        sources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
-
         if (currentPage is null)
         {
             normalizedQuery = string.Empty;
+            resultCount = 0;
+            sources = new Dictionary<string, SitemapSearchSource>(StringComparer.Ordinal);
             return null;
         }
 
-        var normalDescriptor = renderController.BuildCurrentDescriptor(currentPage);
-        if (normalizedQuery.Length == 0)
-        {
-            return normalDescriptor;
-        }
-
-        var search = SitemapSearchDescriptorBuilder.Build(currentPage, normalDescriptor, normalizedQuery, renderController);
+        var search = BuildSearchResultForPage(currentPage, query);
+        normalizedQuery = search.Query;
         resultCount = search.ResultCount;
         sources = new Dictionary<string, SitemapSearchSource>(search.SourcesByResultKey, StringComparer.Ordinal);
         return search.Descriptor;
+    }
+
+    private SitemapSearchBuildResult BuildSearchResultForPage(NormalizedSitemapPage page, string? query)
+    {
+        var normalDescriptor = renderController.BuildCurrentDescriptor(page);
+        return SitemapSearchDescriptorBuilder.Build(page, normalDescriptor, query, renderController);
     }
 
     private SitemapRenderDescriptor BuildEffectiveDescriptor(SitemapRenderDescriptor normalDescriptor)

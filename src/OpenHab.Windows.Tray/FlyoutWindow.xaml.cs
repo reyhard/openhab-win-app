@@ -48,6 +48,9 @@ public sealed partial class FlyoutWindow : Window
     private bool _pendingSnapshotRefresh;
     private bool isUpdatingSearchBox;
     private bool isSearchChromeOpen;
+    private bool isSitemapSearchBoxFocused;
+    private readonly DispatcherTimer sitemapSearchDebounceTimer = new();
+    private string pendingSitemapSearchQuery = string.Empty;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -90,6 +93,10 @@ public sealed partial class FlyoutWindow : Window
         FlyoutChrome.PointerPressed += OnFlyoutChromePointerPressed;
         EnsureLightDismissInitialized();
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
+        sitemapSearchDebounceTimer.Interval = TimeSpan.FromMilliseconds(150);
+        sitemapSearchDebounceTimer.Tick += SitemapSearchDebounceTimer_Tick;
+        SitemapSearchBox.GotFocus += (_, _) => isSitemapSearchBoxFocused = true;
+        SitemapSearchBox.LostFocus += (_, _) => isSitemapSearchBoxFocused = false;
         runtimeController.SnapshotChanged += (_, _) =>
         {
             if (_suppressNextSnapshotRefresh)
@@ -240,7 +247,10 @@ public sealed partial class FlyoutWindow : Window
             ? (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"]
             : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
 
-        if (!isUpdatingSearchBox && SitemapSearchBox.Text != snapshot.SearchQuery)
+        if (!isUpdatingSearchBox &&
+            !sitemapSearchDebounceTimer.IsEnabled &&
+            !isSitemapSearchBoxFocused &&
+            SitemapSearchBox.Text != snapshot.SearchQuery)
         {
             isUpdatingSearchBox = true;
             SitemapSearchBox.Text = snapshot.SearchQuery;
@@ -253,8 +263,21 @@ public sealed partial class FlyoutWindow : Window
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
+        if (ShouldSkipStaleSearchRender(snapshot))
+        {
+            snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+            return;
+        }
+
         sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+    }
+
+    private bool ShouldSkipStaleSearchRender(SitemapRuntimeSnapshot snapshot)
+    {
+        return snapshot.IsSearchActive &&
+               (isSitemapSearchBoxFocused || sitemapSearchDebounceTimer.IsEnabled) &&
+               !string.Equals(SitemapSearchBox.Text, snapshot.SearchQuery, StringComparison.Ordinal);
     }
 
     private async Task OnRowActivatedAsync(int rowIndex)
@@ -354,11 +377,12 @@ public sealed partial class FlyoutWindow : Window
 
     private void CloseSearchChrome()
     {
+        sitemapSearchDebounceTimer.Stop();
         isSearchChromeOpen = false;
         runtimeController.ClearSearch();
     }
 
-    private void SearchButton_Click(object sender, RoutedEventArgs e)
+    private async void SearchButton_Click(object sender, RoutedEventArgs e)
     {
         if (HasVisibleSearchChrome)
         {
@@ -367,7 +391,8 @@ public sealed partial class FlyoutWindow : Window
         }
 
         isSearchChromeOpen = true;
-        runtimeController.ApplySearchQuery(SitemapSearchBox.Text);
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(SitemapSearchBox.Text);
         RefreshChromeBindings(runtimeController.Current);
         SitemapSearchBox.Focus(FocusState.Programmatic);
     }
@@ -379,14 +404,35 @@ public sealed partial class FlyoutWindow : Window
             return;
         }
 
-        runtimeController.ApplySearchQuery(sender.Text);
+        pendingSitemapSearchQuery = sender.Text;
+        isSearchChromeOpen = true;
+        sitemapSearchDebounceTimer.Stop();
+        sitemapSearchDebounceTimer.Start();
+    }
+
+    private async void SitemapSearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(sender.Text);
         isSearchChromeOpen = true;
     }
 
-    private void SitemapSearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    private async void SitemapSearchDebounceTimer_Tick(object? sender, object e)
     {
-        runtimeController.ApplySearchQuery(sender.Text);
-        isSearchChromeOpen = true;
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(pendingSitemapSearchQuery);
+    }
+
+    private async Task ApplySitemapSearchQueryAsync(string query)
+    {
+        try
+        {
+            await runtimeController.ApplySearchQueryAsync(query);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Sitemap search failed: {ex.Message}");
+        }
     }
 
     private async void SitemapMenuItem_Click(object sender, RoutedEventArgs e)

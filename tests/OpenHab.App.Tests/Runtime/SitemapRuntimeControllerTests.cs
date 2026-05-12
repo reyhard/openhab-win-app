@@ -249,6 +249,29 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task ApplySearchQueryAsyncKeepsLatestSubmittedQuery()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        var first = controller.ApplySearchQueryAsync("Hallway");
+        var second = controller.ApplySearchQueryAsync("Living");
+
+        await Task.WhenAll(first, second);
+
+        Assert.True(controller.Current.IsSearchActive);
+        Assert.Equal("Living", controller.Current.SearchQuery);
+        Assert.Equal("__search__", controller.Current.Descriptor!.PageId);
+        Assert.Contains(controller.Current.Descriptor.Rows, row => row.Label == "Living Room Light");
+        Assert.DoesNotContain(controller.Current.Descriptor.Rows, row => row.Label == "Hallway Temperature");
+    }
+
+    [Fact]
     public async Task ClearSearchRestoresNormalDescriptor()
     {
         var settings = CreateSettingsController();
