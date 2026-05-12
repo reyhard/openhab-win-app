@@ -24,6 +24,7 @@ namespace OpenHab.Windows.Tray;
 
 public sealed partial class MainWindow : Window
 {
+    private static readonly HttpClient FallbackOpenHabClient = new();
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
     private readonly OpenHab.App.Shell.MainWindowShellController shellController;
@@ -63,7 +64,7 @@ public sealed partial class MainWindow : Window
             runtimeController,
             notificationStore: null,
             () => { },
-            (transportKind, endpoint) => new OpenHabHttpClient(new HttpClient(), endpoint))
+            (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint))
     {
     }
 
@@ -76,7 +77,7 @@ public sealed partial class MainWindow : Window
             runtimeController,
             notificationStore: null,
             requestHideToTray,
-            (transportKind, endpoint) => new OpenHabHttpClient(new HttpClient(), endpoint))
+            (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint))
     {
     }
 

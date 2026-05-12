@@ -44,6 +44,7 @@ public partial class App : Application
     private SitemapRuntimeController? runtimeController;
     private DeviceInfoSyncService? deviceInfoSyncService;
     private WindowsSessionInfoReader? windowsSessionInfoReader;
+    private CancellationTokenSource? promotedMainUiDiscoveryCts;
     private bool deviceInfoEventsRegistered;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
     private int isShuttingDown;
@@ -70,6 +71,7 @@ public partial class App : Application
         SetCurrentProcessExplicitAppUserModelID("OpenHab.OpenHabWinApp");
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
+        promotedMainUiDiscoveryCts = new CancellationTokenSource();
 
         var activatedEventArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
 
@@ -528,7 +530,8 @@ public partial class App : Application
             {
                 if (mainWindow is not null)
                 {
-                    _ = mainWindow.RefreshPromotedMainUiPagesAsync();
+                    _ = mainWindow.RefreshPromotedMainUiPagesAsync(
+                        promotedMainUiDiscoveryCts?.Token ?? CancellationToken.None);
                 }
             });
         }
@@ -568,6 +571,9 @@ public partial class App : Application
     private void ShutdownTrayResourcesCore()
     {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        promotedMainUiDiscoveryCts?.Cancel();
+        promotedMainUiDiscoveryCts?.Dispose();
+        promotedMainUiDiscoveryCts = null;
         UnregisterDeviceInfoSyncEvents();
         deviceInfoSyncService?.Dispose();
         deviceInfoSyncService = null;
