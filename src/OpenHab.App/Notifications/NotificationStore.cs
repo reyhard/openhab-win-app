@@ -126,6 +126,9 @@ public sealed class NotificationStore
         bool mutated;
         lock (syncRoot)
         {
+            var normalizedReferenceId = string.IsNullOrWhiteSpace(referenceId)
+                ? null
+                : referenceId.Trim();
             var existingKey = id;
             var existing = notifications.TryGetValue(id, out var directMatch)
                 ? directMatch
@@ -133,14 +136,16 @@ public sealed class NotificationStore
 
             if (existing is null
                 && !notifications.ContainsKey(id)
-                && !string.IsNullOrWhiteSpace(referenceId))
+                && normalizedReferenceId is not null)
             {
                 var referenceMatch = notifications
                     .Where(entry =>
                         !string.IsNullOrWhiteSpace(entry.Value.ReferenceId)
-                        && string.Equals(entry.Value.ReferenceId, referenceId, StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(entry.Value.ReferenceId, normalizedReferenceId, StringComparison.OrdinalIgnoreCase))
                     .OrderBy(entry => entry.Value.IsDismissed ? 1 : 0)
                     .ThenByDescending(entry => entry.Value.Created)
+                    .ThenByDescending(entry => entry.Value.ReceivedAt)
+                    .ThenBy(entry => entry.Key, StringComparer.Ordinal)
                     .FirstOrDefault();
 
                 if (!referenceMatch.Equals(default(KeyValuePair<string, StoredNotification>)))
@@ -160,7 +165,7 @@ public sealed class NotificationStore
                     Icon = icon ?? existing.Icon,
                     Severity = severity ?? existing.Severity,
                     Created = created,
-                    ReferenceId = referenceId ?? existing.ReferenceId,
+                    ReferenceId = normalizedReferenceId ?? existing.ReferenceId,
                     OnClickAction = onClickAction ?? existing.OnClickAction,
                     MediaAttachmentUrl = mediaAttachmentUrl ?? existing.MediaAttachmentUrl,
                     ActionButton1 = actionButton1 ?? existing.ActionButton1,
@@ -188,7 +193,7 @@ public sealed class NotificationStore
                     ReceivedAt: DateTimeOffset.UtcNow,
                     IsRead: false,
                     IsDismissed: false,
-                    ReferenceId: referenceId,
+                    ReferenceId: normalizedReferenceId,
                     OnClickAction: onClickAction,
                     MediaAttachmentUrl: mediaAttachmentUrl,
                     ActionButton1: actionButton1,

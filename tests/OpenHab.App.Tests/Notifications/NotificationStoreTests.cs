@@ -160,6 +160,64 @@ public sealed class NotificationStoreTests
     }
 
     [Fact]
+    public void AddOrUpdate_PrefersLatestReceivedAtWhenCreatedMatches()
+    {
+        var created = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var olderReceived = new DateTimeOffset(2026, 5, 7, 10, 1, 0, TimeSpan.Zero);
+        var newerReceived = new DateTimeOffset(2026, 5, 7, 10, 2, 0, TimeSpan.Zero);
+        var replacementCreated = new DateTimeOffset(2026, 5, 7, 10, 3, 0, TimeSpan.Zero);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(StorageFilePath)!);
+
+        var older = new StoredNotification(
+            "cloud-older",
+            "Older original",
+            null,
+            null,
+            "info",
+            created,
+            olderReceived,
+            false,
+            false,
+            "ref-2",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        var newer = new StoredNotification(
+            "cloud-newer",
+            "Newer original",
+            null,
+            null,
+            "info",
+            created,
+            newerReceived,
+            false,
+            false,
+            "ref-2",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        File.WriteAllText(
+            StorageFilePath,
+            JsonSerializer.Serialize(new { Notifications = new[] { older, newer } }));
+
+        var store = new NotificationStore();
+        store.AddOrUpdate("cloud-replacement", "Replacement", replacementCreated, referenceId: "ref-2");
+
+        var all = store.GetAll();
+        Assert.Equal(2, all.Count);
+        Assert.Contains(all, n => n.Id == "cloud-older");
+        Assert.Contains(all, n => n.Id == "cloud-replacement");
+        Assert.DoesNotContain(all, n => n.Id == "cloud-newer");
+    }
+
+    [Fact]
     public void AddOrUpdate_ReplacesVisibleNotificationWithSameReferenceId()
     {
         var store = new NotificationStore();
@@ -201,6 +259,20 @@ public sealed class NotificationStoreTests
         Assert.Equal("cloud-2", notification.Id);
         Assert.True(notification.IsDismissed);
         Assert.True(notification.IsRead);
+    }
+
+    [Fact]
+    public void AddOrUpdate_WhitespaceReferenceIdPreservesExistingReference()
+    {
+        var store = new NotificationStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("n1", "Original", created1, referenceId: "ref-1");
+        store.AddOrUpdate("n1", "Updated", created2, referenceId: "   ");
+
+        var notification = store.GetAll().Single(n => n.Id == "n1");
+        Assert.Equal("ref-1", notification.ReferenceId);
     }
 
     [Fact]
