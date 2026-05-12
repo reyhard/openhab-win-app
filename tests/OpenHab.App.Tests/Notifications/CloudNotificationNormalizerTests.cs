@@ -115,6 +115,27 @@ public sealed class CloudNotificationNormalizerTests
     }
 
     [Fact]
+    public void Normalize_ClassifiesLogOnlyTypePayload()
+    {
+        var raw = Deserialize("""
+        {
+          "_id": "log-only-1",
+          "message": "Saved only",
+          "created": "2026-05-12T10:00:00Z",
+          "payload": {
+            "message": "Saved only",
+            "type": "logOnly"
+          }
+        }
+        """);
+
+        var normalized = CloudNotificationNormalizer.Normalize(raw);
+
+        Assert.Equal(CloudNotificationKind.LogOnly, normalized.Kind);
+        Assert.Empty(normalized.HideTargets);
+    }
+
+    [Fact]
     public void Normalize_ClassifiesHideByReferenceIdAndTag()
     {
         var raw = Deserialize("""
@@ -160,5 +181,35 @@ public sealed class CloudNotificationNormalizerTests
             normalized.ActionButtons,
             first => Assert.Equal("Light", first.Title),
             second => Assert.Equal("Main UI", second.Title));
+    }
+
+    [Fact]
+    public void Normalize_TruncatesActionsToThreeButtons()
+    {
+        var raw = Deserialize("""
+        {
+          "_id": "actions-2",
+          "message": "Body",
+          "created": "2026-05-12T10:00:00Z",
+          "payload": {
+            "actionButton1": "One=command:Light:ON",
+            "actionButton2": "Two=command:Fan:ON",
+            "actionButton3": "Three=command:Door:OPEN",
+            "actions": [
+              "Four=command:Alarm:ON",
+              { "title": "Five", "action": "ui:navigate:/page/overview" }
+            ]
+          }
+        }
+        """);
+
+        var normalized = CloudNotificationNormalizer.Normalize(raw);
+
+        Assert.Equal(3, normalized.ActionButtons.Count);
+        Assert.Collection(
+            normalized.ActionButtons,
+            first => Assert.Equal("One", first.Title),
+            second => Assert.Equal("Two", second.Title),
+            third => Assert.Equal("Three", third.Title));
     }
 }
