@@ -14,6 +14,7 @@ public sealed partial class MainUiWebViewHost : UserControl
     private Uri? currentUri;
     private string pendingRoute = "/";
     private bool initialized;
+    private TaskCompletionSource? navigationCompletion;
 
     public event EventHandler<string>? CurrentRouteChanged;
 
@@ -41,7 +42,21 @@ public sealed partial class MainUiWebViewHost : UserControl
         {
             await EnsureInitializedAsync();
             cancellationToken.ThrowIfCancellationRequested();
+            var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            navigationCompletion = completion;
             MainWebView.Source = currentUri;
+            using var registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
+            try
+            {
+                await completion.Task;
+            }
+            finally
+            {
+                if (ReferenceEquals(navigationCompletion, completion))
+                {
+                    navigationCompletion = null;
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -127,11 +142,15 @@ public sealed partial class MainUiWebViewHost : UserControl
             MainWebView.Visibility = Visibility.Visible;
             LoadingView.Visibility = Visibility.Collapsed;
             ErrorView.Visibility = Visibility.Collapsed;
+            navigationCompletion?.TrySetResult();
+            navigationCompletion = null;
             return;
         }
 
         DiagnosticLogger.Warn($"Main UI navigation failed: webError={args.WebErrorStatus}");
         ShowError("Check the configured endpoint and credentials, then retry.");
+        navigationCompletion?.TrySetResult();
+        navigationCompletion = null;
     }
 
     private async void RetryButton_Click(object sender, RoutedEventArgs e)
