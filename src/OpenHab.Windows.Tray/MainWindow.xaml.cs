@@ -190,9 +190,12 @@ public sealed partial class MainWindow : Window
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
             ShowMainUi();
-            if (!string.IsNullOrWhiteSpace(state.PendingMainUiRoute))
+            var targetRoute = !string.IsNullOrWhiteSpace(state.PendingMainUiRoute)
+                ? state.PendingMainUiRoute
+                : MainUiHost.CurrentRoute;
+            if (!string.IsNullOrWhiteSpace(targetRoute))
             {
-                var normalizedRoute = NormalizeMainUiRoute(state.PendingMainUiRoute);
+                var normalizedRoute = NormalizeMainUiRoute(targetRoute);
                 var activeTransport = runtimeController.Current.ActiveTransport == TransportKind.Cloud
                     ? TransportKind.Cloud
                     : TransportKind.Local;
