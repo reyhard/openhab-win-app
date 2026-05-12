@@ -597,6 +597,26 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void LoadedSettingsStripEndpointUserInfo()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            AppSettings.Default with
+            {
+                LocalEndpoint = new Uri("http://user:pass@openhab:8080/base"),
+                CloudEndpoint = new Uri("https://cloud-user:cloud-pass@myopenhab.org/")
+            });
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        Assert.Equal(new Uri("http://openhab:8080/base"), controller.Current.LocalEndpoint);
+        Assert.Equal(new Uri("https://myopenhab.org/"), controller.Current.CloudEndpoint);
+        Assert.Equal(string.Empty, controller.Current.LocalEndpoint.UserInfo);
+        Assert.Equal(string.Empty, controller.Current.CloudEndpoint.UserInfo);
+    }
+
+    [Fact]
     public async Task ImportantNotificationTagsRoundTripThroughJson()
     {
         var controller = CreateController();

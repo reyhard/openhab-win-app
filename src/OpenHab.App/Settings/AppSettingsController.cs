@@ -503,12 +503,34 @@ public sealed class AppSettingsController
 
         return settings with
         {
+            LocalEndpoint = NormalizeLoadedEndpoint(settings.LocalEndpoint, AppSettings.Default.LocalEndpoint),
+            CloudEndpoint = NormalizeLoadedEndpoint(settings.CloudEndpoint, AppSettings.Default.CloudEndpoint),
             FlyoutWidth = width,
             NotificationPollIntervalSeconds = interval,
             ImportantNotificationTags = NormalizeImportantNotificationTags(settings.ImportantNotificationTags),
             DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default,
             CachedMainUiPageLinks = NormalizeMainUiPageLinks(settings.CachedMainUiPageLinks)
         };
+    }
+
+    private static Uri NormalizeLoadedEndpoint(Uri? endpoint, Uri defaultEndpoint)
+    {
+        if (endpoint is null || !endpoint.IsAbsoluteUri || !IsHttpOrHttps(endpoint))
+        {
+            return defaultEndpoint;
+        }
+
+        if (string.IsNullOrEmpty(endpoint.UserInfo))
+        {
+            return endpoint;
+        }
+
+        var builder = new UriBuilder(endpoint)
+        {
+            UserName = string.Empty,
+            Password = string.Empty
+        };
+        return builder.Uri;
     }
 
     private static ImmutableArray<MainUiPageLink> NormalizeMainUiPageLinks(IEnumerable<MainUiPageLink>? links)
