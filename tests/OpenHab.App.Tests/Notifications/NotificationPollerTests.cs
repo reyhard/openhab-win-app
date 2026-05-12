@@ -102,6 +102,38 @@ public sealed class NotificationPollerTests
     }
 
     [Fact]
+    public async Task PollOnce_Hide_DeduplicatesSameHideIdAcrossPolls()
+    {
+        using var poller = CreatePoller(
+            """
+            [
+              {
+                "_id": "hide-repeat-1",
+                "message": "",
+                "created": "2026-05-12T10:00:00Z",
+                "payload": {
+                  "type": "hideNotification",
+                  "reference-id": "motion-123",
+                  "tag": "Motion"
+                }
+              }
+            ]
+            """,
+            out var raised,
+            out var stored,
+            out var hidden);
+
+        await poller.PollOnceForTestingAsync(CancellationToken.None);
+        await poller.PollOnceForTestingAsync(CancellationToken.None);
+
+        Assert.Empty(raised);
+        Assert.Empty(stored);
+        Assert.Equal(2, hidden.Count);
+        Assert.Equal(1, hidden.Count(t => t.Kind == NotificationHideTargetKind.ReferenceId && t.Value == "motion-123"));
+        Assert.Equal(1, hidden.Count(t => t.Kind == NotificationHideTargetKind.Tag && t.Value == "Motion"));
+    }
+
+    [Fact]
     public async Task PollOnce_DoesNotRepeatPushOrLogForAlreadySeenNormalizedIds()
     {
         using var poller = CreatePoller(

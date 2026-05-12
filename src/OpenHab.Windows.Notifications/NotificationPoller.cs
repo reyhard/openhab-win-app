@@ -169,6 +169,11 @@ public sealed class NotificationPoller : IDisposable
         foreach (var notification in notifications.OrderBy(n => n.Created))
         {
             var normalized = CloudNotificationNormalizer.Normalize(notification);
+            if (!seenIds.Add(normalized.Id))
+            {
+                continue;
+            }
+
             if (normalized.Kind == CloudNotificationKind.Hide)
             {
                 foreach (var hideTarget in normalized.HideTargets)
@@ -176,11 +181,6 @@ public sealed class NotificationPoller : IDisposable
                     onHideNotification?.Invoke(hideTarget);
                 }
 
-                continue;
-            }
-
-            if (!seenIds.Add(normalized.Id))
-            {
                 continue;
             }
 
