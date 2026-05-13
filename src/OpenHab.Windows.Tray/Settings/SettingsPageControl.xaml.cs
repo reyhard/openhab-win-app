@@ -68,6 +68,8 @@ public sealed partial class SettingsPageControl : UserControl
     private NumberBox? NotificationPollBox;
     private TextBox? ImportantNotificationTagsText;
     private ToggleSwitch? DeviceInfoSyncEnabledToggle;
+    private ToggleSwitch? CommandMenuEnabledToggle;
+    private ComboBox? CommandMenuActivationModeCombo;
     private TextBlock? DeviceInfoSyncDisabledText;
     private TextBox? DeviceInfoSyncIdentifierText;
     private NumberBox? DeviceInfoSyncIntervalBox;
@@ -628,12 +630,13 @@ public sealed partial class SettingsPageControl : UserControl
 
         AddSettingsSectionTitle("Built-in shortcuts");
 
-        var commandMenuEnabledToggle = new ToggleSwitch
+        CommandMenuEnabledToggle = new ToggleSwitch
         {
             OnContent = string.Empty,
             OffContent = string.Empty,
             IsOn = settings.CommandMenu.Enabled
         };
+        CommandMenuEnabledToggle.Toggled += CommandMenuEnabledToggle_Toggled;
         var commandMenuTitleRow = CreateSettingsControlRow(
             "\uE8FD",
             "openHAB Command Menu",
@@ -645,7 +648,7 @@ public sealed partial class SettingsPageControl : UserControl
                 VerticalAlignment = VerticalAlignment.Center
             });
 
-        var commandMenuEnabledRow = CreateSettingsToggleRow("\uE8FD", "Enabled", "Turn command menu keyboard handling on or off", commandMenuEnabledToggle);
+        var commandMenuEnabledRow = CreateSettingsToggleRow("\uE8FD", "Enabled", "Turn command menu keyboard handling on or off", CommandMenuEnabledToggle);
 
         var globalShortcutRow = CreateSettingsControlRow(
             "\uE765",
@@ -653,17 +656,18 @@ public sealed partial class SettingsPageControl : UserControl
             "Keyboard shortcut for opening command menu from anywhere",
             ShortcutSettingsControls.CreateShortcutChips(settings.CommandMenu.Binding));
 
-        var activationModeCombo = new ComboBox
+        CommandMenuActivationModeCombo = new ComboBox
         {
             Width = 220,
             ItemsSource = Enum.GetValues<RadialActivationMode>(),
             SelectedItem = settings.CommandMenu.RadialActivationMode
         };
+        CommandMenuActivationModeCombo.SelectionChanged += CommandMenuActivationModeCombo_SelectionChanged;
         var activationModeRow = CreateSettingsControlRow(
             "\uE7C1",
             "Activation mode",
             "Choose whether the command menu toggles or stays open while held",
-            activationModeCombo);
+            CommandMenuActivationModeCombo);
 
         SettingsContent.Children.Add(ShortcutSettingsControls.CreateSettingsCard(
             commandMenuTitleRow,
@@ -794,6 +798,8 @@ public sealed partial class SettingsPageControl : UserControl
         NotificationPollBox = null;
         ImportantNotificationTagsText = null;
         DeviceInfoSyncEnabledToggle = null;
+        CommandMenuEnabledToggle = null;
+        CommandMenuActivationModeCombo = null;
         DeviceInfoSyncDisabledText = null;
         DeviceInfoSyncIdentifierText = null;
         DeviceInfoSyncIntervalBox = null;
@@ -866,9 +872,18 @@ public sealed partial class SettingsPageControl : UserControl
             }
 
             var deviceInfoSync = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
+            var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
             if (DeviceInfoSyncEnabledToggle is not null)
             {
                 DeviceInfoSyncEnabledToggle.IsOn = deviceInfoSync.IsEnabled;
+            }
+            if (CommandMenuEnabledToggle is not null)
+            {
+                CommandMenuEnabledToggle.IsOn = shortcuts.CommandMenu.Enabled;
+            }
+            if (CommandMenuActivationModeCombo is not null)
+            {
+                CommandMenuActivationModeCombo.SelectedItem = shortcuts.CommandMenu.RadialActivationMode;
             }
             if (DeviceInfoSyncIdentifierText is not null)
             {
@@ -1203,6 +1218,40 @@ public sealed partial class SettingsPageControl : UserControl
 
         SaveDeviceInfoSyncSettings(enabledOverride: toggle.IsOn);
         NavigateToSettingsPage(SettingsPage.DeviceInfoSync);
+    }
+
+    private void CommandMenuEnabledToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ToggleSwitch toggle)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            CommandMenu = shortcuts.CommandMenu with
+            {
+                Enabled = toggle.IsOn
+            }
+        });
+    }
+
+    private void CommandMenuActivationModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ComboBox combo || combo.SelectedItem is not RadialActivationMode mode)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            CommandMenu = shortcuts.CommandMenu with
+            {
+                RadialActivationMode = mode
+            }
+        });
     }
 
     private void DeviceInfoSyncField_LostFocus(object sender, RoutedEventArgs e)
