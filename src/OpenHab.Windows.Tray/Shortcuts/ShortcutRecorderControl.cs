@@ -614,15 +614,7 @@ internal sealed class ShortcutRecorderControl : UserControl
             Height = 48,
             Padding = new Thickness(14, 0, 14, 0),
             Child = text.Equals("Win", StringComparison.Ordinal)
-                ? new FontIcon
-                {
-                    Glyph = "\uE782",
-                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                    FontSize = 22,
-                    Foreground = foreground,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
+                ? CreateWindowsLogoIcon(foreground)
                 : new TextBlock
             {
                 Text = text,
@@ -633,5 +625,38 @@ internal sealed class ShortcutRecorderControl : UserControl
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
             }
         };
+    }
+
+    private static Grid CreateWindowsLogoIcon(Brush foreground)
+    {
+        var icon = new Grid
+        {
+            Width = 18,
+            Height = 18,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        icon.ColumnDefinitions.Add(new ColumnDefinition());
+        icon.ColumnDefinitions.Add(new ColumnDefinition());
+        icon.RowDefinitions.Add(new RowDefinition());
+        icon.RowDefinitions.Add(new RowDefinition());
+
+        AddWindowsLogoPane(icon, foreground, 0, 0);
+        AddWindowsLogoPane(icon, foreground, 1, 0);
+        AddWindowsLogoPane(icon, foreground, 0, 1);
+        AddWindowsLogoPane(icon, foreground, 1, 1);
+        return icon;
+    }
+
+    private static void AddWindowsLogoPane(Grid icon, Brush foreground, int column, int row)
+    {
+        var pane = new Border
+        {
+            Background = foreground,
+            Margin = new Thickness(1)
+        };
+        Grid.SetColumn(pane, column);
+        Grid.SetRow(pane, row);
+        icon.Children.Add(pane);
     }
 }
