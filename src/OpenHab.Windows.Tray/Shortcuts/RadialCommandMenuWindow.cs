@@ -68,9 +68,8 @@ public sealed class RadialCommandMenuWindow : Window
             Width = WindowSize,
             Height = WindowSize,
             CornerRadius = new CornerRadius(WindowSize / 2d),
-            Background = GetBrush("CardBackgroundFillColorDefaultBrush", "LayerFillColorDefaultBrush"),
-            BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
             Padding = new Thickness(8)
         };
 
@@ -232,7 +231,9 @@ public sealed class RadialCommandMenuWindow : Window
 
     private void Root_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (e.OriginalSource is DependencyObject source && IsWithin(source, menuSurface))
+        if (e.OriginalSource is DependencyObject source
+            && (IsWithin(source, closeButton)
+                || displayedEntries.Any(entry => IsWithin(source, entry.Button))))
         {
             return;
         }
