@@ -18,7 +18,6 @@ internal sealed class GlobalHotkeyService : IDisposable
 {
     private const int FirstHotkeyId = 0x4F00;
     private const string InvalidBindingMessage = "This shortcut is invalid and could not be registered.";
-    private const string InvalidActionMessage = "This action is invalid and its shortcut could not be registered.";
     private const string UnmappableBindingMessage = "This shortcut cannot be mapped to a Windows hotkey.";
     private const string DuplicateBindingMessage = "This shortcut is already used by another shortcut in settings.";
     private const string OsRegistrationFailedMessage = "This shortcut could not be registered. It may already be used by Windows or another app.";
@@ -44,7 +43,10 @@ internal sealed class GlobalHotkeyService : IDisposable
 
     public HotkeyRefreshResult Refresh(ShortcutSettings settings)
     {
-        ThrowIfDisposed();
+        if (disposed)
+        {
+            return new HotkeyRefreshResult([]);
+        }
 
         var failures = ImmutableArray.CreateBuilder<HotkeyRegistrationFailure>();
         var seenBindings = new HashSet<string>(StringComparer.Ordinal);
@@ -72,7 +74,6 @@ internal sealed class GlobalHotkeyService : IDisposable
 
             if (!ShortcutValidation.ValidateAction(action).IsValid)
             {
-                failures.Add(new HotkeyRegistrationFailure($"Action: {action.Name}", InvalidActionMessage));
                 continue;
             }
 

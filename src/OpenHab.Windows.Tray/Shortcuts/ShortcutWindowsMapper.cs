@@ -72,6 +72,11 @@ internal static class ShortcutWindowsMapper
 
         if (Enum.TryParse<VirtualKey>(normalizedKey, ignoreCase: true, out var parsedVirtualKey))
         {
+            if (parsedVirtualKey == VirtualKey.None)
+            {
+                return false;
+            }
+
             virtualKey = (uint)parsedVirtualKey;
             return true;
         }
