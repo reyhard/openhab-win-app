@@ -1,4 +1,5 @@
 using OpenHab.App.Settings;
+using OpenHab.App.Shortcuts;
 using OpenHab.App.Tests.Settings;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
@@ -38,6 +39,40 @@ public sealed class AppSettingsControllerTests
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
         Assert.Null(controller.Current.CloudUserName);
+    }
+
+    [Fact]
+    public void DefaultsIncludeShortcutSettings()
+    {
+        var controller = CreateController();
+
+        Assert.True(controller.Current.Shortcuts.CommandMenu.Enabled);
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(controller.Current.Shortcuts.CommandMenu.Binding));
+        Assert.Equal(RadialActivationMode.Toggle, controller.Current.Shortcuts.CommandMenu.RadialActivationMode);
+        Assert.False(controller.Current.Shortcuts.VoiceMode.Enabled);
+        Assert.Null(controller.Current.Shortcuts.VoiceMode.Binding);
+        Assert.Empty(controller.Current.Shortcuts.Actions);
+    }
+
+    [Fact]
+    public async Task CanPersistShortcutSettings()
+    {
+        var controller = CreateController();
+        var settings = ShortcutSettings.Default with
+        {
+            CommandMenu = ShortcutSettings.Default.CommandMenu with
+            {
+                Binding = new ShortcutBinding([ShortcutModifier.Ctrl, ShortcutModifier.Alt], "K"),
+                RadialActivationMode = RadialActivationMode.Hold
+            }
+        };
+
+        controller.SetShortcutSettings(settings);
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        Assert.Equal("Ctrl + Alt + K", ShortcutBindingFormatter.Format(reloaded.Current.Shortcuts.CommandMenu.Binding));
+        Assert.Equal(RadialActivationMode.Hold, reloaded.Current.Shortcuts.CommandMenu.RadialActivationMode);
     }
 
     [Fact]

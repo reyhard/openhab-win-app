@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using OpenHab.App.MainUi;
+using OpenHab.App.Shortcuts;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using System.Collections.Immutable;
@@ -47,6 +48,7 @@ public sealed record AppSettings(
     bool MainUiPagesExpanded = false,
     bool MainWindowSitemapPaneVisible = false,
     bool MainWindowSidebarCollapsed = false,
+    ShortcutSettings? Shortcuts = null,
     ImmutableArray<MainUiPageLink> CachedMainUiPageLinks = default,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
@@ -62,6 +64,7 @@ public sealed record AppSettings(
         NotificationPollIntervalSeconds: 30,
         ImportantNotificationTags: [],
         DeviceInfoSync: DeviceInfoSyncSettings.Default,
+        Shortcuts: ShortcutSettings.Default,
         CachedMainUiPageLinks: []);
 }
 
