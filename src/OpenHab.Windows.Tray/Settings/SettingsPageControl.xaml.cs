@@ -69,6 +69,7 @@ public sealed partial class SettingsPageControl : UserControl
     private TextBox? ImportantNotificationTagsText;
     private ToggleSwitch? DeviceInfoSyncEnabledToggle;
     private ToggleSwitch? CommandMenuEnabledToggle;
+    private ShortcutRecorderControl? CommandMenuShortcutRecorder;
     private ComboBox? CommandMenuActivationModeCombo;
     private TextBlock? DeviceInfoSyncDisabledText;
     private TextBox? DeviceInfoSyncIdentifierText;
@@ -654,7 +655,7 @@ public sealed partial class SettingsPageControl : UserControl
             "\uE765",
             "Global shortcut",
             "Keyboard shortcut for opening command menu from anywhere",
-            ShortcutSettingsControls.CreateShortcutChips(settings.CommandMenu.Binding));
+            CreateCommandMenuShortcutRecorder(settings.CommandMenu.Binding));
 
         CommandMenuActivationModeCombo = new ComboBox
         {
@@ -799,6 +800,7 @@ public sealed partial class SettingsPageControl : UserControl
         ImportantNotificationTagsText = null;
         DeviceInfoSyncEnabledToggle = null;
         CommandMenuEnabledToggle = null;
+        CommandMenuShortcutRecorder = null;
         CommandMenuActivationModeCombo = null;
         DeviceInfoSyncDisabledText = null;
         DeviceInfoSyncIdentifierText = null;
@@ -880,6 +882,11 @@ public sealed partial class SettingsPageControl : UserControl
             if (CommandMenuEnabledToggle is not null)
             {
                 CommandMenuEnabledToggle.IsOn = shortcuts.CommandMenu.Enabled;
+            }
+            if (CommandMenuShortcutRecorder is not null)
+            {
+                CommandMenuShortcutRecorder.Binding = shortcuts.CommandMenu.Binding;
+                CommandMenuShortcutRecorder.Error = null;
             }
             if (CommandMenuActivationModeCombo is not null)
             {
@@ -1250,6 +1257,35 @@ public sealed partial class SettingsPageControl : UserControl
             CommandMenu = shortcuts.CommandMenu with
             {
                 RadialActivationMode = mode
+            }
+        });
+    }
+
+    private ShortcutRecorderControl CreateCommandMenuShortcutRecorder(ShortcutBinding? binding)
+    {
+        CommandMenuShortcutRecorder = new ShortcutRecorderControl
+        {
+            Binding = binding,
+            AllowClear = true,
+            Error = null
+        };
+        CommandMenuShortcutRecorder.BindingChanged += CommandMenuShortcutRecorder_BindingChanged;
+        return CommandMenuShortcutRecorder;
+    }
+
+    private void CommandMenuShortcutRecorder_BindingChanged(object? sender, EventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ShortcutRecorderControl recorder)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            CommandMenu = shortcuts.CommandMenu with
+            {
+                Binding = recorder.Binding
             }
         });
     }
