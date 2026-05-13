@@ -10,15 +10,22 @@ public sealed class ShortcutActionExecutorTests
     [Fact]
     public async Task BlocksExecutionWhenDisconnected()
     {
-        var client = new RecordingShortcutClient();
+        var clientInvoked = false;
         var executor = new ShortcutActionExecutor(() => null, () => ConnectionState.Offline);
+        executor = new ShortcutActionExecutor(
+            () =>
+            {
+                clientInvoked = true;
+                throw new InvalidOperationException("getClient must not be called while disconnected.");
+            },
+            () => ConnectionState.Offline);
         var action = Action(ShortcutCommandType.SendCommand, "PLAY");
 
         var result = await executor.ExecuteAsync(action, CancellationToken.None);
 
         Assert.False(result.Succeeded);
         Assert.Equal(ShortcutActionExecutionFailure.Disconnected, result.Failure);
-        Assert.Empty(client.Commands);
+        Assert.False(clientInvoked);
     }
 
     [Fact]
@@ -157,6 +164,34 @@ public sealed class ShortcutActionExecutorTests
         Assert.Empty(client.Commands);
     }
 
+    [Fact]
+    public async Task SendCommandCancellationIsRethrown()
+    {
+        var client = new RecordingShortcutClient
+        {
+            SendCommandException = new OperationCanceledException("cancel")
+        };
+        var executor = new ShortcutActionExecutor(() => client, () => ConnectionState.Online);
+        var action = Action(ShortcutCommandType.SendCommand, "PLAY");
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => executor.ExecuteAsync(action, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ToggleStateLookupCancellationIsRethrown()
+    {
+        var client = new RecordingShortcutClient
+        {
+            GetItemStateException = new OperationCanceledException("cancel")
+        };
+        var executor = new ShortcutActionExecutor(() => client, () => ConnectionState.Online);
+        var action = Action(ShortcutCommandType.Toggle, null);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => executor.ExecuteAsync(action, CancellationToken.None));
+    }
+
     private static ShortcutAction Action(ShortcutCommandType type, string? value)
     {
         return new ShortcutAction("a1", "Action", "play", true, null, "LivingRoom_Item", type, value);
@@ -167,6 +202,7 @@ public sealed class ShortcutActionExecutorTests
         public List<(string ItemName, string Command)> Commands { get; } = new();
         public Dictionary<string, string?> ItemStates { get; } = new(StringComparer.Ordinal);
         public Exception? SendCommandException { get; set; }
+        public Exception? GetItemStateException { get; set; }
 
         public Task SendCommandAsync(string itemName, string command, CancellationToken cancellationToken)
         {
@@ -187,6 +223,11 @@ public sealed class ShortcutActionExecutorTests
 
         public Task<string?> GetItemStateAsync(string itemName, CancellationToken cancellationToken)
         {
+            if (GetItemStateException is not null)
+            {
+                throw GetItemStateException;
+            }
+
             ItemStates.TryGetValue(itemName, out var state);
             return Task.FromResult(state);
         }
