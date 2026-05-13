@@ -11,8 +11,7 @@ public sealed class ShortcutActionExecutorTests
     public async Task BlocksExecutionWhenDisconnected()
     {
         var clientInvoked = false;
-        var executor = new ShortcutActionExecutor(() => null, () => ConnectionState.Offline);
-        executor = new ShortcutActionExecutor(
+        var executor = new ShortcutActionExecutor(
             () =>
             {
                 clientInvoked = true;
@@ -103,6 +102,45 @@ public sealed class ShortcutActionExecutorTests
 
         Assert.True(result.Succeeded);
         Assert.Equal(("LivingRoom_Item", value), Assert.Single(client.Commands));
+    }
+
+    [Fact]
+    public async Task OnOffNormalizesWhitespaceAndCase()
+    {
+        var client = new RecordingShortcutClient();
+        var executor = new ShortcutActionExecutor(() => client, () => ConnectionState.Online);
+        var action = Action(ShortcutCommandType.OnOff, " on ");
+
+        var result = await executor.ExecuteAsync(action, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(("LivingRoom_Item", "ON"), Assert.Single(client.Commands));
+    }
+
+    [Fact]
+    public async Task OpenCloseNormalizesWhitespaceAndCase()
+    {
+        var client = new RecordingShortcutClient();
+        var executor = new ShortcutActionExecutor(() => client, () => ConnectionState.Online);
+        var action = Action(ShortcutCommandType.OpenClose, " close ");
+
+        var result = await executor.ExecuteAsync(action, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(("LivingRoom_Item", "CLOSE"), Assert.Single(client.Commands));
+    }
+
+    [Fact]
+    public async Task SendCommandTrimsWhitespace()
+    {
+        var client = new RecordingShortcutClient();
+        var executor = new ShortcutActionExecutor(() => client, () => ConnectionState.Online);
+        var action = Action(ShortcutCommandType.SendCommand, " PLAY ");
+
+        var result = await executor.ExecuteAsync(action, CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(("LivingRoom_Item", "PLAY"), Assert.Single(client.Commands));
     }
 
     [Theory]

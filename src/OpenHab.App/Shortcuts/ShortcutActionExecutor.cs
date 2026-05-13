@@ -118,9 +118,27 @@ public sealed class ShortcutActionExecutor
                         $"Unsupported toggle state '{state}'."));
             }
             case ShortcutCommandType.OnOff:
+            {
+                var normalized = (action.CommandValue ?? string.Empty).Trim();
+                if (normalized.Equals("ON", StringComparison.OrdinalIgnoreCase))
+                {
+                    return CommandResolution.FromCommand("ON");
+                }
+
+                return CommandResolution.FromCommand("OFF");
+            }
             case ShortcutCommandType.OpenClose:
+            {
+                var normalized = (action.CommandValue ?? string.Empty).Trim();
+                if (normalized.Equals("OPEN", StringComparison.OrdinalIgnoreCase))
+                {
+                    return CommandResolution.FromCommand("OPEN");
+                }
+
+                return CommandResolution.FromCommand("CLOSE");
+            }
             case ShortcutCommandType.SendCommand:
-                return CommandResolution.FromCommand(action.CommandValue!);
+                return CommandResolution.FromCommand((action.CommandValue ?? string.Empty).Trim());
             case ShortcutCommandType.OpenSlider:
             case ShortcutCommandType.OpenColorPicker:
                 return CommandResolution.FromFailure(
