@@ -52,6 +52,7 @@ public sealed class RadialCommandMenuWindow : Window
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         StripNonClientFrame(hwnd);
         ExtendTransparentClientArea(hwnd);
+        ApplyCircularWindowRegion(hwnd);
         Activated += RadialCommandMenuWindow_Activated;
 
         root = new Grid
@@ -530,7 +531,7 @@ public sealed class RadialCommandMenuWindow : Window
             "light-bulb" => "\uE793",
             "ceiling-light" => "\uE9A8",
             "lamp" => "\uE706",
-            "strip-light" => "\uE95A",
+            "strip-light" => "\uE706",
             "brightness" => "\uE706",
             "color-wheel" => "\uE790",
             "power" => "\uE7E8",
@@ -655,6 +656,20 @@ public sealed class RadialCommandMenuWindow : Window
         _ = DwmExtendFrameIntoClientArea(hwnd, ref margins);
     }
 
+    private static void ApplyCircularWindowRegion(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var region = CreateEllipticRgn(0, 0, WindowSize + 1, WindowSize + 1);
+        if (region != IntPtr.Zero)
+        {
+            _ = SetWindowRgn(hwnd, region, redraw: true);
+        }
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct DwmMargins
     {
@@ -683,4 +698,10 @@ public sealed class RadialCommandMenuWindow : Window
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref DwmMargins margins);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
 }

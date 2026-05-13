@@ -567,7 +567,12 @@ public sealed partial class SettingsPageControl : UserControl
         return stack;
     }
 
-    private static Grid CreateSettingsControlRow(string glyph, string title, string subtitle, FrameworkElement control)
+    private static Grid CreateSettingsControlRow(
+        string glyph,
+        string title,
+        string subtitle,
+        FrameworkElement control,
+        bool stretchControl = false)
     {
         var row = new Grid
         {
@@ -577,7 +582,12 @@ public sealed partial class SettingsPageControl : UserControl
         };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = stretchControl
+                ? new GridLength(1, GridUnitType.Star)
+                : GridLength.Auto
+        });
 
         var icon = new FontIcon
         {
@@ -606,7 +616,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(textPanel);
 
         control.VerticalAlignment = VerticalAlignment.Center;
-        control.HorizontalAlignment = HorizontalAlignment.Right;
+        control.HorizontalAlignment = stretchControl ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
         Grid.SetColumn(control, 2);
         row.Children.Add(control);
 
@@ -902,9 +912,14 @@ public sealed partial class SettingsPageControl : UserControl
         ShortcutActionNameText = new TextBox
         {
             Text = draftAction.Name,
-            Width = 280
+            MinWidth = 280
         };
-        var nameRow = CreateSettingsControlRow("\uE8D2", "Action name", "Display name used in settings and command menu", ShortcutActionNameText);
+        var nameRow = CreateSettingsControlRow(
+            "\uE8D2",
+            "Action name",
+            "Display name used in settings and command menu",
+            ShortcutActionNameText,
+            stretchControl: true);
 
         ShortcutActionIconCombo = new ComboBox
         {
@@ -946,9 +961,14 @@ public sealed partial class SettingsPageControl : UserControl
         ShortcutActionTargetItemText = new TextBox
         {
             Text = draftAction.TargetItem,
-            Width = 280
+            MinWidth = 280
         };
-        var targetItemRow = CreateSettingsControlRow("\uE7F4", "Target item", "Enter openHAB item name manually for now", ShortcutActionTargetItemText);
+        var targetItemRow = CreateSettingsControlRow(
+            "\uE7F4",
+            "Target item",
+            "Enter openHAB item name manually for now",
+            ShortcutActionTargetItemText,
+            stretchControl: true);
 
         ShortcutActionTypeCombo = new ComboBox
         {
