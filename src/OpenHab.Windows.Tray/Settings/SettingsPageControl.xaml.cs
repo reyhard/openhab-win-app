@@ -232,7 +232,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(chevron);
 
         button.Content = row;
-        button.Click += (_, _) => NavigateToSettingsPage(destination);
+        button.Click += async (_, _) => await NavigateToSettingsPageWithDiscardConfirmationAsync(destination);
         return button;
     }
 
@@ -1330,9 +1330,9 @@ public sealed partial class SettingsPageControl : UserControl
         }
     }
 
-    private void SettingsBreadcrumbRootButton_Click(object sender, RoutedEventArgs e)
+    private async void SettingsBreadcrumbRootButton_Click(object sender, RoutedEventArgs e)
     {
-        NavigateToSettingsPage(SettingsPage.Root);
+        await NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage.Root);
     }
 
     private void AppColorThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1661,6 +1661,11 @@ public sealed partial class SettingsPageControl : UserControl
             return;
         }
 
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
         var action = shortcuts.Actions.FirstOrDefault(candidate => string.Equals(candidate.Id, actionId, StringComparison.Ordinal));
         if (action is null)
@@ -1668,11 +1673,13 @@ public sealed partial class SettingsPageControl : UserControl
             return;
         }
 
+        var actionName = string.IsNullOrWhiteSpace(action.Name) ? "Unnamed action" : action.Name.Trim();
+
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = "Delete action",
-            Content = $"Delete action '{action.Name}'?",
+            Content = $"Delete action '{actionName}'?",
             PrimaryButtonText = "Delete",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close
@@ -1863,6 +1870,16 @@ public sealed partial class SettingsPageControl : UserControl
             && string.Equals(current.TargetItem, saved.TargetItem, StringComparison.Ordinal)
             && current.CommandType == saved.CommandType
             && string.Equals(current.CommandValue ?? string.Empty, saved.CommandValue ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    private async Task NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage destination)
+    {
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
+        NavigateToSettingsPage(destination);
     }
 
     private void DeviceInfoSyncField_LostFocus(object sender, RoutedEventArgs e)
