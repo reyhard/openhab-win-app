@@ -1274,12 +1274,25 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void CommandMenuShortcutRecorder_BindingChanged(object? sender, ShortcutBinding? binding)
     {
-        if (isRefreshingSettingsBindings)
+        if (isRefreshingSettingsBindings || sender is not ShortcutRecorderControl recorder)
         {
             return;
         }
 
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var validation = ShortcutValidation.ValidateBinding(
+            binding,
+            "openHAB Command Menu",
+            existingBindings: [],
+            allowUnassigned: false);
+        if (!validation.IsValid)
+        {
+            recorder.Error = string.Join(Environment.NewLine, validation.Errors);
+            recorder.Binding = shortcuts.CommandMenu.Binding;
+            return;
+        }
+
+        recorder.Error = null;
         settingsController.SetShortcutSettings(shortcuts with
         {
             CommandMenu = shortcuts.CommandMenu with

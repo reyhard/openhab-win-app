@@ -292,11 +292,14 @@ internal sealed class ShortcutRecorderControl : UserControl
             return ((int)key - (int)VirtualKey.Number0).ToString();
         }
 
+        if (key >= VirtualKey.F1 && key <= VirtualKey.F24)
+        {
+            return key.ToString();
+        }
+
         return key switch
         {
             VirtualKey.Space => "Space",
-            VirtualKey.Tab => "Tab",
-            VirtualKey.Enter => "Enter",
             VirtualKey.Back => "Backspace",
             VirtualKey.Delete => "Delete",
             VirtualKey.Insert => "Insert",
@@ -308,7 +311,7 @@ internal sealed class ShortcutRecorderControl : UserControl
             VirtualKey.PageDown => "PageDown",
             VirtualKey.Home => "Home",
             VirtualKey.End => "End",
-            _ => key.ToString()
+            _ => string.Empty
         };
     }
 }
