@@ -52,7 +52,7 @@ public sealed class RadialCommandMenuWindow : Window
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         StripNonClientFrame(hwnd);
         ExtendTransparentClientArea(hwnd);
-        ApplyCircularWindowRegion(hwnd);
+        ApplyButtonWindowRegion(hwnd);
         Activated += RadialCommandMenuWindow_Activated;
 
         root = new Grid
@@ -138,7 +138,7 @@ public sealed class RadialCommandMenuWindow : Window
             emptyStateText.Visibility = Visibility.Visible;
             selectedActionIndex = -1;
             PositionUnderCursor();
-            ApplyCircularWindowRegion();
+            ApplyButtonWindowRegion();
             Activate();
             closeButton.Focus(FocusState.Programmatic);
             return;
@@ -146,7 +146,7 @@ public sealed class RadialCommandMenuWindow : Window
 
         BuildDisplayedEntriesForCurrentPage();
         PositionUnderCursor();
-        ApplyCircularWindowRegion();
+        ApplyButtonWindowRegion();
         Activate();
         FocusSelectedEntry();
     }
@@ -590,9 +590,9 @@ public sealed class RadialCommandMenuWindow : Window
         AppWindow.Move(new PointInt32(x, y));
     }
 
-    private void ApplyCircularWindowRegion()
+    private void ApplyButtonWindowRegion()
     {
-        ApplyCircularWindowRegion(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        ApplyButtonWindowRegion(WinRT.Interop.WindowNative.GetWindowHandle(this));
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -664,18 +664,71 @@ public sealed class RadialCommandMenuWindow : Window
         _ = DwmExtendFrameIntoClientArea(hwnd, ref margins);
     }
 
-    private static void ApplyCircularWindowRegion(IntPtr hwnd)
+    private void ApplyButtonWindowRegion(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero)
         {
             return;
         }
 
-        var region = CreateEllipticRgn(0, 0, WindowSize + 1, WindowSize + 1);
+        var region = CreateRectRgn(0, 0, 0, 0);
+        if (region == IntPtr.Zero)
+        {
+            return;
+        }
+
+        AddButtonRegion(region, (WindowSize - 60d) / 2d, (WindowSize - 60d) / 2d, 60d);
+
+        var count = displayedEntries.Count;
+        if (count > 0)
+        {
+            var canvasSize = WindowSize - 16d;
+            var canvasOffset = (WindowSize - canvasSize) / 2d;
+            var centerX = canvasSize / 2d;
+            var centerY = canvasSize / 2d;
+            for (var i = 0; i < count; i++)
+            {
+                var angle = ((Math.PI * 2d) * i / count) - (Math.PI / 2d);
+                var x = canvasOffset + centerX + (Math.Cos(angle) * ActionRadius) - (ActionButtonSize / 2d);
+                var y = canvasOffset + centerY + (Math.Sin(angle) * ActionRadius) - (ActionButtonSize / 2d);
+                AddButtonRegion(region, x, y, ActionButtonSize);
+            }
+        }
+
+        if (SetWindowRgn(hwnd, region, redraw: true) == 0)
+        {
+            _ = DeleteObject(region);
+        }
+    }
+
+    private static void AddButtonRegion(IntPtr targetRegion, double x, double y, double size)
+    {
+        const int RGN_OR = 2;
+        const int hoverPadding = 5;
+
+        var left = (int)Math.Floor(x) - hoverPadding;
+        var top = (int)Math.Floor(y) - hoverPadding;
+        var right = (int)Math.Ceiling(x + size) + hoverPadding;
+        var bottom = (int)Math.Ceiling(y + size) + hoverPadding;
+        var buttonRegion = CreateEllipticRgn(left, top, right, bottom);
+        if (buttonRegion == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _ = CombineRgn(targetRegion, targetRegion, buttonRegion, RGN_OR);
+        _ = DeleteObject(buttonRegion);
+    }
+
+    private static IntPtr CreateRectRgn(int left, int top, int right, int bottom)
+    {
+        var region = CreateRectRgnNative(left, top, right, bottom);
         if (region != IntPtr.Zero)
         {
-            _ = SetWindowRgn(hwnd, region, redraw: true);
+            return region;
         }
+
+        return IntPtr.Zero;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -709,6 +762,16 @@ public sealed class RadialCommandMenuWindow : Window
 
     [DllImport("gdi32.dll", SetLastError = true)]
     private static extern IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll", EntryPoint = "CreateRectRgn", SetLastError = true)]
+    private static extern IntPtr CreateRectRgnNative(int left, int top, int right, int bottom);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern int CombineRgn(IntPtr destinationRegion, IntPtr sourceRegion1, IntPtr sourceRegion2, int combineMode);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr gdiObject);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, bool redraw);
