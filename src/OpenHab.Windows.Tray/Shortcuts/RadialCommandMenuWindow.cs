@@ -176,6 +176,18 @@ public sealed class RadialCommandMenuWindow : Window
                 return;
             case VirtualKey.Enter:
                 e.Handled = true;
+                if (FocusManager.GetFocusedElement(root.XamlRoot) is Button focusedButton && ReferenceEquals(focusedButton, closeButton))
+                {
+                    CloseMenu();
+                    return;
+                }
+
+                if (selectedActionIndex < 0)
+                {
+                    CloseMenu();
+                    return;
+                }
+
                 ExecuteSelectedAction();
                 return;
         }
@@ -278,11 +290,10 @@ public sealed class RadialCommandMenuWindow : Window
 
         if (totalPages > 1)
         {
-            var hiddenCount = validActions.Count - ((currentPageIndex + 1) * MaxActionSlotsPerPage);
-            if (hiddenCount < 0)
-            {
-                hiddenCount = validActions.Count - pageActions.Count;
-            }
+            var isLastPage = currentPageIndex == totalPages - 1;
+            var hiddenCount = isLastPage
+                ? 0
+                : Math.Max(0, validActions.Count - ((currentPageIndex + 1) * MaxActionSlotsPerPage));
 
             var pageButton = CreatePageButton(hiddenCount, currentPageIndex + 1, totalPages);
             displayedEntries.Add(new RadialDisplayEntry(null, pageButton, RadialEntryType.PageAdvance));
