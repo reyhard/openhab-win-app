@@ -54,6 +54,16 @@ internal static class ShortcutSettingsControls
         return panel;
     }
 
+    public static TextBlock CreateMutedText(string text)
+    {
+        return new TextBlock
+        {
+            Text = text,
+            Opacity = 0.72,
+            TextWrapping = TextWrapping.Wrap
+        };
+    }
+
     private static Border CreateChip(string text)
     {
         return new Border
