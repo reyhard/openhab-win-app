@@ -22,12 +22,24 @@
                     <TextBlock x:Name="SettingsSubtitleText" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" />
                 </StackPanel>
             </Grid>
-            <ScrollViewer x:Name="SettingsScrollViewer"
-                          Grid.Row="1"
-                          HorizontalScrollBarVisibility="Disabled"
-                          SizeChanged="SettingsScrollViewer_SizeChanged">
-                <StackPanel x:Name="SettingsContent" Spacing="8" HorizontalAlignment="Stretch" />
-            </ScrollViewer>
+            <Grid x:Name="SettingsContentRoot"
+                  Grid.Row="1">
+                <Grid x:Name="SettingsTransitionSlot"
+                      Visibility="Collapsed"
+                      Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="SettingsTransitionContent" Spacing="8" HorizontalAlignment="Stretch" />
+                    </ScrollViewer>
+                </Grid>
+                <Grid x:Name="SettingsActiveSlot"
+                      Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                    <ScrollViewer x:Name="SettingsScrollViewer"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  SizeChanged="SettingsScrollViewer_SizeChanged">
+                        <StackPanel x:Name="SettingsContent" Spacing="8" HorizontalAlignment="Stretch" />
+                    </ScrollViewer>
+                </Grid>
+            </Grid>
         </Grid>
     </Border>
 </UserControl>

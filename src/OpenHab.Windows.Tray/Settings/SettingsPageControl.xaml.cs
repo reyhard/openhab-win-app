@@ -17,6 +17,7 @@ using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Shortcuts;
 using OpenHab.Windows.Tray.Startup;
 
@@ -36,20 +37,11 @@ public sealed partial class SettingsPageControl : UserControl
         new("Follow System Settings", AppColorTheme.FollowSystemSettings)
     ];
 
-    private enum SettingsPage
-    {
-        Root,
-        Connection,
-        General,
-        Appearance,
-        DeviceInfoSync,
-        Shortcuts,
-        About
-    }
-
     private readonly AppSettingsController settingsController;
     private readonly Func<Task> refreshRuntimeAsync;
     private readonly Action<string> setStatusText;
+    private SettingsPageKind currentSettingsPage = SettingsPageKind.Root;
+    private bool isSettingsPageTransitionRunning;
     private bool suppressTokenEditTracking;
     private bool isRefreshingSettingsBindings;
     private bool localTokenEdited;
@@ -106,57 +98,58 @@ public sealed partial class SettingsPageControl : UserControl
 
     public void ShowRoot()
     {
-        NavigateToSettingsPage(SettingsPage.Root);
+        NavigateToSettingsPage(SettingsPageKind.Root);
     }
 
     private void InitializeSettingsControls()
     {
-        NavigateToSettingsPage(SettingsPage.Root);
+        NavigateToSettingsPage(SettingsPageKind.Root);
     }
 
-    private void NavigateToSettingsPage(SettingsPage page)
+    private void NavigateToSettingsPage(SettingsPageKind page)
     {
+        currentSettingsPage = page;
         ResetSettingsControlReferences();
         SettingsContent.Children.Clear();
 
         switch (page)
         {
-            case SettingsPage.Root:
+            case SettingsPageKind.Root:
                 UpdateSettingsBreadcrumb(null);
                 SettingsSubtitleText.Text = "Choose a category";
-                SettingsContent.Children.Add(CreateCategoryRow("\uE713", "Connection", "Endpoints and credentials", SettingsPage.Connection));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPage.General));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPage.Appearance));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", "Device Info Sync", "Configure device metadata sync", SettingsPage.DeviceInfoSync));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE765", "Shortcuts", "Command menu and global shortcuts", SettingsPage.Shortcuts));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE946", "About", "Logs and version", SettingsPage.About));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE713", "Connection", "Endpoints and credentials", SettingsPageKind.Connection));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPageKind.General));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPageKind.Appearance));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", "Device Info Sync", "Configure device metadata sync", SettingsPageKind.DeviceInfoSync));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE765", "Shortcuts", "Command menu and global shortcuts", SettingsPageKind.Shortcuts));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE946", "About", "Logs and version", SettingsPageKind.About));
                 break;
-            case SettingsPage.Connection:
+            case SettingsPageKind.Connection:
                 UpdateSettingsBreadcrumb("Connection");
                 SettingsSubtitleText.Text = "Endpoints and credentials";
                 BuildConnectionSettingsPage();
                 break;
-            case SettingsPage.General:
+            case SettingsPageKind.General:
                 UpdateSettingsBreadcrumb("General");
                 SettingsSubtitleText.Text = "Startup and runtime behavior";
                 BuildGeneralSettingsPage();
                 break;
-            case SettingsPage.Appearance:
+            case SettingsPageKind.Appearance:
                 UpdateSettingsBreadcrumb("Appearance");
                 SettingsSubtitleText.Text = "Visual options";
                 BuildAppearanceSettingsPage();
                 break;
-            case SettingsPage.DeviceInfoSync:
+            case SettingsPageKind.DeviceInfoSync:
                 UpdateSettingsBreadcrumb("Device Info Sync");
                 SettingsSubtitleText.Text = "Configure device metadata sync";
                 BuildDeviceInfoSyncSettingsPage();
                 break;
-            case SettingsPage.Shortcuts:
+            case SettingsPageKind.Shortcuts:
                 UpdateSettingsBreadcrumb("Shortcuts");
                 SettingsSubtitleText.Text = "Configure global shortcuts and command menu actions.";
                 BuildShortcutsSettingsPage();
                 break;
-            case SettingsPage.About:
+            case SettingsPageKind.About:
                 UpdateSettingsBreadcrumb("About");
                 SettingsSubtitleText.Text = "Diagnostics and version";
                 BuildAboutSettingsPage();
@@ -164,6 +157,67 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         RefreshSettingsBindings();
+    }
+
+    private async Task NavigateToSettingsPageAsync(SettingsPageKind destination, bool animate)
+    {
+        if (isSettingsPageTransitionRunning)
+        {
+            return;
+        }
+
+        if (!animate
+            || !SettingsPageTransitionPlanner.TryResolveDirection(currentSettingsPage, destination, out var direction))
+        {
+            NavigateToSettingsPage(destination);
+            return;
+        }
+
+        var durationMs = SitemapPageTransitionAnimator.ResolveDurationMs(settingsController.GetFlyoutAnimationDurationMs());
+        if (durationMs <= 0)
+        {
+            NavigateToSettingsPage(destination);
+            return;
+        }
+
+        isSettingsPageTransitionRunning = true;
+        MoveActiveSettingsContentToTransitionSlot();
+        SettingsTransitionSlot.Visibility = Visibility.Visible;
+
+        try
+        {
+            NavigateToSettingsPage(destination);
+            SettingsScrollViewer.ChangeView(null, 0d, null, true);
+            await SitemapPageTransitionAnimator.AnimateOverlapAsync(
+                SettingsContentRoot,
+                SettingsTransitionSlot,
+                SettingsActiveSlot,
+                ToNavigationDirection(direction),
+                durationMs);
+        }
+        finally
+        {
+            SettingsTransitionContent.Children.Clear();
+            SettingsTransitionSlot.Visibility = Visibility.Collapsed;
+            isSettingsPageTransitionRunning = false;
+        }
+    }
+
+    private static NavigationDirection ToNavigationDirection(SettingsPageTransitionDirection direction) =>
+        direction == SettingsPageTransitionDirection.Back
+            ? NavigationDirection.Back
+            : NavigationDirection.Forward;
+
+    private void MoveActiveSettingsContentToTransitionSlot()
+    {
+        SettingsTransitionContent.Width = SettingsContent.Width;
+        SettingsTransitionContent.Children.Clear();
+        var oldChildren = SettingsContent.Children.Cast<UIElement>().ToArray();
+        SettingsContent.Children.Clear();
+        foreach (var child in oldChildren)
+        {
+            SettingsTransitionContent.Children.Add(child);
+        }
     }
 
     private void UpdateSettingsBreadcrumb(string? pageTitle)
@@ -184,7 +238,7 @@ public sealed partial class SettingsPageControl : UserControl
         });
     }
 
-    private Button CreateCategoryRow(string glyph, string title, string subtitle, SettingsPage destination)
+    private Button CreateCategoryRow(string glyph, string title, string subtitle, SettingsPageKind destination)
     {
         var button = new Button
         {
@@ -1424,12 +1478,13 @@ public sealed partial class SettingsPageControl : UserControl
 
     private async void SettingsBreadcrumbRootButton_Click(object sender, RoutedEventArgs e)
     {
-        await NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage.Root);
+        await NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPageKind.Root);
     }
 
     private void SettingsScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         SettingsContent.Width = Math.Max(0d, e.NewSize.Width);
+        SettingsTransitionContent.Width = SettingsContent.Width;
     }
 
     private void AppColorThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1516,7 +1571,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         SaveDeviceInfoSyncSettings(enabledOverride: toggle.IsOn);
-        NavigateToSettingsPage(SettingsPage.DeviceInfoSync);
+        NavigateToSettingsPage(SettingsPageKind.DeviceInfoSync);
     }
 
     private void CommandMenuEnabledToggle_Toggled(object sender, RoutedEventArgs e)
@@ -1786,7 +1841,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = true;
         editingShortcutActionId = null;
-        NavigateToSettingsPage(SettingsPage.Shortcuts);
+        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
     }
 
     private async void EditShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -1803,7 +1858,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = false;
         editingShortcutActionId = actionId;
-        NavigateToSettingsPage(SettingsPage.Shortcuts);
+        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
     }
 
     private async void MoveShortcutActionUpButton_Click(object sender, RoutedEventArgs e)
@@ -1843,7 +1898,7 @@ public sealed partial class SettingsPageControl : UserControl
             Actions = actions.ToImmutableArray()
         });
 
-        NavigateToSettingsPage(SettingsPage.Shortcuts);
+        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
     }
 
     private async void DeleteShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -1892,7 +1947,7 @@ public sealed partial class SettingsPageControl : UserControl
             creatingShortcutAction = false;
         }
 
-        NavigateToSettingsPage(SettingsPage.Shortcuts);
+        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
     }
 
     private void CancelShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -1905,7 +1960,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = false;
         editingShortcutActionId = null;
-        NavigateToSettingsPage(SettingsPage.Shortcuts);
+        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
     }
 
     private void SaveShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -1992,7 +2047,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = false;
         editingShortcutActionId = null;
-        NavigateToSettingsPage(SettingsPage.Shortcuts);
+        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
     }
 
     private async Task<bool> ConfirmDiscardShortcutActionChangesIfNeededAsync()
@@ -2070,14 +2125,14 @@ public sealed partial class SettingsPageControl : UserControl
             ?? combo?.SelectedItem as ShortcutIconDefinition;
     }
 
-    private async Task NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage destination)
+    private async Task NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPageKind destination)
     {
         if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
         {
             return;
         }
 
-        NavigateToSettingsPage(destination);
+        await NavigateToSettingsPageAsync(destination, animate: true);
     }
 
     private void DeviceInfoSyncField_LostFocus(object sender, RoutedEventArgs e)
@@ -2091,7 +2146,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         if (ReferenceEquals(sender, DeviceInfoSyncIdentifierText))
         {
-            NavigateToSettingsPage(SettingsPage.DeviceInfoSync);
+            NavigateToSettingsPage(SettingsPageKind.DeviceInfoSync);
         }
     }
 
