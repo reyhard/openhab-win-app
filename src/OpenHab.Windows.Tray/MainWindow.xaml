@@ -86,18 +86,18 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <Grid x:Name="HomeNavRow" ColumnSpacing="4" Height="34">
+                        <Grid x:Name="HomeNavRow" ColumnSpacing="0" Height="34">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="HomeNavButton" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Padding="10,0,10,0" Click="HomeNavButton_Click" ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
+                            <Button x:Name="HomeNavButton" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="10,0,10,0" Click="HomeNavButton_Click" ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
                                 <StackPanel x:Name="HomeNavContent" Orientation="Horizontal" Spacing="12">
                                     <FontIcon Glyph="&#xE80F;" FontSize="14" />
                                     <TextBlock x:Name="HomeNavText" Text="Home" />
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="HomePagesToggleButton" Grid.Column="1" Width="34" MinWidth="0" Padding="0" Click="HomePagesToggleButton_Click" ToolTipService.ToolTip="Show Main UI pages" AutomationProperties.Name="Show Main UI pages">
+                            <Button x:Name="HomePagesToggleButton" Grid.Column="1" Width="34" MinWidth="0" Height="34" Padding="0" Click="HomePagesToggleButton_Click" ToolTipService.ToolTip="Show Main UI pages" AutomationProperties.Name="Show Main UI pages">
                                 <FontIcon x:Name="MainUiPagesChevron" Glyph="&#xE70D;" FontSize="12" />
                             </Button>
                         </Grid>
