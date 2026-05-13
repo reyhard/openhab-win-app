@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.WinUI.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -452,7 +453,7 @@ public sealed partial class SettingsPageControl : UserControl
             SettingsContent.Children.Add(CreateSettingsExpander(
                 "Device Info Sync",
                 "Send selected Windows device state to openHAB Items",
-                syncContent,
+                CreateExpanderRows(syncContent),
                 enabledAction));
             return;
         }
@@ -478,7 +479,7 @@ public sealed partial class SettingsPageControl : UserControl
         SettingsContent.Children.Add(CreateSettingsExpander(
             "Device Info Sync",
             "Send selected Windows device state to openHAB Items",
-            syncContent,
+            CreateExpanderRows(syncContent),
             enabledAction));
 
         AddSettingsSectionTitle("openHAB Item mappings");
@@ -498,7 +499,7 @@ public sealed partial class SettingsPageControl : UserControl
         SettingsContent.Children.Add(CreateSettingsExpander(
             "Item suffixes",
             "The device identifier is added automatically before each suffix",
-            mappingContent));
+            CreateExpanderRows(mappingContent)));
     }
 
     private void AddDeviceInfoSyncMappingTextBox(StackPanel target, string key, string title, string placeholder)
@@ -514,32 +515,20 @@ public sealed partial class SettingsPageControl : UserControl
         target.Children.Add(textBox);
     }
 
-    private static Border CreateSettingsGroup(params FrameworkElement[] rows)
+    private static StackPanel CreateSettingsGroup(params FrameworkElement[] rows)
     {
         var stack = new StackPanel
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Spacing = 4
         };
 
-        for (var index = 0; index < rows.Length; index++)
+        foreach (var row in rows)
         {
-            stack.Children.Add(new Border
-            {
-                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                BorderThickness = index == rows.Length - 1 ? new Thickness(0) : new Thickness(0, 0, 0, 1),
-                Child = rows[index]
-            });
+            stack.Children.Add(CreateSettingsCardForContent(row));
         }
 
-        return new Border
-        {
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Child = stack,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
+        return stack;
     }
 
     private static Grid CreateSettingsToggleRow(string glyph, string title, string subtitle, ToggleSwitch toggle)
@@ -547,24 +536,28 @@ public sealed partial class SettingsPageControl : UserControl
         return CreateSettingsControlRow(glyph, title, subtitle, CreateSettingsToggleAction(toggle));
     }
 
-    private static StackPanel CreateExpanderRows(params FrameworkElement[] rows)
+    private static List<SettingsCard> CreateExpanderRows(params FrameworkElement[] rows)
     {
-        var stack = new StackPanel
+        var cards = new List<SettingsCard>(rows.Length);
+        foreach (var row in rows)
         {
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        for (var index = 0; index < rows.Length; index++)
-        {
-            stack.Children.Add(new Border
-            {
-                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                BorderThickness = index == rows.Length - 1 ? new Thickness(0) : new Thickness(0, 0, 0, 1),
-                Child = rows[index]
-            });
+            cards.Add(CreateSettingsCardForContent(row));
         }
 
-        return stack;
+        return cards;
+    }
+
+    private static SettingsCard CreateSettingsCardForContent(FrameworkElement content)
+    {
+        content.HorizontalAlignment = HorizontalAlignment.Stretch;
+        return new SettingsCard
+        {
+            Content = content,
+            ContentAlignment = CommunityToolkit.WinUI.Controls.ContentAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            IsClickEnabled = false
+        };
     }
 
     private static Grid CreateSettingsControlRow(
@@ -581,12 +574,10 @@ public sealed partial class SettingsPageControl : UserControl
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
         row.ColumnDefinitions.Add(new ColumnDefinition
         {
-            Width = stretchControl
-                ? new GridLength(1, GridUnitType.Star)
-                : GridLength.Auto
+            Width = new GridLength(1, GridUnitType.Star)
         });
 
         var icon = new FontIcon
@@ -616,7 +607,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(textPanel);
 
         control.VerticalAlignment = VerticalAlignment.Center;
-        control.HorizontalAlignment = stretchControl ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
+        control.HorizontalAlignment = stretchControl ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
         Grid.SetColumn(control, 2);
         row.Children.Add(control);
 
@@ -798,7 +789,10 @@ public sealed partial class SettingsPageControl : UserControl
             ShortcutSettingsControls.CreateShortcutChips(null));
 
         var voiceModeContent = CreateExpanderRows(voiceModeStateRow, voiceModeShortcutRow);
-        voiceModeContent.Opacity = 0.72;
+        foreach (var card in voiceModeContent)
+        {
+            card.Opacity = 0.72;
+        }
         SettingsContent.Children.Add(CreateSettingsExpander(
             "Voice Mode",
             "Planned voice shortcut, coming soon",
@@ -1036,67 +1030,36 @@ public sealed partial class SettingsPageControl : UserControl
             }));
     }
 
-    private Expander CreateSettingsExpander(
+    private SettingsExpander CreateSettingsExpander(
         string title,
         string subtitle,
-        UIElement content,
+        IEnumerable<SettingsCard> items,
         UIElement? action = null,
         bool isExpanded = true)
     {
-        if (content is FrameworkElement contentElement)
-        {
-            contentElement.HorizontalAlignment = HorizontalAlignment.Stretch;
-        }
-
-        var contentHost = new Border
-        {
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            Child = content
-        };
-
-        var expander = new Expander
-        {
-            Header = CreateSettingsHeader(title, subtitle, action),
-            Content = contentHost,
-            IsExpanded = isExpanded,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch
-        };
-
-        return expander;
-    }
-
-    private static Grid CreateSettingsHeader(string title, string subtitle, UIElement? action)
-    {
-        var header = new Grid
-        {
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            ColumnSpacing = 16,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var textPanel = new StackPanel { Spacing = 2 };
-        textPanel.Children.Add(new TextBlock { Text = title });
-        textPanel.Children.Add(new TextBlock
-        {
-            Text = subtitle,
-            Opacity = 0.68,
-            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-            TextWrapping = TextWrapping.Wrap
-        });
-        header.Children.Add(textPanel);
-
         if (action is FrameworkElement actionElement)
         {
-            actionElement.Margin = new Thickness(0, 0, 24, 0);
-            Grid.SetColumn(actionElement, 1);
-            header.Children.Add(actionElement);
+            actionElement.Margin = new Thickness(0, 0, 4, 0);
         }
 
-        return header;
+        var expander = new SettingsExpander
+        {
+            Header = title,
+            Description = subtitle,
+            IsExpanded = isExpanded,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        if (action is not null)
+        {
+            expander.Content = action;
+        }
+
+        foreach (var item in items)
+        {
+            expander.Items.Add(item);
+        }
+
+        return expander;
     }
 
     private void ResetSettingsControlReferences()
