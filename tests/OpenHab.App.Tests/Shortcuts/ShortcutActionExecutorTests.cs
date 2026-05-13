@@ -203,6 +203,28 @@ public sealed class ShortcutActionExecutorTests
         Assert.True(providerInvoked);
         Assert.False(result.Succeeded);
         Assert.Equal(ShortcutActionExecutionFailure.CommandFailed, result.Failure);
+        Assert.Equal("Command could not be sent.", result.Message);
+    }
+
+    [Fact]
+    public async Task ConnectionStateProviderExceptionReturnsCommandFailedWithoutInvokingClient()
+    {
+        var clientInvoked = false;
+        var executor = new ShortcutActionExecutor(
+            () =>
+            {
+                clientInvoked = true;
+                return new RecordingShortcutClient();
+            },
+            () => throw new InvalidOperationException("state provider failed"));
+        var action = Action(ShortcutCommandType.SendCommand, "PLAY");
+
+        var result = await executor.ExecuteAsync(action, CancellationToken.None);
+
+        Assert.False(clientInvoked);
+        Assert.False(result.Succeeded);
+        Assert.Equal(ShortcutActionExecutionFailure.CommandFailed, result.Failure);
+        Assert.Equal("Command could not be sent.", result.Message);
     }
 
     [Fact]
@@ -218,11 +240,23 @@ public sealed class ShortcutActionExecutorTests
     }
 
     [Fact]
+    public async Task ConnectionStateProviderCancellationIsRethrown()
+    {
+        var executor = new ShortcutActionExecutor(
+            () => new RecordingShortcutClient(),
+            () => throw new OperationCanceledException("cancel"));
+        var action = Action(ShortcutCommandType.SendCommand, "PLAY");
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => executor.ExecuteAsync(action, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task CommandExceptionReturnsCommandFailed()
     {
         var client = new RecordingShortcutClient
         {
-            SendCommandException = new InvalidOperationException("boom")
+            SendCommandException = new InvalidOperationException("boom token=secret-123")
         };
         var executor = new ShortcutActionExecutor(() => client, () => ConnectionState.Online);
         var action = Action(ShortcutCommandType.SendCommand, "PLAY");
@@ -231,6 +265,8 @@ public sealed class ShortcutActionExecutorTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(ShortcutActionExecutionFailure.CommandFailed, result.Failure);
+        Assert.Equal("Command could not be sent.", result.Message);
+        Assert.DoesNotContain("secret-123", result.Message, StringComparison.Ordinal);
         Assert.Empty(client.Commands);
     }
 

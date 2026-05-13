@@ -52,15 +52,15 @@ public sealed class ShortcutActionExecutor
             return ShortcutActionExecutionResult.Failed(ShortcutActionExecutionFailure.InvalidAction, message);
         }
 
-        if (getConnectionState() != ConnectionState.Online)
-        {
-            return ShortcutActionExecutionResult.Failed(
-                ShortcutActionExecutionFailure.Disconnected,
-                "Cannot execute action while disconnected.");
-        }
-
         try
         {
+            if (getConnectionState() != ConnectionState.Online)
+            {
+                return ShortcutActionExecutionResult.Failed(
+                    ShortcutActionExecutionFailure.Disconnected,
+                    "Cannot execute action while disconnected.");
+            }
+
             var client = getClient();
             if (client is null)
             {
@@ -83,11 +83,11 @@ public sealed class ShortcutActionExecutor
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return ShortcutActionExecutionResult.Failed(
                 ShortcutActionExecutionFailure.CommandFailed,
-                ex.Message);
+                "Command could not be sent.");
         }
     }
 
