@@ -64,4 +64,20 @@ public sealed class ShortcutValidationTests
         Assert.Contains("stop", ids);
         Assert.Contains("cast", ids);
     }
+
+    [Fact]
+    public void IconCatalogUsesStableGroupIds()
+    {
+        var byId = ShortcutIconCatalog.All.ToDictionary(icon => icon.Id, StringComparer.Ordinal);
+        var groups = ShortcutIconCatalog.All.Select(icon => icon.Group).ToHashSet(StringComparer.Ordinal);
+
+        Assert.Contains("lighting", groups);
+        Assert.Contains("openings", groups);
+        Assert.Contains("climate", groups);
+        Assert.Contains("media", groups);
+        Assert.Contains("scenes-tools", groups);
+
+        Assert.Equal("media", byId["play"].Group);
+        Assert.Equal("scenes-tools", byId["movie"].Group);
+    }
 }
