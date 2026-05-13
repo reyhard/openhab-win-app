@@ -45,6 +45,19 @@ internal static class ShortcutWindowsMapper
         return true;
     }
 
+    public static bool TryMapVirtualKey(ShortcutBinding? binding, out VirtualKey virtualKey)
+    {
+        virtualKey = VirtualKey.None;
+        if (!ShortcutBindingFormatter.TryNormalize(binding, out var normalized)
+            || !TryMapVirtualKey(normalized.Key, out var mappedVirtualKey))
+        {
+            return false;
+        }
+
+        virtualKey = (VirtualKey)mappedVirtualKey;
+        return true;
+    }
+
     private static bool TryMapVirtualKey(string key, out uint virtualKey)
     {
         virtualKey = 0;

@@ -29,6 +29,7 @@ internal sealed class GlobalHotkeyService : IDisposable
     private readonly Dictionary<int, RegisteredHotkey> registered = [];
     private int nextHotkeyId = FirstHotkeyId;
     private bool subclassRemoved;
+    private bool suspended;
     private bool disposed;
 
     public GlobalHotkeyService(Window window, DispatcherQueue dispatcherQueue)
@@ -61,6 +62,10 @@ internal sealed class GlobalHotkeyService : IDisposable
         var seenBindings = new HashSet<string>(StringComparer.Ordinal);
 
         UnregisterAll();
+        if (suspended)
+        {
+            return new HotkeyRefreshResult([]);
+        }
 
         var normalized = (settings ?? ShortcutSettings.Default).Normalized();
 
@@ -97,9 +102,31 @@ internal sealed class GlobalHotkeyService : IDisposable
         return new HotkeyRefreshResult(failures.ToImmutable());
     }
 
-    public bool HandleHotkeyMessage(int id)
+    public void Suspend()
+    {
+        if (disposed || suspended)
+        {
+            return;
+        }
+
+        suspended = true;
+        UnregisterAll();
+    }
+
+    public HotkeyRefreshResult Resume(ShortcutSettings settings)
     {
         if (disposed)
+        {
+            return new HotkeyRefreshResult([]);
+        }
+
+        suspended = false;
+        return Refresh(settings);
+    }
+
+    public bool HandleHotkeyMessage(int id)
+    {
+        if (disposed || suspended)
         {
             return false;
         }

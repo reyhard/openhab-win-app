@@ -32,6 +32,8 @@ public sealed class RadialCommandMenuWindow : Window
     private int currentPageIndex;
     private int totalPages;
 
+    public bool IsMenuVisible => AppWindow.IsVisible;
+
     public RadialCommandMenuWindow()
     {
         var appWindow = AppWindow;

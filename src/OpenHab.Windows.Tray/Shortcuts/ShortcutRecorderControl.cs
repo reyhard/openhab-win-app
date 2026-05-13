@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Threading;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -24,8 +25,10 @@ internal sealed class ShortcutRecorderControl : UserControl
     private bool allowClear;
     private bool isRecording;
     private string? error;
+    private static int activeRecorderCount;
 
     public event EventHandler<ShortcutBinding?>? BindingChanged;
+    public static event EventHandler<bool>? AnyRecordingChanged;
 
     public ShortcutBinding? Binding
     {
@@ -129,12 +132,13 @@ internal sealed class ShortcutRecorderControl : UserControl
 
         Content = root;
         UseSystemFocusVisuals = true;
+        Unloaded += ShortcutRecorderControl_Unloaded;
         RefreshVisualState();
     }
 
     private void EditButton_Click(object sender, RoutedEventArgs e)
     {
-        isRecording = true;
+        StartRecording();
         Error = null;
         _ = ((FrameworkElement)Content).Focus(FocusState.Programmatic);
         RefreshVisualState();
@@ -162,7 +166,7 @@ internal sealed class ShortcutRecorderControl : UserControl
 
         if (e.Key == VirtualKey.Escape)
         {
-            isRecording = false;
+            StopRecording();
             Error = null;
             RefreshVisualState();
             e.Handled = true;
@@ -192,11 +196,50 @@ internal sealed class ShortcutRecorderControl : UserControl
         }
 
         binding = ShortcutBindingFormatter.Normalize(new ShortcutBinding(modifiers.ToImmutableArray(), keyText));
-        isRecording = false;
+        StopRecording();
         Error = null;
         BindingChanged?.Invoke(this, binding);
         RefreshVisualState();
         e.Handled = true;
+    }
+
+    private void ShortcutRecorderControl_Unloaded(object sender, RoutedEventArgs e)
+    {
+        StopRecording();
+    }
+
+    private void StartRecording()
+    {
+        if (isRecording)
+        {
+            return;
+        }
+
+        isRecording = true;
+        if (Interlocked.Increment(ref activeRecorderCount) == 1)
+        {
+            AnyRecordingChanged?.Invoke(null, true);
+        }
+    }
+
+    private void StopRecording()
+    {
+        if (!isRecording)
+        {
+            return;
+        }
+
+        isRecording = false;
+        var remaining = Interlocked.Decrement(ref activeRecorderCount);
+        if (remaining <= 0)
+        {
+            if (remaining < 0)
+            {
+                Interlocked.Exchange(ref activeRecorderCount, 0);
+            }
+
+            AnyRecordingChanged?.Invoke(null, false);
+        }
     }
 
     private void RefreshVisualState()
