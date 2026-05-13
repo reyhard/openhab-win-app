@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
 using OpenHab.App.Notifications;
@@ -27,6 +28,10 @@ namespace OpenHab.Windows.Tray;
 
 public sealed partial class MainWindow : Window
 {
+    private const double ExpandedSidebarWidth = 220d;
+    private const double CollapsedSidebarWidth = 56d;
+    private const double ExpandedSitemapPaneWidth = 380d;
+    private const int ShellChromeAnimationDurationMs = 180;
     private static readonly HttpClient FallbackOpenHabClient = new();
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
@@ -52,6 +57,9 @@ public sealed partial class MainWindow : Window
     private bool isSidebarCollapsed;
     private TransportKind? activeMainUiNavigationTransport;
     private bool pendingMainUiTransportResync;
+    private bool hasAppliedInitialShellState;
+    private DispatcherTimer? sidebarWidthAnimationTimer;
+    private DispatcherTimer? sitemapPaneWidthAnimationTimer;
     private string? pendingExplicitMainUiRoute;
 
     private Notifications.NotificationsPageControl? notificationsPage;
@@ -210,8 +218,7 @@ public sealed partial class MainWindow : Window
     private void ApplyMainWindowShellState()
     {
         var state = shellController.Current;
-        SitemapPaneColumn.Width = state.IsSitemapVisible ? new GridLength(380) : new GridLength(0);
-        SitemapContentRoot.Visibility = state.IsSitemapVisible ? Visibility.Visible : Visibility.Collapsed;
+        SetSitemapPaneVisibility(state.IsSitemapVisible, animate: hasAppliedInitialShellState);
         ToggleSitemapIcon.Foreground = state.IsSitemapVisible
             ? GetThemeBrush("AccentTextFillColorPrimaryBrush")
             : GetThemeBrush("TextFillColorPrimaryBrush");
@@ -223,6 +230,7 @@ public sealed partial class MainWindow : Window
         }
 
         SyncSidebarStateFromSettings();
+        hasAppliedInitialShellState = true;
 
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
@@ -819,12 +827,24 @@ public sealed partial class MainWindow : Window
     {
         isSidebarCollapsed = !isSidebarCollapsed;
         settingsController.SetMainWindowSidebarCollapsed(isSidebarCollapsed);
-        ApplySidebarState();
+        ApplySidebarState(animate: true);
     }
 
-    private void ApplySidebarState()
+    private void ApplySidebarState(bool animate = false)
     {
-        SidebarColumn.Width = isSidebarCollapsed ? new GridLength(56) : new GridLength(220);
+        var targetWidth = isSidebarCollapsed ? CollapsedSidebarWidth : ExpandedSidebarWidth;
+        if (animate)
+        {
+            AnimateSidebarWidth(targetWidth);
+        }
+        else
+        {
+            sidebarWidthAnimationTimer?.Stop();
+            sidebarWidthAnimationTimer = null;
+            SidebarColumn.Width = new GridLength(targetWidth);
+        }
+
+        SidebarLayoutRoot.Padding = isSidebarCollapsed ? new Thickness(8, 18, 8, 12) : new Thickness(12, 18, 12, 12);
         SidebarBrandTextPanel.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         HomeNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         MainUiPagesNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
@@ -839,7 +859,7 @@ public sealed partial class MainWindow : Window
         SettingsNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
 
         SidebarBrandPanel.Margin = isSidebarCollapsed ? new Thickness(0, 0, 0, 14) : new Thickness(4, 0, 0, 14);
-        SidebarCollapseIcon.Glyph = isSidebarCollapsed ? "\uE700" : "\uE711";
+        SidebarCollapseIcon.Glyph = isSidebarCollapsed ? "\uE970" : "\uE96F";
         ToolTipService.SetToolTip(SidebarCollapseButton, isSidebarCollapsed ? "Expand navigation" : "Collapse navigation");
         AutomationProperties.SetName(SidebarCollapseButton, isSidebarCollapsed ? "Expand navigation" : "Collapse navigation");
     }
@@ -858,6 +878,134 @@ public sealed partial class MainWindow : Window
     {
         isSidebarCollapsed = settingsController.Current.MainWindowSidebarCollapsed;
         ApplySidebarState();
+    }
+
+    private void SetSitemapPaneVisibility(bool isVisible, bool animate)
+    {
+        var targetWidth = isVisible ? ExpandedSitemapPaneWidth : 0d;
+        var currentWidth = GetCurrentColumnWidth(SitemapPaneColumn);
+        if (!animate || Math.Abs(currentWidth - targetWidth) < 0.5d)
+        {
+            sitemapPaneWidthAnimationTimer?.Stop();
+            sitemapPaneWidthAnimationTimer = null;
+            SitemapPaneColumn.Width = new GridLength(targetWidth);
+            SitemapContentRoot.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+            SitemapContentRoot.Opacity = 1d;
+            UpdateSitemapPaneClip();
+            return;
+        }
+
+        AnimateSitemapPaneWidth(targetWidth, isVisible);
+    }
+
+    private void AnimateSidebarWidth(double targetWidth)
+    {
+        sidebarWidthAnimationTimer?.Stop();
+        var startWidth = GetCurrentColumnWidth(SidebarColumn);
+        if (Math.Abs(startWidth - targetWidth) < 0.5d)
+        {
+            SidebarColumn.Width = new GridLength(targetWidth);
+            return;
+        }
+
+        var started = DateTimeOffset.UtcNow;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        sidebarWidthAnimationTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / ShellChromeAnimationDurationMs, 0d, 1d);
+            var width = Lerp(startWidth, targetWidth, EaseOutCubic(progress));
+            SidebarColumn.Width = new GridLength(width);
+            if (progress < 1d)
+            {
+                return;
+            }
+
+            timer.Stop();
+            if (ReferenceEquals(sidebarWidthAnimationTimer, timer))
+            {
+                sidebarWidthAnimationTimer = null;
+            }
+
+            SidebarColumn.Width = new GridLength(targetWidth);
+        };
+        timer.Start();
+    }
+
+    private void AnimateSitemapPaneWidth(double targetWidth, bool targetVisible)
+    {
+        sitemapPaneWidthAnimationTimer?.Stop();
+        var startWidth = GetCurrentColumnWidth(SitemapPaneColumn);
+        SitemapContentRoot.Visibility = Visibility.Visible;
+        UpdateSitemapPaneClip();
+
+        var started = DateTimeOffset.UtcNow;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        sitemapPaneWidthAnimationTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / ShellChromeAnimationDurationMs, 0d, 1d);
+            var width = Lerp(startWidth, targetWidth, EaseOutCubic(progress));
+            SitemapPaneColumn.Width = new GridLength(width);
+            SitemapContentRoot.Opacity = targetVisible
+                ? Math.Clamp(width / ExpandedSitemapPaneWidth, 0.25d, 1d)
+                : Math.Clamp(width / Math.Max(startWidth, 1d), 0d, 1d);
+            UpdateSitemapPaneClip();
+            if (progress < 1d)
+            {
+                return;
+            }
+
+            timer.Stop();
+            if (ReferenceEquals(sitemapPaneWidthAnimationTimer, timer))
+            {
+                sitemapPaneWidthAnimationTimer = null;
+            }
+
+            SitemapPaneColumn.Width = new GridLength(targetWidth);
+            SitemapContentRoot.Opacity = 1d;
+            SitemapContentRoot.Visibility = targetVisible ? Visibility.Visible : Visibility.Collapsed;
+            UpdateSitemapPaneClip();
+        };
+        timer.Start();
+    }
+
+    private void SitemapContentRoot_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSitemapPaneClip();
+    }
+
+    private void UpdateSitemapPaneClip()
+    {
+        var width = SitemapPaneColumn.Width.IsAbsolute
+            ? SitemapPaneColumn.Width.Value
+            : SitemapContentRoot.ActualWidth;
+        var height = SitemapContentRoot.ActualHeight;
+        SitemapContentRoot.Clip = new RectangleGeometry
+        {
+            Rect = new Rect(0, 0, Math.Max(0d, width), Math.Max(0d, height))
+        };
+    }
+
+    private static double GetCurrentColumnWidth(ColumnDefinition column)
+    {
+        if (column.Width.IsAbsolute)
+        {
+            return column.Width.Value;
+        }
+
+        return Math.Max(0d, column.ActualWidth);
+    }
+
+    private static double Lerp(double start, double end, double progress)
+    {
+        return start + ((end - start) * progress);
+    }
+
+    private static double EaseOutCubic(double progress)
+    {
+        var inverse = 1d - progress;
+        return 1d - (inverse * inverse * inverse);
     }
 
     private void SetShellStatusText(string text)

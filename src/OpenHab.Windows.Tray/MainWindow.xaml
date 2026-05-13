@@ -19,7 +19,6 @@
               Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -31,30 +30,15 @@
                     Click="SidebarCollapseButton_Click"
                     ToolTipService.ToolTip="Collapse navigation"
                     AutomationProperties.Name="Collapse navigation">
-                <FontIcon x:Name="SidebarCollapseIcon" Glyph="&#xE711;" FontSize="14" />
+                <FontIcon x:Name="SidebarCollapseIcon" Glyph="&#xE96F;" FontSize="14" />
             </Button>
 
-            <StackPanel Grid.Column="1"
-                        Orientation="Horizontal"
-                        Spacing="6"
-                        VerticalAlignment="Center"
-                        Margin="4,0,0,0">
-                <Image Width="22" Height="22">
-                    <Image.Source>
-                        <SvgImageSource UriSource="ms-appx:///Assets/openhab-icon.svg" />
-                    </Image.Source>
-                </Image>
-                <TextBlock Text="openHAB"
-                           VerticalAlignment="Center"
-                           FontWeight="SemiBold" />
-            </StackPanel>
-
             <Grid x:Name="TitleBarDragRegion"
-                  Grid.Column="2"
+                  Grid.Column="1"
                   Background="Transparent" />
 
             <Button x:Name="ToggleSitemapButton"
-                    Grid.Column="3"
+                    Grid.Column="2"
                     Width="34"
                     Height="30"
                     Padding="0"
@@ -79,7 +63,7 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="0,0,1,0">
-                <Grid Padding="12,18,12,12" RowSpacing="10">
+                <Grid x:Name="SidebarLayoutRoot" Padding="12,18,12,12" RowSpacing="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -102,14 +86,14 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <Button x:Name="HomeNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="HomeNavButton_Click" ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
+                        <Button x:Name="HomeNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="0" Click="HomeNavButton_Click" ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE80F;" FontSize="14" />
                                 <TextBlock x:Name="HomeNavText" Text="Home" />
                             </StackPanel>
                         </Button>
 
-                        <Button x:Name="MainUiPagesToggleButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="MainUiPagesToggleButton_Click" ToolTipService.ToolTip="Main UI Pages" AutomationProperties.Name="Main UI Pages">
+                        <Button x:Name="MainUiPagesToggleButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="0" Click="MainUiPagesToggleButton_Click" ToolTipService.ToolTip="Main UI Pages" AutomationProperties.Name="Main UI Pages">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon x:Name="MainUiPagesChevron" Glyph="&#xE70D;" FontSize="12" />
                                 <TextBlock x:Name="MainUiPagesNavText" Text="Main UI Pages" />
@@ -118,14 +102,14 @@
 
                         <StackPanel x:Name="MainUiPagesList" Spacing="4" Margin="18,0,0,0" />
 
-                        <Button x:Name="NotificationsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="NotificationsNavButton_Click" ToolTipService.ToolTip="Notifications" AutomationProperties.Name="Notifications">
+                        <Button x:Name="NotificationsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="0" Click="NotificationsNavButton_Click" ToolTipService.ToolTip="Notifications" AutomationProperties.Name="Notifications">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE7F4;" FontSize="14" />
                                 <TextBlock x:Name="NotificationsNavText" Text="Notifications" />
                             </StackPanel>
                         </Button>
 
-                        <Button x:Name="SettingsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="SettingsNavButton_Click" ToolTipService.ToolTip="Settings" AutomationProperties.Name="Settings">
+                        <Button x:Name="SettingsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="0" Click="SettingsNavButton_Click" ToolTipService.ToolTip="Settings" AutomationProperties.Name="Settings">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <FontIcon Glyph="&#xE713;" FontSize="14" />
                                 <TextBlock x:Name="SettingsNavText" Text="Settings" />
@@ -157,7 +141,8 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1,0,0,0"
-                    Padding="12">
+                    Padding="12"
+                    SizeChanged="SitemapContentRoot_SizeChanged">
                 <Grid RowSpacing="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />

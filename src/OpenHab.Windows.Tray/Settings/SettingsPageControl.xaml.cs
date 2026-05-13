@@ -153,6 +153,8 @@ public sealed partial class SettingsPageControl : UserControl
             Padding = new Thickness(12, 10, 12, 10),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 4)
         };
@@ -494,6 +496,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         return new Border
         {
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
@@ -577,7 +580,12 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void BuildAboutSettingsPage()
     {
-        ViewLogsButton = new Button { Content = "View diagnostic logs" };
+        ViewLogsButton = new Button
+        {
+            Content = "View diagnostic logs",
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"]
+        };
         ViewLogsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         ViewLogsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
         ViewLogsButton.Click += ViewLogsButton_Click;
@@ -601,6 +609,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         var contentHost = new Grid
         {
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         contentHost.Children.Add(content);
@@ -625,6 +634,7 @@ public sealed partial class SettingsPageControl : UserControl
     {
         var header = new Grid
         {
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
             ColumnSpacing = 16,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
