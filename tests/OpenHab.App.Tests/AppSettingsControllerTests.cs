@@ -125,6 +125,121 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void LoadedSettingsWithBlankCommandMenuBindingFallsBackToWinO()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "Shortcuts": {
+            "CommandMenu": {
+              "Enabled": true,
+              "Binding": { "Modifiers": [ 1 ], "Key": "   " },
+              "RadialActivationMode": 1
+            },
+            "VoiceMode": { "Enabled": false, "Binding": null, "RadialActivationMode": 0 },
+            "Actions": []
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(controller.Current.Shortcuts.CommandMenu.Binding));
+    }
+
+    [Fact]
+    public void LoadedSettingsWithInvalidActionShortcutKeepsActionAndClearsShortcut()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "Shortcuts": {
+            "CommandMenu": {
+              "Enabled": true,
+              "Binding": { "Modifiers": [ 0 ], "Key": "O" },
+              "RadialActivationMode": 0
+            },
+            "VoiceMode": { "Enabled": false, "Binding": null, "RadialActivationMode": 0 },
+            "Actions": [
+              {
+                "Id": "desk-light",
+                "Name": "Desk Light",
+                "IconId": "lightbulb",
+                "ShowInCommandMenu": true,
+                "GlobalShortcut": { "Modifiers": [ 1 ], "Key": " " },
+                "TargetItem": "DeskLight",
+                "CommandType": 0,
+                "CommandValue": null
+              }
+            ]
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        var action = Assert.Single(controller.Current.Shortcuts.Actions);
+        Assert.Equal("desk-light", action.Id);
+        Assert.Null(action.GlobalShortcut);
+    }
+
+    [Fact]
+    public void LoadedSettingsWithNullNestedShortcutObjectsDoesNotResetWholeAppSettings()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 0,
+          "EndpointMode": 2,
+          "LocalEndpoint": "http://openhab.local:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "custom-home",
+          "FlyoutWidth": 420,
+          "Shortcuts": {
+            "CommandMenu": null,
+            "VoiceMode": null,
+            "Actions": [
+              null,
+              {
+                "Id": "heater-toggle",
+                "Name": "Heater",
+                "IconId": "fire",
+                "ShowInCommandMenu": true,
+                "GlobalShortcut": null,
+                "TargetItem": "HeaterSwitch",
+                "CommandType": 0,
+                "CommandValue": null
+              }
+            ]
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        Assert.Equal("custom-home", controller.Current.SitemapName);
+        Assert.Equal(420, controller.Current.FlyoutWidth);
+        Assert.Equal(EndpointMode.CloudOnly, controller.Current.EndpointMode);
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(controller.Current.Shortcuts.CommandMenu.Binding));
+        Assert.False(controller.Current.Shortcuts.VoiceMode.Enabled);
+        var action = Assert.Single(controller.Current.Shortcuts.Actions);
+        Assert.Equal("heater-toggle", action.Id);
+    }
+
+    [Fact]
     public void CanChangeSkinAndEndpointMode()
     {
         var controller = CreateController();

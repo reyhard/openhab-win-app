@@ -25,21 +25,24 @@ public sealed record ShortcutSettings(
 
     public ShortcutSettings Normalized()
     {
-        var commandMenuBinding = ShortcutBindingFormatter.TryNormalize(CommandMenu.Binding, out var normalizedCommandMenuBinding)
+        var commandMenu = CommandMenu ?? Default.CommandMenu;
+        var voiceMode = VoiceMode ?? Default.VoiceMode;
+
+        var commandMenuBinding = ShortcutBindingFormatter.TryNormalize(commandMenu.Binding, out var normalizedCommandMenuBinding)
             ? normalizedCommandMenuBinding
             : Default.CommandMenu.Binding;
 
-        var commandMenuMode = Enum.IsDefined(CommandMenu.RadialActivationMode)
-            ? CommandMenu.RadialActivationMode
+        var commandMenuMode = Enum.IsDefined(commandMenu.RadialActivationMode)
+            ? commandMenu.RadialActivationMode
             : RadialActivationMode.Toggle;
 
         var actions = Actions.IsDefault
             ? []
             : Actions
-                .Where(static action => !string.IsNullOrWhiteSpace(action.Id))
+                .Where(static action => action is not null && !string.IsNullOrWhiteSpace(action.Id))
                 .Select(static action => action with
                 {
-                    Id = action.Id.Trim(),
+                    Id = action!.Id.Trim(),
                     Name = string.IsNullOrWhiteSpace(action.Name) ? "Unnamed action" : action.Name.Trim(),
                     IconId = string.IsNullOrWhiteSpace(action.IconId) ? "custom" : action.IconId.Trim(),
                     GlobalShortcut = ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out var normalizedShortcut) ? normalizedShortcut : null,
@@ -49,13 +52,13 @@ public sealed record ShortcutSettings(
                 .ToImmutableArray();
 
         return new ShortcutSettings(
-            CommandMenu with
+            commandMenu with
             {
                 Binding = commandMenuBinding,
                 RadialActivationMode = commandMenuMode
             },
             // Voice Mode is intentionally locked for this release and must not register shortcuts yet.
-            VoiceMode with
+            voiceMode with
             {
                 Enabled = false,
                 Binding = null,
