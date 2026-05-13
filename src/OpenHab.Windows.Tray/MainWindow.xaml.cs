@@ -49,6 +49,7 @@ public sealed partial class MainWindow : Window
     private string? currentMainUiRoute;
     private TransportKind? currentMainUiTransport;
     private bool isMainUiNavigationInProgress;
+    private bool isSidebarCollapsed;
     private TransportKind? activeMainUiNavigationTransport;
     private bool pendingMainUiTransportResync;
     private string? pendingExplicitMainUiRoute;
@@ -118,6 +119,8 @@ public sealed partial class MainWindow : Window
         shellController.Changed += (_, _) => ApplyMainWindowShellState();
         promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
         ApplyMainWindowShellState();
+        isSidebarCollapsed = settingsController.Current.MainWindowSidebarCollapsed;
+        ApplySidebarState();
         RefreshPromotedMainUiPagesList();
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openhab-icon.ico");
@@ -219,7 +222,6 @@ public sealed partial class MainWindow : Window
         {
             settingsController.SetMainWindowSitemapPaneVisible(state.IsSitemapVisible);
         }
-        ApplySidebarCollapsedState(settingsController.Current.MainWindowSidebarCollapsed);
 
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
@@ -415,19 +417,13 @@ public sealed partial class MainWindow : Window
 
     private void RefreshPromotedMainUiPagesList(bool discoveryError = false)
     {
-        if (settingsController.Current.MainWindowSidebarCollapsed)
-        {
-            MainUiPagesChevron.Visibility = Visibility.Collapsed;
-            MainUiPagesList.Children.Clear();
-            MainUiPagesList.Visibility = Visibility.Collapsed;
-            return;
-        }
-
         var isExpanded = settingsController.Current.MainUiPagesExpanded;
-        MainUiPagesChevron.Visibility = Visibility.Visible;
+        MainUiPagesChevron.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         MainUiPagesChevron.Glyph = isExpanded ? "\uE70E" : "\uE70D";
         MainUiPagesList.Children.Clear();
-        MainUiPagesList.Visibility = isExpanded ? Visibility.Visible : Visibility.Collapsed;
+        MainUiPagesList.Visibility = !isSidebarCollapsed && isExpanded
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         if (!isExpanded)
         {
             return;
@@ -824,32 +820,35 @@ public sealed partial class MainWindow : Window
 
     private void SidebarCollapseButton_Click(object sender, RoutedEventArgs e)
     {
-        var isSidebarCollapsed = !settingsController.Current.MainWindowSidebarCollapsed;
+        isSidebarCollapsed = !isSidebarCollapsed;
         settingsController.SetMainWindowSidebarCollapsed(isSidebarCollapsed);
-        ApplySidebarCollapsedState(isSidebarCollapsed);
+        ApplySidebarState();
     }
 
-    private void ApplySidebarCollapsedState(bool collapsed)
+    private void ApplySidebarState()
     {
-        SidebarColumn.Width = collapsed ? new GridLength(56) : new GridLength(220);
-        SidebarBrandTextPanel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        HomeNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        MainUiPagesNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        NotificationsNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        SettingsNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        MainUiPagesChevron.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        HomeNavButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        MainUiPagesToggleButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        NotificationsNavButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        SettingsNavButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        MainUiPagesList.Visibility = collapsed
-            ? Visibility.Collapsed
-            : (settingsController.Current.MainUiPagesExpanded ? Visibility.Visible : Visibility.Collapsed);
-        SidebarConnectionPanel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        SidebarBrandPanel.Margin = collapsed ? new Thickness(0, 0, 0, 14) : new Thickness(4, 0, 0, 14);
-        SidebarCollapseIcon.Glyph = collapsed ? "\uE701" : "\uE700";
-        ToolTipService.SetToolTip(SidebarCollapseButton, collapsed ? "Expand navigation" : "Collapse navigation");
-        AutomationProperties.SetName(SidebarCollapseButton, collapsed ? "Expand navigation" : "Collapse navigation");
+        SidebarColumn.Width = isSidebarCollapsed ? new GridLength(56) : new GridLength(220);
+        SidebarBrandTextPanel.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        HomeNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        MainUiPagesNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        NotificationsNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        SettingsNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        SidebarConnectionPanel.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+
+        MainUiPagesList.Visibility = !isSidebarCollapsed && settingsController.Current.MainUiPagesExpanded
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        MainUiPagesChevron.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+
+        HomeNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        MainUiPagesToggleButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        NotificationsNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        SettingsNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+
+        SidebarBrandPanel.Margin = isSidebarCollapsed ? new Thickness(0, 0, 0, 14) : new Thickness(4, 0, 0, 14);
+        SidebarCollapseIcon.Glyph = isSidebarCollapsed ? "\uE700" : "\uE711";
+        ToolTipService.SetToolTip(SidebarCollapseButton, isSidebarCollapsed ? "Expand navigation" : "Collapse navigation");
+        AutomationProperties.SetName(SidebarCollapseButton, isSidebarCollapsed ? "Expand navigation" : "Collapse navigation");
     }
 
     private void SetShellStatusText(string text)
