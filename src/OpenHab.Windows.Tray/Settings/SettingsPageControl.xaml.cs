@@ -851,7 +851,7 @@ public sealed partial class SettingsPageControl : UserControl
         actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
         actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
         actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
 
         AddActionTableHeaderCell(actionHeader, "Icon", 0);
         AddActionTableHeaderCell(actionHeader, "Action name", 1);
@@ -882,7 +882,7 @@ public sealed partial class SettingsPageControl : UserControl
         {
             for (var i = 0; i < settings.Actions.Length; i++)
             {
-                actionsCardStack.Children.Add(CreateShortcutActionRow(settings.Actions[i]));
+                actionsCardStack.Children.Add(CreateShortcutActionRow(settings.Actions[i], i, settings.Actions.Length));
             }
         }
 
@@ -1647,7 +1647,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(cell);
     }
 
-    private FrameworkElement CreateShortcutActionRow(ShortcutAction action)
+    private FrameworkElement CreateShortcutActionRow(ShortcutAction action, int index, int actionCount)
     {
         var row = new Grid
         {
@@ -1661,7 +1661,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
 
         AddActionTableElement(row, CreateShortcutIconPresenter(action.IconId, includeId: true), 0);
         AddActionTableCell(row, action.Name, 1);
@@ -1674,22 +1674,21 @@ public sealed partial class SettingsPageControl : UserControl
         var actionsPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 6
+            Spacing = 4
         };
-        var editButton = new Button
-        {
-            Content = "Edit",
-            Tag = action.Id,
-            MinWidth = 56
-        };
+
+        var moveUpButton = CreateActionIconButton("\uE70E", "Move action up", action.Id);
+        moveUpButton.IsEnabled = index > 0;
+        moveUpButton.Click += MoveShortcutActionUpButton_Click;
+        var moveDownButton = CreateActionIconButton("\uE70D", "Move action down", action.Id);
+        moveDownButton.IsEnabled = index < actionCount - 1;
+        moveDownButton.Click += MoveShortcutActionDownButton_Click;
+        var editButton = CreateActionIconButton("\uE70F", "Edit action", action.Id);
         editButton.Click += EditShortcutActionButton_Click;
-        var deleteButton = new Button
-        {
-            Content = "Delete",
-            Tag = action.Id,
-            MinWidth = 64
-        };
+        var deleteButton = CreateActionIconButton("\uE74D", "Delete action", action.Id);
         deleteButton.Click += DeleteShortcutActionButton_Click;
+        actionsPanel.Children.Add(moveUpButton);
+        actionsPanel.Children.Add(moveDownButton);
         actionsPanel.Children.Add(editButton);
         actionsPanel.Children.Add(deleteButton);
         Grid.SetColumn(actionsPanel, 7);
@@ -1701,6 +1700,27 @@ public sealed partial class SettingsPageControl : UserControl
             BorderThickness = new Thickness(0, 1, 0, 0),
             Child = row
         };
+    }
+
+    private static Button CreateActionIconButton(string glyph, string name, string actionId)
+    {
+        var button = new Button
+        {
+            Tag = actionId,
+            Width = 34,
+            Height = 32,
+            MinWidth = 0,
+            Padding = new Thickness(0),
+            Content = new FontIcon
+            {
+                Glyph = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 14
+            }
+        };
+        AutomationProperties.SetName(button, name);
+        ToolTipService.SetToolTip(button, name);
+        return button;
     }
 
     private static void AddActionTableCell(Grid row, string text, int column)
@@ -1820,6 +1840,46 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = false;
         editingShortcutActionId = actionId;
+        NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private async void MoveShortcutActionUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        await MoveShortcutActionAsync(sender, -1);
+    }
+
+    private async void MoveShortcutActionDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        await MoveShortcutActionAsync(sender, 1);
+    }
+
+    private async Task MoveShortcutActionAsync(object sender, int offset)
+    {
+        if (sender is not Button { Tag: string actionId } || string.IsNullOrWhiteSpace(actionId))
+        {
+            return;
+        }
+
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var actions = shortcuts.Actions.ToList();
+        var index = actions.FindIndex(candidate => string.Equals(candidate.Id, actionId, StringComparison.Ordinal));
+        var targetIndex = index + offset;
+        if (index < 0 || targetIndex < 0 || targetIndex >= actions.Count)
+        {
+            return;
+        }
+
+        (actions[index], actions[targetIndex]) = (actions[targetIndex], actions[index]);
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            Actions = actions.ToImmutableArray()
+        });
+
         NavigateToSettingsPage(SettingsPage.Shortcuts);
     }
 

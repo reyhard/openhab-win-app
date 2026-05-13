@@ -605,6 +605,7 @@ internal sealed class ShortcutRecorderControl : UserControl
 
     private static Border CreatePreviewChip(string text)
     {
+        var foreground = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"];
         return new Border
         {
             Background = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
@@ -612,13 +613,21 @@ internal sealed class ShortcutRecorderControl : UserControl
             MinWidth = 58,
             Height = 48,
             Padding = new Thickness(14, 0, 14, 0),
-            Child = new TextBlock
+            Child = text.Equals("Win", StringComparison.Ordinal)
+                ? new FontIcon
+                {
+                    Glyph = "\uE782",
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                    FontSize = 22,
+                    Foreground = foreground,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+                : new TextBlock
             {
-                Text = text.Equals("Win", StringComparison.Ordinal) ? "\uE782" : text,
-                FontFamily = text.Equals("Win", StringComparison.Ordinal)
-                    ? new FontFamily("Segoe MDL2 Assets")
-                    : new FontFamily("Segoe UI"),
-                Foreground = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"],
+                Text = text,
+                FontFamily = new FontFamily("Segoe UI"),
+                Foreground = foreground,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
