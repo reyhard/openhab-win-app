@@ -776,6 +776,28 @@ public sealed class NotificationStoreTests : IDisposable
     }
 
     [Fact]
+    public void GetNotifications_ExcludesHideOnlyNotificationsFromListViewsAndUnreadCount()
+    {
+        var store = CreateStore();
+        store.AddOrUpdate(
+            "hide-only",
+            "",
+            DateTimeOffset.UtcNow,
+            severity: "Motion Tag",
+            referenceId: "motion-123");
+
+        Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.Visible, null));
+        Assert.Equal(0, store.UnreadCount);
+
+        store.Hide("hide-only");
+
+        Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.All, null));
+        Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.Hidden, null));
+        Assert.Empty(store.GetNotifications(NotificationVisibilityFilter.All, "Motion"));
+        Assert.Equal(0, store.UnreadCount);
+    }
+
+    [Fact]
     public void GetNotifications_SearchesTitleMessageAndTagCaseInsensitively()
     {
         var store = CreateStore();

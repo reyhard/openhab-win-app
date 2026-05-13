@@ -40,8 +40,10 @@
             </Grid>
             <TextBlock x:Name="LocalOnlyNote" Grid.Row="1" Text="New notifications unavailable in Local-Only mode. Switch to Automatic or Cloud to receive alerts." Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,8,0,0" />
             <Grid Grid.Row="2">
-                <ScrollViewer>
-                    <StackPanel x:Name="NotificationRows" Spacing="4" />
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto"
+                              Margin="0,0,10,0">
+                    <StackPanel x:Name="NotificationRows" Spacing="6" Padding="0,0,2,0" />
                 </ScrollViewer>
                 <TextBlock x:Name="EmptyNotificationsText" Text="No notifications" Opacity="0.5" HorizontalAlignment="Center" Margin="0,40,0,0" Visibility="Collapsed" />
             </Grid>

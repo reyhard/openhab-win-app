@@ -50,7 +50,7 @@ public sealed class NotificationStore
         {
             lock (syncRoot)
             {
-                return notifications.Values.Count(n => !n.IsRead && !n.IsDismissed);
+                return notifications.Values.Count(n => IsListableNotification(n) && !n.IsRead && !n.IsDismissed);
             }
         }
     }
@@ -81,6 +81,7 @@ public sealed class NotificationStore
         lock (syncRoot)
         {
             return notifications.Values
+                .Where(IsListableNotification)
                 .Where(n => MatchesFilter(n, filter))
                 .Where(n => MatchesSearch(n, searchText))
                 .OrderByDescending(n => n.Created)
@@ -436,6 +437,17 @@ public sealed class NotificationStore
             NotificationVisibilityFilter.All => true,
             _ => true
         };
+    }
+
+    private static bool IsListableNotification(StoredNotification notification)
+    {
+        return !string.IsNullOrWhiteSpace(notification.Message)
+            || !string.IsNullOrWhiteSpace(notification.Title)
+            || !string.IsNullOrWhiteSpace(notification.OnClickAction)
+            || !string.IsNullOrWhiteSpace(notification.MediaAttachmentUrl)
+            || !string.IsNullOrWhiteSpace(notification.ActionButton1)
+            || !string.IsNullOrWhiteSpace(notification.ActionButton2)
+            || !string.IsNullOrWhiteSpace(notification.ActionButton3);
     }
 
     private static bool MatchesSearch(StoredNotification notification, string? searchText)

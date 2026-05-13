@@ -216,7 +216,12 @@ public sealed partial class NotificationsPageControl : UserControl
                 var title = n.Title ?? "openHAB";
                 var hasTag = !string.IsNullOrWhiteSpace(n.Severity);
 
-                var row = new Grid { Padding = new Thickness(0, 8, 0, 0), ColumnSpacing = 8 };
+                var row = new Grid
+                {
+                    Padding = new Thickness(8, 9, 10, 9),
+                    ColumnSpacing = 10,
+                    MinHeight = 58
+                };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -285,14 +290,24 @@ public sealed partial class NotificationsPageControl : UserControl
 
                 row.Children.Add(metaPanel);
 
+                var rowFrame = new Border
+                {
+                    Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                    BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(4),
+                    Child = row
+                };
+
                 var capturedId = n.Id;
                 var capturedIsUnread = isUnread;
                 var button = new Button
                 {
-                    Content = row,
+                    Content = rowFrame,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     Padding = new Thickness(0),
+                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                     BorderThickness = new Thickness(0)
                 };
                 button.ContextFlyout = CreateNotificationContextMenu(n);
