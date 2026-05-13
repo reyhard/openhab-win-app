@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -68,14 +69,16 @@ internal sealed class ShortcutRecorderControl : UserControl
         editButton = new Button
         {
             Content = "Edit",
-            MinWidth = 76
+            MinWidth = 76,
+            UseSystemFocusVisuals = true
         };
         editButton.Click += EditButton_Click;
 
         clearButton = new Button
         {
             Content = "Clear",
-            MinWidth = 76
+            MinWidth = 76,
+            UseSystemFocusVisuals = true
         };
         clearButton.Click += ClearButton_Click;
 
@@ -122,8 +125,10 @@ internal sealed class ShortcutRecorderControl : UserControl
         root.Children.Add(errorText);
         root.KeyDown += Root_KeyDown;
         root.IsTabStop = true;
+        root.UseSystemFocusVisuals = true;
 
         Content = root;
+        UseSystemFocusVisuals = true;
         RefreshVisualState();
     }
 
@@ -212,8 +217,10 @@ internal sealed class ShortcutRecorderControl : UserControl
 
         editButton.Content = isRecording ? "Press shortcut..." : "Edit";
         editButton.IsEnabled = true;
+        AutomationProperties.SetName(editButton, "Edit shortcut");
         clearButton.Visibility = allowClear ? Visibility.Visible : Visibility.Collapsed;
         clearButton.IsEnabled = !isRecording && binding is not null;
+        AutomationProperties.SetName(clearButton, "Clear shortcut");
         statusText.Text = isRecording ? "Press modifiers + key. Press Esc to cancel." : "Press Edit to record";
         errorText.Text = error ?? string.Empty;
         errorText.Visibility = string.IsNullOrWhiteSpace(error) ? Visibility.Collapsed : Visibility.Visible;

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Settings;
@@ -648,6 +649,7 @@ public sealed partial class SettingsPageControl : UserControl
             OffContent = string.Empty,
             IsOn = settings.CommandMenu.Enabled
         };
+        AutomationProperties.SetName(CommandMenuEnabledToggle, "Enable openHAB command menu shortcut");
         CommandMenuEnabledToggle.Toggled += CommandMenuEnabledToggle_Toggled;
         var commandMenuTitleRow = CreateSettingsControlRow(
             "\uE8FD",
@@ -674,6 +676,7 @@ public sealed partial class SettingsPageControl : UserControl
             ItemsSource = Enum.GetValues<RadialActivationMode>(),
             SelectedItem = settings.CommandMenu.RadialActivationMode
         };
+        AutomationProperties.SetName(CommandMenuActivationModeCombo, "Command menu activation mode");
         CommandMenuActivationModeCombo.SelectionChanged += CommandMenuActivationModeCombo_SelectionChanged;
         var activationModeRow = CreateSettingsControlRow(
             "\uE7C1",

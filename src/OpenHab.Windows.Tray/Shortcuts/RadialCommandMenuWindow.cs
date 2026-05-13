@@ -1,5 +1,6 @@
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -81,8 +82,10 @@ public sealed class RadialCommandMenuWindow : Window
             BorderThickness = new Thickness(1),
             Content = BuildCenterContent(),
             HorizontalAlignment = HorizontalAlignment.Center,
+            UseSystemFocusVisuals = true,
             VerticalAlignment = VerticalAlignment.Center
         };
+        AutomationProperties.SetName(closeButton, "Close command menu");
         closeButton.Click += (_, _) => CloseMenu();
 
         emptyStateText = new TextBlock
@@ -356,8 +359,11 @@ public sealed class RadialCommandMenuWindow : Window
             Background = GetBrush("SubtleFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
             BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
-            Content = BuildActionContent(action)
+            Content = BuildActionContent(action),
+            IsTabStop = true,
+            UseSystemFocusVisuals = true
         };
+        AutomationProperties.SetName(button, $"Run {action.Name}");
         ToolTipService.SetToolTip(button, $"{action.Name} - {action.TargetItem}");
         button.GotFocus += ActionButton_GotFocus;
         button.Click += (_, _) => _ = ExecuteAndCloseAsync(action);
@@ -378,6 +384,7 @@ public sealed class RadialCommandMenuWindow : Window
             Background = GetBrush("ControlFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
             BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
+            UseSystemFocusVisuals = true,
             Content = new StackPanel
             {
                 VerticalAlignment = VerticalAlignment.Center,
@@ -408,6 +415,7 @@ public sealed class RadialCommandMenuWindow : Window
                 }
             }
         };
+        AutomationProperties.SetName(button, $"Show command menu page {pageNumber} of {pageCount}");
         button.GotFocus += ActionButton_GotFocus;
         button.Click += (_, _) => AdvancePage();
         return button;
