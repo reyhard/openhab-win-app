@@ -980,9 +980,15 @@ public sealed partial class SettingsPageControl : UserControl
 
         ShortcutActionValueText = new TextBox
         {
-            Text = draftAction.CommandValue ?? string.Empty
+            Text = draftAction.CommandValue ?? string.Empty,
+            MinWidth = 280
         };
-        var commandValueRow = CreateSettingsControlRow("\uE756", "Command value", "Required for SendCommand, and constrained for OnOff/OpenClose", ShortcutActionValueText);
+        var commandValueRow = CreateSettingsControlRow(
+            "\uE756",
+            "Command value",
+            "Required for SendCommand, and constrained for OnOff/OpenClose",
+            ShortcutActionValueText,
+            stretchControl: true);
 
         var actionButtons = new StackPanel
         {

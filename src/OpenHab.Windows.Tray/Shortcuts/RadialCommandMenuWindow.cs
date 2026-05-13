@@ -139,6 +139,7 @@ public sealed class RadialCommandMenuWindow : Window
             emptyStateText.Visibility = Visibility.Visible;
             selectedActionIndex = -1;
             PositionUnderCursor();
+            ApplyCircularWindowRegion();
             Activate();
             closeButton.Focus(FocusState.Programmatic);
             return;
@@ -146,6 +147,7 @@ public sealed class RadialCommandMenuWindow : Window
 
         BuildDisplayedEntriesForCurrentPage();
         PositionUnderCursor();
+        ApplyCircularWindowRegion();
         Activate();
         FocusSelectedEntry();
     }
@@ -585,6 +587,11 @@ public sealed class RadialCommandMenuWindow : Window
         x = Math.Clamp(x, workArea.X, workArea.X + workArea.Width - WindowSize);
         y = Math.Clamp(y, workArea.Y, workArea.Y + workArea.Height - WindowSize);
         AppWindow.Move(new PointInt32(x, y));
+    }
+
+    private void ApplyCircularWindowRegion()
+    {
+        ApplyCircularWindowRegion(WinRT.Interop.WindowNative.GetWindowHandle(this));
     }
 
     [StructLayout(LayoutKind.Sequential)]
