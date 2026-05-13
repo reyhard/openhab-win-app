@@ -1266,16 +1266,15 @@ public sealed partial class SettingsPageControl : UserControl
         CommandMenuShortcutRecorder = new ShortcutRecorderControl
         {
             Binding = binding,
-            AllowClear = true,
             Error = null
         };
         CommandMenuShortcutRecorder.BindingChanged += CommandMenuShortcutRecorder_BindingChanged;
         return CommandMenuShortcutRecorder;
     }
 
-    private void CommandMenuShortcutRecorder_BindingChanged(object? sender, EventArgs e)
+    private void CommandMenuShortcutRecorder_BindingChanged(object? sender, ShortcutBinding? binding)
     {
-        if (isRefreshingSettingsBindings || sender is not ShortcutRecorderControl recorder)
+        if (isRefreshingSettingsBindings)
         {
             return;
         }
@@ -1285,7 +1284,7 @@ public sealed partial class SettingsPageControl : UserControl
         {
             CommandMenu = shortcuts.CommandMenu with
             {
-                Binding = recorder.Binding
+                Binding = binding
             }
         });
     }

@@ -24,7 +24,7 @@ internal sealed class ShortcutRecorderControl : UserControl
     private bool isRecording;
     private string? error;
 
-    public event EventHandler? BindingChanged;
+    public event EventHandler<ShortcutBinding?>? BindingChanged;
 
     public ShortcutBinding? Binding
     {
@@ -144,7 +144,7 @@ internal sealed class ShortcutRecorderControl : UserControl
 
         binding = null;
         Error = null;
-        BindingChanged?.Invoke(this, EventArgs.Empty);
+        BindingChanged?.Invoke(this, binding);
         RefreshVisualState();
     }
 
@@ -189,7 +189,7 @@ internal sealed class ShortcutRecorderControl : UserControl
         binding = ShortcutBindingFormatter.Normalize(new ShortcutBinding(modifiers.ToImmutableArray(), keyText));
         isRecording = false;
         Error = null;
-        BindingChanged?.Invoke(this, EventArgs.Empty);
+        BindingChanged?.Invoke(this, binding);
         RefreshVisualState();
         e.Handled = true;
     }
