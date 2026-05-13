@@ -21,11 +21,14 @@ internal sealed class GlobalHotkeyService : IDisposable
     private const string UnmappableBindingMessage = "This shortcut cannot be mapped to a Windows hotkey.";
     private const string DuplicateBindingMessage = "This shortcut is already used by another shortcut in settings.";
     private const string OsRegistrationFailedMessage = "This shortcut could not be registered. It may already be used by Windows or another app.";
+    private const uint WmHotkey = 0x0312;
 
     private readonly DispatcherQueue dispatcherQueue;
     private readonly IntPtr hwnd;
+    private readonly SubclassProc subclassProc;
     private readonly Dictionary<int, RegisteredHotkey> registered = [];
     private int nextHotkeyId = FirstHotkeyId;
+    private bool subclassRemoved;
     private bool disposed;
 
     public GlobalHotkeyService(Window window, DispatcherQueue dispatcherQueue)
@@ -35,6 +38,12 @@ internal sealed class GlobalHotkeyService : IDisposable
         if (hwnd == IntPtr.Zero)
         {
             throw new InvalidOperationException("Cannot register global hotkeys because the window handle is not available.");
+        }
+
+        subclassProc = WindowProc;
+        if (!SetWindowSubclass(hwnd, subclassProc, 1, IntPtr.Zero))
+        {
+            throw new InvalidOperationException("Cannot listen for global hotkeys because the window message hook could not be installed.");
         }
     }
 
@@ -121,7 +130,24 @@ internal sealed class GlobalHotkeyService : IDisposable
         }
 
         disposed = true;
+        RemoveSubclass();
         UnregisterAll();
+    }
+
+    private IntPtr WindowProc(
+        IntPtr hWnd,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam,
+        UIntPtr subclassId,
+        IntPtr refData)
+    {
+        if (message == WmHotkey && HandleHotkeyMessage((int)wParam))
+        {
+            return IntPtr.Zero;
+        }
+
+        return DefSubclassProc(hWnd, message, wParam, lParam);
     }
 
     private void RegisterBinding(
@@ -171,16 +197,44 @@ internal sealed class GlobalHotkeyService : IDisposable
         nextHotkeyId = FirstHotkeyId;
     }
 
+    private void RemoveSubclass()
+    {
+        if (subclassRemoved)
+        {
+            return;
+        }
+
+        subclassRemoved = true;
+        _ = RemoveWindowSubclass(hwnd, subclassProc, 1);
+    }
+
     private void ThrowIfDisposed()
     {
         ObjectDisposedException.ThrowIf(disposed, this);
     }
+
+    private delegate IntPtr SubclassProc(
+        IntPtr hWnd,
+        uint message,
+        UIntPtr wParam,
+        IntPtr lParam,
+        UIntPtr subclassId,
+        IntPtr refData);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    [DllImport("comctl32.dll", SetLastError = true)]
+    private static extern bool SetWindowSubclass(IntPtr hWnd, SubclassProc pfnSubclass, UIntPtr uIdSubclass, IntPtr dwRefData);
+
+    [DllImport("comctl32.dll", SetLastError = true)]
+    private static extern bool RemoveWindowSubclass(IntPtr hWnd, SubclassProc pfnSubclass, UIntPtr uIdSubclass);
+
+    [DllImport("comctl32.dll")]
+    private static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, UIntPtr wParam, IntPtr lParam);
 
     private sealed record RegisteredHotkey(ShortcutAction? Action);
 }
