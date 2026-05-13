@@ -574,12 +574,10 @@ public sealed partial class SettingsPageControl : UserControl
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
         row.ColumnDefinitions.Add(new ColumnDefinition
         {
-            Width = stretchControl
-                ? new GridLength(1, GridUnitType.Star)
-                : GridLength.Auto
+            Width = new GridLength(1, GridUnitType.Star)
         });
 
         var icon = new FontIcon
@@ -609,7 +607,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(textPanel);
 
         control.VerticalAlignment = VerticalAlignment.Center;
-        control.HorizontalAlignment = stretchControl ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
+        control.HorizontalAlignment = stretchControl ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
         Grid.SetColumn(control, 2);
         row.Children.Add(control);
 
