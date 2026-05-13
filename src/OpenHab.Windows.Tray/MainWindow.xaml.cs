@@ -800,6 +800,10 @@ public sealed partial class MainWindow : Window
     private void HomeNavButton_Click(object sender, RoutedEventArgs e)
     {
         shellController.SelectPromotedMainUiPage("/");
+    }
+
+    private void HomePagesToggleButton_Click(object sender, RoutedEventArgs e)
+    {
         settingsController.SetMainUiPagesExpanded(!settingsController.Current.MainUiPagesExpanded);
         RefreshPromotedMainUiPagesList();
     }
@@ -848,8 +852,11 @@ public sealed partial class MainWindow : Window
         SidebarConnectionPanel.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         ApplyMainUiPagesVisibilityState();
 
-        HomeNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
-        HomeNavContent.HorizontalAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        Grid.SetColumnSpan(HomeNavButton, isSidebarCollapsed ? 2 : 1);
+        HomeNavButton.Padding = isSidebarCollapsed ? new Thickness(0) : new Thickness(10, 0, 10, 0);
+        NotificationsNavButton.Padding = isSidebarCollapsed ? new Thickness(0) : new Thickness(10, 0, 10, 0);
+        SettingsNavButton.Padding = isSidebarCollapsed ? new Thickness(0) : new Thickness(10, 0, 10, 0);
+        HomeNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         NotificationsNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         SettingsNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
 
@@ -864,7 +871,7 @@ public sealed partial class MainWindow : Window
     {
         var isExpanded = settingsController.Current.MainUiPagesExpanded;
         MainUiPagesChevron.Glyph = isExpanded ? "\uE70E" : "\uE70D";
-        MainUiPagesChevron.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        HomePagesToggleButton.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
         MainUiPagesList.Visibility = isExpanded && !isSidebarCollapsed
             ? Visibility.Visible
             : Visibility.Collapsed;
