@@ -19,6 +19,7 @@ internal sealed class GlobalHotkeyService : IDisposable
     private const int FirstHotkeyId = 0x4F00;
     private const string InvalidBindingMessage = "This shortcut is invalid and could not be registered.";
     private const string InvalidActionMessage = "This action is invalid and its shortcut could not be registered.";
+    private const string UnmappableBindingMessage = "This shortcut cannot be mapped to a Windows hotkey.";
     private const string DuplicateBindingMessage = "This shortcut is already used by another shortcut in settings.";
     private const string OsRegistrationFailedMessage = "This shortcut could not be registered. It may already be used by Windows or another app.";
 
@@ -32,6 +33,10 @@ internal sealed class GlobalHotkeyService : IDisposable
     {
         this.dispatcherQueue = dispatcherQueue ?? throw new ArgumentNullException(nameof(dispatcherQueue));
         hwnd = WindowNative.GetWindowHandle(window ?? throw new ArgumentNullException(nameof(window)));
+        if (hwnd == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("Cannot register global hotkeys because the window handle is not available.");
+        }
     }
 
     public event EventHandler? CommandMenuRequested;
@@ -84,14 +89,17 @@ internal sealed class GlobalHotkeyService : IDisposable
 
     public bool HandleHotkeyMessage(int id)
     {
-        ThrowIfDisposed();
+        if (disposed)
+        {
+            return false;
+        }
 
         if (!registered.TryGetValue(id, out var hotkey))
         {
             return false;
         }
 
-        _ = dispatcherQueue.TryEnqueue(() =>
+        return dispatcherQueue.TryEnqueue(() =>
         {
             if (hotkey.Action is null)
             {
@@ -102,8 +110,6 @@ internal sealed class GlobalHotkeyService : IDisposable
                 ActionRequested?.Invoke(this, hotkey.Action);
             }
         });
-
-        return true;
     }
 
     public void Dispose()
@@ -139,7 +145,7 @@ internal sealed class GlobalHotkeyService : IDisposable
 
         if (!ShortcutWindowsMapper.TryMap(normalizedBinding, out var modifiers, out var virtualKey))
         {
-            failures.Add(new HotkeyRegistrationFailure(owner, InvalidBindingMessage));
+            failures.Add(new HotkeyRegistrationFailure(owner, UnmappableBindingMessage));
             return;
         }
 

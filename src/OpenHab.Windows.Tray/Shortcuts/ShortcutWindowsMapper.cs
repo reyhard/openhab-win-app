@@ -70,6 +70,12 @@ internal static class ShortcutWindowsMapper
             }
         }
 
+        if (Enum.TryParse<VirtualKey>(normalizedKey, ignoreCase: true, out var parsedVirtualKey))
+        {
+            virtualKey = (uint)parsedVirtualKey;
+            return true;
+        }
+
         if (normalizedKey.StartsWith("F", StringComparison.OrdinalIgnoreCase)
             && int.TryParse(normalizedKey[1..], out var functionNumber)
             && functionNumber is >= 1 and <= 24)
@@ -92,6 +98,8 @@ internal static class ShortcutWindowsMapper
             "PAGEDOWN" => VirtualKey.PageDown,
             "HOME" => VirtualKey.Home,
             "END" => VirtualKey.End,
+            "ENTER" => VirtualKey.Enter,
+            "TAB" => VirtualKey.Tab,
             _ => (VirtualKey)0
         };
 
