@@ -31,7 +31,7 @@
                     Click="SidebarCollapseButton_Click"
                     ToolTipService.ToolTip="Collapse navigation"
                     AutomationProperties.Name="Collapse navigation">
-                <FontIcon x:Name="SidebarCollapseIcon" Glyph="&#xE700;" FontSize="14" />
+                <FontIcon x:Name="SidebarCollapseIcon" Glyph="&#xE711;" FontSize="14" />
             </Button>
 
             <StackPanel Grid.Column="1"
