@@ -1280,10 +1280,14 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var existingBindings = shortcuts.Actions
+            .Where(action => action.GlobalShortcut is not null)
+            .Select(action => new ShortcutBindingOwner(action.Name, action.GlobalShortcut!))
+            .ToArray();
         var validation = ShortcutValidation.ValidateBinding(
             binding,
             "openHAB Command Menu",
-            existingBindings: [],
+            existingBindings,
             allowUnassigned: false);
         if (!validation.IsValid)
         {
