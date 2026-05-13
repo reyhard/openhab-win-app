@@ -238,6 +238,11 @@ public sealed class AppSettingsController
         UpdateSettings(settings => settings with { MainWindowSitemapPaneVisible = visible });
     }
 
+    public void SetMainWindowSidebarCollapsed(bool collapsed)
+    {
+        UpdateSettings(settings => settings with { MainWindowSidebarCollapsed = collapsed });
+    }
+
     public void SetCachedMainUiPageLinks(IEnumerable<MainUiPageLink> links)
     {
         ArgumentNullException.ThrowIfNull(links);
@@ -588,3 +593,4 @@ public sealed class AppSettingsController
         public Task QueuedSaveTask { get; set; } = Task.CompletedTask;
     }
 }
+

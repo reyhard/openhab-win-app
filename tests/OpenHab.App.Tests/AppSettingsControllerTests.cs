@@ -634,6 +634,7 @@ public sealed class AppSettingsControllerTests
 
         controller.SetMainUiPagesExpanded(true);
         controller.SetMainWindowSitemapPaneVisible(true);
+        controller.SetMainWindowSidebarCollapsed(true);
         controller.SetCachedMainUiPageLinks(new[]
         {
             new OpenHab.App.MainUi.MainUiPageLink("energy", "Energy", "/page/energy", "f7:bolt", "oh-layout-page", 10)
@@ -644,6 +645,7 @@ public sealed class AppSettingsControllerTests
 
         Assert.True(reloaded.Current.MainUiPagesExpanded);
         Assert.True(reloaded.Current.MainWindowSitemapPaneVisible);
+        Assert.True(reloaded.Current.MainWindowSidebarCollapsed);
         var link = Assert.Single(reloaded.Current.CachedMainUiPageLinks);
         Assert.Equal("energy", link.Uid);
         Assert.Equal("Energy", link.Label);
@@ -690,3 +692,4 @@ public sealed class AppSettingsControllerTests
         Assert.Equal("/page/energy", link.Route);
     }
 }
+

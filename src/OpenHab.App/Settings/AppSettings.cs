@@ -37,6 +37,7 @@ public sealed record AppSettings(
     DeviceInfoSyncSettings? DeviceInfoSync = null,
     bool MainUiPagesExpanded = false,
     bool MainWindowSitemapPaneVisible = false,
+    bool MainWindowSidebarCollapsed = false,
     ImmutableArray<MainUiPageLink> CachedMainUiPageLinks = default,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
@@ -54,3 +55,4 @@ public sealed record AppSettings(
         DeviceInfoSync: DeviceInfoSyncSettings.Default,
         CachedMainUiPageLinks: []);
 }
+
