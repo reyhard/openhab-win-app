@@ -22,7 +22,10 @@
                     <TextBlock x:Name="SettingsSubtitleText" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" />
                 </StackPanel>
             </Grid>
-            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer x:Name="SettingsScrollViewer"
+                          Grid.Row="1"
+                          HorizontalScrollBarVisibility="Disabled"
+                          SizeChanged="SettingsScrollViewer_SizeChanged">
                 <StackPanel x:Name="SettingsContent" Spacing="8" HorizontalAlignment="Stretch" />
             </ScrollViewer>
         </Grid>

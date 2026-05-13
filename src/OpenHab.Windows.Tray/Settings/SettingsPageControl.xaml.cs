@@ -1422,6 +1422,11 @@ public sealed partial class SettingsPageControl : UserControl
         await NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage.Root);
     }
 
+    private void SettingsScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        SettingsContent.Width = Math.Max(0d, e.NewSize.Width);
+    }
+
     private void AppColorThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!isRefreshingSettingsBindings
