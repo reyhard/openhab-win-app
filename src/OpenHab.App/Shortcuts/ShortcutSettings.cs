@@ -25,9 +25,9 @@ public sealed record ShortcutSettings(
 
     public ShortcutSettings Normalized()
     {
-        var commandMenuBinding = CommandMenu.Binding is null
-            ? Default.CommandMenu.Binding
-            : ShortcutBindingFormatter.Normalize(CommandMenu.Binding);
+        var commandMenuBinding = ShortcutBindingFormatter.TryNormalize(CommandMenu.Binding, out var normalizedCommandMenuBinding)
+            ? normalizedCommandMenuBinding
+            : Default.CommandMenu.Binding;
 
         var commandMenuMode = Enum.IsDefined(CommandMenu.RadialActivationMode)
             ? CommandMenu.RadialActivationMode
@@ -42,7 +42,7 @@ public sealed record ShortcutSettings(
                     Id = action.Id.Trim(),
                     Name = string.IsNullOrWhiteSpace(action.Name) ? "Unnamed action" : action.Name.Trim(),
                     IconId = string.IsNullOrWhiteSpace(action.IconId) ? "custom" : action.IconId.Trim(),
-                    GlobalShortcut = action.GlobalShortcut is null ? null : ShortcutBindingFormatter.Normalize(action.GlobalShortcut),
+                    GlobalShortcut = ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out var normalizedShortcut) ? normalizedShortcut : null,
                     TargetItem = action.TargetItem?.Trim() ?? string.Empty,
                     CommandValue = string.IsNullOrWhiteSpace(action.CommandValue) ? null : action.CommandValue.Trim()
                 })
@@ -54,6 +54,7 @@ public sealed record ShortcutSettings(
                 Binding = commandMenuBinding,
                 RadialActivationMode = commandMenuMode
             },
+            // Voice Mode is intentionally locked for this release and must not register shortcuts yet.
             VoiceMode with
             {
                 Enabled = false,

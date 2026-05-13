@@ -76,6 +76,55 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void ShortcutSettingsNormalizationForcesVoiceModeDisabledAndUnassigned()
+    {
+        var controller = CreateController();
+        var settings = ShortcutSettings.Default with
+        {
+            VoiceMode = new BuiltInShortcutSettings(
+                Enabled: true,
+                Binding: new ShortcutBinding([ShortcutModifier.Win], "V"),
+                RadialActivationMode: RadialActivationMode.Hold)
+        };
+
+        controller.SetShortcutSettings(settings);
+
+        Assert.False(controller.Current.Shortcuts.VoiceMode.Enabled);
+        Assert.Null(controller.Current.Shortcuts.VoiceMode.Binding);
+        Assert.Equal(RadialActivationMode.Toggle, controller.Current.Shortcuts.VoiceMode.RadialActivationMode);
+    }
+
+    [Fact]
+    public void LegacySettingsWithoutShortcutsLoadsShortcutDefaults()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var jsonWithoutShortcuts = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "UseWindows11Icons": false,
+          "FlyoutWidth": 460,
+          "AnimationSpeed": 2,
+          "NotificationPollIntervalSeconds": 30,
+          "LaunchAtStartup": true,
+          "ChartQuality": 192
+        }
+        """;
+        File.WriteAllText(settingsFilePath, jsonWithoutShortcuts);
+
+        var controller = CreateController();
+
+        Assert.True(controller.Current.Shortcuts.CommandMenu.Enabled);
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(controller.Current.Shortcuts.CommandMenu.Binding));
+        Assert.False(controller.Current.Shortcuts.VoiceMode.Enabled);
+        Assert.Null(controller.Current.Shortcuts.VoiceMode.Binding);
+        Assert.Empty(controller.Current.Shortcuts.Actions);
+    }
+
+    [Fact]
     public void CanChangeSkinAndEndpointMode()
     {
         var controller = CreateController();

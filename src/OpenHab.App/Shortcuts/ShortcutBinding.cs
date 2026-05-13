@@ -32,20 +32,43 @@ public static class ShortcutBindingFormatter
 
     public static ShortcutBinding Normalize(ShortcutBinding binding)
     {
+        if (!TryNormalize(binding, out var normalized))
+        {
+            throw new ArgumentException("Shortcut key must not be empty.", nameof(binding));
+        }
+
+        return normalized;
+    }
+
+    public static bool TryNormalize(ShortcutBinding? binding, out ShortcutBinding normalized)
+    {
+        if (binding is null)
+        {
+            normalized = default!;
+            return false;
+        }
+
         var modifiers = ModifierOrder
             .Where(modifier => binding.Modifiers.Contains(modifier))
             .ToImmutableArray();
-        return new ShortcutBinding(modifiers, NormalizeKey(binding.Key));
+        var key = NormalizeKey(binding.Key);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            normalized = default!;
+            return false;
+        }
+
+        normalized = new ShortcutBinding(modifiers, key);
+        return true;
     }
 
     public static string Format(ShortcutBinding? binding)
     {
-        if (binding is null)
+        if (!TryNormalize(binding, out var normalized))
         {
             return "Unassigned";
         }
 
-        var normalized = Normalize(binding);
         var parts = normalized.Modifiers.Select(static modifier => modifier.ToString()).Append(normalized.Key);
         return string.Join(" + ", parts);
     }

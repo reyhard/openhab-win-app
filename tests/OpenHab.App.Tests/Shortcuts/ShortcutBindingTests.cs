@@ -32,4 +32,22 @@ public sealed class ShortcutBindingTests
     {
         Assert.Equal("Unassigned", ShortcutBindingFormatter.Format(null));
     }
+
+    [Fact]
+    public void FormatEmptyKeyReturnsUnassigned()
+    {
+        var binding = new ShortcutBinding([ShortcutModifier.Ctrl], "   ");
+
+        Assert.Equal("Unassigned", ShortcutBindingFormatter.Format(binding));
+    }
+
+    [Fact]
+    public void TryNormalizeReturnsFalseForEmptyKey()
+    {
+        var isValid = ShortcutBindingFormatter.TryNormalize(
+            new ShortcutBinding([ShortcutModifier.Ctrl], string.Empty),
+            out _);
+
+        Assert.False(isValid);
+    }
 }
