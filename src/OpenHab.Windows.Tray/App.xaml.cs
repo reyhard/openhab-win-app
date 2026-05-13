@@ -123,6 +123,7 @@ public partial class App : Application
                     basicPassword: auth.BasicPassword);
             },
             sitemapEventStreamClient: CreateEventStreamClient(settingsController, httpClient));
+        runtimeController.SnapshotChanged += OnRuntimeSnapshotChanged;
         windowsSessionInfoReader = new WindowsSessionInfoReader();
         var deviceStateSource = new WindowsDeviceStateSnapshotSource(
             runtimeController,
@@ -714,6 +715,7 @@ public partial class App : Application
             {
                 DiagnosticLogger.Warn(
                     $"Shortcut action execution failed: action='{action.Name}', failure='{result.Failure}', message='{result.Message}'");
+                SetShellStatusText(result.Message);
             }
         }
         catch (OperationCanceledException)
@@ -724,6 +726,40 @@ public partial class App : Application
             DiagnosticLogger.Warn(
                 $"Shortcut action execution failed unexpectedly: action='{action.Name}', error='{ex.GetType().Name}: {ex.Message}'");
         }
+    }
+
+    private void OnRuntimeSnapshotChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            _ = dispatcher.TryEnqueue(CloseShortcutCommandMenuWhenOffline);
+            return;
+        }
+
+        CloseShortcutCommandMenuWhenOffline();
+    }
+
+    private void CloseShortcutCommandMenuWhenOffline()
+    {
+        if (runtimeController?.Current.ConnectionState == ConnectionState.Online)
+        {
+            return;
+        }
+
+        radialCommandMenuWindow?.CloseMenu();
+    }
+
+    private void SetShellStatusText(string text)
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            _ = dispatcher.TryEnqueue(() => mainWindow?.SetShellStatusText(text));
+            return;
+        }
+
+        mainWindow?.SetShellStatusText(text);
     }
 
     private void ShutdownTrayResources()

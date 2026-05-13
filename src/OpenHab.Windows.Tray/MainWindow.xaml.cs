@@ -1102,7 +1102,7 @@ public sealed partial class MainWindow : Window
         return brightness < 128;
     }
 
-    private void SetShellStatusText(string text)
+    public void SetShellStatusText(string text)
     {
         ShellStatusText.Text = text;
         ShellStatusText.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
