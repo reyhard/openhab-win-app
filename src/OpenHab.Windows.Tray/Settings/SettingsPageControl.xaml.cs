@@ -547,6 +547,26 @@ public sealed partial class SettingsPageControl : UserControl
         return CreateSettingsControlRow(glyph, title, subtitle, CreateSettingsToggleAction(toggle));
     }
 
+    private static StackPanel CreateExpanderRows(params FrameworkElement[] rows)
+    {
+        var stack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        for (var index = 0; index < rows.Length; index++)
+        {
+            stack.Children.Add(new Border
+            {
+                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = index == rows.Length - 1 ? new Thickness(0) : new Thickness(0, 0, 0, 1),
+                Child = rows[index]
+            });
+        }
+
+        return stack;
+    }
+
     private static Grid CreateSettingsControlRow(string glyph, string title, string subtitle, FrameworkElement control)
     {
         var row = new Grid
@@ -651,19 +671,6 @@ public sealed partial class SettingsPageControl : UserControl
         };
         AutomationProperties.SetName(CommandMenuEnabledToggle, "Enable openHAB command menu shortcut");
         CommandMenuEnabledToggle.Toggled += CommandMenuEnabledToggle_Toggled;
-        var commandMenuTitleRow = CreateSettingsControlRow(
-            "\uE8FD",
-            "openHAB Command Menu",
-            "Built-in global shortcut for opening the command menu",
-            new TextBlock
-            {
-                Text = "Built-in",
-                Opacity = 0.7,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-
-        var commandMenuEnabledRow = CreateSettingsToggleRow("\uE8FD", "Enabled", "Turn command menu keyboard handling on or off", CommandMenuEnabledToggle);
-
         var globalShortcutRow = CreateSettingsControlRow(
             "\uE765",
             "Global shortcut",
@@ -684,11 +691,11 @@ public sealed partial class SettingsPageControl : UserControl
             "Choose whether the command menu toggles or stays open while held",
             CommandMenuActivationModeCombo);
 
-        SettingsContent.Children.Add(ShortcutSettingsControls.CreateSettingsCard(
-            commandMenuTitleRow,
-            commandMenuEnabledRow,
-            globalShortcutRow,
-            activationModeRow));
+        SettingsContent.Children.Add(CreateSettingsExpander(
+            "openHAB Command Menu",
+            "Built-in global shortcut for opening the command menu",
+            CreateExpanderRows(globalShortcutRow, activationModeRow),
+            CreateSettingsToggleAction(CommandMenuEnabledToggle)));
 
         var voiceModeStateRow = CreateSettingsControlRow(
             "\uE720",

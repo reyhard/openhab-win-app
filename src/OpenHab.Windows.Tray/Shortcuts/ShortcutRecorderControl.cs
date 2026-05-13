@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
@@ -19,7 +20,6 @@ internal sealed class ShortcutRecorderControl : UserControl
     private readonly StackPanel chipsPanel;
     private readonly Button editButton;
     private readonly Button clearButton;
-    private readonly TextBlock statusText;
     private readonly TextBlock errorText;
     private ShortcutBinding? binding;
     private bool allowClear;
@@ -29,6 +29,9 @@ internal sealed class ShortcutRecorderControl : UserControl
 
     public event EventHandler<ShortcutBinding?>? BindingChanged;
     public static event EventHandler<bool>? AnyRecordingChanged;
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
 
     public ShortcutBinding? Binding
     {
@@ -85,13 +88,6 @@ internal sealed class ShortcutRecorderControl : UserControl
         };
         clearButton.Click += ClearButton_Click;
 
-        statusText = new TextBlock
-        {
-            Opacity = 0.68,
-            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-            Text = "Press Edit to record"
-        };
-
         errorText = new TextBlock
         {
             Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
@@ -124,11 +120,7 @@ internal sealed class ShortcutRecorderControl : UserControl
             Spacing = 6
         };
         root.Children.Add(row);
-        root.Children.Add(statusText);
         root.Children.Add(errorText);
-        root.KeyDown += Root_KeyDown;
-        root.IsTabStop = true;
-        root.UseSystemFocusVisuals = true;
 
         Content = root;
         UseSystemFocusVisuals = true;
@@ -136,12 +128,9 @@ internal sealed class ShortcutRecorderControl : UserControl
         RefreshVisualState();
     }
 
-    private void EditButton_Click(object sender, RoutedEventArgs e)
+    private async void EditButton_Click(object sender, RoutedEventArgs e)
     {
-        StartRecording();
-        Error = null;
-        _ = ((FrameworkElement)Content).Focus(FocusState.Programmatic);
-        RefreshVisualState();
+        await ShowRecorderDialogAsync();
     }
 
     private void ClearButton_Click(object sender, RoutedEventArgs e)
@@ -157,50 +146,191 @@ internal sealed class ShortcutRecorderControl : UserControl
         RefreshVisualState();
     }
 
-    private void Root_KeyDown(object sender, KeyRoutedEventArgs e)
+    private async Task ShowRecorderDialogAsync()
     {
-        if (!isRecording)
+        StartRecording();
+        Error = null;
+        RefreshVisualState();
+
+        var initialBinding = binding is null ? null : ShortcutBindingFormatter.Normalize(binding);
+        var capturedBinding = initialBinding;
+        var previewPanel = new StackPanel
         {
-            return;
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Spacing = 10,
+            MinHeight = 78
+        };
+        var dialogStatus = new TextBlock
+        {
+            Text = "Press a modifier and key.",
+            TextAlignment = TextAlignment.Center,
+            Opacity = 0.75,
+            TextWrapping = TextWrapping.Wrap
+        };
+        var dialogError = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed
+        };
+
+        var captureSurface = new Border
+        {
+            Background = (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"],
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(18),
+            Child = previewPanel,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var resetButton = new Button
+        {
+            Content = "Reset",
+            MinWidth = 86
+        };
+        var clearButton = new Button
+        {
+            Content = "Clear",
+            MinWidth = 86
+        };
+
+        var helperButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Spacing = 10,
+            Children =
+            {
+                resetButton,
+                clearButton
+            }
+        };
+
+        var content = new StackPanel
+        {
+            Spacing = 14,
+            MinWidth = 420,
+            IsTabStop = true,
+            UseSystemFocusVisuals = true,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "Shortcut must start with Windows, Ctrl, Alt, or Shift.",
+                    TextWrapping = TextWrapping.Wrap
+                },
+                captureSurface,
+                helperButtons,
+                dialogStatus,
+                dialogError
+            }
+        };
+        content.Loaded += (_, _) => _ = content.Focus(FocusState.Programmatic);
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Activation shortcut",
+            Content = content,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary
+        };
+
+        void RenderPreview()
+        {
+            previewPanel.Children.Clear();
+            if (ShortcutBindingFormatter.TryNormalize(capturedBinding, out var normalized))
+            {
+                foreach (var part in ShortcutBindingFormatter.Format(normalized).Split(" + "))
+                {
+                    previewPanel.Children.Add(CreatePreviewChip(part));
+                }
+            }
+            else
+            {
+                previewPanel.Children.Add(CreatePreviewChip("Press shortcut"));
+            }
+
+            dialog.IsPrimaryButtonEnabled = capturedBinding is not null || AllowClear;
         }
 
-        if (e.Key == VirtualKey.Escape)
+        void SetDialogError(string? message)
+        {
+            dialogError.Text = message ?? string.Empty;
+            dialogError.Visibility = string.IsNullOrWhiteSpace(message) ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        content.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler((_, args) =>
+        {
+            if (args.Key == VirtualKey.Escape)
+            {
+                return;
+            }
+
+            if (IsModifierKey(args.Key))
+            {
+                SetDialogError(null);
+                args.Handled = true;
+                return;
+            }
+
+            var modifiers = GetActiveModifiers();
+            if (modifiers.Count == 0)
+            {
+                SetDialogError("Use at least one modifier key.");
+                args.Handled = true;
+                return;
+            }
+
+            var keyText = FormatKey(args.Key);
+            if (string.IsNullOrWhiteSpace(keyText))
+            {
+                SetDialogError("Unsupported key.");
+                args.Handled = true;
+                return;
+            }
+
+            capturedBinding = ShortcutBindingFormatter.Normalize(new ShortcutBinding(modifiers.ToImmutableArray(), keyText));
+            dialogStatus.Text = ShortcutBindingFormatter.Format(capturedBinding);
+            SetDialogError(null);
+            RenderPreview();
+            args.Handled = true;
+        }), handledEventsToo: true);
+
+        resetButton.Click += (_, _) =>
+        {
+            capturedBinding = initialBinding;
+            dialogStatus.Text = "Reset to current shortcut.";
+            SetDialogError(null);
+            RenderPreview();
+        };
+        clearButton.Click += (_, _) =>
+        {
+            capturedBinding = null;
+            dialogStatus.Text = AllowClear ? "Shortcut cleared." : "Shortcut is required for this control.";
+            SetDialogError(AllowClear ? null : "Shortcut is required.");
+            RenderPreview();
+        };
+
+        try
+        {
+            RenderPreview();
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                binding = capturedBinding is null ? null : ShortcutBindingFormatter.Normalize(capturedBinding);
+                Error = null;
+                BindingChanged?.Invoke(this, binding);
+            }
+        }
+        finally
         {
             StopRecording();
-            Error = null;
             RefreshVisualState();
-            e.Handled = true;
-            return;
         }
-
-        if (IsModifierKey(e.Key))
-        {
-            e.Handled = true;
-            return;
-        }
-
-        var modifiers = GetActiveModifiers();
-        if (modifiers.Count == 0)
-        {
-            Error = "Use at least one modifier key.";
-            e.Handled = true;
-            return;
-        }
-
-        var keyText = FormatKey(e.Key);
-        if (string.IsNullOrWhiteSpace(keyText))
-        {
-            Error = "Unsupported key.";
-            e.Handled = true;
-            return;
-        }
-
-        binding = ShortcutBindingFormatter.Normalize(new ShortcutBinding(modifiers.ToImmutableArray(), keyText));
-        StopRecording();
-        Error = null;
-        BindingChanged?.Invoke(this, binding);
-        RefreshVisualState();
-        e.Handled = true;
     }
 
     private void ShortcutRecorderControl_Unloaded(object sender, RoutedEventArgs e)
@@ -264,7 +394,6 @@ internal sealed class ShortcutRecorderControl : UserControl
         clearButton.Visibility = allowClear ? Visibility.Visible : Visibility.Collapsed;
         clearButton.IsEnabled = !isRecording && binding is not null;
         AutomationProperties.SetName(clearButton, "Clear shortcut");
-        statusText.Text = isRecording ? "Press modifiers + key. Press Esc to cancel." : "Press Edit to record";
         errorText.Text = error ?? string.Empty;
         errorText.Visibility = string.IsNullOrWhiteSpace(error) ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -312,7 +441,8 @@ internal sealed class ShortcutRecorderControl : UserControl
 
     private static bool IsDown(VirtualKey key)
     {
-        return InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
+        return InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down)
+            || (GetAsyncKeyState((int)key) & 0x8000) != 0;
     }
 
     private static bool IsModifierKey(VirtualKey key)
@@ -361,7 +491,32 @@ internal sealed class ShortcutRecorderControl : UserControl
             VirtualKey.PageDown => "PageDown",
             VirtualKey.Home => "Home",
             VirtualKey.End => "End",
+            VirtualKey.Enter => "Enter",
+            VirtualKey.Tab => "Tab",
             _ => string.Empty
+        };
+    }
+
+    private static Border CreatePreviewChip(string text)
+    {
+        return new Border
+        {
+            Background = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
+            CornerRadius = new CornerRadius(6),
+            MinWidth = 58,
+            Height = 48,
+            Padding = new Thickness(14, 0, 14, 0),
+            Child = new TextBlock
+            {
+                Text = text.Equals("Win", StringComparison.Ordinal) ? "\uE782" : text,
+                FontFamily = text.Equals("Win", StringComparison.Ordinal)
+                    ? new FontFamily("Segoe MDL2 Assets")
+                    : new FontFamily("Segoe UI"),
+                Foreground = (Brush)Application.Current.Resources["TextOnAccentFillColorPrimaryBrush"],
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            }
         };
     }
 }
