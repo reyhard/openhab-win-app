@@ -47,6 +47,7 @@ public sealed record ShortcutSettings(
                     IconId = string.IsNullOrWhiteSpace(action.IconId) ? "custom" : action.IconId.Trim(),
                     GlobalShortcut = ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out var normalizedShortcut) ? normalizedShortcut : null,
                     TargetItem = action.TargetItem?.Trim() ?? string.Empty,
+                    CommandType = Enum.IsDefined(action.CommandType) ? action.CommandType : ShortcutCommandType.SendCommand,
                     CommandValue = string.IsNullOrWhiteSpace(action.CommandValue) ? null : action.CommandValue.Trim()
                 })
                 .ToImmutableArray();
