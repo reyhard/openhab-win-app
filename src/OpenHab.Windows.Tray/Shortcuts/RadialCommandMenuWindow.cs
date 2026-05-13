@@ -13,7 +13,8 @@ namespace OpenHab.Windows.Tray.Shortcuts;
 public sealed class RadialCommandMenuWindow : Window
 {
     private const int WindowSize = 380;
-    private const int MaxVisibleRadialActions = 8;
+    private const int MaxVisibleRadialSlots = 8;
+    private const int MaxActionSlotsPerPage = 7;
     private const double ActionButtonSize = 92d;
     private const double ActionRadius = 128d;
 
@@ -23,9 +24,12 @@ public sealed class RadialCommandMenuWindow : Window
     private readonly TextBlock emptyStateText;
     private readonly Button closeButton;
     private readonly List<RadialDisplayEntry> displayedEntries = [];
+    private readonly List<ShortcutAction> validActions = [];
 
     private Func<ShortcutAction, Task>? executeActionAsync;
     private int selectedActionIndex;
+    private int currentPageIndex;
+    private int totalPages;
 
     public RadialCommandMenuWindow()
     {
@@ -43,8 +47,11 @@ public sealed class RadialCommandMenuWindow : Window
         appWindow.IsShownInSwitchers = false;
         StripNonClientFrame(WinRT.Interop.WindowNative.GetWindowHandle(this));
 
-        root = new Grid();
-        root.KeyDown += Root_KeyDown;
+        root = new Grid
+        {
+            IsTabStop = true
+        };
+        root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(Root_KeyDown), handledEventsToo: true);
 
         menuSurface = new Border
         {
@@ -100,54 +107,29 @@ public sealed class RadialCommandMenuWindow : Window
     public void ShowActions(IReadOnlyList<ShortcutAction> commandMenuActions, Func<ShortcutAction, Task> execute)
     {
         executeActionAsync = execute;
-        displayedEntries.Clear();
-        actionCanvas.Children.Clear();
-        emptyStateText.Visibility = Visibility.Collapsed;
-
-        var validActions = (commandMenuActions ?? [])
+        validActions.Clear();
+        validActions.AddRange((commandMenuActions ?? [])
             .Where(static action => action.ShowInCommandMenu && ShortcutValidation.ValidateAction(action).IsValid)
-            .ToList();
+            .ToList());
+        currentPageIndex = 0;
+        totalPages = validActions.Count == 0
+            ? 0
+            : (int)Math.Ceiling(validActions.Count / (double)MaxActionSlotsPerPage);
 
         if (validActions.Count == 0)
         {
+            displayedEntries.Clear();
+            actionCanvas.Children.Clear();
             emptyStateText.Visibility = Visibility.Visible;
             selectedActionIndex = -1;
             Activate();
-            root.Focus(FocusState.Programmatic);
+            closeButton.Focus(FocusState.Programmatic);
             return;
         }
 
-        var overflowCount = 0;
-        if (validActions.Count > MaxVisibleRadialActions)
-        {
-            overflowCount = validActions.Count - (MaxVisibleRadialActions - 1);
-            validActions = validActions.Take(MaxVisibleRadialActions - 1).ToList();
-        }
-
-        foreach (var action in validActions)
-        {
-            var button = CreateActionButton(action);
-            displayedEntries.Add(new RadialDisplayEntry(action, button, IsOverflowIndicator: false));
-            actionCanvas.Children.Add(button);
-        }
-
-        if (overflowCount > 0)
-        {
-            var overflowButton = CreateOverflowButton(overflowCount);
-            displayedEntries.Add(new RadialDisplayEntry(null, overflowButton, IsOverflowIndicator: true));
-            actionCanvas.Children.Add(overflowButton);
-        }
-
-        selectedActionIndex = displayedEntries.FindIndex(static entry => !entry.IsOverflowIndicator);
-        if (selectedActionIndex < 0)
-        {
-            selectedActionIndex = 0;
-        }
-
-        UpdateSelectedVisualState();
-        ArrangeRadialActions();
+        BuildDisplayedEntriesForCurrentPage();
         Activate();
-        root.Focus(FocusState.Programmatic);
+        FocusSelectedEntry();
     }
 
     public void CloseMenu()
@@ -206,17 +188,8 @@ public sealed class RadialCommandMenuWindow : Window
             return;
         }
 
-        var next = selectedActionIndex;
-        for (var attempt = 0; attempt < displayedEntries.Count; attempt++)
-        {
-            next = (next + direction + displayedEntries.Count) % displayedEntries.Count;
-            if (!displayedEntries[next].IsOverflowIndicator)
-            {
-                selectedActionIndex = next;
-                UpdateSelectedVisualState();
-                return;
-            }
-        }
+        selectedActionIndex = (selectedActionIndex + direction + displayedEntries.Count) % displayedEntries.Count;
+        FocusSelectedEntry();
     }
 
     private void ExecuteSelectedAction()
@@ -227,6 +200,12 @@ public sealed class RadialCommandMenuWindow : Window
         }
 
         var entry = displayedEntries[selectedActionIndex];
+        if (entry.EntryType == RadialEntryType.PageAdvance)
+        {
+            AdvancePage();
+            return;
+        }
+
         if (entry.Action is null)
         {
             return;
@@ -253,6 +232,80 @@ public sealed class RadialCommandMenuWindow : Window
             Canvas.SetLeft(displayedEntries[i].Button, x);
             Canvas.SetTop(displayedEntries[i].Button, y);
         }
+    }
+
+    private void FocusSelectedEntry()
+    {
+        if (selectedActionIndex < 0 || selectedActionIndex >= displayedEntries.Count)
+        {
+            return;
+        }
+
+        UpdateSelectedVisualState();
+        _ = displayedEntries[selectedActionIndex].Button.Focus(FocusState.Programmatic);
+    }
+
+    private void AdvancePage()
+    {
+        if (totalPages <= 1)
+        {
+            return;
+        }
+
+        currentPageIndex = (currentPageIndex + 1) % totalPages;
+        BuildDisplayedEntriesForCurrentPage();
+        FocusSelectedEntry();
+    }
+
+    private void BuildDisplayedEntriesForCurrentPage()
+    {
+        displayedEntries.Clear();
+        actionCanvas.Children.Clear();
+        emptyStateText.Visibility = Visibility.Collapsed;
+
+        var pageStart = currentPageIndex * MaxActionSlotsPerPage;
+        var pageActions = validActions
+            .Skip(pageStart)
+            .Take(MaxActionSlotsPerPage)
+            .ToList();
+
+        foreach (var action in pageActions)
+        {
+            var button = CreateActionButton(action);
+            displayedEntries.Add(new RadialDisplayEntry(action, button, RadialEntryType.Action));
+            actionCanvas.Children.Add(button);
+        }
+
+        if (totalPages > 1)
+        {
+            var hiddenCount = validActions.Count - ((currentPageIndex + 1) * MaxActionSlotsPerPage);
+            if (hiddenCount < 0)
+            {
+                hiddenCount = validActions.Count - pageActions.Count;
+            }
+
+            var pageButton = CreatePageButton(hiddenCount, currentPageIndex + 1, totalPages);
+            displayedEntries.Add(new RadialDisplayEntry(null, pageButton, RadialEntryType.PageAdvance));
+            actionCanvas.Children.Add(pageButton);
+        }
+
+        if (displayedEntries.Count > MaxVisibleRadialSlots)
+        {
+            displayedEntries.RemoveRange(MaxVisibleRadialSlots, displayedEntries.Count - MaxVisibleRadialSlots);
+            while (actionCanvas.Children.Count > MaxVisibleRadialSlots)
+            {
+                actionCanvas.Children.RemoveAt(actionCanvas.Children.Count - 1);
+            }
+        }
+
+        selectedActionIndex = displayedEntries.FindIndex(static entry => entry.EntryType == RadialEntryType.Action);
+        if (selectedActionIndex < 0)
+        {
+            selectedActionIndex = 0;
+        }
+
+        ArrangeRadialActions();
+        UpdateSelectedVisualState();
     }
 
     private void UpdateSelectedVisualState()
@@ -287,18 +340,22 @@ public sealed class RadialCommandMenuWindow : Window
             Content = BuildActionContent(action)
         };
         ToolTipService.SetToolTip(button, $"{action.Name} - {action.TargetItem}");
+        button.GotFocus += ActionButton_GotFocus;
         button.Click += (_, _) => _ = ExecuteAndCloseAsync(action);
         return button;
     }
 
-    private Button CreateOverflowButton(int hiddenCount)
+    private Button CreatePageButton(int hiddenCount, int pageNumber, int pageCount)
     {
-        return new Button
+        var moreText = hiddenCount > 0
+            ? $"More +{hiddenCount}"
+            : "More";
+
+        var button = new Button
         {
             Width = ActionButtonSize,
             Height = ActionButtonSize,
             CornerRadius = new CornerRadius(46),
-            IsEnabled = false,
             Background = GetBrush("ControlFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
             BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
@@ -318,13 +375,40 @@ public sealed class RadialCommandMenuWindow : Window
                     },
                     new TextBlock
                     {
-                        Text = $"More +{hiddenCount}",
+                        Text = moreText,
                         Style = GetTextStyle("CaptionTextBlockStyle"),
+                        HorizontalAlignment = HorizontalAlignment.Center
+                    },
+                    new TextBlock
+                    {
+                        Text = $"{pageNumber}/{pageCount}",
+                        Style = GetTextStyle("CaptionTextBlockStyle"),
+                        Opacity = 0.72,
                         HorizontalAlignment = HorizontalAlignment.Center
                     }
                 }
             }
         };
+        button.GotFocus += ActionButton_GotFocus;
+        button.Click += (_, _) => AdvancePage();
+        return button;
+    }
+
+    private void ActionButton_GotFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+        {
+            return;
+        }
+
+        var index = displayedEntries.FindIndex(entry => ReferenceEquals(entry.Button, button));
+        if (index < 0 || index == selectedActionIndex)
+        {
+            return;
+        }
+
+        selectedActionIndex = index;
+        UpdateSelectedVisualState();
     }
 
     private static UIElement BuildCenterContent()
@@ -405,7 +489,12 @@ public sealed class RadialCommandMenuWindow : Window
             return style;
         }
 
-        return (Style)Application.Current.Resources["DefaultTextBlockStyle"];
+        if (Application.Current.Resources.TryGetValue("DefaultTextBlockStyle", out var fallback) && fallback is Style defaultStyle)
+        {
+            return defaultStyle;
+        }
+
+        return new Style(typeof(TextBlock));
     }
 
     private static Brush GetBrush(string preferredKey, string fallbackKey)
@@ -462,7 +551,13 @@ public sealed class RadialCommandMenuWindow : Window
         };
     }
 
-    private sealed record RadialDisplayEntry(ShortcutAction? Action, Button Button, bool IsOverflowIndicator);
+    private enum RadialEntryType
+    {
+        Action,
+        PageAdvance
+    }
+
+    private sealed record RadialDisplayEntry(ShortcutAction? Action, Button Button, RadialEntryType EntryType);
 
     private static void StripNonClientFrame(IntPtr hwnd)
     {
