@@ -2,6 +2,7 @@ using OpenHab.Core;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.App.MainUi;
+using OpenHab.App.Shortcuts;
 using OpenHab.Rendering.Descriptors;
 using System.Collections.Immutable;
 using System.Collections.Generic;
@@ -233,6 +234,12 @@ public sealed class AppSettingsController
         }
 
         UpdateSettings(appSettings => appSettings with { DeviceInfoSync = settings.Normalized() });
+    }
+
+    public void SetShortcutSettings(ShortcutSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        UpdateSettings(appSettings => appSettings with { Shortcuts = settings.Normalized() });
     }
 
     public void SetMainUiPagesExpanded(bool expanded)
@@ -550,6 +557,7 @@ public sealed class AppSettingsController
             NotificationPollIntervalSeconds = interval,
             ImportantNotificationTags = NormalizeImportantNotificationTags(settings.ImportantNotificationTags),
             DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default,
+            Shortcuts = (settings.Shortcuts ?? ShortcutSettings.Default).Normalized(),
             CachedMainUiPageLinks = NormalizeMainUiPageLinks(settings.CachedMainUiPageLinks)
         };
     }

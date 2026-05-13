@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.Windows.AppLifecycle;
+using OpenHab.App.Shortcuts;
 using OpenHab.App.Tray;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
@@ -20,11 +21,13 @@ using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Tray;
 using OpenHab.Windows.Tray.Startup;
 using OpenHab.Windows.Tray.DeviceInfo;
+using OpenHab.Windows.Tray.Shortcuts;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Windows.Networking.Connectivity;
+using VirtualKey = Windows.System.VirtualKey;
 
 namespace OpenHab.Windows.Tray;
 
@@ -44,16 +47,25 @@ public partial class App : Application
     private NotificationStore? notificationStore;
     private NotificationPoller? notificationPoller;
     private SitemapRuntimeController? runtimeController;
+    private ShortcutActionExecutor? shortcutActionExecutor;
+    private GlobalHotkeyService? globalHotkeyService;
+    private RadialCommandMenuWindow? radialCommandMenuWindow;
+    private DispatcherTimer? commandMenuHoldTimer;
+    private ShortcutBinding? commandMenuHoldBinding;
     private DeviceInfoSyncService? deviceInfoSyncService;
     private WindowsSessionInfoReader? windowsSessionInfoReader;
     private CancellationTokenSource? promotedMainUiDiscoveryCts;
     private bool deviceInfoEventsRegistered;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
     private int isShuttingDown;
+    private bool shortcutHotkeysSuspended;
 
     [DllImport("shell32.dll", SetLastError = true)]
     private static extern void SetCurrentProcessExplicitAppUserModelID(
         [MarshalAs(UnmanagedType.LPWStr)] string appId);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -118,6 +130,7 @@ public partial class App : Application
                     basicPassword: auth.BasicPassword);
             },
             sitemapEventStreamClient: CreateEventStreamClient(settingsController, httpClient));
+        runtimeController.SnapshotChanged += OnRuntimeSnapshotChanged;
         windowsSessionInfoReader = new WindowsSessionInfoReader();
         var deviceStateSource = new WindowsDeviceStateSnapshotSource(
             runtimeController,
@@ -142,6 +155,7 @@ public partial class App : Application
                 shellController.HandleWindowCloseRequested(TrayShellSurface.MainWindow);
                 _ = ApplyShellStateAsync();
             },
+            shouldAllowClose: IsShutdownInProgress,
             openHabClientFactory: (transportKind, endpoint) =>
             {
                 var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
@@ -157,6 +171,10 @@ public partial class App : Application
                 var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
                 return new MainUi.MainUiAuthContext(auth.ApiToken, auth.BasicUserName, auth.BasicPassword);
             });
+        shortcutActionExecutor = new ShortcutActionExecutor(
+            CreateActiveShortcutClient,
+            () => runtimeController?.Current.ConnectionState ?? ConnectionState.Offline);
+        radialCommandMenuWindow = new RadialCommandMenuWindow();
         flyoutWindow = new FlyoutWindow(
             settingsController,
             runtimeController,
@@ -186,6 +204,11 @@ public partial class App : Application
 
         flyoutWindow.AppWindow.Closing += (sender, args) =>
         {
+            if (IsShutdownInProgress())
+            {
+                return;
+            }
+
             // If the window is already hidden (by exit animation), just cancel
             if (!flyoutWindow.AppWindow.IsVisible)
             {
@@ -210,9 +233,20 @@ public partial class App : Application
             },
             exitApplication: () =>
             {
-                shellController.HandleExitRequested();
-                _ = ApplyShellStateAsync();
+                RequestApplicationExit();
             });
+        globalHotkeyService = new GlobalHotkeyService(mainWindow, uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread());
+        globalHotkeyService.CommandMenuRequested += (_, _) =>
+        {
+            _ = OpenShortcutCommandMenuAsync();
+        };
+        globalHotkeyService.ActionRequested += (_, action) =>
+        {
+            _ = ExecuteShortcutActionAsync(action);
+        };
+        ShortcutRecorderControl.AnyRecordingChanged += OnShortcutRecorderRecordingChanged;
+        RefreshShortcutHotkeys();
+        settingsController.SettingsChanged += (_, _) => RefreshShortcutHotkeys();
 
         _ = CompleteStartupAsync(settingsController, activatedEventArgs);
     }
@@ -373,6 +407,30 @@ public partial class App : Application
 
     private readonly record struct RuntimeAuth(string? ApiToken, string? BasicUserName, string? BasicPassword);
 
+    private IOpenHabClient? CreateActiveShortcutClient()
+    {
+        var settings = settingsController?.Current;
+        var runtime = runtimeController;
+        var sharedClient = httpClient;
+        var activeTransport = runtime?.Current.ActiveTransport;
+        if (settings is null || runtime is null || sharedClient is null || activeTransport is null)
+        {
+            return null;
+        }
+
+        var endpoint = activeTransport == TransportKind.Cloud
+            ? settings.CloudEndpoint
+            : settings.LocalEndpoint;
+        var auth = ResolveRuntimeAuthSync(settingsController!, activeTransport.Value);
+
+        return new OpenHabHttpClient(
+            sharedClient,
+            endpoint,
+            apiToken: auth.ApiToken,
+            basicUserName: auth.BasicUserName,
+            basicPassword: auth.BasicPassword);
+    }
+
     private IOpenHabClient? CreateDeviceInfoSyncClient()
     {
         var settings = settingsController?.Current;
@@ -402,6 +460,22 @@ public partial class App : Application
         ShutdownTrayResources();
     }
 
+    private void RequestApplicationExit()
+    {
+        DiagnosticLogger.Info("Tray exit requested");
+        shellController?.HandleExitRequested();
+        ShutdownTrayResources();
+        DiagnosticLogger.Info("Application exit invoked");
+        Exit();
+        Environment.Exit(0);
+    }
+
+    private bool IsShutdownInProgress()
+    {
+        return Volatile.Read(ref isShuttingDown) != 0
+            || shellController?.Current.ShouldExitProcess == true;
+    }
+
     private async Task ApplyShellStateAsync()
     {
         await shellApplySemaphore.WaitAsync();
@@ -416,8 +490,7 @@ public partial class App : Application
 
             if (state.ShouldExitProcess)
             {
-                ShutdownTrayResources();
-                Exit();
+                RequestApplicationExit();
                 return;
             }
 
@@ -583,6 +656,283 @@ public partial class App : Application
         }
     }
 
+    private void RefreshShortcutHotkeys()
+    {
+        var service = globalHotkeyService;
+        if (service is null)
+        {
+            return;
+        }
+
+        var shortcutSettings = (settingsController?.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        if (shortcutHotkeysSuspended)
+        {
+            service.Suspend();
+            return;
+        }
+
+        var result = service.Refresh(shortcutSettings);
+        foreach (var failure in result.Failures)
+        {
+            var key = ResolveShortcutFailureKey(shortcutSettings, failure.Owner);
+            DiagnosticLogger.Warn(
+                $"Shortcut hotkey registration failed: owner='{failure.Owner}', key='{key}', message='{failure.Message}'");
+        }
+    }
+
+    private static string ResolveShortcutFailureKey(ShortcutSettings settings, string owner)
+    {
+        if (string.Equals(owner, "openHAB Command Menu", StringComparison.Ordinal))
+        {
+            return ShortcutBindingFormatter.Format(settings.CommandMenu.Binding);
+        }
+
+        const string actionPrefix = "Action: ";
+        if (owner.StartsWith(actionPrefix, StringComparison.Ordinal))
+        {
+            var actionName = owner[actionPrefix.Length..];
+            var action = settings.Actions.FirstOrDefault(action =>
+                string.Equals(action.Name, actionName, StringComparison.Ordinal));
+            if (action is not null)
+            {
+                return ShortcutBindingFormatter.Format(action.GlobalShortcut);
+            }
+        }
+
+        return "(unknown)";
+    }
+
+    private void OnShortcutRecorderRecordingChanged(object? sender, bool isRecording)
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            _ = dispatcher.TryEnqueue(() => OnShortcutRecorderRecordingChanged(sender, isRecording));
+            return;
+        }
+
+        shortcutHotkeysSuspended = isRecording;
+        var service = globalHotkeyService;
+        if (service is null)
+        {
+            return;
+        }
+
+        if (isRecording)
+        {
+            service.Suspend();
+            return;
+        }
+
+        RegisterCurrentShortcutHotkeys(service);
+    }
+
+    private void RegisterCurrentShortcutHotkeys(GlobalHotkeyService service)
+    {
+        var shortcutSettings = (settingsController?.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var result = service.Resume(shortcutSettings);
+        foreach (var failure in result.Failures)
+        {
+            var key = ResolveShortcutFailureKey(shortcutSettings, failure.Owner);
+            DiagnosticLogger.Warn(
+                $"Shortcut hotkey registration failed: owner='{failure.Owner}', key='{key}', message='{failure.Message}'");
+        }
+    }
+
+    private Task OpenShortcutCommandMenuAsync()
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            _ = dispatcher.TryEnqueue(() => _ = OpenShortcutCommandMenuAsync());
+            return Task.CompletedTask;
+        }
+
+        if (runtimeController?.Current.ConnectionState != ConnectionState.Online)
+        {
+            DiagnosticLogger.Info("Shortcut command menu skipped because openHAB is not online.");
+            return Task.CompletedTask;
+        }
+
+        var settings = settingsController?.Current.Shortcuts?.Normalized();
+        var menuWindow = radialCommandMenuWindow;
+        if (settings is null || menuWindow is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        StopCommandMenuHoldTimer();
+        var canPollHoldBinding = ShortcutWindowsMapper.TryMapVirtualKey(settings.CommandMenu.Binding, out _);
+
+        if (settings.CommandMenu.RadialActivationMode == RadialActivationMode.Toggle && menuWindow.IsMenuVisible)
+        {
+            menuWindow.CloseMenu();
+            return Task.CompletedTask;
+        }
+        if (settings.CommandMenu.RadialActivationMode == RadialActivationMode.Hold
+            && !canPollHoldBinding
+            && menuWindow.IsMenuVisible)
+        {
+            menuWindow.CloseMenu();
+            return Task.CompletedTask;
+        }
+
+        var actions = settings
+            .Actions
+            .Where(static action => action.ShowInCommandMenu && ShortcutValidation.ValidateAction(action).IsValid)
+            .ToList();
+        menuWindow.ShowActions(actions, ExecuteShortcutActionAsync);
+        if (settings.CommandMenu.RadialActivationMode == RadialActivationMode.Hold && canPollHoldBinding)
+        {
+            StartCommandMenuHoldTimer(settings.CommandMenu.Binding);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void StartCommandMenuHoldTimer(ShortcutBinding? binding)
+    {
+        if (!ShortcutWindowsMapper.TryMapVirtualKey(binding, out _))
+        {
+            return;
+        }
+
+        commandMenuHoldBinding = binding;
+        var timer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(35)
+        };
+        timer.Tick += CommandMenuHoldTimer_Tick;
+        commandMenuHoldTimer = timer;
+        timer.Start();
+    }
+
+    private void StopCommandMenuHoldTimer()
+    {
+        if (commandMenuHoldTimer is not null)
+        {
+            commandMenuHoldTimer.Stop();
+            commandMenuHoldTimer.Tick -= CommandMenuHoldTimer_Tick;
+            commandMenuHoldTimer = null;
+        }
+
+        commandMenuHoldBinding = null;
+    }
+
+    private void CommandMenuHoldTimer_Tick(object? sender, object e)
+    {
+        if (radialCommandMenuWindow?.IsMenuVisible != true)
+        {
+            StopCommandMenuHoldTimer();
+            return;
+        }
+
+        if (!IsShortcutBindingDown(commandMenuHoldBinding))
+        {
+            radialCommandMenuWindow.CloseMenu();
+            StopCommandMenuHoldTimer();
+        }
+    }
+
+    private static bool IsShortcutBindingDown(ShortcutBinding? binding)
+    {
+        if (!ShortcutBindingFormatter.TryNormalize(binding, out var normalized)
+            || !ShortcutWindowsMapper.TryMapVirtualKey(normalized, out var virtualKey))
+        {
+            return false;
+        }
+
+        foreach (var modifier in normalized.Modifiers)
+        {
+            if (!IsModifierDown(modifier))
+            {
+                return false;
+            }
+        }
+
+        return IsVirtualKeyDown(virtualKey);
+    }
+
+    private static bool IsModifierDown(ShortcutModifier modifier)
+    {
+        return modifier switch
+        {
+            ShortcutModifier.Win => IsVirtualKeyDown(VirtualKey.LeftWindows) || IsVirtualKeyDown(VirtualKey.RightWindows),
+            ShortcutModifier.Ctrl => IsVirtualKeyDown(VirtualKey.Control) || IsVirtualKeyDown(VirtualKey.LeftControl) || IsVirtualKeyDown(VirtualKey.RightControl),
+            ShortcutModifier.Alt => IsVirtualKeyDown(VirtualKey.Menu) || IsVirtualKeyDown(VirtualKey.LeftMenu) || IsVirtualKeyDown(VirtualKey.RightMenu),
+            ShortcutModifier.Shift => IsVirtualKeyDown(VirtualKey.Shift) || IsVirtualKeyDown(VirtualKey.LeftShift) || IsVirtualKeyDown(VirtualKey.RightShift),
+            _ => false
+        };
+    }
+
+    private static bool IsVirtualKeyDown(VirtualKey virtualKey)
+    {
+        return (GetAsyncKeyState((int)virtualKey) & 0x8000) != 0;
+    }
+
+    private async Task ExecuteShortcutActionAsync(ShortcutAction action)
+    {
+        try
+        {
+            var executor = shortcutActionExecutor;
+            if (executor is null)
+            {
+                DiagnosticLogger.Warn("Shortcut action execution skipped: executor is unavailable.");
+                return;
+            }
+
+            var result = await executor.ExecuteAsync(action, CancellationToken.None);
+            if (!result.Succeeded)
+            {
+                DiagnosticLogger.Warn(
+                    $"Shortcut action execution failed: action='{action.Name}', failure='{result.Failure}', message='{result.Message}'");
+                SetShellStatusText(result.Message);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn(
+                $"Shortcut action execution failed unexpectedly: action='{action.Name}', error='{ex.GetType().Name}: {ex.Message}'");
+        }
+    }
+
+    private void OnRuntimeSnapshotChanged(object? sender, EventArgs e)
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            _ = dispatcher.TryEnqueue(CloseShortcutCommandMenuWhenOffline);
+            return;
+        }
+
+        CloseShortcutCommandMenuWhenOffline();
+    }
+
+    private void CloseShortcutCommandMenuWhenOffline()
+    {
+        if (runtimeController?.Current.ConnectionState == ConnectionState.Online)
+        {
+            return;
+        }
+
+        radialCommandMenuWindow?.CloseMenu();
+    }
+
+    private void SetShellStatusText(string text)
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            _ = dispatcher.TryEnqueue(() => mainWindow?.SetShellStatusText(text));
+            return;
+        }
+
+        mainWindow?.SetShellStatusText(text);
+    }
+
     private void ShutdownTrayResources()
     {
         // Shared shutdown path for both tray-initiated exit and process-exit cleanup.
@@ -619,6 +969,13 @@ public partial class App : Application
         DiagnosticLogger.Info("Shutting down notification poller");
         notificationPoller?.Dispose();
         notificationPoller = null;
+        ShortcutRecorderControl.AnyRecordingChanged -= OnShortcutRecorderRecordingChanged;
+        globalHotkeyService?.Dispose();
+        globalHotkeyService = null;
+        StopCommandMenuHoldTimer();
+        radialCommandMenuWindow?.CloseMenu();
+        radialCommandMenuWindow = null;
+        shortcutActionExecutor = null;
         trayIcon?.Dispose();
         trayIcon = null;
         httpClient?.Dispose();

@@ -1,4 +1,5 @@
 using OpenHab.App.Settings;
+using OpenHab.App.Shortcuts;
 using OpenHab.App.Tests.Settings;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
@@ -20,6 +21,11 @@ public sealed class AppSettingsControllerTests
         return new AppSettingsController(credentialStore, settingsFilePath);
     }
 
+    private static ShortcutSettings AssertShortcuts(AppSettings settings)
+    {
+        return Assert.IsType<ShortcutSettings>(settings.Shortcuts);
+    }
+
     [Fact]
     public void DefaultsUseWindows11SkinAndAutomaticEndpointMode()
     {
@@ -38,6 +44,254 @@ public sealed class AppSettingsControllerTests
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
         Assert.Null(controller.Current.CloudUserName);
+    }
+
+    [Fact]
+    public void DefaultsIncludeShortcutSettings()
+    {
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.True(shortcuts.CommandMenu.Enabled);
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.Equal(RadialActivationMode.Toggle, shortcuts.CommandMenu.RadialActivationMode);
+        Assert.False(shortcuts.VoiceMode.Enabled);
+        Assert.Null(shortcuts.VoiceMode.Binding);
+        Assert.Empty(shortcuts.Actions);
+    }
+
+    [Fact]
+    public async Task CanPersistShortcutSettings()
+    {
+        var controller = CreateController();
+        var settings = ShortcutSettings.Default with
+        {
+            CommandMenu = ShortcutSettings.Default.CommandMenu with
+            {
+                Binding = new ShortcutBinding([ShortcutModifier.Ctrl, ShortcutModifier.Alt], "K"),
+                RadialActivationMode = RadialActivationMode.Hold
+            }
+        };
+
+        controller.SetShortcutSettings(settings);
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        var shortcuts = AssertShortcuts(reloaded.Current);
+        Assert.Equal("Ctrl + Alt + K", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.Equal(RadialActivationMode.Hold, shortcuts.CommandMenu.RadialActivationMode);
+    }
+
+    [Fact]
+    public void ShortcutSettingsNormalizationForcesVoiceModeDisabledAndUnassigned()
+    {
+        var controller = CreateController();
+        var settings = ShortcutSettings.Default with
+        {
+            VoiceMode = new BuiltInShortcutSettings(
+                Enabled: true,
+                Binding: new ShortcutBinding([ShortcutModifier.Win], "V"),
+                RadialActivationMode: RadialActivationMode.Hold)
+        };
+
+        controller.SetShortcutSettings(settings);
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.False(shortcuts.VoiceMode.Enabled);
+        Assert.Null(shortcuts.VoiceMode.Binding);
+        Assert.Equal(RadialActivationMode.Toggle, shortcuts.VoiceMode.RadialActivationMode);
+    }
+
+    [Fact]
+    public void LegacySettingsWithoutShortcutsLoadsShortcutDefaults()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var jsonWithoutShortcuts = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "UseWindows11Icons": false,
+          "FlyoutWidth": 460,
+          "AnimationSpeed": 2,
+          "NotificationPollIntervalSeconds": 30,
+          "LaunchAtStartup": true,
+          "ChartQuality": 192
+        }
+        """;
+        File.WriteAllText(settingsFilePath, jsonWithoutShortcuts);
+
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.True(shortcuts.CommandMenu.Enabled);
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.False(shortcuts.VoiceMode.Enabled);
+        Assert.Null(shortcuts.VoiceMode.Binding);
+        Assert.Empty(shortcuts.Actions);
+    }
+
+    [Fact]
+    public void LoadedSettingsWithBlankCommandMenuBindingFallsBackToWinO()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "Shortcuts": {
+            "CommandMenu": {
+              "Enabled": true,
+              "Binding": { "Modifiers": [ 1 ], "Key": "   " },
+              "RadialActivationMode": 1
+            },
+            "VoiceMode": { "Enabled": false, "Binding": null, "RadialActivationMode": 0 },
+            "Actions": []
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+    }
+
+    [Fact]
+    public void LoadedSettingsWithInvalidActionShortcutKeepsActionAndClearsShortcut()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "Shortcuts": {
+            "CommandMenu": {
+              "Enabled": true,
+              "Binding": { "Modifiers": [ 0 ], "Key": "O" },
+              "RadialActivationMode": 0
+            },
+            "VoiceMode": { "Enabled": false, "Binding": null, "RadialActivationMode": 0 },
+            "Actions": [
+              {
+                "Id": "desk-light",
+                "Name": "Desk Light",
+                "IconId": "lightbulb",
+                "ShowInCommandMenu": true,
+                "GlobalShortcut": { "Modifiers": [ 1 ], "Key": " " },
+                "TargetItem": "DeskLight",
+                "CommandType": 0,
+                "CommandValue": null
+              }
+            ]
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        var action = Assert.Single(shortcuts.Actions);
+        Assert.Equal("desk-light", action.Id);
+        Assert.Null(action.GlobalShortcut);
+    }
+
+    [Fact]
+    public void LoadedSettingsWithInvalidActionCommandTypeFallsBackToSendCommand()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "Shortcuts": {
+            "CommandMenu": {
+              "Enabled": true,
+              "Binding": { "Modifiers": [ 0 ], "Key": "O" },
+              "RadialActivationMode": 0
+            },
+            "VoiceMode": { "Enabled": false, "Binding": null, "RadialActivationMode": 0 },
+            "Actions": [
+              {
+                "Id": "heater-send",
+                "Name": "Heater Send",
+                "IconId": "fire",
+                "ShowInCommandMenu": true,
+                "GlobalShortcut": null,
+                "TargetItem": "HeaterSwitch",
+                "CommandType": 999,
+                "CommandValue": " ON "
+              }
+            ]
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        var action = Assert.Single(shortcuts.Actions);
+        Assert.Equal(ShortcutCommandType.SendCommand, action.CommandType);
+        Assert.Equal("ON", action.CommandValue);
+    }
+
+    [Fact]
+    public void LoadedSettingsWithNullNestedShortcutObjectsDoesNotResetWholeAppSettings()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 0,
+          "EndpointMode": 2,
+          "LocalEndpoint": "http://openhab.local:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "custom-home",
+          "FlyoutWidth": 420,
+          "Shortcuts": {
+            "CommandMenu": null,
+            "VoiceMode": null,
+            "Actions": [
+              null,
+              {
+                "Id": "heater-toggle",
+                "Name": "Heater",
+                "IconId": "fire",
+                "ShowInCommandMenu": true,
+                "GlobalShortcut": null,
+                "TargetItem": "HeaterSwitch",
+                "CommandType": 0,
+                "CommandValue": null
+              }
+            ]
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.Equal("custom-home", controller.Current.SitemapName);
+        Assert.Equal(420, controller.Current.FlyoutWidth);
+        Assert.Equal(EndpointMode.CloudOnly, controller.Current.EndpointMode);
+        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.False(shortcuts.VoiceMode.Enabled);
+        var action = Assert.Single(shortcuts.Actions);
+        Assert.Equal("heater-toggle", action.Id);
     }
 
     [Fact]

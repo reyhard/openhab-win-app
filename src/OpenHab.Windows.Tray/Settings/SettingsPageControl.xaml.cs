@@ -1,18 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Settings;
+using OpenHab.App.Shortcuts;
 using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Windows.Tray.Shortcuts;
 using OpenHab.Windows.Tray.Startup;
 
 namespace OpenHab.Windows.Tray.Settings;
@@ -38,6 +42,7 @@ public sealed partial class SettingsPageControl : UserControl
         General,
         Appearance,
         DeviceInfoSync,
+        Shortcuts,
         About
     }
 
@@ -65,6 +70,19 @@ public sealed partial class SettingsPageControl : UserControl
     private NumberBox? NotificationPollBox;
     private TextBox? ImportantNotificationTagsText;
     private ToggleSwitch? DeviceInfoSyncEnabledToggle;
+    private ToggleSwitch? CommandMenuEnabledToggle;
+    private ShortcutRecorderControl? CommandMenuShortcutRecorder;
+    private ComboBox? CommandMenuActivationModeCombo;
+    private string? editingShortcutActionId;
+    private bool creatingShortcutAction;
+    private TextBox? ShortcutActionNameText;
+    private ComboBox? ShortcutActionIconCombo;
+    private ToggleSwitch? ShortcutActionShowInCommandMenuToggle;
+    private ShortcutRecorderControl? ShortcutActionGlobalShortcutRecorder;
+    private TextBox? ShortcutActionTargetItemText;
+    private ComboBox? ShortcutActionTypeCombo;
+    private TextBox? ShortcutActionValueText;
+    private TextBlock? ShortcutActionEditorErrorText;
     private TextBlock? DeviceInfoSyncDisabledText;
     private TextBox? DeviceInfoSyncIdentifierText;
     private NumberBox? DeviceInfoSyncIntervalBox;
@@ -109,6 +127,7 @@ public sealed partial class SettingsPageControl : UserControl
                 SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPage.General));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPage.Appearance));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", "Device Info Sync", "Configure device metadata sync", SettingsPage.DeviceInfoSync));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE765", "Shortcuts", "Command menu and global shortcuts", SettingsPage.Shortcuts));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE946", "About", "Logs and version", SettingsPage.About));
                 break;
             case SettingsPage.Connection:
@@ -130,6 +149,11 @@ public sealed partial class SettingsPageControl : UserControl
                 UpdateSettingsBreadcrumb("Device Info Sync");
                 SettingsSubtitleText.Text = "Configure device metadata sync";
                 BuildDeviceInfoSyncSettingsPage();
+                break;
+            case SettingsPage.Shortcuts:
+                UpdateSettingsBreadcrumb("Shortcuts");
+                SettingsSubtitleText.Text = "Configure global shortcuts and command menu actions.";
+                BuildShortcutsSettingsPage();
                 break;
             case SettingsPage.About:
                 UpdateSettingsBreadcrumb("About");
@@ -209,7 +233,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(chevron);
 
         button.Content = row;
-        button.Click += (_, _) => NavigateToSettingsPage(destination);
+        button.Click += async (_, _) => await NavigateToSettingsPageWithDiscardConfirmationAsync(destination);
         return button;
     }
 
@@ -523,7 +547,32 @@ public sealed partial class SettingsPageControl : UserControl
         return CreateSettingsControlRow(glyph, title, subtitle, CreateSettingsToggleAction(toggle));
     }
 
-    private static Grid CreateSettingsControlRow(string glyph, string title, string subtitle, FrameworkElement control)
+    private static StackPanel CreateExpanderRows(params FrameworkElement[] rows)
+    {
+        var stack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        for (var index = 0; index < rows.Length; index++)
+        {
+            stack.Children.Add(new Border
+            {
+                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = index == rows.Length - 1 ? new Thickness(0) : new Thickness(0, 0, 0, 1),
+                Child = rows[index]
+            });
+        }
+
+        return stack;
+    }
+
+    private static Grid CreateSettingsControlRow(
+        string glyph,
+        string title,
+        string subtitle,
+        FrameworkElement control,
+        bool stretchControl = false)
     {
         var row = new Grid
         {
@@ -533,7 +582,12 @@ public sealed partial class SettingsPageControl : UserControl
         };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = stretchControl
+                ? new GridLength(1, GridUnitType.Star)
+                : GridLength.Auto
+        });
 
         var icon = new FontIcon
         {
@@ -562,11 +616,79 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(textPanel);
 
         control.VerticalAlignment = VerticalAlignment.Center;
-        control.HorizontalAlignment = HorizontalAlignment.Right;
+        control.HorizontalAlignment = stretchControl ? HorizontalAlignment.Stretch : HorizontalAlignment.Right;
         Grid.SetColumn(control, 2);
         row.Children.Add(control);
 
         return row;
+    }
+
+    private static FrameworkElement CreateCommandMenuPreview(IEnumerable<ShortcutAction> actions)
+    {
+        var visibleActions = actions
+            .Where(static action => action.ShowInCommandMenu && ShortcutValidation.ValidateAction(action).IsValid)
+            .Take(6)
+            .ToArray();
+
+        if (visibleActions.Length == 0)
+        {
+            return new TextBlock
+            {
+                Text = "No actions",
+                Opacity = 0.7,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        var preview = new Canvas
+        {
+            Width = 220,
+            Height = 132,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var center = CreatePreviewNode("\uE711", "Close", 50, true);
+        Canvas.SetLeft(center, 85);
+        Canvas.SetTop(center, 41);
+        preview.Children.Add(center);
+
+        var radius = 48d;
+        var centerX = 110d;
+        var centerY = 66d;
+        for (var i = 0; i < visibleActions.Length; i++)
+        {
+            var action = visibleActions[i];
+            var angle = ((Math.PI * 2d) * i / visibleActions.Length) - (Math.PI / 2d);
+            var node = CreatePreviewNode(RadialCommandMenuWindow.ResolveShortcutGlyph(action.IconId), action.Name, 38, false);
+            Canvas.SetLeft(node, centerX + (Math.Cos(angle) * radius) - 19);
+            Canvas.SetTop(node, centerY + (Math.Sin(angle) * radius) - 19);
+            preview.Children.Add(node);
+        }
+
+        return preview;
+    }
+
+    private static Border CreatePreviewNode(string glyph, string label, double size, bool isCenter)
+    {
+        var node = new Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(size / 2d),
+            Background = (Brush)Application.Current.Resources[
+                isCenter ? "AccentFillColorSecondaryBrush" : "SubtleFillColorSecondaryBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            Child = new FontIcon
+            {
+                Glyph = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = isCenter ? 16 : 14,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        ToolTipService.SetToolTip(node, label);
+        return node;
     }
 
     private static StackPanel CreateSettingsToggleAction(ToggleSwitch toggle)
@@ -613,31 +735,333 @@ public sealed partial class SettingsPageControl : UserControl
         SettingsContent.Children.Add(VersionText);
     }
 
-    private Expander CreateSettingsExpander(string title, string subtitle, UIElement content, UIElement? action = null)
+    private void BuildShortcutsSettingsPage()
+    {
+        var settings = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+
+        AddSettingsSectionTitle("Built-in shortcuts");
+
+        CommandMenuEnabledToggle = new ToggleSwitch
+        {
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            IsOn = settings.CommandMenu.Enabled
+        };
+        AutomationProperties.SetName(CommandMenuEnabledToggle, "Enable openHAB command menu shortcut");
+        CommandMenuEnabledToggle.Toggled += CommandMenuEnabledToggle_Toggled;
+        var globalShortcutRow = CreateSettingsControlRow(
+            "\uE765",
+            "Global shortcut",
+            "Keyboard shortcut for opening command menu from anywhere",
+            CreateCommandMenuShortcutRecorder(settings.CommandMenu.Binding));
+
+        CommandMenuActivationModeCombo = new ComboBox
+        {
+            Width = 220,
+            ItemsSource = Enum.GetValues<RadialActivationMode>(),
+            SelectedItem = settings.CommandMenu.RadialActivationMode
+        };
+        AutomationProperties.SetName(CommandMenuActivationModeCombo, "Command menu activation mode");
+        CommandMenuActivationModeCombo.SelectionChanged += CommandMenuActivationModeCombo_SelectionChanged;
+        var activationModeRow = CreateSettingsControlRow(
+            "\uE7C1",
+            "Activation mode",
+            "Choose whether the command menu toggles or stays open while held",
+            CommandMenuActivationModeCombo);
+        var previewRow = CreateSettingsControlRow(
+            "\uE8FD",
+            "Command menu preview",
+            "Actions currently visible in the radial command menu",
+            CreateCommandMenuPreview(settings.Actions));
+
+        SettingsContent.Children.Add(CreateSettingsExpander(
+            "openHAB Command Menu",
+            "Built-in global shortcut for opening the command menu",
+            CreateExpanderRows(globalShortcutRow, activationModeRow, previewRow),
+            CreateSettingsToggleAction(CommandMenuEnabledToggle)));
+
+        var voiceModeStateRow = CreateSettingsControlRow(
+            "\uE720",
+            "Voice mode",
+            "Coming soon. Voice shortcut is currently unassigned and unavailable.",
+            new TextBlock
+            {
+                Text = "Disabled",
+                Opacity = 0.7,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+        var voiceModeShortcutRow = CreateSettingsControlRow(
+            "\uE765",
+            "Shortcut",
+            "No shortcut assigned yet",
+            ShortcutSettingsControls.CreateShortcutChips(null));
+
+        var voiceModeContent = CreateExpanderRows(voiceModeStateRow, voiceModeShortcutRow);
+        voiceModeContent.Opacity = 0.72;
+        SettingsContent.Children.Add(CreateSettingsExpander(
+            "Voice Mode",
+            "Planned voice shortcut, coming soon",
+            voiceModeContent,
+            new TextBlock
+            {
+                Text = "Disabled",
+                Opacity = 0.7,
+                VerticalAlignment = VerticalAlignment.Center
+            },
+            isExpanded: false));
+
+        var actionsHeader = new Grid
+        {
+            ColumnSpacing = 10
+        };
+        actionsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        actionsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        actionsHeader.Children.Add(new TextBlock
+        {
+            Text = "Actions and shortcuts",
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Margin = new Thickness(0, 8, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        var addActionButton = new Button
+        {
+            Content = "Add action",
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        addActionButton.Click += AddShortcutActionButton_Click;
+        Grid.SetColumn(addActionButton, 1);
+        actionsHeader.Children.Add(addActionButton);
+        SettingsContent.Children.Add(actionsHeader);
+
+        var actionsCardStack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+
+        var actionHeader = new Grid
+        {
+            ColumnSpacing = 8,
+            Padding = new Thickness(12, 8, 12, 8)
+        };
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+        actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+
+        AddActionTableHeaderCell(actionHeader, "Icon", 0);
+        AddActionTableHeaderCell(actionHeader, "Action name", 1);
+        AddActionTableHeaderCell(actionHeader, "Availability", 2);
+        AddActionTableHeaderCell(actionHeader, "Shortcut", 3);
+        AddActionTableHeaderCell(actionHeader, "Target item", 4);
+        AddActionTableHeaderCell(actionHeader, "Action type", 5);
+        AddActionTableHeaderCell(actionHeader, "Command value", 6);
+        AddActionTableHeaderCell(actionHeader, "Actions", 7);
+        actionsCardStack.Children.Add(actionHeader);
+
+        if (settings.Actions.Length == 0)
+        {
+            actionsCardStack.Children.Add(new Border
+            {
+                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                Padding = new Thickness(12, 12, 12, 12),
+                Child = new TextBlock
+                {
+                    Text = "No actions yet." + Environment.NewLine + "Add actions to make them available in the command menu.",
+                    Opacity = 0.72,
+                    TextWrapping = TextWrapping.Wrap
+                }
+            });
+        }
+        else
+        {
+            for (var i = 0; i < settings.Actions.Length; i++)
+            {
+                actionsCardStack.Children.Add(CreateShortcutActionRow(settings.Actions[i], i, settings.Actions.Length));
+            }
+        }
+
+        SettingsContent.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Disabled,
+            Content = new Border
+            {
+                Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(4),
+                Child = actionsCardStack
+            }
+        });
+
+        var draftAction = ResolveShortcutActionDraft(settings.Actions);
+        if (draftAction is null)
+        {
+            return;
+        }
+
+        AddSettingsSectionTitle(creatingShortcutAction ? "Add action" : "Edit action");
+        ShortcutActionNameText = new TextBox
+        {
+            Text = draftAction.Name,
+            MinWidth = 280
+        };
+        var nameRow = CreateSettingsControlRow(
+            "\uE8D2",
+            "Action name",
+            "Display name used in settings and command menu",
+            ShortcutActionNameText,
+            stretchControl: true);
+
+        ShortcutActionIconCombo = new ComboBox
+        {
+            Width = 280
+        };
+        foreach (var icon in ShortcutIconCatalog.All)
+        {
+            ShortcutActionIconCombo.Items.Add(new ComboBoxItem
+            {
+                Content = CreateShortcutIconPresenter(icon, includeId: false),
+                Tag = icon
+            });
+        }
+
+        ShortcutActionIconCombo.SelectedItem = ShortcutActionIconCombo.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, draftAction.IconId, StringComparison.Ordinal))
+            ?? ShortcutActionIconCombo.Items
+                .OfType<ComboBoxItem>()
+                .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, "custom", StringComparison.Ordinal));
+        var iconRow = CreateSettingsControlRow("\uE8D4", "Icon", "Select an icon from the shortcut icon catalog", ShortcutActionIconCombo);
+
+        ShortcutActionShowInCommandMenuToggle = new ToggleSwitch
+        {
+            IsOn = draftAction.ShowInCommandMenu,
+            OnContent = string.Empty,
+            OffContent = string.Empty
+        };
+        var showInMenuRow = CreateSettingsControlRow("\uE8FD", "Show in command menu", "Controls whether this action appears in the command menu", CreateSettingsToggleAction(ShortcutActionShowInCommandMenuToggle));
+
+        ShortcutActionGlobalShortcutRecorder = new ShortcutRecorderControl
+        {
+            Binding = draftAction.GlobalShortcut,
+            AllowClear = true,
+            Error = null
+        };
+        var globalShortcutEditorRow = CreateSettingsControlRow("\uE765", "Global shortcut", "Optional shortcut. Leave unassigned if not needed", ShortcutActionGlobalShortcutRecorder);
+
+        ShortcutActionTargetItemText = new TextBox
+        {
+            Text = draftAction.TargetItem,
+            MinWidth = 280
+        };
+        var targetItemRow = CreateSettingsControlRow(
+            "\uE7F4",
+            "Target item",
+            "Enter openHAB item name manually for now",
+            ShortcutActionTargetItemText,
+            stretchControl: true);
+
+        ShortcutActionTypeCombo = new ComboBox
+        {
+            Width = 280,
+            ItemsSource = Enum.GetValues<ShortcutCommandType>(),
+            SelectedItem = draftAction.CommandType
+        };
+        var typeRow = CreateSettingsControlRow("\uE8EF", "Action type", "Choose command behavior", ShortcutActionTypeCombo);
+
+        ShortcutActionValueText = new TextBox
+        {
+            Text = draftAction.CommandValue ?? string.Empty,
+            MinWidth = 280
+        };
+        var commandValueRow = CreateSettingsControlRow(
+            "\uE756",
+            "Command value",
+            "Required for SendCommand, and constrained for OnOff/OpenClose",
+            ShortcutActionValueText,
+            stretchControl: true);
+
+        var actionButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var saveButton = new Button { Content = "Save" };
+        saveButton.Click += SaveShortcutActionButton_Click;
+        var cancelButton = new Button { Content = "Cancel" };
+        cancelButton.Click += CancelShortcutActionButton_Click;
+        actionButtons.Children.Add(saveButton);
+        actionButtons.Children.Add(cancelButton);
+
+        ShortcutActionEditorErrorText = new TextBlock
+        {
+            Foreground = (Brush)Application.Current.Resources["SystemFillColorCautionBrush"],
+            Visibility = Visibility.Collapsed,
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        SettingsContent.Children.Add(ShortcutSettingsControls.CreateSettingsCard(
+            nameRow,
+            iconRow,
+            showInMenuRow,
+            globalShortcutEditorRow,
+            targetItemRow,
+            typeRow,
+            commandValueRow,
+            new Grid
+            {
+                Padding = new Thickness(12, 12, 12, 8),
+                Children =
+                {
+                    new StackPanel
+                    {
+                        Spacing = 8,
+                        Children =
+                        {
+                            ShortcutActionEditorErrorText,
+                            actionButtons
+                        }
+                    }
+                }
+            }));
+    }
+
+    private Expander CreateSettingsExpander(
+        string title,
+        string subtitle,
+        UIElement content,
+        UIElement? action = null,
+        bool isExpanded = true)
     {
         if (content is FrameworkElement contentElement)
         {
             contentElement.HorizontalAlignment = HorizontalAlignment.Stretch;
         }
 
-        var contentHost = new Grid
+        var contentHost = new Border
         {
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Child = content
         };
-        contentHost.Children.Add(content);
 
         var expander = new Expander
         {
             Header = CreateSettingsHeader(title, subtitle, action),
             Content = contentHost,
-            IsExpanded = true,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        expander.SizeChanged += (_, _) =>
-        {
-            contentHost.Width = Math.Max(0, expander.ActualWidth - 2);
+            IsExpanded = isExpanded,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
 
         return expander;
@@ -691,6 +1115,17 @@ public sealed partial class SettingsPageControl : UserControl
         NotificationPollBox = null;
         ImportantNotificationTagsText = null;
         DeviceInfoSyncEnabledToggle = null;
+        CommandMenuEnabledToggle = null;
+        CommandMenuShortcutRecorder = null;
+        CommandMenuActivationModeCombo = null;
+        ShortcutActionNameText = null;
+        ShortcutActionIconCombo = null;
+        ShortcutActionShowInCommandMenuToggle = null;
+        ShortcutActionGlobalShortcutRecorder = null;
+        ShortcutActionTargetItemText = null;
+        ShortcutActionTypeCombo = null;
+        ShortcutActionValueText = null;
+        ShortcutActionEditorErrorText = null;
         DeviceInfoSyncDisabledText = null;
         DeviceInfoSyncIdentifierText = null;
         DeviceInfoSyncIntervalBox = null;
@@ -763,9 +1198,23 @@ public sealed partial class SettingsPageControl : UserControl
             }
 
             var deviceInfoSync = settingsController.Current.DeviceInfoSync ?? DeviceInfoSyncSettings.Default;
+            var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
             if (DeviceInfoSyncEnabledToggle is not null)
             {
                 DeviceInfoSyncEnabledToggle.IsOn = deviceInfoSync.IsEnabled;
+            }
+            if (CommandMenuEnabledToggle is not null)
+            {
+                CommandMenuEnabledToggle.IsOn = shortcuts.CommandMenu.Enabled;
+            }
+            if (CommandMenuShortcutRecorder is not null)
+            {
+                CommandMenuShortcutRecorder.Binding = shortcuts.CommandMenu.Binding;
+                CommandMenuShortcutRecorder.Error = null;
+            }
+            if (CommandMenuActivationModeCombo is not null)
+            {
+                CommandMenuActivationModeCombo.SelectedItem = shortcuts.CommandMenu.RadialActivationMode;
             }
             if (DeviceInfoSyncIdentifierText is not null)
             {
@@ -1010,9 +1459,14 @@ public sealed partial class SettingsPageControl : UserControl
         }
     }
 
-    private void SettingsBreadcrumbRootButton_Click(object sender, RoutedEventArgs e)
+    private async void SettingsBreadcrumbRootButton_Click(object sender, RoutedEventArgs e)
     {
-        NavigateToSettingsPage(SettingsPage.Root);
+        await NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage.Root);
+    }
+
+    private void SettingsScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        SettingsContent.Width = Math.Max(0d, e.NewSize.Width);
     }
 
     private void AppColorThemeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1100,6 +1554,567 @@ public sealed partial class SettingsPageControl : UserControl
 
         SaveDeviceInfoSyncSettings(enabledOverride: toggle.IsOn);
         NavigateToSettingsPage(SettingsPage.DeviceInfoSync);
+    }
+
+    private void CommandMenuEnabledToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ToggleSwitch toggle)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            CommandMenu = shortcuts.CommandMenu with
+            {
+                Enabled = toggle.IsOn
+            }
+        });
+    }
+
+    private void CommandMenuActivationModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ComboBox combo || combo.SelectedItem is not RadialActivationMode mode)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            CommandMenu = shortcuts.CommandMenu with
+            {
+                RadialActivationMode = mode
+            }
+        });
+    }
+
+    private ShortcutRecorderControl CreateCommandMenuShortcutRecorder(ShortcutBinding? binding)
+    {
+        CommandMenuShortcutRecorder = new ShortcutRecorderControl
+        {
+            Binding = binding,
+            Error = null
+        };
+        CommandMenuShortcutRecorder.BindingChanged += CommandMenuShortcutRecorder_BindingChanged;
+        return CommandMenuShortcutRecorder;
+    }
+
+    private void CommandMenuShortcutRecorder_BindingChanged(object? sender, ShortcutBinding? binding)
+    {
+        if (isRefreshingSettingsBindings || sender is not ShortcutRecorderControl recorder)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var existingBindings = shortcuts.Actions
+            .Where(action => action.GlobalShortcut is not null)
+            .Select(action => new ShortcutBindingOwner($"Action: {action.Name}", action.GlobalShortcut!))
+            .ToArray();
+        var validation = ShortcutValidation.ValidateBinding(
+            binding,
+            "openHAB Command Menu",
+            existingBindings,
+            allowUnassigned: false);
+        if (!validation.IsValid)
+        {
+            recorder.Error = string.Join(Environment.NewLine, validation.Errors);
+            recorder.Binding = shortcuts.CommandMenu.Binding;
+            return;
+        }
+
+        recorder.Error = null;
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            CommandMenu = shortcuts.CommandMenu with
+            {
+                Binding = binding
+            }
+        });
+    }
+
+    private static void AddActionTableHeaderCell(Grid row, string text, int column)
+    {
+        var cell = new TextBlock
+        {
+            Text = text,
+            Opacity = 0.7,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+        };
+        Grid.SetColumn(cell, column);
+        row.Children.Add(cell);
+    }
+
+    private FrameworkElement CreateShortcutActionRow(ShortcutAction action, int index, int actionCount)
+    {
+        var row = new Grid
+        {
+            ColumnSpacing = 8,
+            Padding = new Thickness(12, 8, 12, 8)
+        };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
+
+        AddActionTableElement(row, CreateShortcutIconPresenter(action.IconId, includeId: true), 0);
+        AddActionTableCell(row, action.Name, 1);
+        AddActionTableCell(row, DescribeActionAvailability(action), 2);
+        AddActionTableCell(row, ShortcutBindingFormatter.Format(action.GlobalShortcut), 3);
+        AddActionTableCell(row, action.TargetItem, 4);
+        AddActionTableCell(row, action.CommandType.ToString(), 5);
+        AddActionTableCell(row, action.CommandValue ?? "-", 6);
+
+        var actionsPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4
+        };
+
+        var moveUpButton = CreateActionIconButton("\uE70E", "Move action up", action.Id);
+        moveUpButton.IsEnabled = index > 0;
+        moveUpButton.Click += MoveShortcutActionUpButton_Click;
+        var moveDownButton = CreateActionIconButton("\uE70D", "Move action down", action.Id);
+        moveDownButton.IsEnabled = index < actionCount - 1;
+        moveDownButton.Click += MoveShortcutActionDownButton_Click;
+        var editButton = CreateActionIconButton("\uE70F", "Edit action", action.Id);
+        editButton.Click += EditShortcutActionButton_Click;
+        var deleteButton = CreateActionIconButton("\uE74D", "Delete action", action.Id);
+        deleteButton.Click += DeleteShortcutActionButton_Click;
+        actionsPanel.Children.Add(moveUpButton);
+        actionsPanel.Children.Add(moveDownButton);
+        actionsPanel.Children.Add(editButton);
+        actionsPanel.Children.Add(deleteButton);
+        Grid.SetColumn(actionsPanel, 7);
+        row.Children.Add(actionsPanel);
+
+        return new Border
+        {
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Child = row
+        };
+    }
+
+    private static Button CreateActionIconButton(string glyph, string name, string actionId)
+    {
+        var button = new Button
+        {
+            Tag = actionId,
+            Width = 34,
+            Height = 32,
+            MinWidth = 0,
+            Padding = new Thickness(0),
+            Content = new FontIcon
+            {
+                Glyph = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = 14
+            }
+        };
+        AutomationProperties.SetName(button, name);
+        ToolTipService.SetToolTip(button, name);
+        return button;
+    }
+
+    private static void AddActionTableCell(Grid row, string text, int column)
+    {
+        var cell = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(text) ? "-" : text,
+            TextWrapping = TextWrapping.WrapWholeWords
+        };
+        Grid.SetColumn(cell, column);
+        row.Children.Add(cell);
+    }
+
+    private static void AddActionTableElement(Grid row, FrameworkElement element, int column)
+    {
+        Grid.SetColumn(element, column);
+        row.Children.Add(element);
+    }
+
+    private static FrameworkElement CreateShortcutIconPresenter(string iconId, bool includeId)
+    {
+        var icon = ShortcutIconCatalog.All.FirstOrDefault(entry => string.Equals(entry.Id, iconId, StringComparison.Ordinal))
+            ?? new ShortcutIconDefinition(iconId, iconId, "custom");
+        return CreateShortcutIconPresenter(icon, includeId);
+    }
+
+    private static FrameworkElement CreateShortcutIconPresenter(ShortcutIconDefinition icon, bool includeId)
+    {
+        var label = includeId ? $"{icon.Label} ({icon.Id})" : icon.Label;
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new FontIcon
+                {
+                    Glyph = RadialCommandMenuWindow.ResolveShortcutGlyph(icon.Id),
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                    FontSize = 16,
+                    Width = 20,
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                new TextBlock
+                {
+                    Text = label,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
+    }
+
+    private static string DescribeActionAvailability(ShortcutAction action)
+    {
+        var hasShortcut = action.GlobalShortcut is not null;
+        if (action.ShowInCommandMenu && hasShortcut)
+        {
+            return "Shortcut + Command menu";
+        }
+
+        if (action.ShowInCommandMenu)
+        {
+            return "Command menu only";
+        }
+
+        return hasShortcut ? "Shortcut only" : "Unavailable";
+    }
+
+    private ShortcutAction? ResolveShortcutActionDraft(IEnumerable<ShortcutAction> actions)
+    {
+        if (creatingShortcutAction)
+        {
+            return new ShortcutAction(
+                Guid.NewGuid().ToString("N"),
+                string.Empty,
+                "custom",
+                ShowInCommandMenu: true,
+                GlobalShortcut: null,
+                TargetItem: string.Empty,
+                CommandType: ShortcutCommandType.Toggle,
+                CommandValue: null);
+        }
+
+        if (string.IsNullOrWhiteSpace(editingShortcutActionId))
+        {
+            return null;
+        }
+
+        return actions.FirstOrDefault(action => string.Equals(action.Id, editingShortcutActionId, StringComparison.Ordinal));
+    }
+
+    private async void AddShortcutActionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
+        creatingShortcutAction = true;
+        editingShortcutActionId = null;
+        NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private async void EditShortcutActionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string actionId } || string.IsNullOrWhiteSpace(actionId))
+        {
+            return;
+        }
+
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
+        creatingShortcutAction = false;
+        editingShortcutActionId = actionId;
+        NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private async void MoveShortcutActionUpButton_Click(object sender, RoutedEventArgs e)
+    {
+        await MoveShortcutActionAsync(sender, -1);
+    }
+
+    private async void MoveShortcutActionDownButton_Click(object sender, RoutedEventArgs e)
+    {
+        await MoveShortcutActionAsync(sender, 1);
+    }
+
+    private async Task MoveShortcutActionAsync(object sender, int offset)
+    {
+        if (sender is not Button { Tag: string actionId } || string.IsNullOrWhiteSpace(actionId))
+        {
+            return;
+        }
+
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var actions = shortcuts.Actions.ToList();
+        var index = actions.FindIndex(candidate => string.Equals(candidate.Id, actionId, StringComparison.Ordinal));
+        var targetIndex = index + offset;
+        if (index < 0 || targetIndex < 0 || targetIndex >= actions.Count)
+        {
+            return;
+        }
+
+        (actions[index], actions[targetIndex]) = (actions[targetIndex], actions[index]);
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            Actions = actions.ToImmutableArray()
+        });
+
+        NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private async void DeleteShortcutActionButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string actionId } || string.IsNullOrWhiteSpace(actionId))
+        {
+            return;
+        }
+
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var action = shortcuts.Actions.FirstOrDefault(candidate => string.Equals(candidate.Id, actionId, StringComparison.Ordinal));
+        if (action is null)
+        {
+            return;
+        }
+
+        var actionName = string.IsNullOrWhiteSpace(action.Name) ? "Unnamed action" : action.Name.Trim();
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Delete action",
+            Content = $"Delete action '{actionName}'?",
+            PrimaryButtonText = "Delete",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            Actions = shortcuts.Actions.Where(candidate => !string.Equals(candidate.Id, actionId, StringComparison.Ordinal)).ToImmutableArray()
+        });
+        if (string.Equals(editingShortcutActionId, actionId, StringComparison.Ordinal))
+        {
+            editingShortcutActionId = null;
+            creatingShortcutAction = false;
+        }
+
+        NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private void CancelShortcutActionButton_Click(object sender, RoutedEventArgs e)
+    {
+        ShortcutActionEditorErrorText?.SetValue(TextBlock.TextProperty, string.Empty);
+        if (ShortcutActionEditorErrorText is not null)
+        {
+            ShortcutActionEditorErrorText.Visibility = Visibility.Collapsed;
+        }
+
+        creatingShortcutAction = false;
+        editingShortcutActionId = null;
+        NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private void SaveShortcutActionButton_Click(object sender, RoutedEventArgs e)
+    {
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        var selectedType = ShortcutActionTypeCombo?.SelectedItem is ShortcutCommandType commandType
+            ? commandType
+            : ShortcutCommandType.Toggle;
+        var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
+
+        var actionId = creatingShortcutAction
+            ? Guid.NewGuid().ToString("N")
+            : editingShortcutActionId ?? Guid.NewGuid().ToString("N");
+        var updated = new ShortcutAction(
+            actionId,
+            ShortcutActionNameText?.Text?.Trim() ?? string.Empty,
+            selectedIcon?.Id ?? "custom",
+            ShortcutActionShowInCommandMenuToggle?.IsOn ?? false,
+            ShortcutActionGlobalShortcutRecorder?.Binding,
+            ShortcutActionTargetItemText?.Text?.Trim() ?? string.Empty,
+            selectedType,
+            string.IsNullOrWhiteSpace(ShortcutActionValueText?.Text) ? null : ShortcutActionValueText!.Text.Trim());
+
+        var errors = new List<string>();
+        var actionValidation = ShortcutValidation.ValidateAction(updated);
+        if (!actionValidation.IsValid)
+        {
+            errors.AddRange(actionValidation.Errors);
+        }
+
+        var existingBindings = new List<ShortcutBindingOwner>();
+        if (shortcuts.CommandMenu.Binding is not null)
+        {
+            existingBindings.Add(new ShortcutBindingOwner("openHAB Command Menu", shortcuts.CommandMenu.Binding));
+        }
+
+        foreach (var action in shortcuts.Actions.Where(action => action.GlobalShortcut is not null && !string.Equals(action.Id, updated.Id, StringComparison.Ordinal)))
+        {
+            existingBindings.Add(new ShortcutBindingOwner($"Action: {action.Name}", action.GlobalShortcut!));
+        }
+
+        var bindingValidation = ShortcutValidation.ValidateBinding(
+            updated.GlobalShortcut,
+            $"Current action:{updated.Id}",
+            existingBindings,
+            allowUnassigned: true);
+        if (!bindingValidation.IsValid)
+        {
+            errors.AddRange(bindingValidation.Errors);
+        }
+
+        if (errors.Count > 0)
+        {
+            if (ShortcutActionEditorErrorText is not null)
+            {
+                ShortcutActionEditorErrorText.Text = string.Join(Environment.NewLine, errors.Distinct(StringComparer.Ordinal));
+                ShortcutActionEditorErrorText.Visibility = Visibility.Visible;
+            }
+            if (ShortcutActionGlobalShortcutRecorder is not null)
+            {
+                ShortcutActionGlobalShortcutRecorder.Error = bindingValidation.IsValid
+                    ? null
+                    : string.Join(Environment.NewLine, bindingValidation.Errors);
+            }
+
+            return;
+        }
+
+        if (ShortcutActionEditorErrorText is not null)
+        {
+            ShortcutActionEditorErrorText.Text = string.Empty;
+            ShortcutActionEditorErrorText.Visibility = Visibility.Collapsed;
+        }
+        if (ShortcutActionGlobalShortcutRecorder is not null)
+        {
+            ShortcutActionGlobalShortcutRecorder.Error = null;
+        }
+
+        var hasExisting = shortcuts.Actions.Any(action => string.Equals(action.Id, updated.Id, StringComparison.Ordinal));
+        var updatedActions = hasExisting
+            ? shortcuts.Actions.Select(action => string.Equals(action.Id, updated.Id, StringComparison.Ordinal) ? updated : action).ToImmutableArray()
+            : shortcuts.Actions.Add(updated);
+        settingsController.SetShortcutSettings(shortcuts with { Actions = updatedActions });
+
+        creatingShortcutAction = false;
+        editingShortcutActionId = null;
+        NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private async Task<bool> ConfirmDiscardShortcutActionChangesIfNeededAsync()
+    {
+        var currentDraft = GetCurrentShortcutActionEditorDraft();
+        if (currentDraft is null)
+        {
+            return true;
+        }
+
+        var savedDraft = ResolveShortcutActionDraft((settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized().Actions);
+        if (savedDraft is not null && ShortcutActionDraftEquals(currentDraft, savedDraft))
+        {
+            return true;
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Discard unsaved changes?",
+            Content = "You have unsaved changes in the action editor.",
+            PrimaryButtonText = "Continue",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private ShortcutAction? GetCurrentShortcutActionEditorDraft()
+    {
+        if (ShortcutActionNameText is null
+            || ShortcutActionIconCombo is null
+            || ShortcutActionShowInCommandMenuToggle is null
+            || ShortcutActionTargetItemText is null
+            || ShortcutActionTypeCombo is null
+            || ShortcutActionValueText is null)
+        {
+            return null;
+        }
+
+        var actionId = creatingShortcutAction
+            ? string.Empty
+            : editingShortcutActionId ?? string.Empty;
+        var selectedType = ShortcutActionTypeCombo.SelectedItem is ShortcutCommandType commandType
+            ? commandType
+            : ShortcutCommandType.Toggle;
+        var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
+
+        return new ShortcutAction(
+            actionId,
+            ShortcutActionNameText.Text.Trim(),
+            selectedIcon?.Id ?? "custom",
+            ShortcutActionShowInCommandMenuToggle.IsOn,
+            ShortcutActionGlobalShortcutRecorder?.Binding,
+            ShortcutActionTargetItemText.Text.Trim(),
+            selectedType,
+            string.IsNullOrWhiteSpace(ShortcutActionValueText.Text) ? null : ShortcutActionValueText.Text.Trim());
+    }
+
+    private static bool ShortcutActionDraftEquals(ShortcutAction current, ShortcutAction saved)
+    {
+        return string.Equals(current.Name, saved.Name, StringComparison.Ordinal)
+            && string.Equals(current.IconId, saved.IconId, StringComparison.Ordinal)
+            && current.ShowInCommandMenu == saved.ShowInCommandMenu
+            && ShortcutBindingFormatter.Format(current.GlobalShortcut).Equals(ShortcutBindingFormatter.Format(saved.GlobalShortcut), StringComparison.Ordinal)
+            && string.Equals(current.TargetItem, saved.TargetItem, StringComparison.Ordinal)
+            && current.CommandType == saved.CommandType
+            && string.Equals(current.CommandValue ?? string.Empty, saved.CommandValue ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    private static ShortcutIconDefinition? GetSelectedShortcutIcon(ComboBox? combo)
+    {
+        return (combo?.SelectedItem as ComboBoxItem)?.Tag as ShortcutIconDefinition
+            ?? combo?.SelectedItem as ShortcutIconDefinition;
+    }
+
+    private async Task NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage destination)
+    {
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
+        NavigateToSettingsPage(destination);
     }
 
     private void DeviceInfoSyncField_LostFocus(object sender, RoutedEventArgs e)

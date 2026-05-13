@@ -70,6 +70,64 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<OpenHabItemSummary>> GetItemsAsync(CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri("rest/items"));
+        ApplyAuth(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await ThrowIfFailedAsync(response, cancellationToken);
+
+        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (json.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new FormatException("Items response must be a JSON array.");
+        }
+
+        var results = new List<OpenHabItemSummary>();
+        foreach (var element in json.RootElement.EnumerateArray())
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var name = ReadString(element, "name");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            var label = ReadString(element, "label");
+            var type = ReadString(element, "type") ?? string.Empty;
+            var state = ReadString(element, "state");
+            results.Add(new OpenHabItemSummary(name, string.IsNullOrWhiteSpace(label) ? name : label, type, state));
+        }
+
+        return results;
+    }
+
+    public async Task<string?> GetItemStateAsync(string itemName, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri($"rest/items/{Uri.EscapeDataString(itemName)}"));
+        ApplyAuth(request);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        await ThrowIfFailedAsync(response, cancellationToken);
+
+        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (json.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new FormatException("Item state response must be a JSON object.");
+        }
+
+        return ReadString(json.RootElement, "state");
+    }
+
     public async Task<IReadOnlyList<SitemapInfo>> GetSitemapsAsync(CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri("rest/sitemaps"));
