@@ -175,19 +175,28 @@ public sealed class RadialCommandMenuWindow : Window
                 MoveSelection(1);
                 return;
             case VirtualKey.Enter:
-                e.Handled = true;
                 if (FocusManager.GetFocusedElement(root.XamlRoot) is Button focusedButton && ReferenceEquals(focusedButton, closeButton))
                 {
+                    e.Handled = true;
                     CloseMenu();
+                    return;
+                }
+
+                if (FocusManager.GetFocusedElement(root.XamlRoot) is Button displayedButton
+                    && displayedEntries.Any(entry => ReferenceEquals(entry.Button, displayedButton)))
+                {
+                    // Avoid duplicate execution: let the Button class Enter activation path own Click.
                     return;
                 }
 
                 if (selectedActionIndex < 0)
                 {
+                    e.Handled = true;
                     CloseMenu();
                     return;
                 }
 
+                e.Handled = true;
                 ExecuteSelectedAction();
                 return;
         }
@@ -347,7 +356,6 @@ public sealed class RadialCommandMenuWindow : Window
             Background = GetBrush("SubtleFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
             BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
-            Tag = action,
             Content = BuildActionContent(action)
         };
         ToolTipService.SetToolTip(button, $"{action.Name} - {action.TargetItem}");
