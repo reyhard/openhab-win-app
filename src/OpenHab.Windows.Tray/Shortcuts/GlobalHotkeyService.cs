@@ -18,6 +18,7 @@ internal sealed class GlobalHotkeyService : IDisposable
 {
     private const int FirstHotkeyId = 0x4F00;
     private const string InvalidBindingMessage = "This shortcut is invalid and could not be registered.";
+    private const string InvalidActionMessage = "This action is invalid and its shortcut could not be registered.";
     private const string DuplicateBindingMessage = "This shortcut is already used by another shortcut in settings.";
     private const string OsRegistrationFailedMessage = "This shortcut could not be registered. It may already be used by Windows or another app.";
 
@@ -34,7 +35,7 @@ internal sealed class GlobalHotkeyService : IDisposable
     }
 
     public event EventHandler? CommandMenuRequested;
-    public event EventHandler<string>? ActionRequested;
+    public event EventHandler<ShortcutAction>? ActionRequested;
 
     public HotkeyRefreshResult Refresh(ShortcutSettings settings)
     {
@@ -52,7 +53,7 @@ internal sealed class GlobalHotkeyService : IDisposable
             RegisterBinding(
                 owner: "openHAB Command Menu",
                 binding: normalized.CommandMenu.Binding,
-                actionId: null,
+                action: null,
                 seenBindings,
                 failures);
         }
@@ -64,10 +65,16 @@ internal sealed class GlobalHotkeyService : IDisposable
                 continue;
             }
 
+            if (!ShortcutValidation.ValidateAction(action).IsValid)
+            {
+                failures.Add(new HotkeyRegistrationFailure($"Action: {action.Name}", InvalidActionMessage));
+                continue;
+            }
+
             RegisterBinding(
                 owner: $"Action: {action.Name}",
                 binding: action.GlobalShortcut,
-                actionId: action.Id,
+                action,
                 seenBindings,
                 failures);
         }
@@ -86,13 +93,13 @@ internal sealed class GlobalHotkeyService : IDisposable
 
         _ = dispatcherQueue.TryEnqueue(() =>
         {
-            if (hotkey.ActionId is null)
+            if (hotkey.Action is null)
             {
                 CommandMenuRequested?.Invoke(this, EventArgs.Empty);
             }
             else
             {
-                ActionRequested?.Invoke(this, hotkey.ActionId);
+                ActionRequested?.Invoke(this, hotkey.Action);
             }
         });
 
@@ -113,7 +120,7 @@ internal sealed class GlobalHotkeyService : IDisposable
     private void RegisterBinding(
         string owner,
         ShortcutBinding? binding,
-        string? actionId,
+        ShortcutAction? action,
         ISet<string> seenBindings,
         ICollection<HotkeyRegistrationFailure> failures)
     {
@@ -143,7 +150,7 @@ internal sealed class GlobalHotkeyService : IDisposable
             return;
         }
 
-        registered[hotkeyId] = new RegisteredHotkey(actionId);
+        registered[hotkeyId] = new RegisteredHotkey(action);
     }
 
     private void UnregisterAll()
@@ -168,5 +175,5 @@ internal sealed class GlobalHotkeyService : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-    private sealed record RegisteredHotkey(string? ActionId);
+    private sealed record RegisteredHotkey(ShortcutAction? Action);
 }
