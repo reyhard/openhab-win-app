@@ -40,6 +40,21 @@ public sealed class ShortcutValidationTests
     }
 
     [Theory]
+    [InlineData("Escape")]
+    [InlineData("Enter")]
+    [InlineData("Tab")]
+    public void SingleKeyBindingsForEscapeEnterAndTabAreExplicitlyRejected(string key)
+    {
+        var result = ShortcutValidation.ValidateBinding(
+            new ShortcutBinding([], key),
+            "Command Menu",
+            []);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("cannot be used", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
     [InlineData(ShortcutCommandType.OnOff, "ON")]
     [InlineData(ShortcutCommandType.OnOff, "OFF")]
     [InlineData(ShortcutCommandType.OpenClose, "OPEN")]

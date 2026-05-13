@@ -48,6 +48,11 @@ public static class ShortcutValidation
             errors.Add("Shortcut must include a key.");
         }
 
+        if (!hasModifier && IsBlockedSingleKey(key))
+        {
+            errors.Add($"'{key}' by itself cannot be used as a shortcut.");
+        }
+
         if (errors.Count > 0)
         {
             return ShortcutValidationResult.Invalid(errors);
@@ -56,11 +61,6 @@ public static class ShortcutValidation
         if (!ShortcutBindingFormatter.TryNormalize(binding, out var normalized))
         {
             return ShortcutValidationResult.Invalid(["Shortcut key is invalid."]);
-        }
-
-        if (!hasModifier && IsBlockedSingleKey(normalized.Key))
-        {
-            errors.Add($"'{normalized.Key}' by itself cannot be used as a shortcut.");
         }
 
         var normalizedBinding = ShortcutBindingFormatter.Format(normalized);
