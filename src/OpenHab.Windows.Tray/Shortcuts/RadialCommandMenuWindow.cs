@@ -19,7 +19,6 @@ public sealed class RadialCommandMenuWindow : Window
     private const int MaxActionSlotsPerPage = 7;
     private const double ActionButtonSize = 52d;
     private const double ActionRadius = 88d;
-    private const uint TransparentColorKey = 0x00FF00FF;
 
     private readonly Grid root;
     private readonly Canvas actionCanvas;
@@ -52,12 +51,12 @@ public sealed class RadialCommandMenuWindow : Window
         appWindow.IsShownInSwitchers = false;
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         StripNonClientFrame(hwnd);
-        EnableTransparentColorKey(hwnd);
+        ExtendTransparentClientArea(hwnd);
         Activated += RadialCommandMenuWindow_Activated;
 
         root = new Grid
         {
-            Background = new SolidColorBrush(Microsoft.UI.Colors.Magenta),
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             IsTabStop = true
         };
         root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(Root_KeyDown), handledEventsToo: true);
@@ -531,7 +530,7 @@ public sealed class RadialCommandMenuWindow : Window
             "light-bulb" => "\uE793",
             "ceiling-light" => "\uE9A8",
             "lamp" => "\uE706",
-            "strip-light" => "\uEF96",
+            "strip-light" => "\uE95A",
             "brightness" => "\uE706",
             "color-wheel" => "\uE790",
             "power" => "\uE7E8",
@@ -639,20 +638,30 @@ public sealed class RadialCommandMenuWindow : Window
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     }
 
-    private static void EnableTransparentColorKey(IntPtr hwnd)
+    private static void ExtendTransparentClientArea(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero)
         {
             return;
         }
 
-        const int GWL_EXSTYLE = -20;
-        const int WS_EX_LAYERED = 0x00080000;
-        const uint LWA_COLORKEY = 0x00000001;
+        var margins = new DwmMargins
+        {
+            CxLeftWidth = -1,
+            CxRightWidth = -1,
+            CyTopHeight = -1,
+            CyBottomHeight = -1
+        };
+        _ = DwmExtendFrameIntoClientArea(hwnd, ref margins);
+    }
 
-        var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-        _ = SetLayeredWindowAttributes(hwnd, TransparentColorKey, 0, LWA_COLORKEY);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DwmMargins
+    {
+        public int CxLeftWidth;
+        public int CxRightWidth;
+        public int CyTopHeight;
+        public int CyBottomHeight;
     }
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
@@ -672,7 +681,6 @@ public sealed class RadialCommandMenuWindow : Window
         int cy,
         uint uFlags);
 
-    [DllImport("user32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref DwmMargins margins);
 }

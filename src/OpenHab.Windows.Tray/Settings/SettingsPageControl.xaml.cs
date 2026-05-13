@@ -899,7 +899,11 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         AddSettingsSectionTitle(creatingShortcutAction ? "Add action" : "Edit action");
-        ShortcutActionNameText = new TextBox { Text = draftAction.Name };
+        ShortcutActionNameText = new TextBox
+        {
+            Text = draftAction.Name,
+            Width = 280
+        };
         var nameRow = CreateSettingsControlRow("\uE8D2", "Action name", "Display name used in settings and command menu", ShortcutActionNameText);
 
         ShortcutActionIconCombo = new ComboBox
@@ -941,7 +945,8 @@ public sealed partial class SettingsPageControl : UserControl
 
         ShortcutActionTargetItemText = new TextBox
         {
-            Text = draftAction.TargetItem
+            Text = draftAction.TargetItem,
+            Width = 280
         };
         var targetItemRow = CreateSettingsControlRow("\uE7F4", "Target item", "Enter openHAB item name manually for now", ShortcutActionTargetItemText);
 
