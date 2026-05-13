@@ -704,10 +704,12 @@ public sealed class RadialCommandMenuWindow : Window
     private static void AddButtonRegion(IntPtr targetRegion, double x, double y, double size)
     {
         const int RGN_OR = 2;
-        var left = (int)Math.Floor(x);
-        var top = (int)Math.Floor(y);
-        var right = (int)Math.Ceiling(x + size);
-        var bottom = (int)Math.Ceiling(y + size);
+        const int antiAliasPadding = 2;
+
+        var left = (int)Math.Floor(x) - antiAliasPadding;
+        var top = (int)Math.Floor(y) - antiAliasPadding;
+        var right = (int)Math.Ceiling(x + size) + antiAliasPadding;
+        var bottom = (int)Math.Ceiling(y + size) + antiAliasPadding;
         var buttonRegion = CreateEllipticRgn(left, top, right, bottom);
         if (buttonRegion == IntPtr.Zero)
         {
