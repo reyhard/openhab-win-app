@@ -164,6 +164,18 @@ public static class ToastService
         }
     }
 
+    public static void HideByReferenceId(string referenceId)
+    {
+        if (!isAvailable || !isInitialized || string.IsNullOrWhiteSpace(referenceId)) return;
+        RemoveFromHistory(ToastNotificationXmlBuilder.BuildReferenceTagAndGroup(referenceId), "referenceId");
+    }
+
+    public static void HideByTag(string tag)
+    {
+        if (!isAvailable || !isInitialized || string.IsNullOrWhiteSpace(tag)) return;
+        RemoveFromHistory(ToastNotificationXmlBuilder.BuildTagTagAndGroup(tag), "tag");
+    }
+
     public static event EventHandler<ToastNotificationActivatedEventArgsCompat>? NotificationActivated;
 
     public static event Action<string>? PackagedActivated;
@@ -193,5 +205,46 @@ public static class ToastService
         return string.IsNullOrWhiteSpace(extension)
             ? uri.Scheme
             : $"{uri.Scheme}:{extension}";
+    }
+
+    private static void RemoveFromHistory(ToastTagGroup tagGroup, string targetKind)
+    {
+        if (string.IsNullOrWhiteSpace(tagGroup.Tag))
+        {
+            return;
+        }
+
+        try
+        {
+            if (isPackaged)
+            {
+                if (string.IsNullOrWhiteSpace(tagGroup.Group))
+                {
+                    ToastNotificationManager.History.Remove(tagGroup.Tag);
+                }
+                else
+                {
+                    ToastNotificationManager.History.Remove(tagGroup.Tag, tagGroup.Group);
+                }
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(tagGroup.Group))
+                {
+                    ToastNotificationManagerCompat.History.Remove(tagGroup.Tag);
+                }
+                else
+                {
+                    ToastNotificationManagerCompat.History.Remove(tagGroup.Tag, tagGroup.Group);
+                }
+            }
+
+            DiagnosticLogger.Info(
+                $"Toast history remove applied target={targetKind} tag={tagGroup.Tag} group={tagGroup.Group ?? "<none>"}");
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Toast history remove failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 }

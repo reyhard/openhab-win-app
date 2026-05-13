@@ -71,6 +71,18 @@ public sealed class NotificationPollerTests
     }
 
     [Fact]
+    public async Task PollOnce_RequestsAtMost25Notifications()
+    {
+        var handler = new FixedJsonHandler("[]");
+        using var httpClient = new HttpClient(handler);
+        using var poller = new NotificationPoller(httpClient, new Uri("https://example.test/"));
+
+        await poller.PollOnceForTestingAsync(CancellationToken.None);
+
+        Assert.Equal("https://example.test/api/v1/notifications?limit=25", handler.LastRequestUri?.ToString());
+    }
+
+    [Fact]
     public async Task PollOnce_Hide_InvokesHideCallbackOncePerTargetWithoutStoreOrToast()
     {
         using var poller = CreatePoller(
@@ -223,8 +235,11 @@ public sealed class NotificationPollerTests
 
     private sealed class FixedJsonHandler(string json) : HttpMessageHandler
     {
+        public Uri? LastRequestUri { get; private set; }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            LastRequestUri = request.RequestUri;
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")

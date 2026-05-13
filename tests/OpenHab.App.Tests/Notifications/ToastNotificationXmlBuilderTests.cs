@@ -131,6 +131,22 @@ public sealed partial class ToastNotificationXmlBuilderTests
     }
 
     [Fact]
+    public void BuildExplicitHideTagGroups_MatchShowTagGroups()
+    {
+        var shownByReference = ToastNotificationXmlBuilder.BuildTagAndGroup(
+            new ToastNotificationRequest("t", "b", ReferenceId: "ref-42", Tag: "ignored"));
+        var hiddenByReference = ToastNotificationXmlBuilder.BuildReferenceTagAndGroup("ref-42");
+
+        Assert.Equal(shownByReference, hiddenByReference);
+
+        var shownByTag = ToastNotificationXmlBuilder.BuildTagAndGroup(
+            new ToastNotificationRequest("t", "b", Tag: "priority"));
+        var hiddenByTag = ToastNotificationXmlBuilder.BuildTagTagAndGroup("priority");
+
+        Assert.Equal(shownByTag, hiddenByTag);
+    }
+
+    [Fact]
     public void Build_UsesBoundedStableHeaderId()
     {
         var request = new ToastNotificationRequest("t", "b", Header: "h", ReferenceId: "ref-42");

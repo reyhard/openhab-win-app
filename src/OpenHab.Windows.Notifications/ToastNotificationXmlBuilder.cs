@@ -92,15 +92,27 @@ public static partial class ToastNotificationXmlBuilder
 
         if (!string.IsNullOrWhiteSpace(request.ReferenceId))
         {
-            return new ToastTagGroup(BuildStableId("ref", request.ReferenceId), "openhab-ref");
+            return BuildReferenceTagAndGroup(request.ReferenceId);
         }
 
         if (!string.IsNullOrWhiteSpace(request.Tag))
         {
-            return new ToastTagGroup(BuildStableId("tag", request.Tag), "openhab-tag");
+            return BuildTagTagAndGroup(request.Tag);
         }
 
         return new ToastTagGroup(null, null);
+    }
+
+    public static ToastTagGroup BuildReferenceTagAndGroup(string referenceId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(referenceId);
+        return new ToastTagGroup(BuildStableId("ref", referenceId), "openhab-ref");
+    }
+
+    public static ToastTagGroup BuildTagTagAndGroup(string tag)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tag);
+        return new ToastTagGroup(BuildStableId("tag", tag), "openhab-tag");
     }
 
     private static string BuildHeaderId(ToastNotificationRequest request)

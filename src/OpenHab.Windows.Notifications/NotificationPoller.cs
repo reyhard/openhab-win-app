@@ -129,7 +129,7 @@ public sealed class NotificationPoller : IDisposable
     private async Task PollOnceAsync(CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get,
-            new Uri(cloudBaseUri, "api/v1/notifications"));
+            new Uri(cloudBaseUri, "api/v1/notifications?limit=25"));
 
         if (apiToken is not null)
         {
@@ -176,8 +176,15 @@ public sealed class NotificationPoller : IDisposable
 
             if (normalized.Kind == CloudNotificationKind.Hide)
             {
+                if (normalized.HideTargets.Count == 0)
+                {
+                    DiagnosticLogger.Warn($"Hide notification has no supported targets: Id={normalized.Id}");
+                }
+
                 foreach (var hideTarget in normalized.HideTargets)
                 {
+                    DiagnosticLogger.Info(
+                        $"Hide notification received: Id={normalized.Id}, Target={hideTarget.Kind}, Value={hideTarget.Value}");
                     onHideNotification?.Invoke(hideTarget);
                 }
 

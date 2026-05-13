@@ -269,13 +269,28 @@ public partial class App : Application
                 },
                 onHideNotification: target =>
                 {
+                    DiagnosticLogger.Info($"Applying hide notification target: {target.Kind}={target.Value}");
                     if (target.Kind == NotificationHideTargetKind.ReferenceId)
                     {
                         notificationStore?.HideByReferenceId(target.Value);
+                        ToastService.HideByReferenceId(target.Value);
                     }
                     else
                     {
+                        var matchingReferenceIds = notificationStore?.GetAll()
+                            .Where(n =>
+                                !string.IsNullOrWhiteSpace(n.Severity)
+                                && string.Equals(n.Severity, target.Value, StringComparison.OrdinalIgnoreCase)
+                                && !string.IsNullOrWhiteSpace(n.ReferenceId))
+                            .Select(n => n.ReferenceId!)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList() ?? [];
                         notificationStore?.HideByTag(target.Value);
+                        ToastService.HideByTag(target.Value);
+                        foreach (var referenceId in matchingReferenceIds)
+                        {
+                            ToastService.HideByReferenceId(referenceId);
+                        }
                     }
                 });
 
