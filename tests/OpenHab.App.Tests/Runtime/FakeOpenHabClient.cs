@@ -12,6 +12,8 @@ public sealed class FakeOpenHabClient : IOpenHabClient
     public List<string> RequestedSitemaps { get; } = new();
     public List<SitemapInfo> Sitemaps { get; set; } = new();
     public List<MainUiPageComponent> MainUiPageComponents { get; set; } = new();
+    public List<OpenHabItemSummary> Items { get; } = new();
+    public Dictionary<string, string?> ItemStates { get; } = new(StringComparer.Ordinal);
     public Exception? SetItemStateFailure { get; set; }
     public Dictionary<string, Exception> SetItemStateFailuresByItem { get; } = new();
 
@@ -61,6 +63,17 @@ public sealed class FakeOpenHabClient : IOpenHabClient
     public Task<IReadOnlyList<SitemapInfo>> GetSitemapsAsync(CancellationToken ct)
     {
         return Task.FromResult<IReadOnlyList<SitemapInfo>>(Sitemaps);
+    }
+
+    public Task<IReadOnlyList<OpenHabItemSummary>> GetItemsAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IReadOnlyList<OpenHabItemSummary>>(Items);
+    }
+
+    public Task<string?> GetItemStateAsync(string itemName, CancellationToken cancellationToken)
+    {
+        ItemStates.TryGetValue(itemName, out var state);
+        return Task.FromResult(state);
     }
 
     public Task<IReadOnlyList<MainUiPageComponent>> GetMainUiPageComponentsAsync(CancellationToken ct)

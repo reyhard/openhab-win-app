@@ -50,6 +50,63 @@ public sealed class OpenHabHttpClientTests
     }
 
     [Fact]
+    public async Task GetItemsParsesItemSummaries()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, """
+        [
+          { "name": "Light_LivingRoom", "label": "Living Room Light", "type": "Switch", "state": "ON" },
+          { "name": "Speaker_Playback", "type": "Player", "state": "PLAY" }
+        ]
+        """);
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var items = await client.GetItemsAsync(CancellationToken.None);
+
+        Assert.Equal("http://openhab:8080/rest/items", handler.Requests[0].RequestUri!.ToString());
+        Assert.Collection(items,
+            item =>
+            {
+                Assert.Equal("Light_LivingRoom", item.Name);
+                Assert.Equal("Living Room Light", item.Label);
+                Assert.Equal("Switch", item.Type);
+                Assert.Equal("ON", item.State);
+            },
+            item =>
+            {
+                Assert.Equal("Speaker_Playback", item.Name);
+                Assert.Equal("Speaker_Playback", item.Label);
+                Assert.Equal("Player", item.Type);
+                Assert.Equal("PLAY", item.State);
+            });
+    }
+
+    [Fact]
+    public async Task GetItemStateReturnsStateProperty()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, """{ "name": "Light", "state": "OFF" }""");
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var state = await client.GetItemStateAsync("Light", CancellationToken.None);
+
+        Assert.Equal("OFF", state);
+        Assert.Equal("http://openhab:8080/rest/items/Light", handler.Requests[0].RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task GetItemStateEscapesItemName()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, """{ "name": "Light/Desk", "state": "ON" }""");
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        _ = await client.GetItemStateAsync("Light/Desk", CancellationToken.None);
+
+        Assert.Equal("http://openhab:8080/rest/items/Light%2FDesk", handler.Requests[0].RequestUri!.ToString());
+    }
+
+    [Fact]
     public async Task FailedCommandThrowsRedactedOpenHabRequestException()
     {
         var handler = new FakeHttpMessageHandler();
