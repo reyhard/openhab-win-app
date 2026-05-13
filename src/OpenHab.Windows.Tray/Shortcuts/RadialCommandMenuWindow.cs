@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Shortcuts;
 using System.Runtime.InteropServices;
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
 
@@ -13,11 +14,12 @@ namespace OpenHab.Windows.Tray.Shortcuts;
 
 public sealed class RadialCommandMenuWindow : Window
 {
-    private const int WindowSize = 380;
+    private const int WindowSize = 260;
     private const int MaxVisibleRadialSlots = 8;
     private const int MaxActionSlotsPerPage = 7;
-    private const double ActionButtonSize = 92d;
-    private const double ActionRadius = 128d;
+    private const double ActionButtonSize = 52d;
+    private const double ActionRadius = 88d;
+    private const uint TransparentColorKey = 0x00FF00FF;
 
     private readonly Grid root;
     private readonly Canvas actionCanvas;
@@ -48,46 +50,55 @@ public sealed class RadialCommandMenuWindow : Window
         }
 
         appWindow.IsShownInSwitchers = false;
-        StripNonClientFrame(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        StripNonClientFrame(hwnd);
+        EnableTransparentColorKey(hwnd);
+        Activated += RadialCommandMenuWindow_Activated;
 
         root = new Grid
         {
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Magenta),
             IsTabStop = true
         };
         root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(Root_KeyDown), handledEventsToo: true);
+        root.PointerPressed += Root_PointerPressed;
 
         menuSurface = new Border
         {
             Width = WindowSize,
             Height = WindowSize,
             CornerRadius = new CornerRadius(WindowSize / 2d),
-            Background = GetBrush("AcrylicInAppFillColorDefaultBrush", "LayerFillColorDefaultBrush"),
+            Background = GetBrush("CardBackgroundFillColorDefaultBrush", "LayerFillColorDefaultBrush"),
             BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(12)
+            Padding = new Thickness(8)
         };
 
         actionCanvas = new Canvas
         {
-            Width = WindowSize - 24,
-            Height = WindowSize - 24
+            Width = WindowSize - 16,
+            Height = WindowSize - 16
         };
         actionCanvas.SizeChanged += (_, _) => ArrangeRadialActions();
 
         closeButton = new Button
         {
-            Width = 84,
-            Height = 84,
-            CornerRadius = new CornerRadius(42),
+            Width = 60,
+            Height = 60,
+            CornerRadius = new CornerRadius(30),
             Background = GetBrush("AccentFillColorSecondaryBrush", "AccentFillColorDefaultBrush"),
             BorderBrush = GetBrush("AccentFillColorTertiaryBrush", "CardStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
-            Content = BuildCenterContent(),
+            Content = BuildIconContent("\uE711", 20),
             HorizontalAlignment = HorizontalAlignment.Center,
+            RenderTransform = new ScaleTransform(),
+            RenderTransformOrigin = new Point(0.5, 0.5),
             UseSystemFocusVisuals = true,
             VerticalAlignment = VerticalAlignment.Center
         };
         AutomationProperties.SetName(closeButton, "Close command menu");
+        ToolTipService.SetToolTip(closeButton, "Close");
+        WireHoverVisuals(closeButton, GetBrush("AccentFillColorSecondaryBrush", "AccentFillColorDefaultBrush"));
         closeButton.Click += (_, _) => CloseMenu();
 
         emptyStateText = new TextBlock
@@ -142,6 +153,14 @@ public sealed class RadialCommandMenuWindow : Window
     public void CloseMenu()
     {
         AppWindow.Hide();
+    }
+
+    private void RadialCommandMenuWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState == WindowActivationState.Deactivated)
+        {
+            CloseMenu();
+        }
     }
 
     private async Task ExecuteAndCloseAsync(ShortcutAction action)
@@ -207,6 +226,17 @@ public sealed class RadialCommandMenuWindow : Window
                 ExecuteSelectedAction();
                 return;
         }
+    }
+
+    private void Root_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source && IsWithin(source, menuSurface))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        CloseMenu();
     }
 
     private void MoveSelection(int direction)
@@ -359,17 +389,20 @@ public sealed class RadialCommandMenuWindow : Window
         {
             Width = ActionButtonSize,
             Height = ActionButtonSize,
-            CornerRadius = new CornerRadius(46),
+            CornerRadius = new CornerRadius(ActionButtonSize / 2d),
             Background = GetBrush("SubtleFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
             BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
-            Content = BuildActionContent(action),
+            Content = BuildIconContent(ResolveShortcutGlyph(action.IconId), 18),
             IsTabStop = true,
+            RenderTransform = new ScaleTransform(),
+            RenderTransformOrigin = new Point(0.5, 0.5),
             UseSystemFocusVisuals = true
         };
         AutomationProperties.SetName(button, $"Run {action.Name}");
         ToolTipService.SetToolTip(button, $"{action.Name} - {action.TargetItem}");
         button.GotFocus += ActionButton_GotFocus;
+        WireHoverVisuals(button, GetBrush("SubtleFillColorSecondaryBrush", "LayerFillColorDefaultBrush"));
         button.Click += (_, _) => _ = ExecuteAndCloseAsync(action);
         return button;
     }
@@ -384,43 +417,19 @@ public sealed class RadialCommandMenuWindow : Window
         {
             Width = ActionButtonSize,
             Height = ActionButtonSize,
-            CornerRadius = new CornerRadius(46),
+            CornerRadius = new CornerRadius(ActionButtonSize / 2d),
             Background = GetBrush("ControlFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
             BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
             BorderThickness = new Thickness(1),
+            RenderTransform = new ScaleTransform(),
+            RenderTransformOrigin = new Point(0.5, 0.5),
             UseSystemFocusVisuals = true,
-            Content = new StackPanel
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Spacing = 3,
-                Children =
-                {
-                    new FontIcon
-                    {
-                        Glyph = "\uE712",
-                        FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                        FontSize = 16,
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    },
-                    new TextBlock
-                    {
-                        Text = moreText,
-                        Style = GetTextStyle("CaptionTextBlockStyle"),
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    },
-                    new TextBlock
-                    {
-                        Text = $"{pageNumber}/{pageCount}",
-                        Style = GetTextStyle("CaptionTextBlockStyle"),
-                        Opacity = 0.72,
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    }
-                }
-            }
+            Content = BuildIconContent("\uE712", 18)
         };
         AutomationProperties.SetName(button, $"Show command menu page {pageNumber} of {pageCount}");
+        ToolTipService.SetToolTip(button, $"{moreText} ({pageNumber}/{pageCount})");
         button.GotFocus += ActionButton_GotFocus;
+        WireHoverVisuals(button, GetBrush("ControlFillColorSecondaryBrush", "LayerFillColorDefaultBrush"));
         button.Click += (_, _) => AdvancePage();
         return button;
     }
@@ -442,75 +451,47 @@ public sealed class RadialCommandMenuWindow : Window
         UpdateSelectedVisualState();
     }
 
-    private static UIElement BuildCenterContent()
+    private static UIElement BuildIconContent(string glyph, double size)
     {
-        return new StackPanel
+        return new FontIcon
         {
-            VerticalAlignment = VerticalAlignment.Center,
+            Glyph = glyph,
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = size,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Spacing = 2,
-            Children =
-            {
-                new FontIcon
-                {
-                    Glyph = "\uE711",
-                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                    FontSize = 20,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                },
-                new TextBlock
-                {
-                    Text = "Close",
-                    Style = GetTextStyle("CaptionTextBlockStyle"),
-                    HorizontalAlignment = HorizontalAlignment.Center
-                }
-            }
+            VerticalAlignment = VerticalAlignment.Center
         };
     }
 
-    private static UIElement BuildActionContent(ShortcutAction action)
+    private static bool IsWithin(DependencyObject source, DependencyObject ancestor)
     {
-        var targetHint = action.TargetItem;
-        if (targetHint.Length > 14)
+        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
         {
-            targetHint = targetHint[..11] + "...";
+            if (ReferenceEquals(current, ancestor))
+            {
+                return true;
+            }
         }
 
-        return new StackPanel
+        return false;
+    }
+
+    private static void WireHoverVisuals(Button button, Brush defaultBackground)
+    {
+        var hoverBackground = GetBrush("ControlFillColorSecondaryBrush", "LayerFillColorDefaultBrush");
+        button.PointerEntered += (_, _) => ApplyInteractiveVisual(button, hoverBackground, 1.08d);
+        button.PointerExited += (_, _) => ApplyInteractiveVisual(button, defaultBackground, 1d);
+        button.PointerCanceled += (_, _) => ApplyInteractiveVisual(button, defaultBackground, 1d);
+    }
+
+    private static void ApplyInteractiveVisual(Button button, Brush background, double scale)
+    {
+        button.Background = background;
+        if (button.RenderTransform is ScaleTransform transform)
         {
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Spacing = 2,
-            Children =
-            {
-                new FontIcon
-                {
-                    Glyph = ResolveShortcutGlyph(action.IconId),
-                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                    FontSize = 17,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                },
-                new TextBlock
-                {
-                    Text = action.Name,
-                    Style = GetTextStyle("CaptionTextBlockStyle"),
-                    MaxWidth = 72,
-                    TextAlignment = TextAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                },
-                new TextBlock
-                {
-                    Text = targetHint,
-                    Style = GetTextStyle("CaptionTextBlockStyle"),
-                    Opacity = 0.72,
-                    MaxWidth = 72,
-                    TextAlignment = TextAlignment.Center,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    HorizontalAlignment = HorizontalAlignment.Center
-                }
-            }
-        };
+            transform.ScaleX = scale;
+            transform.ScaleY = scale;
+        }
     }
 
     private static Style GetTextStyle(string styleKey)
@@ -658,6 +639,22 @@ public sealed class RadialCommandMenuWindow : Window
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     }
 
+    private static void EnableTransparentColorKey(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        const int GWL_EXSTYLE = -20;
+        const int WS_EX_LAYERED = 0x00080000;
+        const uint LWA_COLORKEY = 0x00000001;
+
+        var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+        _ = SetLayeredWindowAttributes(hwnd, TransparentColorKey, 0, LWA_COLORKEY);
+    }
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
     private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
@@ -674,4 +671,8 @@ public sealed class RadialCommandMenuWindow : Window
         int cx,
         int cy,
         uint uFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
 }

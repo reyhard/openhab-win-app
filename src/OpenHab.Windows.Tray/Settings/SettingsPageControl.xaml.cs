@@ -904,12 +904,23 @@ public sealed partial class SettingsPageControl : UserControl
 
         ShortcutActionIconCombo = new ComboBox
         {
-            Width = 280,
-            ItemsSource = ShortcutIconCatalog.All,
-            DisplayMemberPath = "Label"
+            Width = 280
         };
-        ShortcutActionIconCombo.SelectedItem = ShortcutIconCatalog.All.FirstOrDefault(icon => string.Equals(icon.Id, draftAction.IconId, StringComparison.Ordinal))
-            ?? ShortcutIconCatalog.All.FirstOrDefault(icon => string.Equals(icon.Id, "custom", StringComparison.Ordinal));
+        foreach (var icon in ShortcutIconCatalog.All)
+        {
+            ShortcutActionIconCombo.Items.Add(new ComboBoxItem
+            {
+                Content = CreateShortcutIconPresenter(icon, includeId: false),
+                Tag = icon
+            });
+        }
+
+        ShortcutActionIconCombo.SelectedItem = ShortcutActionIconCombo.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, draftAction.IconId, StringComparison.Ordinal))
+            ?? ShortcutActionIconCombo.Items
+                .OfType<ComboBoxItem>()
+                .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, "custom", StringComparison.Ordinal));
         var iconRow = CreateSettingsControlRow("\uE8D4", "Icon", "Select an icon from the shortcut icon catalog", ShortcutActionIconCombo);
 
         ShortcutActionShowInCommandMenuToggle = new ToggleSwitch
@@ -1621,7 +1632,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
 
-        AddActionTableCell(row, DescribeActionIcon(action.IconId), 0);
+        AddActionTableElement(row, CreateShortcutIconPresenter(action.IconId, includeId: true), 0);
         AddActionTableCell(row, action.Name, 1);
         AddActionTableCell(row, DescribeActionAvailability(action), 2);
         AddActionTableCell(row, ShortcutBindingFormatter.Format(action.GlobalShortcut), 3);
@@ -1672,10 +1683,45 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(cell);
     }
 
-    private static string DescribeActionIcon(string iconId)
+    private static void AddActionTableElement(Grid row, FrameworkElement element, int column)
     {
-        var icon = ShortcutIconCatalog.All.FirstOrDefault(entry => string.Equals(entry.Id, iconId, StringComparison.Ordinal));
-        return icon is null ? iconId : $"{icon.Label} ({icon.Id})";
+        Grid.SetColumn(element, column);
+        row.Children.Add(element);
+    }
+
+    private static FrameworkElement CreateShortcutIconPresenter(string iconId, bool includeId)
+    {
+        var icon = ShortcutIconCatalog.All.FirstOrDefault(entry => string.Equals(entry.Id, iconId, StringComparison.Ordinal))
+            ?? new ShortcutIconDefinition(iconId, iconId, "custom");
+        return CreateShortcutIconPresenter(icon, includeId);
+    }
+
+    private static FrameworkElement CreateShortcutIconPresenter(ShortcutIconDefinition icon, bool includeId)
+    {
+        var label = includeId ? $"{icon.Label} ({icon.Id})" : icon.Label;
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new FontIcon
+                {
+                    Glyph = RadialCommandMenuWindow.ResolveShortcutGlyph(icon.Id),
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                    FontSize = 16,
+                    Width = 20,
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                new TextBlock
+                {
+                    Text = label,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
     }
 
     private static string DescribeActionAvailability(ShortcutAction action)
@@ -1814,7 +1860,7 @@ public sealed partial class SettingsPageControl : UserControl
         var selectedType = ShortcutActionTypeCombo?.SelectedItem is ShortcutCommandType commandType
             ? commandType
             : ShortcutCommandType.Toggle;
-        var selectedIcon = ShortcutActionIconCombo?.SelectedItem as ShortcutIconDefinition;
+        var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
         var actionId = creatingShortcutAction
             ? Guid.NewGuid().ToString("N")
@@ -1940,7 +1986,7 @@ public sealed partial class SettingsPageControl : UserControl
         var selectedType = ShortcutActionTypeCombo.SelectedItem is ShortcutCommandType commandType
             ? commandType
             : ShortcutCommandType.Toggle;
-        var selectedIcon = ShortcutActionIconCombo.SelectedItem as ShortcutIconDefinition;
+        var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
         return new ShortcutAction(
             actionId,
@@ -1962,6 +2008,12 @@ public sealed partial class SettingsPageControl : UserControl
             && string.Equals(current.TargetItem, saved.TargetItem, StringComparison.Ordinal)
             && current.CommandType == saved.CommandType
             && string.Equals(current.CommandValue ?? string.Empty, saved.CommandValue ?? string.Empty, StringComparison.Ordinal);
+    }
+
+    private static ShortcutIconDefinition? GetSelectedShortcutIcon(ComboBox? combo)
+    {
+        return (combo?.SelectedItem as ComboBoxItem)?.Tag as ShortcutIconDefinition
+            ?? combo?.SelectedItem as ShortcutIconDefinition;
     }
 
     private async Task NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPage destination)
