@@ -92,7 +92,7 @@ public sealed class RadialCommandMenuWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center,
             RenderTransform = new ScaleTransform(),
             RenderTransformOrigin = new Point(0.5, 0.5),
-            UseSystemFocusVisuals = true,
+            UseSystemFocusVisuals = false,
             VerticalAlignment = VerticalAlignment.Center
         };
         AutomationProperties.SetName(closeButton, "Close command menu");
@@ -400,7 +400,7 @@ public sealed class RadialCommandMenuWindow : Window
             IsTabStop = true,
             RenderTransform = new ScaleTransform(),
             RenderTransformOrigin = new Point(0.5, 0.5),
-            UseSystemFocusVisuals = true
+            UseSystemFocusVisuals = false
         };
         AutomationProperties.SetName(button, $"Run {action.Name}");
         ToolTipService.SetToolTip(button, $"{action.Name} - {action.TargetItem}");
@@ -426,7 +426,7 @@ public sealed class RadialCommandMenuWindow : Window
             BorderThickness = new Thickness(1),
             RenderTransform = new ScaleTransform(),
             RenderTransformOrigin = new Point(0.5, 0.5),
-            UseSystemFocusVisuals = true,
+            UseSystemFocusVisuals = false,
             Content = BuildIconContent("\uE712", 18)
         };
         AutomationProperties.SetName(button, $"Show command menu page {pageNumber} of {pageCount}");
@@ -704,12 +704,10 @@ public sealed class RadialCommandMenuWindow : Window
     private static void AddButtonRegion(IntPtr targetRegion, double x, double y, double size)
     {
         const int RGN_OR = 2;
-        const int hoverPadding = 5;
-
-        var left = (int)Math.Floor(x) - hoverPadding;
-        var top = (int)Math.Floor(y) - hoverPadding;
-        var right = (int)Math.Ceiling(x + size) + hoverPadding;
-        var bottom = (int)Math.Ceiling(y + size) + hoverPadding;
+        var left = (int)Math.Floor(x);
+        var top = (int)Math.Floor(y);
+        var right = (int)Math.Ceiling(x + size);
+        var bottom = (int)Math.Ceiling(y + size);
         var buttonRegion = CreateEllipticRgn(left, top, right, bottom);
         if (buttonRegion == IntPtr.Zero)
         {
