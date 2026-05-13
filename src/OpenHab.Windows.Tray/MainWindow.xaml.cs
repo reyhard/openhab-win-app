@@ -6,6 +6,7 @@ using System.Threading;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics;
 using Windows.System;
@@ -109,6 +110,8 @@ public sealed partial class MainWindow : Window
         snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(TitleBarDragRegion);
         MainUiHost.CurrentRouteChanged += MainUiHost_CurrentRouteChanged;
         shellController = new OpenHab.App.Shell.MainWindowShellController(settingsController.Current.MainWindowSitemapPaneVisible);
         shellController.Changed += (_, _) => ApplyMainWindowShellState();
@@ -195,7 +198,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowSettingsPage()
     {
-        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, text => StatusText.Text = text);
+        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, text => ShellConnectionText.Text = text);
         settingsPage.ShowRoot();
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(settingsPage);
@@ -206,10 +209,16 @@ public sealed partial class MainWindow : Window
         var state = shellController.Current;
         SitemapPaneColumn.Width = state.IsSitemapVisible ? new GridLength(380) : new GridLength(0);
         SitemapContentRoot.Visibility = state.IsSitemapVisible ? Visibility.Visible : Visibility.Collapsed;
+        ToggleSitemapIcon.Foreground = state.IsSitemapVisible
+            ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
+            : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+        ToolTipService.SetToolTip(ToggleSitemapButton, state.IsSitemapVisible ? "Hide sitemap" : "Show sitemap");
+        AutomationProperties.SetName(ToggleSitemapButton, state.IsSitemapVisible ? "Hide sitemap" : "Show sitemap");
         if (settingsController.Current.MainWindowSitemapPaneVisible != state.IsSitemapVisible)
         {
             settingsController.SetMainWindowSitemapPaneVisible(state.IsSitemapVisible);
         }
+        ApplySidebarCollapsedState(settingsController.Current.MainWindowSidebarCollapsed);
 
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
@@ -298,7 +307,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLogger.Warn($"Main UI navigation failed: {ex.GetType().Name}");
-            StatusText.Text = "Error: Main UI could not be loaded.";
+            ShellConnectionText.Text = "Error: Main UI could not be loaded.";
         }
         finally
         {
@@ -473,7 +482,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            ShellConnectionText.Text = $"Error: {ex.Message}";
         }
         finally
         {
@@ -572,7 +581,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            ShellConnectionText.Text = $"Error: {ex.Message}";
         }
         finally
         {
@@ -633,9 +642,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void SitemapHeaderArea_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    private void SitemapPickerButton_Click(object sender, RoutedEventArgs e)
     {
-        ShowSitemapMenuAt(TitleText);
+        ShowSitemapMenuAt(SitemapPickerButton);
     }
 
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
@@ -803,11 +812,39 @@ public sealed partial class MainWindow : Window
         shellController.SetSitemapVisible(!shellController.Current.IsSitemapVisible);
     }
 
+    private void SidebarCollapseButton_Click(object sender, RoutedEventArgs e)
+    {
+        var collapsed = !settingsController.Current.MainWindowSidebarCollapsed;
+        settingsController.SetMainWindowSidebarCollapsed(collapsed);
+        ApplySidebarCollapsedState(collapsed);
+    }
+
+    private void ApplySidebarCollapsedState(bool collapsed)
+    {
+        SidebarColumn.Width = collapsed ? new GridLength(56) : new GridLength(220);
+        SidebarBrandTextPanel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        HomeNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        MainUiPagesNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        NotificationsNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        SettingsNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        MainUiPagesList.Visibility = collapsed
+            ? Visibility.Collapsed
+            : (settingsController.Current.MainUiPagesExpanded ? Visibility.Visible : Visibility.Collapsed);
+        SidebarConnectionPanel.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        SidebarBrandPanel.Margin = collapsed ? new Thickness(0, 0, 0, 14) : new Thickness(4, 0, 0, 14);
+        SidebarCollapseIcon.Glyph = collapsed ? "\uE701" : "\uE700";
+        ToolTipService.SetToolTip(SidebarCollapseButton, collapsed ? "Expand navigation" : "Collapse navigation");
+        AutomationProperties.SetName(SidebarCollapseButton, collapsed ? "Expand navigation" : "Collapse navigation");
+    }
+
     /// <summary>Updates header chrome independently of sitemap rows.</summary>
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
     {
-        TitleText.Text = snapshot.Descriptor?.Title ?? "openHAB";
-        StatusText.Text = snapshot.StatusText;
+        SitemapPickerText.Text = snapshot.Descriptor?.Title ?? settingsController.Current.SitemapName;
+        if (string.IsNullOrWhiteSpace(SitemapPickerText.Text))
+        {
+            SitemapPickerText.Text = "Choose sitemap";
+        }
         ShellConnectionText.Text = snapshot.ActiveTransport switch
         {
             TransportKind.Cloud => $"Connected via cloud ({snapshot.ConnectionState})",
