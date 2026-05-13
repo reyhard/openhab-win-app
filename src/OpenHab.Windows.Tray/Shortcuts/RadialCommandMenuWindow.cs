@@ -86,8 +86,7 @@ public sealed class RadialCommandMenuWindow : Window
             Height = 60,
             CornerRadius = new CornerRadius(30),
             Background = GetBrush("AccentFillColorSecondaryBrush", "AccentFillColorDefaultBrush"),
-            BorderBrush = GetBrush("AccentFillColorTertiaryBrush", "CardStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(0),
             Content = BuildIconContent("\uE711", 20),
             HorizontalAlignment = HorizontalAlignment.Center,
             RenderTransform = new ScaleTransform(),
@@ -394,8 +393,7 @@ public sealed class RadialCommandMenuWindow : Window
             Height = ActionButtonSize,
             CornerRadius = new CornerRadius(ActionButtonSize / 2d),
             Background = GetBrush("SubtleFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
-            BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(0),
             Content = BuildIconContent(ResolveShortcutGlyph(action.IconId), 18),
             IsTabStop = true,
             RenderTransform = new ScaleTransform(),
@@ -422,8 +420,7 @@ public sealed class RadialCommandMenuWindow : Window
             Height = ActionButtonSize,
             CornerRadius = new CornerRadius(ActionButtonSize / 2d),
             Background = GetBrush("ControlFillColorSecondaryBrush", "LayerFillColorDefaultBrush"),
-            BorderBrush = GetBrush("CardStrokeColorDefaultBrush", "SurfaceStrokeColorDefaultBrush"),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(0),
             RenderTransform = new ScaleTransform(),
             RenderTransformOrigin = new Point(0.5, 0.5),
             UseSystemFocusVisuals = false,
@@ -704,12 +701,11 @@ public sealed class RadialCommandMenuWindow : Window
     private static void AddButtonRegion(IntPtr targetRegion, double x, double y, double size)
     {
         const int RGN_OR = 2;
-        const int antiAliasPadding = 2;
 
-        var left = (int)Math.Floor(x) - antiAliasPadding;
-        var top = (int)Math.Floor(y) - antiAliasPadding;
-        var right = (int)Math.Ceiling(x + size) + antiAliasPadding;
-        var bottom = (int)Math.Ceiling(y + size) + antiAliasPadding;
+        var left = (int)Math.Floor(x);
+        var top = (int)Math.Floor(y);
+        var right = (int)Math.Ceiling(x + size);
+        var bottom = (int)Math.Ceiling(y + size);
         var buttonRegion = CreateEllipticRgn(left, top, right, bottom);
         if (buttonRegion == IntPtr.Zero)
         {
