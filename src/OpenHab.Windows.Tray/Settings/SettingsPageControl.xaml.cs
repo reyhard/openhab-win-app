@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Settings;
+using OpenHab.App.Shortcuts;
 using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
@@ -136,7 +137,7 @@ public sealed partial class SettingsPageControl : UserControl
                 break;
             case SettingsPage.Shortcuts:
                 UpdateSettingsBreadcrumb("Shortcuts");
-                SettingsSubtitleText.Text = "Configure global shortcuts and command menu actions";
+                SettingsSubtitleText.Text = "Configure global shortcuts and command menu actions.";
                 BuildShortcutsSettingsPage();
                 break;
             case SettingsPage.About:
@@ -623,31 +624,40 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void BuildShortcutsSettingsPage()
     {
+        var settings = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+
         AddSettingsSectionTitle("Built-in shortcuts");
 
         var commandMenuEnabledToggle = new ToggleSwitch
         {
             OnContent = string.Empty,
             OffContent = string.Empty,
-            IsOn = true
+            IsOn = settings.CommandMenu.Enabled
         };
-        var commandMenuEnabledRow = CreateSettingsToggleRow(
+        var commandMenuTitleRow = CreateSettingsControlRow(
             "\uE8FD",
-            "Enabled",
-            "Turn command menu keyboard handling on or off",
-            commandMenuEnabledToggle);
+            "openHAB Command Menu",
+            "Built-in global shortcut for opening the command menu",
+            new TextBlock
+            {
+                Text = "Built-in",
+                Opacity = 0.7,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+        var commandMenuEnabledRow = CreateSettingsToggleRow("\uE8FD", "Enabled", "Turn command menu keyboard handling on or off", commandMenuEnabledToggle);
 
         var globalShortcutRow = CreateSettingsControlRow(
             "\uE765",
             "Global shortcut",
             "Keyboard shortcut for opening command menu from anywhere",
-            ShortcutSettingsControls.CreateShortcutChips(["Ctrl", "Shift", "Space"]));
+            ShortcutSettingsControls.CreateShortcutChips(settings.CommandMenu.Binding));
 
         var activationModeCombo = new ComboBox
         {
             Width = 220,
-            ItemsSource = new[] { "Toggle", "Hold" },
-            SelectedIndex = 0
+            ItemsSource = Enum.GetValues<RadialActivationMode>(),
+            SelectedItem = settings.CommandMenu.RadialActivationMode
         };
         var activationModeRow = CreateSettingsControlRow(
             "\uE7C1",
@@ -656,23 +666,10 @@ public sealed partial class SettingsPageControl : UserControl
             activationModeCombo);
 
         SettingsContent.Children.Add(ShortcutSettingsControls.CreateSettingsCard(
+            commandMenuTitleRow,
             commandMenuEnabledRow,
             globalShortcutRow,
             activationModeRow));
-
-        SettingsContent.Children.Add(new TextBlock
-        {
-            Text = "Command menu",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 10, 0, 0)
-        });
-        SettingsContent.Children.Add(new TextBlock
-        {
-            Text = "Current shortcut settings for the command menu. Persistence wiring comes in the next task.",
-            Opacity = 0.68,
-            TextWrapping = TextWrapping.Wrap,
-            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
-        });
 
         var voiceModeStateRow = CreateSettingsControlRow(
             "\uE720",
@@ -689,7 +686,7 @@ public sealed partial class SettingsPageControl : UserControl
             "\uE765",
             "Shortcut",
             "No shortcut assigned yet",
-            ShortcutSettingsControls.CreateShortcutChips(["Unassigned"]));
+            ShortcutSettingsControls.CreateShortcutChips(null));
 
         SettingsContent.Children.Add(new TextBlock
         {
@@ -697,7 +694,10 @@ public sealed partial class SettingsPageControl : UserControl
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 14, 0, 0)
         });
-        SettingsContent.Children.Add(ShortcutSettingsControls.CreateSettingsCard(voiceModeStateRow, voiceModeShortcutRow));
+        var voiceModeCard = ShortcutSettingsControls.CreateSettingsCard(voiceModeStateRow, voiceModeShortcutRow);
+        voiceModeCard.IsHitTestVisible = false;
+        voiceModeCard.Opacity = 0.72;
+        SettingsContent.Children.Add(voiceModeCard);
 
         AddSettingsSectionTitle("Actions and shortcuts");
         SettingsContent.Children.Add(new Border

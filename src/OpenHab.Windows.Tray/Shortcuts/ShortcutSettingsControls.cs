@@ -1,7 +1,7 @@
-using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using OpenHab.App.Shortcuts;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
@@ -35,7 +35,7 @@ internal static class ShortcutSettingsControls
         };
     }
 
-    public static StackPanel CreateShortcutChips(IEnumerable<string> shortcuts)
+    public static StackPanel CreateShortcutChips(ShortcutBinding? binding)
     {
         var panel = new StackPanel
         {
@@ -44,7 +44,9 @@ internal static class ShortcutSettingsControls
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        foreach (var shortcut in shortcuts)
+        var formatted = ShortcutBindingFormatter.Format(binding);
+        var parts = formatted.Split(" + ");
+        foreach (var shortcut in parts)
         {
             panel.Children.Add(CreateChip(shortcut));
         }
