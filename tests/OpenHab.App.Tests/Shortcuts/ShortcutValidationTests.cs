@@ -5,6 +5,24 @@ namespace OpenHab.App.Tests.Shortcuts;
 public sealed class ShortcutValidationTests
 {
     [Fact]
+    public void NullBindingIsAcceptedWhenAllowUnassignedIsTrue()
+    {
+        var result = ShortcutValidation.ValidateBinding(null, "Command Menu", [], allowUnassigned: true);
+
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public void NullBindingIsRejectedWhenAllowUnassignedIsFalse()
+    {
+        var result = ShortcutValidation.ValidateBinding(null, "Command Menu", [], allowUnassigned: false);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("required", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void CommandMenuBindingRequiresModifierAndKey()
     {
         var result = ShortcutValidation.ValidateBinding(new ShortcutBinding([], "O"), "Command Menu", []);
@@ -55,6 +73,41 @@ public sealed class ShortcutValidationTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void EmptyOrWhitespaceKeyIsRejectedWithoutThrowing(string key)
+    {
+        var exception = Record.Exception(() =>
+            ShortcutValidation.ValidateBinding(new ShortcutBinding([ShortcutModifier.Ctrl], key), "Command Menu", []));
+
+        Assert.Null(exception);
+
+        var result = ShortcutValidation.ValidateBinding(
+            new ShortcutBinding([ShortcutModifier.Ctrl], key),
+            "Command Menu",
+            []);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("key", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void NullExistingBindingsDoesNotThrow()
+    {
+        var exception = Record.Exception(() =>
+            ShortcutValidation.ValidateBinding(new ShortcutBinding([ShortcutModifier.Win], "O"), "Command Menu", null));
+
+        Assert.Null(exception);
+
+        var result = ShortcutValidation.ValidateBinding(
+            new ShortcutBinding([ShortcutModifier.Win], "O"),
+            "Command Menu",
+            null);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Theory]
     [InlineData(ShortcutCommandType.OnOff, "ON")]
     [InlineData(ShortcutCommandType.OnOff, "OFF")]
     [InlineData(ShortcutCommandType.OpenClose, "OPEN")]
@@ -67,6 +120,88 @@ public sealed class ShortcutValidationTests
         var result = ShortcutValidation.ValidateAction(action);
 
         Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void NullActionReturnsInvalid()
+    {
+        var result = ShortcutValidation.ValidateAction(null);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("required", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void MissingRequiredActionFieldsAreInvalid()
+    {
+        var action = new ShortcutAction("", "", "play", true, null, "", ShortcutCommandType.Toggle, null);
+
+        var result = ShortcutValidation.ValidateAction(action);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("ID", StringComparison.Ordinal));
+        Assert.Contains(result.Errors, error => error.Contains("name", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Errors, error => error.Contains("target item", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void InvalidCommandEnumIsInvalid()
+    {
+        var action = new ShortcutAction(
+            "a1",
+            "Bad Enum",
+            "custom",
+            true,
+            null,
+            "LivingRoom_Speaker",
+            (ShortcutCommandType)999,
+            "PLAY");
+
+        var result = ShortcutValidation.ValidateAction(action);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("command type", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ActionWithoutCommandMenuOrShortcutIsInvalid()
+    {
+        var action = new ShortcutAction(
+            "a1",
+            "No Route",
+            "custom",
+            false,
+            null,
+            "Kitchen_Light",
+            ShortcutCommandType.Toggle,
+            null);
+
+        var result = ShortcutValidation.ValidateAction(action);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("command menu", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData(ShortcutCommandType.OnOff, "MAYBE")]
+    [InlineData(ShortcutCommandType.OpenClose, "HALF")]
+    [InlineData(ShortcutCommandType.SendCommand, "")]
+    [InlineData(ShortcutCommandType.SendCommand, "   ")]
+    public void InvalidCommandValuesAreRejected(ShortcutCommandType type, string value)
+    {
+        var action = new ShortcutAction(
+            "a1",
+            "Invalid Value",
+            "custom",
+            true,
+            null,
+            "Kitchen_Light",
+            type,
+            value);
+
+        var result = ShortcutValidation.ValidateAction(action);
+
+        Assert.False(result.IsValid);
     }
 
     [Fact]

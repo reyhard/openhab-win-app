@@ -24,7 +24,7 @@ public static class ShortcutValidation
     public static ShortcutValidationResult ValidateBinding(
         ShortcutBinding? binding,
         string ownerName,
-        IEnumerable<ShortcutBindingOwner> existingBindings,
+        IEnumerable<ShortcutBindingOwner>? existingBindings,
         bool allowUnassigned = false)
     {
         if (binding is null)
@@ -69,7 +69,7 @@ public static class ShortcutValidation
             errors.Add($"'{normalizedBinding}' is reserved by Windows and cannot be used.");
         }
 
-        foreach (var existing in existingBindings)
+        foreach (var existing in existingBindings ?? [])
         {
             if (string.Equals(existing.OwnerName, ownerName, StringComparison.Ordinal))
             {
@@ -93,13 +93,18 @@ public static class ShortcutValidation
             : ShortcutValidationResult.Invalid(errors);
     }
 
-    public static ShortcutValidationResult ValidateAction(ShortcutAction action)
+    public static ShortcutValidationResult ValidateAction(ShortcutAction? action)
     {
+        if (action is null)
+        {
+            return ShortcutValidationResult.Invalid(["Action is required."]);
+        }
+
         var errors = new List<string>();
 
         if (string.IsNullOrWhiteSpace(action.Id))
         {
-            errors.Add("Action id is required.");
+            errors.Add("Action ID is required.");
         }
 
         if (string.IsNullOrWhiteSpace(action.Name))
