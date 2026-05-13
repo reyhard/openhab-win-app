@@ -92,7 +92,6 @@ public sealed partial class SettingsPageControl : UserControl
             case SettingsPage.Root:
                 UpdateSettingsBreadcrumb(null);
                 SettingsSubtitleText.Text = "Choose a category";
-                AddSettingsSectionTitle("Settings");
                 SettingsContent.Children.Add(CreateCategoryRow("\uE713", "Connection", "Endpoints and credentials", SettingsPage.Connection));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPage.General));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPage.Appearance));
@@ -201,8 +200,6 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void BuildConnectionSettingsPage()
     {
-        AddSettingsSectionTitle("Server connection");
-
         EndpointModeCombo = new ComboBox
         {
             Width = 220
@@ -289,8 +286,6 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void BuildGeneralSettingsPage()
     {
-        AddSettingsSectionTitle("App behavior");
-
         LaunchAtStartupToggle = new ToggleSwitch
         {
             OnContent = string.Empty,
@@ -350,8 +345,6 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void BuildAppearanceSettingsPage()
     {
-        AddSettingsSectionTitle("Appearance");
-
         SkinCombo = new ComboBox
         {
             Width = 220
@@ -393,7 +386,6 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void BuildDeviceInfoSyncSettingsPage()
     {
-        AddSettingsSectionTitle("Sync settings");
         var syncContent = new StackPanel
         {
             Spacing = 10,
@@ -585,8 +577,6 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void BuildAboutSettingsPage()
     {
-        AddSettingsSectionTitle("Related settings");
-
         ViewLogsButton = new Button { Content = "View diagnostic logs" };
         ViewLogsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
         ViewLogsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
