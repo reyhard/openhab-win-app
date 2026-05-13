@@ -127,12 +127,14 @@ public sealed class RadialCommandMenuWindow : Window
             actionCanvas.Children.Clear();
             emptyStateText.Visibility = Visibility.Visible;
             selectedActionIndex = -1;
+            PositionUnderCursor();
             Activate();
             closeButton.Focus(FocusState.Programmatic);
             return;
         }
 
         BuildDisplayedEntriesForCurrentPage();
+        PositionUnderCursor();
         Activate();
         FocusSelectedEntry();
     }
@@ -541,7 +543,7 @@ public sealed class RadialCommandMenuWindow : Window
         return new SolidColorBrush(Microsoft.UI.Colors.Transparent);
     }
 
-    private static string ResolveShortcutGlyph(string? iconId)
+    public static string ResolveShortcutGlyph(string? iconId)
     {
         return (iconId ?? string.Empty).Trim().ToLowerInvariant() switch
         {
@@ -587,6 +589,32 @@ public sealed class RadialCommandMenuWindow : Window
     }
 
     private sealed record RadialDisplayEntry(ShortcutAction? Action, Button Button, RadialEntryType EntryType);
+
+    private void PositionUnderCursor()
+    {
+        if (!GetCursorPos(out var cursor))
+        {
+            return;
+        }
+
+        var x = cursor.X - (WindowSize / 2);
+        var y = cursor.Y - (WindowSize / 2);
+        var displayArea = DisplayArea.GetFromPoint(new PointInt32(cursor.X, cursor.Y), DisplayAreaFallback.Nearest);
+        var workArea = displayArea.WorkArea;
+        x = Math.Clamp(x, workArea.X, workArea.X + workArea.Width - WindowSize);
+        y = Math.Clamp(y, workArea.Y, workArea.Y + workArea.Height - WindowSize);
+        AppWindow.Move(new PointInt32(x, y));
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CursorPoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out CursorPoint point);
 
     private static void StripNonClientFrame(IntPtr hwnd)
     {

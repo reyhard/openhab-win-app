@@ -613,6 +613,74 @@ public sealed partial class SettingsPageControl : UserControl
         return row;
     }
 
+    private static FrameworkElement CreateCommandMenuPreview(IEnumerable<ShortcutAction> actions)
+    {
+        var visibleActions = actions
+            .Where(static action => action.ShowInCommandMenu && ShortcutValidation.ValidateAction(action).IsValid)
+            .Take(6)
+            .ToArray();
+
+        if (visibleActions.Length == 0)
+        {
+            return new TextBlock
+            {
+                Text = "No actions",
+                Opacity = 0.7,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        var preview = new Canvas
+        {
+            Width = 220,
+            Height = 132,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var center = CreatePreviewNode("\uE711", "Close", 50, true);
+        Canvas.SetLeft(center, 85);
+        Canvas.SetTop(center, 41);
+        preview.Children.Add(center);
+
+        var radius = 48d;
+        var centerX = 110d;
+        var centerY = 66d;
+        for (var i = 0; i < visibleActions.Length; i++)
+        {
+            var action = visibleActions[i];
+            var angle = ((Math.PI * 2d) * i / visibleActions.Length) - (Math.PI / 2d);
+            var node = CreatePreviewNode(RadialCommandMenuWindow.ResolveShortcutGlyph(action.IconId), action.Name, 38, false);
+            Canvas.SetLeft(node, centerX + (Math.Cos(angle) * radius) - 19);
+            Canvas.SetTop(node, centerY + (Math.Sin(angle) * radius) - 19);
+            preview.Children.Add(node);
+        }
+
+        return preview;
+    }
+
+    private static Border CreatePreviewNode(string glyph, string label, double size, bool isCenter)
+    {
+        var node = new Border
+        {
+            Width = size,
+            Height = size,
+            CornerRadius = new CornerRadius(size / 2d),
+            Background = (Brush)Application.Current.Resources[
+                isCenter ? "AccentFillColorSecondaryBrush" : "SubtleFillColorSecondaryBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            Child = new FontIcon
+            {
+                Glyph = glyph,
+                FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                FontSize = isCenter ? 16 : 14,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        ToolTipService.SetToolTip(node, label);
+        return node;
+    }
+
     private static StackPanel CreateSettingsToggleAction(ToggleSwitch toggle)
     {
         var stateText = new TextBlock
@@ -690,11 +758,16 @@ public sealed partial class SettingsPageControl : UserControl
             "Activation mode",
             "Choose whether the command menu toggles or stays open while held",
             CommandMenuActivationModeCombo);
+        var previewRow = CreateSettingsControlRow(
+            "\uE8FD",
+            "Command menu preview",
+            "Actions currently visible in the radial command menu",
+            CreateCommandMenuPreview(settings.Actions));
 
         SettingsContent.Children.Add(CreateSettingsExpander(
             "openHAB Command Menu",
             "Built-in global shortcut for opening the command menu",
-            CreateExpanderRows(globalShortcutRow, activationModeRow),
+            CreateExpanderRows(globalShortcutRow, activationModeRow, previewRow),
             CreateSettingsToggleAction(CommandMenuEnabledToggle)));
 
         var voiceModeStateRow = CreateSettingsControlRow(
@@ -714,16 +787,19 @@ public sealed partial class SettingsPageControl : UserControl
             "No shortcut assigned yet",
             ShortcutSettingsControls.CreateShortcutChips(null));
 
-        SettingsContent.Children.Add(new TextBlock
-        {
-            Text = "Voice Mode",
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            Margin = new Thickness(0, 14, 0, 0)
-        });
-        var voiceModeCard = ShortcutSettingsControls.CreateSettingsCard(voiceModeStateRow, voiceModeShortcutRow);
-        voiceModeCard.IsHitTestVisible = false;
-        voiceModeCard.Opacity = 0.72;
-        SettingsContent.Children.Add(voiceModeCard);
+        var voiceModeContent = CreateExpanderRows(voiceModeStateRow, voiceModeShortcutRow);
+        voiceModeContent.Opacity = 0.72;
+        SettingsContent.Children.Add(CreateSettingsExpander(
+            "Voice Mode",
+            "Planned voice shortcut, coming soon",
+            voiceModeContent,
+            new TextBlock
+            {
+                Text = "Disabled",
+                Opacity = 0.7,
+                VerticalAlignment = VerticalAlignment.Center
+            },
+            isExpanded: false));
 
         var actionsHeader = new Grid
         {
@@ -918,31 +994,32 @@ public sealed partial class SettingsPageControl : UserControl
             }));
     }
 
-    private Expander CreateSettingsExpander(string title, string subtitle, UIElement content, UIElement? action = null)
+    private Expander CreateSettingsExpander(
+        string title,
+        string subtitle,
+        UIElement content,
+        UIElement? action = null,
+        bool isExpanded = true)
     {
         if (content is FrameworkElement contentElement)
         {
             contentElement.HorizontalAlignment = HorizontalAlignment.Stretch;
         }
 
-        var contentHost = new Grid
+        var contentHost = new Border
         {
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            HorizontalAlignment = HorizontalAlignment.Stretch
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Child = content
         };
-        contentHost.Children.Add(content);
 
         var expander = new Expander
         {
             Header = CreateSettingsHeader(title, subtitle, action),
             Content = contentHost,
-            IsExpanded = true,
-            HorizontalAlignment = HorizontalAlignment.Stretch
-        };
-
-        expander.SizeChanged += (_, _) =>
-        {
-            contentHost.Width = Math.Max(0, expander.ActualWidth - 2);
+            IsExpanded = isExpanded,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
 
         return expander;

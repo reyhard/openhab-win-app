@@ -233,8 +233,7 @@ public partial class App : Application
             },
             exitApplication: () =>
             {
-                shellController.HandleExitRequested();
-                _ = ApplyShellStateAsync();
+                RequestApplicationExit();
             });
         globalHotkeyService = new GlobalHotkeyService(mainWindow, uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread());
         globalHotkeyService.CommandMenuRequested += (_, _) =>
@@ -461,6 +460,16 @@ public partial class App : Application
         ShutdownTrayResources();
     }
 
+    private void RequestApplicationExit()
+    {
+        DiagnosticLogger.Info("Tray exit requested");
+        shellController?.HandleExitRequested();
+        ShutdownTrayResources();
+        DiagnosticLogger.Info("Application exit invoked");
+        Exit();
+        Environment.Exit(0);
+    }
+
     private bool IsShutdownInProgress()
     {
         return Volatile.Read(ref isShuttingDown) != 0
@@ -481,8 +490,7 @@ public partial class App : Application
 
             if (state.ShouldExitProcess)
             {
-                ShutdownTrayResources();
-                Exit();
+                RequestApplicationExit();
                 return;
             }
 
