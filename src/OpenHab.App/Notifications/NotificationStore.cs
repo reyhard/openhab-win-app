@@ -33,11 +33,13 @@ public sealed class NotificationStore
 {
     private const int MaxEntries = 500;
 
-    private static readonly string StorageFilePath = Path.Combine(
+    private static readonly string DefaultStorageFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "OpenHab.WinApp",
         "notifications.json");
 
+    private readonly string storageFilePath;
+    private readonly bool persistChanges;
     private readonly object syncRoot = new();
     private readonly Dictionary<string, StoredNotification> notifications = new();
 
@@ -53,8 +55,12 @@ public sealed class NotificationStore
         }
     }
 
-    public NotificationStore()
+    public NotificationStore(string? storageFilePath = null, bool persistChanges = true)
     {
+        this.storageFilePath = string.IsNullOrWhiteSpace(storageFilePath)
+            ? DefaultStorageFilePath
+            : storageFilePath;
+        this.persistChanges = persistChanges;
         TryLoad();
     }
 
@@ -126,22 +132,63 @@ public sealed class NotificationStore
         bool mutated;
         lock (syncRoot)
         {
-            if (notifications.TryGetValue(id, out var existing))
+            var normalizedReferenceId = string.IsNullOrWhiteSpace(referenceId)
+                ? null
+                : referenceId.Trim();
+            var existingKey = id;
+            var existing = notifications.TryGetValue(id, out var directMatch)
+                ? directMatch
+                : null;
+            var replacedByReference = false;
+
+            if (existing is null
+                && !notifications.ContainsKey(id)
+                && normalizedReferenceId is not null)
+            {
+                var referenceMatch = notifications
+                    .Where(entry =>
+                        !string.IsNullOrWhiteSpace(entry.Value.ReferenceId)
+                        && string.Equals(entry.Value.ReferenceId, normalizedReferenceId, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(entry => entry.Value.IsDismissed ? 1 : 0)
+                    .ThenByDescending(entry => entry.Value.Created)
+                    .ThenByDescending(entry => entry.Value.ReceivedAt)
+                    .ThenBy(entry => entry.Key, StringComparer.Ordinal)
+                    .FirstOrDefault();
+
+                if (!referenceMatch.Equals(default(KeyValuePair<string, StoredNotification>)))
+                {
+                    existingKey = referenceMatch.Key;
+                    existing = referenceMatch.Value;
+                    replacedByReference = true;
+                }
+            }
+
+            if (existing is not null)
             {
                 var updated = existing with
                 {
+                    Id = id,
                     Message = message,
                     Title = title ?? existing.Title,
                     Icon = icon ?? existing.Icon,
                     Severity = severity ?? existing.Severity,
                     Created = created,
-                    ReferenceId = referenceId ?? existing.ReferenceId,
+                    ReferenceId = normalizedReferenceId ?? existing.ReferenceId,
+                    IsRead = replacedByReference && existing.IsDismissed
+                        ? true
+                        : existing.IsRead,
                     OnClickAction = onClickAction ?? existing.OnClickAction,
                     MediaAttachmentUrl = mediaAttachmentUrl ?? existing.MediaAttachmentUrl,
                     ActionButton1 = actionButton1 ?? existing.ActionButton1,
                     ActionButton2 = actionButton2 ?? existing.ActionButton2,
                     ActionButton3 = actionButton3 ?? existing.ActionButton3
                 };
+
+                if (!string.Equals(existingKey, id, StringComparison.Ordinal))
+                {
+                    notifications.Remove(existingKey);
+                }
+
                 notifications[id] = updated;
                 mutated = true;
             }
@@ -157,7 +204,7 @@ public sealed class NotificationStore
                     ReceivedAt: DateTimeOffset.UtcNow,
                     IsRead: false,
                     IsDismissed: false,
-                    ReferenceId: referenceId,
+                    ReferenceId: normalizedReferenceId,
                     OnClickAction: onClickAction,
                     MediaAttachmentUrl: mediaAttachmentUrl,
                     ActionButton1: actionButton1,
@@ -176,7 +223,35 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
+        }
+    }
+
+    private void HideMatchingNotifications(Func<StoredNotification, bool> matches)
+    {
+        bool mutated = false;
+        lock (syncRoot)
+        {
+            foreach (var key in notifications.Keys.ToList())
+            {
+                var existing = notifications[key];
+                if (!matches(existing))
+                {
+                    continue;
+                }
+
+                if (!existing.IsDismissed || !existing.IsRead)
+                {
+                    notifications[key] = existing with { IsDismissed = true, IsRead = true };
+                    mutated = true;
+                }
+            }
+        }
+
+        if (mutated)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+            SaveIfEnabled();
         }
     }
 
@@ -195,7 +270,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -214,7 +289,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -233,13 +308,27 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
     public void Dismiss(string id)
     {
         Hide(id);
+    }
+
+    public void HideByReferenceId(string referenceId)
+    {
+        HideMatchingNotifications(notification =>
+            !string.IsNullOrWhiteSpace(notification.ReferenceId)
+            && string.Equals(notification.ReferenceId, referenceId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void HideByTag(string tag)
+    {
+        HideMatchingNotifications(notification =>
+            !string.IsNullOrWhiteSpace(notification.Severity)
+            && string.Equals(notification.Severity, tag, StringComparison.OrdinalIgnoreCase));
     }
 
     public void Unhide(string id)
@@ -257,7 +346,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -280,7 +369,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -303,7 +392,7 @@ public sealed class NotificationStore
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            _ = SaveAsync();
+            SaveIfEnabled();
         }
     }
 
@@ -367,11 +456,19 @@ public sealed class NotificationStore
         return value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
     }
 
+    private void SaveIfEnabled()
+    {
+        if (persistChanges)
+        {
+            _ = SaveAsync();
+        }
+    }
+
     private async Task SaveAsync()
     {
         try
         {
-            var directory = Path.GetDirectoryName(StorageFilePath)!;
+            var directory = Path.GetDirectoryName(storageFilePath)!;
             Directory.CreateDirectory(directory);
 
             List<StoredNotification> snapshot;
@@ -382,7 +479,7 @@ public sealed class NotificationStore
 
             var data = new NotificationStoreData(snapshot);
             var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
-            await File.WriteAllTextAsync(StorageFilePath, json);
+            await File.WriteAllTextAsync(storageFilePath, json);
         }
         catch
         {
@@ -394,8 +491,8 @@ public sealed class NotificationStore
     {
         try
         {
-            if (!File.Exists(StorageFilePath)) return;
-            var json = File.ReadAllText(StorageFilePath);
+            if (!File.Exists(storageFilePath)) return;
+            var json = File.ReadAllText(storageFilePath);
             var loaded = JsonSerializer.Deserialize<NotificationStoreData>(json);
             if (loaded?.Notifications is not null)
             {
@@ -416,3 +513,4 @@ public sealed class NotificationStore
 
     private sealed record NotificationStoreData(List<StoredNotification> Notifications);
 }
+

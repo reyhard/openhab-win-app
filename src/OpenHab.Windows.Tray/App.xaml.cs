@@ -39,6 +39,8 @@ public partial class App : Application
     private AppSettingsController? settingsController;
     private DispatcherQueue? uiDispatcherQueue;
     private HttpClient? httpClient;
+    private NotificationMediaResolver? notificationMediaResolver;
+    private NotificationActionExecutor? notificationActionExecutor;
     private NotificationStore? notificationStore;
     private NotificationPoller? notificationPoller;
     private SitemapRuntimeController? runtimeController;
@@ -89,6 +91,17 @@ public partial class App : Application
         notificationStore = new NotificationStore();
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
+        notificationMediaResolver = new NotificationMediaResolver(
+            httpClient,
+            getSettings: () => this.settingsController?.Current ?? AppSettings.Default,
+            getApiToken: kind => this.settingsController is null ? null : GetApiTokenSync(this.settingsController, kind),
+            getCloudCredentials: kind => this.settingsController is null ? null : GetCloudCredentialsSync(this.settingsController));
+        notificationActionExecutor = new NotificationActionExecutor(
+            httpClient,
+            getSettings: () => this.settingsController?.Current ?? AppSettings.Default,
+            getApiToken: kind => this.settingsController is null ? null : GetApiTokenSync(this.settingsController, kind),
+            getCloudCredentials: kind => this.settingsController is null ? null : GetCloudCredentialsSync(this.settingsController),
+            openExternal: OpenExternalAsync);
         runtimeController = new SitemapRuntimeController(
             settingsController,
             renderController,
@@ -228,18 +241,11 @@ public partial class App : Application
             }
             ToastService.NotificationActivated += (_, args) =>
             {
-                if (!string.IsNullOrEmpty(args.Argument))
-                {
-                    _ = HandleNotificationActionAsync(args.Argument);
-                    return;
-                }
-                // Simple tap (no action buttons) — open main window
-                _ = uiDispatcherQueue?.TryEnqueue(() =>
-                {
-                    if (shellController is null) return;
-                    shellController.HandleNotificationActivated();
-                    _ = ApplyShellStateAsync();
-                });
+                _ = HandleNotificationActivationAsync(args.Argument);
+            };
+            ToastService.PackagedActivated += arguments =>
+            {
+                _ = HandleNotificationActivationAsync(arguments);
             };
 
             var cloudCredentials = GetCloudCredentialsSync(settingsController);
@@ -254,40 +260,50 @@ public partial class App : Application
                 isDismissedFunc: id => notificationStore?.IsDismissed(id) ?? false,
                 onNewNotification: n =>
                 {
-                    var tag = ResolveNotificationTag(n);
-                    var body = BuildNotificationBody(n);
                     notificationStore?.AddOrUpdate(
-                        n.Id, body, n.Created, n.Title, n.Icon, tag,
+                        n.Id, n.Message, n.Created, n.Title, n.Icon, n.Tag,
                         n.ReferenceId, n.OnClickAction, n.MediaAttachmentUrl,
-                        n.ActionButton1, n.ActionButton2, n.ActionButton3);
+                        n.ActionButtons.ElementAtOrDefault(0)?.ToRawButton(),
+                        n.ActionButtons.ElementAtOrDefault(1)?.ToRawButton(),
+                        n.ActionButtons.ElementAtOrDefault(2)?.ToRawButton());
+                },
+                onHideNotification: target =>
+                {
+                    DiagnosticLogger.Info($"Applying hide notification target: {target.Kind}={target.Value}");
+                    if (target.Kind == NotificationHideTargetKind.ReferenceId)
+                    {
+                        notificationStore?.HideByReferenceId(target.Value);
+                        ToastService.HideByReferenceId(target.Value);
+                    }
+                    else
+                    {
+                        var matchingReferenceIds = notificationStore?.GetAll()
+                            .Where(n =>
+                                !string.IsNullOrWhiteSpace(n.Severity)
+                                && string.Equals(n.Severity, target.Value, StringComparison.OrdinalIgnoreCase)
+                                && !string.IsNullOrWhiteSpace(n.ReferenceId))
+                            .Select(n => n.ReferenceId!)
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList() ?? [];
+                        notificationStore?.HideByTag(target.Value);
+                        ToastService.HideByTag(target.Value);
+                        foreach (var referenceId in matchingReferenceIds)
+                        {
+                            ToastService.HideByReferenceId(referenceId);
+                        }
+                    }
                 });
 
             DiagnosticLogger.Info($"Notification poller created — polling {settings.CloudEndpoint.Host} every 60s");
 
             notificationPoller.NotificationReceived += (_, notification) =>
             {
-                DiagnosticLogger.Info($"Notification received — severity: {notification.Severity ?? "none"}");
-                var title = BuildNotificationHeader(notification);
-                var body = BuildNotificationBody(notification);
-                var tag = ResolveNotificationTag(notification);
+                DiagnosticLogger.Info($"Notification received - tag: {notification.Tag ?? "none"}");
                 var importantTags = settingsController.Current.ImportantNotificationTags;
-                var isImportant = IsImportantNotification(tag, importantTags);
-                var toastHeader = ResolveNotificationHeader(tag);
+                var isImportant = IsImportantNotification(notification.Tag, importantTags);
+                var toastHeader = ResolveNotificationHeader(notification.Tag);
 
-                // Parse action buttons from the notification data
-                var actionButtons = new List<NotificationActionButton>();
-                TryAddButton(notification.ActionButton1, actionButtons);
-                TryAddButton(notification.ActionButton2, actionButtons);
-                TryAddButton(notification.ActionButton3, actionButtons);
-
-                _ = ShowNotificationToastAsync(
-                    notification.Icon,
-                    title,
-                    body,
-                    actionButtons.Count > 0 ? actionButtons : null,
-                    isImportant,
-                    toastHeader,
-                    tag);
+                _ = ShowNotificationToastAsync(notification, isImportant, toastHeader);
             };
 
             notificationPoller.Start();
@@ -686,16 +702,9 @@ public partial class App : Application
         }
     }
 
-    private static void TryAddButton(string? rawButton, List<NotificationActionButton> buttons)
+    private static string BuildNotificationHeader(NormalizedCloudNotification notification)
     {
-        var parsed = NotificationActionParser.TryParseButton(rawButton);
-        if (parsed is not null)
-            buttons.Add(parsed);
-    }
-
-    private static string BuildNotificationHeader(CloudNotification notification)
-    {
-        var tag = ResolveNotificationTag(notification);
+        var tag = notification.Tag;
         if (!string.IsNullOrWhiteSpace(notification.Title))
         {
             var title = notification.Title;
@@ -710,10 +719,10 @@ public partial class App : Application
         return "openHAB";
     }
 
-    private static string BuildNotificationBody(CloudNotification notification)
+    private static string BuildNotificationBody(NormalizedCloudNotification notification)
     {
         var body = notification.Message ?? string.Empty;
-        var tag = ResolveNotificationTag(notification);
+        var tag = notification.Tag;
         if (!string.IsNullOrWhiteSpace(tag))
         {
             body = StripLeadingBracketToken(body, tag);
@@ -748,14 +757,6 @@ public partial class App : Application
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
-    // openHAB Cloud docs: "tag" supersedes/semsame as legacy "severity".
-    private static string? ResolveNotificationTag(CloudNotification notification)
-    {
-        return string.IsNullOrWhiteSpace(notification.Tag)
-            ? notification.Severity
-            : notification.Tag;
-    }
-
     private static string? ResolveNotificationHeader(string? tag)
     {
         if (string.IsNullOrWhiteSpace(tag))
@@ -778,33 +779,46 @@ public partial class App : Application
     }
 
     private async Task ShowNotificationToastAsync(
-        string? icon,
-        string title,
-        string body,
-        IReadOnlyList<NotificationActionButton>? actionButtons,
+        NormalizedCloudNotification notification,
         bool isImportant,
-        string? toastHeader,
-        string? tag)
+        string? toastHeader)
     {
         Uri? appLogoOverrideUri = null;
+        Uri? heroImageUri = null;
         try
         {
             using var iconCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-            appLogoOverrideUri = await ResolveNotificationAppLogoOverrideUriAsync(icon, iconCts.Token);
+            appLogoOverrideUri = await ResolveNotificationAppLogoOverrideUriAsync(notification.Icon, iconCts.Token);
         }
         catch (Exception ex)
         {
             DiagnosticLogger.Warn($"Notification icon cache failed: {ex.GetType().Name}: {ex.Message}");
         }
 
-        ToastService.Show(
-            title,
-            body,
-            actionButtons,
-            important: isImportant,
-            header: toastHeader,
-            tag: tag,
-            appLogoOverrideUri: appLogoOverrideUri);
+        try
+        {
+            var resolver = notificationMediaResolver;
+            if (resolver is not null)
+            {
+                heroImageUri = await resolver.ResolveAsync(notification.MediaAttachmentUrl, CancellationToken.None);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Notification media resolution failed: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        ToastService.Show(new ToastNotificationRequest(
+            Title: string.IsNullOrWhiteSpace(notification.Title) ? "openHAB" : notification.Title,
+            Body: notification.Message,
+            Actions: notification.ActionButtons,
+            LaunchAction: notification.OnClickAction,
+            Important: isImportant,
+            Header: toastHeader,
+            Tag: notification.Tag,
+            ReferenceId: notification.ReferenceId,
+            AppLogoOverrideUri: appLogoOverrideUri,
+            HeroImageUri: heroImageUri));
     }
 
     private async Task<Uri?> ResolveNotificationAppLogoOverrideUriAsync(string? icon, CancellationToken cancellationToken)
@@ -928,136 +942,106 @@ public partial class App : Application
             $"{hash}.{format}");
     }
 
-    private async Task HandleNotificationActionAsync(string actionArg)
+    private async Task HandleNotificationActivationAsync(string? arguments)
     {
-        var action = NotificationActionParser.TryParse(actionArg);
-        if (action is null)
+        if (TryExtractToastActionArgument(arguments, out var actionArgument))
         {
-            DiagnosticLogger.Warn($"Unparseable toast action: '{actionArg}'");
-            return;
-        }
-
-        DiagnosticLogger.Info($"Handling toast action: Type={action.Type}, Payload={action.Payload}");
-
-        switch (action.Type)
-        {
-            case "command":
-                await ExecuteCommandActionAsync(action.Payload);
-                break;
-            case "ui":
-                OpenUiAction(action.Payload);
-                break;
-            case "http":
-            case "https":
-                OpenUrlAction(action.Payload);
-                break;
-            case "rule":
-                DiagnosticLogger.Warn($"Rule action not implemented from client: {action.Payload}");
-                break;
-            case "app":
-                DiagnosticLogger.Warn($"App launch action not implemented from client: {action.Payload}");
-                break;
-            default:
-                DiagnosticLogger.Warn($"Unknown action type: {action.Type}");
-                break;
-        }
-    }
-
-    private async Task ExecuteCommandActionAsync(string payload)
-    {
-        // payload format: "ItemName:CommandValue"
-        var colonIndex = payload.IndexOf(':');
-        if (colonIndex < 0)
-        {
-            DiagnosticLogger.Warn($"Invalid command action payload: '{payload}'");
-            return;
-        }
-
-        var itemName = payload[..colonIndex];
-        var commandValue = payload[(colonIndex + 1)..];
-
-        try
-        {
-            var settings = settingsController?.Current;
-            if (settings is null) return;
-
-            // Use runtime HTTP client to send command
-            using var client = new HttpClient();
-            var endpoint = settings.EndpointMode == OpenHab.Core.Profiles.EndpointMode.CloudOnly
-                ? settings.CloudEndpoint
-                : settings.LocalEndpoint;
-
-            var commandUri = new Uri(endpoint, $"rest/items/{Uri.EscapeDataString(itemName)}");
-            var content = new System.Net.Http.StringContent(commandValue,
-                System.Text.Encoding.UTF8, "text/plain");
-
-            // Try with API token auth first
-            try
+            var parsed = NotificationActionParser.TryParse(actionArgument);
+            if (parsed is null)
             {
-                var token = GetApiTokenSync(settingsController!,
-                    settings.EndpointMode == OpenHab.Core.Profiles.EndpointMode.CloudOnly
-                        ? OpenHab.Core.Profiles.TransportKind.Cloud
-                        : OpenHab.Core.Profiles.TransportKind.Local);
-                if (token is not null)
+                DiagnosticLogger.Warn("Unparseable toast action argument.");
+            }
+            else
+            {
+                var executor = notificationActionExecutor;
+                if (executor is not null)
                 {
-                    client.DefaultRequestHeaders.Authorization =
-                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                    if (await TryExecuteNotificationActionAsync(executor, parsed))
+                    {
+                        return;
+                    }
                 }
             }
-            catch { /* best-effort auth */ }
-
-            var response = await client.PostAsync(commandUri, content);
-            DiagnosticLogger.Info($"Command result: {(int)response.StatusCode} for {itemName}={commandValue}");
         }
-        catch (Exception ex)
+        else if (!string.IsNullOrWhiteSpace(arguments))
         {
-            DiagnosticLogger.Error($"Command action failed: {itemName}={commandValue}", ex);
-        }
-    }
-
-    private void OpenUiAction(string payload)
-    {
-        // Try to open as URL first (sitemap paths are full URLs or paths)
-        var settings = settingsController?.Current;
-        if (settings is null) return;
-
-        try
-        {
-            var baseUri = settings.EndpointMode == OpenHab.Core.Profiles.EndpointMode.CloudOnly
-                ? settings.CloudEndpoint
-                : settings.LocalEndpoint;
-
-            var url = payload.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                      payload.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-                ? payload
-                : new Uri(baseUri, payload.TrimStart('/')).ToString();
-
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            var parsed = NotificationActionParser.TryParse(arguments);
+            if (parsed is not null && IsInlineToastAction(parsed))
             {
-                FileName = url,
-                UseShellExecute = true
-            });
+                var executor = notificationActionExecutor;
+                if (executor is not null)
+                {
+                    if (await TryExecuteNotificationActionAsync(executor, parsed))
+                    {
+                        return;
+                    }
+                }
+            }
         }
-        catch (Exception ex)
+
+        _ = uiDispatcherQueue?.TryEnqueue(() =>
         {
-            DiagnosticLogger.Error($"Failed to open UI action: {payload}", ex);
-        }
+            if (shellController is null) return;
+            shellController.HandleNotificationActivated();
+            _ = ApplyShellStateAsync();
+        });
     }
 
-    private static void OpenUrlAction(string url)
+    private static async Task<bool> TryExecuteNotificationActionAsync(
+        NotificationActionExecutor executor,
+        NotificationAction action)
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            });
+            await executor.ExecuteAsync(action, CancellationToken.None);
+            return true;
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Error($"Failed to open URL: {url}", ex);
+            DiagnosticLogger.Warn(
+                $"Notification activation action failed: type='{action.Type}', error={ex.GetType().Name}: {ex.Message}");
+            return false;
         }
+    }
+
+    private static bool TryExtractToastActionArgument(string? arguments, out string actionArgument)
+    {
+        actionArgument = string.Empty;
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return false;
+        }
+
+        const string prefix = "action=";
+        foreach (var part in arguments.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                actionArgument = Uri.UnescapeDataString(part[prefix.Length..]);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsInlineToastAction(NotificationAction action)
+    {
+        return action.Type.Equals("command", StringComparison.OrdinalIgnoreCase)
+            || action.Type.Equals("ui", StringComparison.OrdinalIgnoreCase)
+            || action.Type.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || action.Type.Equals("https", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static Task OpenExternalAsync(Uri uri)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = uri.ToString(),
+            UseShellExecute = true
+        });
+
+        return Task.CompletedTask;
     }
 
     private void HandleStartupActivation(AppActivationArguments? activatedEventArgs)
@@ -1067,17 +1051,19 @@ public partial class App : Application
             return;
         }
 
-        _ = uiDispatcherQueue?.TryEnqueue(() =>
-        {
-            if (shellController is null)
-            {
-                return;
-            }
+        var startupArguments = ExtractStartupToastArguments(activatedEventArgs);
+        DiagnosticLogger.Info("Processing startup toast activation");
+        _ = HandleNotificationActivationAsync(startupArguments);
+    }
 
-            DiagnosticLogger.Info("Processing startup toast activation");
-            shellController.HandleNotificationActivated();
-            _ = ApplyShellStateAsync();
-        });
+    private static string? ExtractStartupToastArguments(AppActivationArguments activatedEventArgs)
+    {
+        if (activatedEventArgs.Data is global::Windows.ApplicationModel.Activation.ToastNotificationActivatedEventArgs toastArgs)
+        {
+            return toastArgs.Argument;
+        }
+
+        return activatedEventArgs.Data as string;
     }
 
     // ── Crash diagnostics ──────────────────────────────────────────

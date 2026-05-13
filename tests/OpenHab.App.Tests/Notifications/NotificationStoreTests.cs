@@ -3,22 +3,38 @@ using System.Text.Json;
 
 namespace OpenHab.App.Tests.Notifications;
 
-public sealed class NotificationStoreTests
+public sealed class NotificationStoreTests : IDisposable
 {
-    private static readonly string StorageFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "OpenHab.WinApp",
-        "notifications.json");
+    private readonly string tempRoot;
+    private readonly string storageFilePath;
 
     public NotificationStoreTests()
     {
-        // Retry deletion — fire-and-forget SaveAsync from a previous test may still be writing.
-        for (int i = 0; i < 5; i++)
+        tempRoot = Path.Combine(
+            Path.GetTempPath(),
+            "OpenHab.NotificationStoreTests",
+            Guid.NewGuid().ToString("N"));
+        storageFilePath = Path.Combine(tempRoot, "notifications.json");
+    }
+
+    public void Dispose()
+    {
+        try
         {
-            try { File.Delete(StorageFilePath); } catch { }
-            if (!File.Exists(StorageFilePath)) break;
-            Thread.Sleep(10);
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
         }
+        catch
+        {
+            // Best-effort cleanup: fire-and-forget store saves may still hold handles.
+        }
+    }
+
+    private NotificationStore CreateStore(bool persistChanges = false)
+    {
+        return new NotificationStore(storageFilePath, persistChanges);
     }
 
     // ─────────────────────── AddOrUpdate ───────────────────────
@@ -26,7 +42,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void AddOrUpdate_NewNotification_StoresCorrectly()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         var created = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
 
         store.AddOrUpdate("n1", "Test message", created, title: "Title", severity: "high");
@@ -47,7 +63,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void AddOrUpdate_DuplicateId_UpdatesExisting()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
         var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
 
@@ -71,7 +87,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void AddOrUpdate_DuplicateId_PreservesDismissedState()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         var created = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
 
         store.AddOrUpdate("n1", "Original", created);
@@ -84,12 +100,243 @@ public sealed class NotificationStoreTests
         Assert.True(store.IsDismissed("n1"));
     }
 
-    // ─────────────────────── IsSeen ───────────────────────
+    [Fact]
+    public void AddOrUpdate_DuplicateId_PreservesUnreadDismissedState()
+    {
+        var store = CreateStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("n1", "Original", created1);
+        store.Hide("n1");
+        store.MarkUnread("n1");
+
+        store.AddOrUpdate("n1", "Updated", created2);
+
+        var notification = store.GetAll().Single(n => n.Id == "n1");
+        Assert.True(notification.IsDismissed);
+        Assert.False(notification.IsRead);
+    }
+
+    [Fact]
+    public void AddOrUpdate_DirectIdMatchWinsOverReferenceReplacement()
+    {
+        var store = CreateStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("cloud-1", "Original 1", created1, referenceId: "ref-a");
+        store.AddOrUpdate("cloud-2", "Original 2", created1, referenceId: "ref-b");
+
+        store.AddOrUpdate("cloud-2", "Updated 2", created2, referenceId: "ref-a");
+
+        var all = store.GetAll();
+        Assert.Equal(2, all.Count);
+        Assert.Equal("Original 1", all.Single(n => n.Id == "cloud-1").Message);
+        Assert.Equal("Updated 2", all.Single(n => n.Id == "cloud-2").Message);
+    }
+
+    [Fact]
+    public void AddOrUpdate_PrefersVisibleReferenceMatchOverDismissedMatch()
+    {
+        var hiddenCreated = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var visibleCreated = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+        var replacementCreated = new DateTimeOffset(2026, 5, 7, 12, 0, 0, TimeSpan.Zero);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(storageFilePath)!);
+
+        var hidden = new StoredNotification(
+            "cloud-hidden",
+            "Hidden original",
+            null,
+            null,
+            "info",
+            hiddenCreated,
+            DateTimeOffset.UtcNow,
+            true,
+            true,
+            "ref-1",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        var visible = new StoredNotification(
+            "cloud-visible",
+            "Visible original",
+            null,
+            null,
+            "info",
+            visibleCreated,
+            DateTimeOffset.UtcNow,
+            false,
+            false,
+            "ref-1",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        File.WriteAllText(
+            storageFilePath,
+            JsonSerializer.Serialize(new { Notifications = new[] { hidden, visible } }));
+
+        var store = CreateStore();
+        store.AddOrUpdate("cloud-new", "Replacement", replacementCreated, referenceId: "ref-1");
+
+        var all = store.GetAll();
+        Assert.Equal(2, all.Count);
+        Assert.Contains(all, n => n.Id == "cloud-hidden" && n.IsDismissed && n.IsRead);
+        Assert.Contains(all, n => n.Id == "cloud-new" && !n.IsDismissed && !n.IsRead);
+        Assert.DoesNotContain(all, n => n.Id == "cloud-visible");
+    }
+
+    [Fact]
+    public void AddOrUpdate_PrefersLatestReceivedAtWhenCreatedMatches()
+    {
+        var created = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var olderReceived = new DateTimeOffset(2026, 5, 7, 10, 1, 0, TimeSpan.Zero);
+        var newerReceived = new DateTimeOffset(2026, 5, 7, 10, 2, 0, TimeSpan.Zero);
+        var replacementCreated = new DateTimeOffset(2026, 5, 7, 10, 3, 0, TimeSpan.Zero);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(storageFilePath)!);
+
+        var older = new StoredNotification(
+            "cloud-older",
+            "Older original",
+            null,
+            null,
+            "info",
+            created,
+            olderReceived,
+            false,
+            false,
+            "ref-2",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        var newer = new StoredNotification(
+            "cloud-newer",
+            "Newer original",
+            null,
+            null,
+            "info",
+            created,
+            newerReceived,
+            false,
+            false,
+            "ref-2",
+            null,
+            null,
+            null,
+            null,
+            null);
+
+        File.WriteAllText(
+            storageFilePath,
+            JsonSerializer.Serialize(new { Notifications = new[] { older, newer } }));
+
+        var store = CreateStore();
+        store.AddOrUpdate("cloud-replacement", "Replacement", replacementCreated, referenceId: "ref-2");
+
+        var all = store.GetAll();
+        Assert.Equal(2, all.Count);
+        Assert.Contains(all, n => n.Id == "cloud-older");
+        Assert.Contains(all, n => n.Id == "cloud-replacement");
+        Assert.DoesNotContain(all, n => n.Id == "cloud-newer");
+    }
+
+    [Fact]
+    public void AddOrUpdate_ReplacesVisibleNotificationWithSameReferenceId()
+    {
+        var store = CreateStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("cloud-1", "Original", created1, referenceId: "Ref-123");
+        store.MarkRead("cloud-1");
+
+        store.AddOrUpdate("cloud-2", "Replacement", created2, referenceId: "ref-123");
+
+        var all = store.GetAll();
+        Assert.Single(all);
+
+        var notification = all[0];
+        Assert.Equal("cloud-2", notification.Id);
+        Assert.Equal("Replacement", notification.Message);
+        Assert.Equal("ref-123", notification.ReferenceId);
+        Assert.True(notification.IsRead);
+        Assert.False(notification.IsDismissed);
+    }
+
+    [Fact]
+    public void AddOrUpdate_ByReferenceIdPreservesHiddenState()
+    {
+        var store = CreateStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("cloud-1", "Original", created1, referenceId: "Ref-123");
+        store.Hide("cloud-1");
+
+        store.AddOrUpdate("cloud-2", "Replacement", created2, referenceId: "ref-123");
+
+        var all = store.GetAll();
+        Assert.Single(all);
+
+        var notification = all[0];
+        Assert.Equal("cloud-2", notification.Id);
+        Assert.True(notification.IsDismissed);
+        Assert.True(notification.IsRead);
+    }
+
+    [Fact]
+    public void AddOrUpdate_ReplacesHiddenUnreadNotificationAndForcesRead()
+    {
+        var store = CreateStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("cloud-1", "Original", created1, referenceId: "Ref-123");
+        store.Hide("cloud-1");
+        store.MarkUnread("cloud-1");
+
+        store.AddOrUpdate("cloud-2", "Replacement", created2, referenceId: "ref-123");
+
+        var all = store.GetAll();
+        Assert.Single(all);
+
+        var notification = all[0];
+        Assert.Equal("cloud-2", notification.Id);
+        Assert.Equal("Replacement", notification.Message);
+        Assert.Equal("ref-123", notification.ReferenceId);
+        Assert.True(notification.IsDismissed);
+        Assert.True(notification.IsRead);
+    }
+
+    [Fact]
+    public void AddOrUpdate_WhitespaceReferenceIdPreservesExistingReference()
+    {
+        var store = CreateStore();
+        var created1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var created2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
+
+        store.AddOrUpdate("n1", "Original", created1, referenceId: "ref-1");
+        store.AddOrUpdate("n1", "Updated", created2, referenceId: "   ");
+
+        var notification = store.GetAll().Single(n => n.Id == "n1");
+        Assert.Equal("ref-1", notification.ReferenceId);
+    }
 
     [Fact]
     public void IsSeen_KnownId_ReturnsTrue()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
 
         Assert.True(store.IsSeen("n1"));
@@ -98,7 +345,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void IsSeen_UnknownId_ReturnsFalse()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
 
         Assert.False(store.IsSeen("nonexistent"));
     }
@@ -108,7 +355,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void IsDismissed_DismissedNotification_ReturnsTrue()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         store.Dismiss("n1");
 
@@ -120,7 +367,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void MarkRead_SetsIsReadTrue()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
 
         Assert.False(store.GetAll()[0].IsRead);
@@ -133,7 +380,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void MarkUnread_SetsIsReadFalse()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         store.MarkRead("n1");
 
@@ -149,7 +396,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Dismiss_SetsIsDismissedTrue()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
 
         Assert.False(store.IsDismissed("n1"));
@@ -162,7 +409,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void DismissAll_DismissesAllNotifications()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow);
         store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow);
         store.AddOrUpdate("n3", "msg3", DateTimeOffset.UtcNow);
@@ -174,12 +421,41 @@ public sealed class NotificationStoreTests
         Assert.True(store.IsDismissed("n3"));
     }
 
+    [Fact]
+    public void HideByReferenceId_IsCaseInsensitive()
+    {
+        var store = CreateStore();
+        store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow, referenceId: "ReF-123");
+
+        store.HideByReferenceId("ref-123");
+
+        var notification = store.GetAll().Single(n => n.Id == "n1");
+        Assert.True(notification.IsDismissed);
+        Assert.True(notification.IsRead);
+    }
+
+    [Fact]
+    public void HideByTag_HidesAllMatchingNotificationsCaseInsensitively()
+    {
+        var store = CreateStore();
+        store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow, severity: "warning");
+        store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow, severity: "WARNING");
+        store.AddOrUpdate("n3", "msg3", DateTimeOffset.UtcNow, severity: "info");
+
+        store.HideByTag("Warning");
+
+        Assert.True(store.IsDismissed("n1"));
+        Assert.True(store.IsDismissed("n2"));
+        Assert.True(store.GetAll().Single(n => n.Id == "n1").IsRead);
+        Assert.True(store.GetAll().Single(n => n.Id == "n2").IsRead);
+        Assert.False(store.IsDismissed("n3"));
+    }
     // ─────────────────────── UnreadCount ───────────────────────
 
     [Fact]
     public void UnreadCount_ReflectsUnreadNotifications()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow);
         store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow);
 
@@ -197,7 +473,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void UnreadCount_ExcludesDismissedNotifications()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow);
         store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow);
 
@@ -211,7 +487,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void UnreadCount_IsZeroAfterDismissAll()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow);
         store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow);
         store.MarkRead("n2");
@@ -228,7 +504,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void GetSeenUndismissedIds_ExcludesDismissed()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg1", DateTimeOffset.UtcNow);
         store.AddOrUpdate("n2", "msg2", DateTimeOffset.UtcNow);
         store.AddOrUpdate("n3", "msg3", DateTimeOffset.UtcNow);
@@ -247,7 +523,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Trim_RemovesOldestDismissed_WhenExceedsMax()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         var baseTime = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         // Add 501 entries all dismissed, each with increasing Created time.
@@ -272,13 +548,13 @@ public sealed class NotificationStoreTests
     public void Store_SurvivesRoundTrip_LoadsCorrectly()
     {
         // Give the fire-and-forget save time to complete.
-        var original = new NotificationStore();
+        var original = CreateStore(persistChanges: true);
         var created = new DateTimeOffset(2026, 5, 7, 14, 0, 0, TimeSpan.Zero);
         original.AddOrUpdate("persist1", "Hello", created, title: "T", severity: "info");
         Thread.Sleep(200);
 
         // A new instance should load from the same file.
-        var loaded = new NotificationStore();
+        var loaded = CreateStore();
 
         Assert.True(loaded.IsSeen("persist1"));
         var n = loaded.GetAll()[0];
@@ -294,7 +570,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void GetAll_ReturnsNewestFirst()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         var t1 = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
         var t2 = new DateTimeOffset(2026, 5, 7, 11, 0, 0, TimeSpan.Zero);
         var t3 = new DateTimeOffset(2026, 5, 7, 12, 0, 0, TimeSpan.Zero);
@@ -316,7 +592,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_FiresOnAdd()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         var fired = false;
         store.Changed += (_, _) => fired = true;
 
@@ -328,7 +604,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_FiresOnMarkRead()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         var fired = false;
         store.Changed += (_, _) => fired = true;
@@ -341,7 +617,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_FiresOnDismiss()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         var fired = false;
         store.Changed += (_, _) => fired = true;
@@ -354,7 +630,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_FiresOnDismissAll()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         var fired = false;
         store.Changed += (_, _) => fired = true;
@@ -367,7 +643,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_DoesNotFire_WhenMarkReadOnAlreadyRead()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         store.MarkRead("n1");
         var fired = false;
@@ -381,7 +657,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_DoesNotFire_WhenDismissOnAlreadyDismissed()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         store.Dismiss("n1");
         var fired = false;
@@ -395,7 +671,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_DoesNotFire_WhenHideOnAlreadyHidden()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         store.Hide("n1");
         var fired = false;
@@ -409,7 +685,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_DoesNotFire_WhenUnhideOnAlreadyVisible()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "msg", DateTimeOffset.UtcNow);
         var fired = false;
         store.Changed += (_, _) => fired = true;
@@ -422,7 +698,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Changed_DoesNotFire_WhenMarkAllReadHasNoVisibleUnreadNotifications()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("read", "Read", DateTimeOffset.UtcNow);
         store.AddOrUpdate("hidden", "Hidden", DateTimeOffset.UtcNow);
         store.MarkRead("read");
@@ -439,7 +715,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Hide_MarksNotificationHiddenAndRead()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "Water leak", DateTimeOffset.UtcNow);
 
         store.Hide("n1");
@@ -454,7 +730,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void Unhide_RestoresVisibilityWithoutChangingReadState()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("n1", "Water leak", DateTimeOffset.UtcNow);
         store.Hide("n1");
 
@@ -469,7 +745,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void MarkAllRead_MarksOnlyVisibleNotificationsRead()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("visible", "Visible", DateTimeOffset.UtcNow);
         store.AddOrUpdate("hidden", "Hidden", DateTimeOffset.UtcNow);
         store.Hide("hidden");
@@ -485,7 +761,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void GetNotifications_FiltersByVisibilityAndReadState()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("unread", "Unread", DateTimeOffset.UtcNow.AddMinutes(-3));
         store.AddOrUpdate("read", "Read", DateTimeOffset.UtcNow.AddMinutes(-2));
         store.AddOrUpdate("hidden", "Hidden", DateTimeOffset.UtcNow.AddMinutes(-1));
@@ -502,7 +778,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void GetNotifications_SearchesTitleMessageAndTagCaseInsensitively()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate("title", "Body", DateTimeOffset.UtcNow, title: "Kitchen Alert");
         store.AddOrUpdate("message", "Garage door open", DateTimeOffset.UtcNow);
         store.AddOrUpdate("tag", "Other", DateTimeOffset.UtcNow, severity: "security");
@@ -515,7 +791,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void GetNotifications_SearchDoesNotMatchIdsOrReferenceIds()
     {
-        var store = new NotificationStore();
+        var store = CreateStore();
         store.AddOrUpdate(
             "internal-id",
             "Normal message",
@@ -529,7 +805,7 @@ public sealed class NotificationStoreTests
     [Fact]
     public void GetNotifications_LoadedDismissedEntry_IsHiddenAndExcludedFromVisible()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(StorageFilePath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(storageFilePath)!);
 
         var seeded = new StoredNotification(
             "persist-hidden",
@@ -552,12 +828,13 @@ public sealed class NotificationStoreTests
         {
             Notifications = new[] { seeded },
         });
-        File.WriteAllText(StorageFilePath, json);
+        File.WriteAllText(storageFilePath, json);
 
-        var store = new NotificationStore();
+        var store = CreateStore();
 
         Assert.Contains(store.GetNotifications(NotificationVisibilityFilter.Hidden, null), n => n.Id == seeded.Id);
         Assert.DoesNotContain(store.GetNotifications(NotificationVisibilityFilter.Visible, null), n => n.Id == seeded.Id);
         Assert.Contains(store.GetNotifications(NotificationVisibilityFilter.All, null), n => n.Id == seeded.Id);
     }
 }
+

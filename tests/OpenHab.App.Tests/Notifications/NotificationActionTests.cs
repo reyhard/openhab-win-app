@@ -41,6 +41,40 @@ public sealed class NotificationActionTests
     }
 
     [Fact]
+    public void Parse_HttpUrl_TrimmedInput_PreservesTrimmedAbsoluteUrlPayload()
+    {
+        var httpsResult = NotificationActionParser.TryParse("  https://openhab.org/docs  ");
+        Assert.NotNull(httpsResult);
+        Assert.Equal("https", httpsResult.Type);
+        Assert.Equal("https://openhab.org/docs", httpsResult.Payload);
+
+        var httpResult = NotificationActionParser.TryParse("  http://example.com/path?q=1  ");
+        Assert.NotNull(httpResult);
+        Assert.Equal("http", httpResult.Type);
+        Assert.Equal("http://example.com/path?q=1", httpResult.Payload);
+    }
+
+    [Fact]
+    public void Parse_TrimsTypeAndPayloadParts()
+    {
+        var result = NotificationActionParser.TryParse("  command  :  KitchenLights:ON  ");
+
+        Assert.NotNull(result);
+        Assert.Equal("command", result.Type);
+        Assert.Equal("KitchenLights:ON", result.Payload);
+    }
+
+    [Fact]
+    public void Parse_PreservesMixedCaseTypeForExecutorCaseInsensitiveDispatch()
+    {
+        var result = NotificationActionParser.TryParse("Command:KitchenLight:ON");
+
+        Assert.NotNull(result);
+        Assert.Equal("Command", result.Type);
+        Assert.Equal("KitchenLight:ON", result.Payload);
+    }
+
+    [Fact]
     public void Parse_RuleAction_ReturnsCorrectTypeAndPayload()
     {
         var result = NotificationActionParser.TryParse("rule:02ffc3a297:prop1=foo");
@@ -159,5 +193,41 @@ public sealed class NotificationActionTests
     public void Parse_ButtonEmptyString_ReturnsNull()
     {
         Assert.Null(NotificationActionParser.TryParseButton(""));
+    }
+
+    [Fact]
+    public void Parse_ButtonRejectsEmptyTitle()
+    {
+        Assert.Null(NotificationActionParser.TryParseButton("   =command:KitchenLight:ON"));
+    }
+
+    [Fact]
+    public void Parse_ButtonRejectsEmptyAction()
+    {
+        Assert.Null(NotificationActionParser.TryParseButton("Turn on light=   "));
+    }
+
+    [Fact]
+    public void Parse_ButtonTrimsTitleAndAction()
+    {
+        var result = NotificationActionParser.TryParseButton("  Turn on light  =  command:KitchenLight:ON  ");
+
+        Assert.NotNull(result);
+        Assert.Equal("Turn on light", result.Title);
+        Assert.Equal("command", result.Type);
+        Assert.Equal("KitchenLight:ON", result.Payload);
+    }
+
+    [Fact]
+    public void Button_ToRawButton_RoundTrips()
+    {
+        var button = new NotificationActionButton("Open", "ui", "navigate:/page/security");
+
+        var raw = button.ToRawButton();
+        var parsed = NotificationActionParser.TryParseButton(raw);
+
+        Assert.Equal("Open=ui:navigate:/page/security", raw);
+        Assert.NotNull(parsed);
+        Assert.Equal(button, parsed);
     }
 }

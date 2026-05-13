@@ -4,6 +4,7 @@
     <ProjectReference Include="..\OpenHab.Core\OpenHab.Core.csproj" />
     <ProjectReference Include="..\OpenHab.Sitemaps\OpenHab.Sitemaps.csproj" />
     <ProjectReference Include="..\OpenHab.Rendering\OpenHab.Rendering.csproj" />
+    <ProjectReference Include="..\OpenHab.Windows.Notifications\OpenHab.Windows.Notifications.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

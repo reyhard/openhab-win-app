@@ -4,6 +4,15 @@ public sealed record NotificationAction(string Type, string Payload);
 
 public sealed record NotificationActionButton(string Title, string Type, string Payload);
 
+public static class NotificationActionButtonExtensions
+{
+    public static string ToRawButton(this NotificationActionButton button)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+        return $"{button.Title}={button.Type}:{button.Payload}";
+    }
+}
+
 public static class NotificationActionParser
 {
     public static NotificationAction? TryParse(string? rawAction)
@@ -16,12 +25,14 @@ public static class NotificationActionParser
         if (span.IsEmpty)
             return null;
 
+        var trimmed = span.ToString();
+
         // Special case: http:// and https:// URLs — type is the scheme, payload is the full URL
         if (span.StartsWith("https://".AsSpan(), StringComparison.OrdinalIgnoreCase))
-            return new NotificationAction("https", rawAction!);
+            return new NotificationAction("https", trimmed);
 
         if (span.StartsWith("http://".AsSpan(), StringComparison.OrdinalIgnoreCase))
-            return new NotificationAction("http", rawAction!);
+            return new NotificationAction("http", trimmed);
 
         // General case: type is everything before the first colon, payload is everything after
         int colonIndex = span.IndexOf(':');
@@ -31,8 +42,11 @@ public static class NotificationActionParser
             return new NotificationAction(span.ToString(), string.Empty);
         }
 
-        string type = span[..colonIndex].ToString();
-        string payload = span[(colonIndex + 1)..].ToString();
+        string type = span[..colonIndex].ToString().Trim();
+        string payload = span[(colonIndex + 1)..].ToString().Trim();
+
+        if (type.Length == 0)
+            return null;
 
         return new NotificationAction(type, payload);
     }
@@ -52,8 +66,11 @@ public static class NotificationActionParser
         if (eqIndex < 0)
             return null;
 
-        string title = span[..eqIndex].ToString();
-        string actionPart = span[(eqIndex + 1)..].ToString();
+        string title = span[..eqIndex].ToString().Trim();
+        string actionPart = span[(eqIndex + 1)..].ToString().Trim();
+
+        if (title.Length == 0 || actionPart.Length == 0)
+            return null;
 
         NotificationAction? action = TryParse(actionPart);
         if (action is null)
