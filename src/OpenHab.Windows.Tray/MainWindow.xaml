@@ -136,6 +136,11 @@
                     <StackPanel x:Name="SidebarConnectionPanel" Grid.Row="2" Spacing="2">
                         <TextBlock x:Name="ShellConnectionText" Text="Connecting..." Opacity="0.8" />
                         <TextBlock Text="to openHAB server" Opacity="0.55" Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock x:Name="ShellStatusText"
+                                   Visibility="Collapsed"
+                                   Opacity="0.8"
+                                   TextWrapping="Wrap"
+                                   Style="{StaticResource CaptionTextBlockStyle}" />
                     </StackPanel>
                 </Grid>
             </Border>

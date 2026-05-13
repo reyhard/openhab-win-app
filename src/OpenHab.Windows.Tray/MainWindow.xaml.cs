@@ -8,6 +8,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using Windows.System;
 using OpenHab.App.Notifications;
@@ -198,7 +199,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowSettingsPage()
     {
-        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, text => ShellConnectionText.Text = text);
+        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, SetShellStatusText);
         settingsPage.ShowRoot();
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(settingsPage);
@@ -210,8 +211,8 @@ public sealed partial class MainWindow : Window
         SitemapPaneColumn.Width = state.IsSitemapVisible ? new GridLength(380) : new GridLength(0);
         SitemapContentRoot.Visibility = state.IsSitemapVisible ? Visibility.Visible : Visibility.Collapsed;
         ToggleSitemapIcon.Foreground = state.IsSitemapVisible
-            ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
-            : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+            ? GetThemeBrush("AccentTextFillColorPrimaryBrush")
+            : GetThemeBrush("TextFillColorPrimaryBrush");
         ToolTipService.SetToolTip(ToggleSitemapButton, state.IsSitemapVisible ? "Hide sitemap" : "Show sitemap");
         AutomationProperties.SetName(ToggleSitemapButton, state.IsSitemapVisible ? "Hide sitemap" : "Show sitemap");
         if (settingsController.Current.MainWindowSitemapPaneVisible != state.IsSitemapVisible)
@@ -414,7 +415,16 @@ public sealed partial class MainWindow : Window
 
     private void RefreshPromotedMainUiPagesList(bool discoveryError = false)
     {
+        if (settingsController.Current.MainWindowSidebarCollapsed)
+        {
+            MainUiPagesChevron.Visibility = Visibility.Collapsed;
+            MainUiPagesList.Children.Clear();
+            MainUiPagesList.Visibility = Visibility.Collapsed;
+            return;
+        }
+
         var isExpanded = settingsController.Current.MainUiPagesExpanded;
+        MainUiPagesChevron.Visibility = Visibility.Visible;
         MainUiPagesChevron.Glyph = isExpanded ? "\uE70E" : "\uE70D";
         MainUiPagesList.Children.Clear();
         MainUiPagesList.Visibility = isExpanded ? Visibility.Visible : Visibility.Collapsed;
@@ -814,9 +824,9 @@ public sealed partial class MainWindow : Window
 
     private void SidebarCollapseButton_Click(object sender, RoutedEventArgs e)
     {
-        var collapsed = !settingsController.Current.MainWindowSidebarCollapsed;
-        settingsController.SetMainWindowSidebarCollapsed(collapsed);
-        ApplySidebarCollapsedState(collapsed);
+        var isSidebarCollapsed = !settingsController.Current.MainWindowSidebarCollapsed;
+        settingsController.SetMainWindowSidebarCollapsed(isSidebarCollapsed);
+        ApplySidebarCollapsedState(isSidebarCollapsed);
     }
 
     private void ApplySidebarCollapsedState(bool collapsed)
@@ -827,6 +837,11 @@ public sealed partial class MainWindow : Window
         MainUiPagesNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         NotificationsNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         SettingsNavText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        MainUiPagesChevron.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        HomeNavButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        MainUiPagesToggleButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        NotificationsNavButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        SettingsNavButton.HorizontalContentAlignment = collapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         MainUiPagesList.Visibility = collapsed
             ? Visibility.Collapsed
             : (settingsController.Current.MainUiPagesExpanded ? Visibility.Visible : Visibility.Collapsed);
@@ -835,6 +850,27 @@ public sealed partial class MainWindow : Window
         SidebarCollapseIcon.Glyph = collapsed ? "\uE701" : "\uE700";
         ToolTipService.SetToolTip(SidebarCollapseButton, collapsed ? "Expand navigation" : "Collapse navigation");
         AutomationProperties.SetName(SidebarCollapseButton, collapsed ? "Expand navigation" : "Collapse navigation");
+    }
+
+    private void SetShellStatusText(string text)
+    {
+        ShellStatusText.Text = text;
+        ShellStatusText.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private static Brush GetThemeBrush(string key)
+    {
+        if (Application.Current.Resources.TryGetValue(key, out var resource) && resource is Brush brush)
+        {
+            return brush;
+        }
+
+        if (Application.Current.Resources.TryGetValue("TextFillColorPrimaryBrush", out resource) && resource is Brush fallback)
+        {
+            return fallback;
+        }
+
+        return new SolidColorBrush(Microsoft.UI.Colors.Black);
     }
 
     /// <summary>Updates header chrome independently of sitemap rows.</summary>
