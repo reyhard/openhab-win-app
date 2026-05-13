@@ -9,6 +9,9 @@ Read this file before implementation. Older dated status files remain useful as 
 ## Shipped Product Shape
 
 - Windows 11 tray app with compact flyout and larger main window.
+- Main window defaults to embedded openHAB Main UI through WebView2.
+- Main window left rail contains Settings, Notifications, and collapsible promoted Main UI pages discovered from `/rest/ui/components/ui:page`.
+- Native sitemap rendering remains available as an independent right-side pane that is hidden by default and can stay visible while Main UI, Settings, or Notifications are active.
 - Native sitemap rendering through `OpenHab.Rendering` descriptors and `OpenHab.Windows.Tray.Rendering.SitemapControlFactory`.
 - Connected sitemap homepage loading through `OpenHab.App.Runtime.SitemapRuntimeController`.
 - Settings, credentials, startup integration, packaging, subpage navigation, breadcrumbs, ButtonGrid dispatch, and event-stream widget updates have later evidence in source and dated plans/status files.
@@ -31,6 +34,19 @@ Read this file before implementation. Older dated status files remain useful as 
 - Full gate: run `dotnet test OpenHab.Windows.sln` and `dotnet build OpenHab.Windows.sln --configuration Release` when DesktopBridge package targets are installed.
 - Known environment issue: `OpenHab.Windows.Package.wapproj` imports `Microsoft.DesktopBridge.props`; environments without that target can still run direct test projects.
 - 2026-05-13 advanced notification verification: Core, Sitemaps, Rendering direct test projects passed; App notification tests passed 117/117; `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore` passed. `dotnet test OpenHab.Windows.sln --no-restore --blame-hang --blame-hang-timeout 20s` hit the known DesktopBridge import issue, then completed Core/Sitemaps/Rendering and executed App assertions 230/230 successfully, but the App VSTest host did not exit and was aborted by blame-hang after 20 seconds; listed active tests were existing tray/UI helper tests rather than notification failures.
+
+## Latest Verification Evidence
+
+2026-05-12 Main UI shell branch `feature/main-ui-shell`:
+
+- Passed: `dotnet test tests/OpenHab.Core.Tests/OpenHab.Core.Tests.csproj` (`61/61`).
+- Passed: `dotnet test tests/OpenHab.Sitemaps.Tests/OpenHab.Sitemaps.Tests.csproj` (`39/39`).
+- Passed: `dotnet test tests/OpenHab.Rendering.Tests/OpenHab.Rendering.Tests.csproj` (`31/31`).
+- Passed: `dotnet test tests/OpenHab.App.Tests/OpenHab.App.Tests.csproj` (`291/291`).
+- Passed: `dotnet build src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj --configuration Debug` (0 warnings, 0 errors).
+- Passed: `dotnet build src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj --configuration Release` (0 warnings, 0 errors).
+- Passed: `.\build-package.ps1 -Configuration Release -Platform x64` using Visual Studio MSBuild and DesktopBridge targets.
+- Caveat: `dotnet test OpenHab.Windows.sln -m:1` ran all test projects successfully (`61/61`, `39/39`, `31/31`, `291/291`) but exited non-zero because dotnet SDK MSBuild could not import `Microsoft.DesktopBridge.props` for `OpenHab.Windows.Package.wapproj`.
 
 ## Historical Status References
 

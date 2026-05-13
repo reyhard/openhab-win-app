@@ -46,6 +46,7 @@ public partial class App : Application
     private SitemapRuntimeController? runtimeController;
     private DeviceInfoSyncService? deviceInfoSyncService;
     private WindowsSessionInfoReader? windowsSessionInfoReader;
+    private CancellationTokenSource? promotedMainUiDiscoveryCts;
     private bool deviceInfoEventsRegistered;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
     private int isShuttingDown;
@@ -72,6 +73,7 @@ public partial class App : Application
         SetCurrentProcessExplicitAppUserModelID("OpenHab.OpenHabWinApp");
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         uiDispatcherQueue = DispatcherQueue.GetForCurrentThread();
+        promotedMainUiDiscoveryCts = new CancellationTokenSource();
 
         var activatedEventArgs = AppInstance.GetCurrent().GetActivatedEventArgs();
 
@@ -139,6 +141,21 @@ public partial class App : Application
             {
                 shellController.HandleWindowCloseRequested(TrayShellSurface.MainWindow);
                 _ = ApplyShellStateAsync();
+            },
+            openHabClientFactory: (transportKind, endpoint) =>
+            {
+                var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
+                return new OpenHabHttpClient(
+                    httpClient,
+                    endpoint,
+                    apiToken: auth.ApiToken,
+                    basicUserName: auth.BasicUserName,
+                    basicPassword: auth.BasicPassword);
+            },
+            mainUiAuthResolver: transportKind =>
+            {
+                var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
+                return new MainUi.MainUiAuthContext(auth.ApiToken, auth.BasicUserName, auth.BasicPassword);
             });
         flyoutWindow = new FlyoutWindow(
             settingsController,
@@ -529,6 +546,12 @@ public partial class App : Application
                     settingsController.SetSitemapName(string.Empty);
                 }
             }
+
+            var discoveryCancellationToken = promotedMainUiDiscoveryCts?.Token ?? CancellationToken.None;
+            _ = uiDispatcherQueue?.TryEnqueue(() =>
+            {
+                _ = RefreshPromotedMainUiPagesOnStartupAsync(discoveryCancellationToken);
+            });
         }
         catch
         {
@@ -538,6 +561,26 @@ public partial class App : Application
         DiagnosticLogger.Info("Completing startup — starting notification polling");
         StartNotificationPolling(settingsController);
         HandleStartupActivation(activatedEventArgs);
+    }
+
+    private async Task RefreshPromotedMainUiPagesOnStartupAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (mainWindow is not null)
+            {
+                await mainWindow.RefreshPromotedMainUiPagesAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException ex)
+            when (cancellationToken.IsCancellationRequested && ex.CancellationToken == cancellationToken)
+        {
+            // Expected when the app exits while startup discovery is still in flight.
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Startup Main UI page discovery failed: {ex.GetType().Name}");
+        }
     }
 
     private void ShutdownTrayResources()
@@ -566,6 +609,9 @@ public partial class App : Application
     private void ShutdownTrayResourcesCore()
     {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
+        promotedMainUiDiscoveryCts?.Cancel();
+        promotedMainUiDiscoveryCts?.Dispose();
+        promotedMainUiDiscoveryCts = null;
         UnregisterDeviceInfoSyncEvents();
         deviceInfoSyncService?.Dispose();
         deviceInfoSyncService = null;

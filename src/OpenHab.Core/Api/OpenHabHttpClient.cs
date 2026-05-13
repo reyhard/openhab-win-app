@@ -1,8 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
 using OpenHab.Core;
+using OpenHab.Core.Ui;
 
 namespace OpenHab.Core.Api;
 
@@ -99,6 +101,44 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         return results;
     }
 
+    public async Task<IReadOnlyList<MainUiPageComponent>> GetMainUiPageComponentsAsync(CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildUri("rest/ui/components/ui:page"));
+        ApplyAuth(request);
+
+        using var response = await _httpClient.SendAsync(request, ct);
+        await ThrowIfFailedAsync(response, ct);
+
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+
+        if (json.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new FormatException("Main UI page component response must be a JSON array.");
+        }
+
+        var pages = new List<MainUiPageComponent>();
+        foreach (var element in json.RootElement.EnumerateArray())
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var uid = ReadString(element, "uid");
+            if (string.IsNullOrWhiteSpace(uid))
+            {
+                continue;
+            }
+
+            var component = ReadString(element, "component") ?? string.Empty;
+            var config = ReadConfig(element);
+            pages.Add(new MainUiPageComponent(uid, component, config));
+        }
+
+        return pages;
+    }
+
     private async Task SendPlainTextAsync(HttpMethod method, string relativePath, string body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, BuildUri(relativePath))
@@ -137,6 +177,29 @@ public sealed class OpenHabHttpClient : IOpenHabClient
             var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
         }
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    private static IReadOnlyDictionary<string, JsonElement> ReadConfig(JsonElement element)
+    {
+        if (!element.TryGetProperty("config", out var configElement) || configElement.ValueKind != JsonValueKind.Object)
+        {
+            return new ReadOnlyDictionary<string, JsonElement>(new Dictionary<string, JsonElement>(StringComparer.Ordinal));
+        }
+
+        var config = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var property in configElement.EnumerateObject())
+        {
+            config[property.Name] = property.Value.Clone();
+        }
+
+        return new ReadOnlyDictionary<string, JsonElement>(config);
     }
 
     private static async Task ThrowIfFailedAsync(HttpResponseMessage response, CancellationToken cancellationToken)

@@ -1,6 +1,7 @@
 using OpenHab.Core;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
+using OpenHab.App.MainUi;
 using OpenHab.Rendering.Descriptors;
 using System.Collections.Immutable;
 using System.Collections.Generic;
@@ -103,6 +104,11 @@ public sealed class AppSettingsController
             throw new ArgumentException("Local endpoint must use HTTP or HTTPS.", nameof(localEndpoint));
         }
 
+        if (!string.IsNullOrEmpty(localEndpoint.UserInfo))
+        {
+            throw new ArgumentException("Local endpoint must not contain user information.", nameof(localEndpoint));
+        }
+
         if (!cloudEndpoint.IsAbsoluteUri)
         {
             throw new ArgumentException("Cloud endpoint must be an absolute URI.", nameof(cloudEndpoint));
@@ -111,6 +117,11 @@ public sealed class AppSettingsController
         if (!IsHttpOrHttps(cloudEndpoint))
         {
             throw new ArgumentException("Cloud endpoint must use HTTP or HTTPS.", nameof(cloudEndpoint));
+        }
+
+        if (!string.IsNullOrEmpty(cloudEndpoint.UserInfo))
+        {
+            throw new ArgumentException("Cloud endpoint must not contain user information.", nameof(cloudEndpoint));
         }
 
         UpdateSettings(settings =>
@@ -222,6 +233,30 @@ public sealed class AppSettingsController
         }
 
         UpdateSettings(appSettings => appSettings with { DeviceInfoSync = settings.Normalized() });
+    }
+
+    public void SetMainUiPagesExpanded(bool expanded)
+    {
+        UpdateSettings(settings => settings with { MainUiPagesExpanded = expanded });
+    }
+
+    public void SetMainWindowSitemapPaneVisible(bool visible)
+    {
+        UpdateSettings(settings => settings with { MainWindowSitemapPaneVisible = visible });
+    }
+
+    public void SetMainWindowSidebarCollapsed(bool collapsed)
+    {
+        UpdateSettings(settings => settings with { MainWindowSidebarCollapsed = collapsed });
+    }
+
+    public void SetCachedMainUiPageLinks(IEnumerable<MainUiPageLink> links)
+    {
+        ArgumentNullException.ThrowIfNull(links);
+        UpdateSettings(settings => settings with
+        {
+            CachedMainUiPageLinks = NormalizeMainUiPageLinks(links)
+        });
     }
 
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
@@ -415,6 +450,11 @@ public sealed class AppSettingsController
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
+                if (legacyFollowSystemTheme is bool legacyTheme)
+                {
+                    loaded = loaded with { FollowSystemTheme = legacyTheme };
+                }
+
                 var normalized = NormalizeLoadedSettings(loaded, legacyFollowSystemTheme);
                 // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
@@ -444,6 +484,11 @@ public sealed class AppSettingsController
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)
             {
+                if (legacyFollowSystemTheme is bool legacyTheme)
+                {
+                    loaded = loaded with { FollowSystemTheme = legacyTheme };
+                }
+
                 var normalized = NormalizeLoadedSettings(loaded, legacyFollowSystemTheme);
                 // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
                 lock (syncRoot)
@@ -499,10 +544,13 @@ public sealed class AppSettingsController
         {
             AppColorTheme = appColorTheme,
             FollowSystemTheme = null,
+            LocalEndpoint = NormalizeLoadedEndpoint(settings.LocalEndpoint, AppSettings.Default.LocalEndpoint),
+            CloudEndpoint = NormalizeLoadedEndpoint(settings.CloudEndpoint, AppSettings.Default.CloudEndpoint),
             FlyoutWidth = width,
             NotificationPollIntervalSeconds = interval,
             ImportantNotificationTags = NormalizeImportantNotificationTags(settings.ImportantNotificationTags),
-            DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default
+            DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default,
+            CachedMainUiPageLinks = NormalizeMainUiPageLinks(settings.CachedMainUiPageLinks)
         };
     }
 
@@ -512,7 +560,7 @@ public sealed class AppSettingsController
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object || root.TryGetProperty(nameof(AppSettings.AppColorTheme), out _))
+            if (root.ValueKind != JsonValueKind.Object)
             {
                 return null;
             }
@@ -533,6 +581,64 @@ public sealed class AppSettingsController
         {
             return null;
         }
+    }
+
+    private static Uri NormalizeLoadedEndpoint(Uri? endpoint, Uri defaultEndpoint)
+    {
+        if (endpoint is null || !endpoint.IsAbsoluteUri || !IsHttpOrHttps(endpoint))
+        {
+            return defaultEndpoint;
+        }
+
+        if (string.IsNullOrEmpty(endpoint.UserInfo))
+        {
+            return endpoint;
+        }
+
+        var builder = new UriBuilder(endpoint)
+        {
+            UserName = string.Empty,
+            Password = string.Empty
+        };
+        return builder.Uri;
+    }
+
+    private static ImmutableArray<MainUiPageLink> NormalizeMainUiPageLinks(IEnumerable<MainUiPageLink>? links)
+    {
+        if (links is null)
+        {
+            return [];
+        }
+
+        if (links is ImmutableArray<MainUiPageLink> immutableLinks && immutableLinks.IsDefault)
+        {
+            return [];
+        }
+
+        return links
+            .Where(static link => !string.IsNullOrWhiteSpace(link.Uid))
+            .Select(static link =>
+            {
+                var uid = link.Uid.Trim();
+                var label = string.IsNullOrWhiteSpace(link.Label) ? uid : link.Label.Trim();
+                var route = string.IsNullOrWhiteSpace(link.Route) ? "/page/" + Uri.EscapeDataString(uid) : link.Route.Trim();
+                if (!route.StartsWith("/", StringComparison.Ordinal))
+                {
+                    route = "/" + route;
+                }
+
+                return link with
+                {
+                    Uid = uid,
+                    Label = label,
+                    Route = route
+                };
+            })
+            .DistinctBy(static link => link.Uid, StringComparer.Ordinal)
+            .OrderBy(static link => link.Order ?? int.MaxValue)
+            .ThenBy(static link => link.Label, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(static link => link.Uid, StringComparer.Ordinal)
+            .ToImmutableArray();
     }
 
     private static ImmutableArray<string> NormalizeImportantNotificationTags(IEnumerable<string>? tags)
@@ -562,3 +668,4 @@ public sealed class AppSettingsController
         public Task QueuedSaveTask { get; set; } = Task.CompletedTask;
     }
 }
+

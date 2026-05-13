@@ -196,6 +196,28 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void SetEndpointsRejectsLocalUriUserInfo()
+    {
+        var controller = CreateController();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            controller.SetEndpoints(new Uri("http://user:pass@openhab:8080"), new Uri("https://myopenhab.org")));
+
+        Assert.Contains("user information", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SetEndpointsRejectsCloudUriUserInfo()
+    {
+        var controller = CreateController();
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            controller.SetEndpoints(new Uri("http://openhab:8080"), new Uri("https://user:pass@myopenhab.org")));
+
+        Assert.Contains("user information", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void DefaultsHaveNoTokensOrCloudCredentials()
     {
         var controller = CreateController();
@@ -643,6 +665,26 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void LoadedSettingsStripEndpointUserInfo()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            AppSettings.Default with
+            {
+                LocalEndpoint = new Uri("http://user:pass@openhab:8080/base"),
+                CloudEndpoint = new Uri("https://cloud-user:cloud-pass@myopenhab.org/")
+            });
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        Assert.Equal(new Uri("http://openhab:8080/base"), controller.Current.LocalEndpoint);
+        Assert.Equal(new Uri("https://myopenhab.org/"), controller.Current.CloudEndpoint);
+        Assert.Equal(string.Empty, controller.Current.LocalEndpoint.UserInfo);
+        Assert.Equal(string.Empty, controller.Current.CloudEndpoint.UserInfo);
+    }
+
+    [Fact]
     public async Task ImportantNotificationTagsRoundTripThroughJson()
     {
         var controller = CreateController();
@@ -652,4 +694,70 @@ public sealed class AppSettingsControllerTests
         var reloaded = CreateController();
         Assert.Equal(["critical", "warning"], reloaded.Current.ImportantNotificationTags.ToArray());
     }
+
+    [Fact]
+    public async Task CanPersistMainUiShellState()
+    {
+        var controller = CreateController();
+
+        controller.SetMainUiPagesExpanded(true);
+        controller.SetMainWindowSitemapPaneVisible(true);
+        controller.SetMainWindowSidebarCollapsed(true);
+        controller.SetCachedMainUiPageLinks(new[]
+        {
+            new OpenHab.App.MainUi.MainUiPageLink("energy", "Energy", "/page/energy", "f7:bolt", "oh-layout-page", 10)
+        });
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+
+        Assert.True(reloaded.Current.MainUiPagesExpanded);
+        Assert.True(reloaded.Current.MainWindowSitemapPaneVisible);
+        Assert.True(reloaded.Current.MainWindowSidebarCollapsed);
+        var link = Assert.Single(reloaded.Current.CachedMainUiPageLinks);
+        Assert.Equal("energy", link.Uid);
+        Assert.Equal("Energy", link.Label);
+        Assert.Equal("/page/energy", link.Route);
+    }
+
+    [Fact]
+    public void SetCachedMainUiPageLinksNormalizesBlankLabelsAndRoutes()
+    {
+        var controller = CreateController();
+
+        controller.SetCachedMainUiPageLinks(new[]
+        {
+            new OpenHab.App.MainUi.MainUiPageLink("energy", "  ", "page/energy", null, null, null),
+            new OpenHab.App.MainUi.MainUiPageLink("", "Ignored", "/page/ignored", null, null, null)
+        });
+
+        var link = Assert.Single(controller.Current.CachedMainUiPageLinks);
+        Assert.Equal("energy", link.Uid);
+        Assert.Equal("energy", link.Label);
+        Assert.Equal("/page/energy", link.Route);
+    }
+
+    [Fact]
+    public void CachedMainUiPageLinksLoadedFromJsonAreNormalized()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            AppSettings.Default with
+            {
+                CachedMainUiPageLinks =
+                [
+                    new OpenHab.App.MainUi.MainUiPageLink(" ", "Ignored", "/page/ignored", null, null, null),
+                    new OpenHab.App.MainUi.MainUiPageLink(" energy ", " ", "page/energy", null, null, null)
+                ]
+            });
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        var link = Assert.Single(controller.Current.CachedMainUiPageLinks);
+        Assert.Equal("energy", link.Uid);
+        Assert.Equal("energy", link.Label);
+        Assert.Equal("/page/energy", link.Route);
+    }
 }
+

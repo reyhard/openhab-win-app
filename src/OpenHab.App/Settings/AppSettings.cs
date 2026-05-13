@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using OpenHab.App.MainUi;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using System.Collections.Immutable;
@@ -43,6 +44,10 @@ public sealed record AppSettings(
     bool LaunchAtStartup = true,
     ChartQuality ChartQuality = ChartQuality.High,
     DeviceInfoSyncSettings? DeviceInfoSync = null,
+    bool MainUiPagesExpanded = false,
+    bool MainWindowSitemapPaneVisible = false,
+    bool MainWindowSidebarCollapsed = false,
+    ImmutableArray<MainUiPageLink> CachedMainUiPageLinks = default,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
     [property: JsonIgnore] string? CloudUserName = null)
@@ -56,5 +61,7 @@ public sealed record AppSettings(
         AnimationSpeed: FlyoutAnimationSpeed.Default,
         NotificationPollIntervalSeconds: 30,
         ImportantNotificationTags: [],
-        DeviceInfoSync: DeviceInfoSyncSettings.Default);
+        DeviceInfoSync: DeviceInfoSyncSettings.Default,
+        CachedMainUiPageLinks: []);
 }
+
