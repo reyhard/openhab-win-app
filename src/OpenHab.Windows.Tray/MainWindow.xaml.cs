@@ -876,11 +876,11 @@ public sealed partial class MainWindow : Window
     /// <summary>Updates header chrome independently of sitemap rows.</summary>
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
     {
-        SitemapPickerText.Text = snapshot.Descriptor?.Title ?? settingsController.Current.SitemapName;
-        if (string.IsNullOrWhiteSpace(SitemapPickerText.Text))
-        {
-            SitemapPickerText.Text = "Choose sitemap";
-        }
+        var descriptorTitle = snapshot.Descriptor?.Title;
+        var configuredSitemapName = settingsController.Current.SitemapName;
+        SitemapPickerText.Text = !string.IsNullOrWhiteSpace(descriptorTitle)
+            ? descriptorTitle
+            : (!string.IsNullOrWhiteSpace(configuredSitemapName) ? configuredSitemapName : "Choose sitemap");
         ShellConnectionText.Text = snapshot.ActiveTransport switch
         {
             TransportKind.Cloud => $"Connected via cloud ({snapshot.ConnectionState})",
