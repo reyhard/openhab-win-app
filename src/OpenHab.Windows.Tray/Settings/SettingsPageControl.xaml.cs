@@ -776,7 +776,7 @@ public sealed partial class SettingsPageControl : UserControl
                 Padding = new Thickness(12, 12, 12, 12),
                 Child = new TextBlock
                 {
-                    Text = "No actions configured yet. Add an action to expose it in command menu and/or assign a global shortcut.",
+                    Text = "No actions yet." + Environment.NewLine + "Add actions to make them available in the command menu.",
                     Opacity = 0.72,
                     TextWrapping = TextWrapping.Wrap
                 }
@@ -786,7 +786,7 @@ public sealed partial class SettingsPageControl : UserControl
         {
             for (var i = 0; i < settings.Actions.Length; i++)
             {
-                actionsCardStack.Children.Add(CreateShortcutActionRow(settings.Actions[i], i == settings.Actions.Length - 1));
+                actionsCardStack.Children.Add(CreateShortcutActionRow(settings.Actions[i]));
             }
         }
 
@@ -1513,7 +1513,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(cell);
     }
 
-    private FrameworkElement CreateShortcutActionRow(ShortcutAction action, bool isLast)
+    private FrameworkElement CreateShortcutActionRow(ShortcutAction action)
     {
         var row = new Grid
         {
@@ -1564,7 +1564,7 @@ public sealed partial class SettingsPageControl : UserControl
         return new Border
         {
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-            BorderThickness = isLast ? new Thickness(0, 1, 0, 0) : new Thickness(0, 1, 0, 0),
+            BorderThickness = new Thickness(0, 1, 0, 0),
             Child = row
         };
     }
@@ -1591,15 +1591,15 @@ public sealed partial class SettingsPageControl : UserControl
         var hasShortcut = action.GlobalShortcut is not null;
         if (action.ShowInCommandMenu && hasShortcut)
         {
-            return "Command menu + global";
+            return "Shortcut + Command menu";
         }
 
         if (action.ShowInCommandMenu)
         {
-            return "Command menu";
+            return "Command menu only";
         }
 
-        return hasShortcut ? "Global shortcut" : "Unavailable";
+        return hasShortcut ? "Shortcut only" : "Unavailable";
     }
 
     private ShortcutAction? ResolveShortcutActionDraft(IEnumerable<ShortcutAction> actions)
@@ -1625,16 +1625,26 @@ public sealed partial class SettingsPageControl : UserControl
         return actions.FirstOrDefault(action => string.Equals(action.Id, editingShortcutActionId, StringComparison.Ordinal));
     }
 
-    private void AddShortcutActionButton_Click(object sender, RoutedEventArgs e)
+    private async void AddShortcutActionButton_Click(object sender, RoutedEventArgs e)
     {
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
+        {
+            return;
+        }
+
         creatingShortcutAction = true;
         editingShortcutActionId = null;
         NavigateToSettingsPage(SettingsPage.Shortcuts);
     }
 
-    private void EditShortcutActionButton_Click(object sender, RoutedEventArgs e)
+    private async void EditShortcutActionButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string actionId } || string.IsNullOrWhiteSpace(actionId))
+        {
+            return;
+        }
+
+        if (!await ConfirmDiscardShortcutActionChangesIfNeededAsync())
         {
             return;
         }
@@ -1755,9 +1765,11 @@ public sealed partial class SettingsPageControl : UserControl
                 ShortcutActionEditorErrorText.Text = string.Join(Environment.NewLine, errors.Distinct(StringComparer.Ordinal));
                 ShortcutActionEditorErrorText.Visibility = Visibility.Visible;
             }
-            if (ShortcutActionGlobalShortcutRecorder is not null && !bindingValidation.IsValid)
+            if (ShortcutActionGlobalShortcutRecorder is not null)
             {
-                ShortcutActionGlobalShortcutRecorder.Error = string.Join(Environment.NewLine, bindingValidation.Errors);
+                ShortcutActionGlobalShortcutRecorder.Error = bindingValidation.IsValid
+                    ? null
+                    : string.Join(Environment.NewLine, bindingValidation.Errors);
             }
 
             return;
@@ -1782,6 +1794,75 @@ public sealed partial class SettingsPageControl : UserControl
         creatingShortcutAction = false;
         editingShortcutActionId = null;
         NavigateToSettingsPage(SettingsPage.Shortcuts);
+    }
+
+    private async Task<bool> ConfirmDiscardShortcutActionChangesIfNeededAsync()
+    {
+        var currentDraft = GetCurrentShortcutActionEditorDraft();
+        if (currentDraft is null)
+        {
+            return true;
+        }
+
+        var savedDraft = ResolveShortcutActionDraft((settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized().Actions);
+        if (savedDraft is not null && ShortcutActionDraftEquals(currentDraft, savedDraft))
+        {
+            return true;
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "Discard unsaved changes?",
+            Content = "You have unsaved changes in the action editor.",
+            PrimaryButtonText = "Continue",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close
+        };
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private ShortcutAction? GetCurrentShortcutActionEditorDraft()
+    {
+        if (ShortcutActionNameText is null
+            || ShortcutActionIconCombo is null
+            || ShortcutActionShowInCommandMenuToggle is null
+            || ShortcutActionTargetItemText is null
+            || ShortcutActionTypeCombo is null
+            || ShortcutActionValueText is null)
+        {
+            return null;
+        }
+
+        var actionId = creatingShortcutAction
+            ? string.Empty
+            : editingShortcutActionId ?? string.Empty;
+        var selectedType = ShortcutActionTypeCombo.SelectedItem is ShortcutCommandType commandType
+            ? commandType
+            : ShortcutCommandType.Toggle;
+        var selectedIcon = ShortcutActionIconCombo.SelectedItem as ShortcutIconDefinition;
+
+        return new ShortcutAction(
+            actionId,
+            ShortcutActionNameText.Text.Trim(),
+            selectedIcon?.Id ?? "custom",
+            ShortcutActionShowInCommandMenuToggle.IsOn,
+            ShortcutActionGlobalShortcutRecorder?.Binding,
+            ShortcutActionTargetItemText.Text.Trim(),
+            selectedType,
+            string.IsNullOrWhiteSpace(ShortcutActionValueText.Text) ? null : ShortcutActionValueText.Text.Trim());
+    }
+
+    private static bool ShortcutActionDraftEquals(ShortcutAction current, ShortcutAction saved)
+    {
+        return string.Equals(current.Name, saved.Name, StringComparison.Ordinal)
+            && string.Equals(current.IconId, saved.IconId, StringComparison.Ordinal)
+            && current.ShowInCommandMenu == saved.ShowInCommandMenu
+            && ShortcutBindingFormatter.Format(current.GlobalShortcut).Equals(ShortcutBindingFormatter.Format(saved.GlobalShortcut), StringComparison.Ordinal)
+            && string.Equals(current.TargetItem, saved.TargetItem, StringComparison.Ordinal)
+            && current.CommandType == saved.CommandType
+            && string.Equals(current.CommandValue ?? string.Empty, saved.CommandValue ?? string.Empty, StringComparison.Ordinal);
     }
 
     private void DeviceInfoSyncField_LostFocus(object sender, RoutedEventArgs e)
