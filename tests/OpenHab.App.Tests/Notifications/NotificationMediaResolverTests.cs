@@ -97,6 +97,30 @@ public sealed class NotificationMediaResolverTests : IDisposable
     }
 
     [Fact]
+    public async Task ResolveAsync_ItemReferenceDataUri_DecodesImageBeforeCaching()
+    {
+        var pngBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 1, 2, 3 };
+        var dataUri = $"data:image/png;base64,{Convert.ToBase64String(pngBytes)}";
+        var handler = new CaptureHandler(_ =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(dataUri)
+            };
+            response.Content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+            return response;
+        });
+        var resolver = CreateResolver(handler, EndpointMode.LocalOnly);
+
+        var result = await resolver.ResolveAsync("item:Camera_Image", CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.True(result!.IsFile);
+        Assert.Equal(".png", Path.GetExtension(result.LocalPath));
+        Assert.Equal(pngBytes, await File.ReadAllBytesAsync(result.LocalPath));
+    }
+
+    [Fact]
     public async Task ResolveAsync_CloudTransport_UsesBasicAuthFromCloudCredentials()
     {
         var handler = new CaptureHandler(req =>

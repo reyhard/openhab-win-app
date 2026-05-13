@@ -77,10 +77,19 @@ public sealed class NotificationMediaResolver
                 continue;
             }
 
-            var extension = ResolveFileExtension(bytes.Value.mediaType);
+            var media = DecodeDataUriIfNeeded(bytes.Value.data, bytes.Value.mediaType);
+            if (media is null)
+            {
+                DiagnosticLogger.Warn($"Notification media skipped due to invalid data URI: endpoint='{fetchUri.Host}'");
+                continue;
+            }
+
+            var extension = ResolveFileExtension(media.Value.mediaType);
             var cachePath = BuildCachePath(fetchUri, extension);
             Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-            await File.WriteAllBytesAsync(cachePath, bytes.Value.data, cancellationToken);
+            await File.WriteAllBytesAsync(cachePath, media.Value.data, cancellationToken);
+            DiagnosticLogger.Info(
+                $"Notification media cached: source='{ResolveSourceKind(trimmed)}', endpoint='{fetchUri.Host}', media='{media.Value.mediaType ?? "unknown"}', bytes={media.Value.data.Length}, extension='{extension}'");
             return new Uri(cachePath);
         }
 
@@ -171,6 +180,58 @@ public sealed class NotificationMediaResolver
         return (data, response.Content.Headers.ContentType?.MediaType);
     }
 
+    private (byte[] data, string? mediaType)? DecodeDataUriIfNeeded(byte[] data, string? mediaType)
+    {
+        if (!LooksLikeDataUri(data))
+        {
+            return (data, mediaType);
+        }
+
+        var text = Encoding.UTF8.GetString(data);
+        var commaIndex = text.IndexOf(',');
+        if (commaIndex <= "data:".Length)
+        {
+            return null;
+        }
+
+        var metadata = text["data:".Length..commaIndex];
+        if (!metadata.Contains(";base64", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var detectedMediaType = metadata.Split(';', 2)[0].Trim();
+        if (detectedMediaType.Length == 0)
+        {
+            detectedMediaType = mediaType ?? "application/octet-stream";
+        }
+
+        try
+        {
+            var decoded = Convert.FromBase64String(text[(commaIndex + 1)..].Trim());
+            if (decoded.Length == 0 || decoded.Length > maxBytes)
+            {
+                return null;
+            }
+
+            return (decoded, detectedMediaType);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static bool LooksLikeDataUri(byte[] data)
+    {
+        return data.Length >= 5
+            && data[0] is (byte)'d' or (byte)'D'
+            && data[1] is (byte)'a' or (byte)'A'
+            && data[2] is (byte)'t' or (byte)'T'
+            && data[3] is (byte)'a' or (byte)'A'
+            && data[4] == (byte)':';
+    }
+
     private void ApplyAuth(HttpRequestMessage request, TransportKind transport)
     {
         if (transport == TransportKind.Local)
@@ -220,6 +281,21 @@ public sealed class NotificationMediaResolver
             "image/svg+xml" => ".svg",
             _ => ".bin"
         };
+    }
+
+    private static string ResolveSourceKind(string mediaAttachmentUrl)
+    {
+        if (mediaAttachmentUrl.StartsWith("item:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "item";
+        }
+
+        if (mediaAttachmentUrl.StartsWith('/'))
+        {
+            return "relative";
+        }
+
+        return "unknown";
     }
 
     private static async Task<byte[]?> ReadBoundedAsync(Stream stream, int maxBytes, CancellationToken cancellationToken)

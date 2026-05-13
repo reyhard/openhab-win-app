@@ -115,7 +115,9 @@ public static class ToastService
         var actionCount = request.Actions?.Count ?? 0;
         DiagnosticLogger.Info(
             $"Toast.Show#{seq} begin title=\"{request.Title}\" actions={actionCount} " +
-            $"packaged={isPackaged} important={request.Important} tag={request.Tag ?? "<none>"} threadId={Environment.CurrentManagedThreadId}");
+            $"packaged={isPackaged} important={request.Important} tag={request.Tag ?? "<none>"} " +
+            $"logo={DescribeImageUri(request.AppLogoOverrideUri)} hero={DescribeImageUri(request.HeroImageUri)} " +
+            $"threadId={Environment.CurrentManagedThreadId}");
 
         try
         {
@@ -178,5 +180,18 @@ public static class ToastService
         DiagnosticLogger.Info(
             $"Toast activated (unpackaged) — threadId={Environment.CurrentManagedThreadId}");
         NotificationActivated?.Invoke(null, args);
+    }
+
+    private static string DescribeImageUri(Uri? uri)
+    {
+        if (uri is null)
+        {
+            return "<none>";
+        }
+
+        var extension = Path.GetExtension(uri.IsFile ? uri.LocalPath : uri.AbsolutePath);
+        return string.IsNullOrWhiteSpace(extension)
+            ? uri.Scheme
+            : $"{uri.Scheme}:{extension}";
     }
 }
