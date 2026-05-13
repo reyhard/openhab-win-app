@@ -59,16 +59,16 @@ public sealed class ShortcutActionExecutor
                 "Cannot execute action while disconnected.");
         }
 
-        var client = getClient();
-        if (client is null)
-        {
-            return ShortcutActionExecutionResult.Failed(
-                ShortcutActionExecutionFailure.MissingClient,
-                "Client is unavailable.");
-        }
-
         try
         {
+            var client = getClient();
+            if (client is null)
+            {
+                return ShortcutActionExecutionResult.Failed(
+                    ShortcutActionExecutionFailure.MissingClient,
+                    "Client is unavailable.");
+            }
+
             var commandResolution = await ResolveCommandAsync(client, action, cancellationToken).ConfigureAwait(false);
             if (!commandResolution.Succeeded)
             {

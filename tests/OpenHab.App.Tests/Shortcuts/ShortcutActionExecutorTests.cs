@@ -186,6 +186,38 @@ public sealed class ShortcutActionExecutorTests
     }
 
     [Fact]
+    public async Task ClientProviderExceptionReturnsCommandFailed()
+    {
+        var providerInvoked = false;
+        var executor = new ShortcutActionExecutor(
+            () =>
+            {
+                providerInvoked = true;
+                throw new InvalidOperationException("provider failed");
+            },
+            () => ConnectionState.Online);
+        var action = Action(ShortcutCommandType.SendCommand, "PLAY");
+
+        var result = await executor.ExecuteAsync(action, CancellationToken.None);
+
+        Assert.True(providerInvoked);
+        Assert.False(result.Succeeded);
+        Assert.Equal(ShortcutActionExecutionFailure.CommandFailed, result.Failure);
+    }
+
+    [Fact]
+    public async Task ClientProviderCancellationIsRethrown()
+    {
+        var executor = new ShortcutActionExecutor(
+            () => throw new OperationCanceledException("cancel"),
+            () => ConnectionState.Online);
+        var action = Action(ShortcutCommandType.SendCommand, "PLAY");
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => executor.ExecuteAsync(action, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task CommandExceptionReturnsCommandFailed()
     {
         var client = new RecordingShortcutClient
