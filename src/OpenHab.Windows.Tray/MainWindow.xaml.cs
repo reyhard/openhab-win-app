@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
     private readonly OpenHab.App.Shell.MainWindowShellController shellController;
     private readonly NotificationStore? notificationStore;
     private readonly Action requestHideToTray;
+    private readonly Func<bool> shouldAllowClose;
     private readonly Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory;
     private readonly Func<TransportKind, MainUiAuthContext> mainUiAuthResolver;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
@@ -80,6 +81,7 @@ public sealed partial class MainWindow : Window
             runtimeController,
             notificationStore: null,
             () => { },
+            () => false,
             (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint),
             _ => MainUiAuthContext.None)
     {
@@ -94,6 +96,7 @@ public sealed partial class MainWindow : Window
             runtimeController,
             notificationStore: null,
             requestHideToTray,
+            () => false,
             (transportKind, endpoint) => new OpenHabHttpClient(FallbackOpenHabClient, endpoint),
             _ => MainUiAuthContext.None)
     {
@@ -104,6 +107,7 @@ public sealed partial class MainWindow : Window
         SitemapRuntimeController runtimeController,
         NotificationStore? notificationStore,
         Action requestHideToTray,
+        Func<bool>? shouldAllowClose,
         Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory,
         Func<TransportKind, MainUiAuthContext>? mainUiAuthResolver = null)
     {
@@ -111,6 +115,7 @@ public sealed partial class MainWindow : Window
         this.runtimeController = runtimeController;
         this.notificationStore = notificationStore;
         this.requestHideToTray = requestHideToTray;
+        this.shouldAllowClose = shouldAllowClose ?? (() => false);
         this.openHabClientFactory = openHabClientFactory;
         this.mainUiAuthResolver = mainUiAuthResolver ?? (_ => MainUiAuthContext.None);
         sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
@@ -774,6 +779,11 @@ public sealed partial class MainWindow : Window
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
     {
+        if (shouldAllowClose())
+        {
+            return;
+        }
+
         if (isHandlingCloseRequest)
         {
             return;

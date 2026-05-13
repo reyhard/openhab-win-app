@@ -155,6 +155,7 @@ public partial class App : Application
                 shellController.HandleWindowCloseRequested(TrayShellSurface.MainWindow);
                 _ = ApplyShellStateAsync();
             },
+            shouldAllowClose: IsShutdownInProgress,
             openHabClientFactory: (transportKind, endpoint) =>
             {
                 var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
@@ -203,6 +204,11 @@ public partial class App : Application
 
         flyoutWindow.AppWindow.Closing += (sender, args) =>
         {
+            if (IsShutdownInProgress())
+            {
+                return;
+            }
+
             // If the window is already hidden (by exit animation), just cancel
             if (!flyoutWindow.AppWindow.IsVisible)
             {
@@ -453,6 +459,12 @@ public partial class App : Application
     private void OnProcessExit(object? sender, EventArgs args)
     {
         ShutdownTrayResources();
+    }
+
+    private bool IsShutdownInProgress()
+    {
+        return Volatile.Read(ref isShuttingDown) != 0
+            || shellController?.Current.ShouldExitProcess == true;
     }
 
     private async Task ApplyShellStateAsync()
