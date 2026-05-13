@@ -82,6 +82,41 @@ public sealed class OpenHabHttpClientTests
     }
 
     [Fact]
+    public async Task GetItemsSkipsNonObjectEntriesAndEntriesWithoutValidName()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, """
+        [
+          "invalid",
+          { "label": "No Name", "type": "Switch", "state": "ON" },
+          { "name": " ", "label": "Blank Name", "type": "Switch", "state": "ON" },
+          { "name": "Valid_Item", "type": "Number", "state": "42" }
+        ]
+        """);
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var items = await client.GetItemsAsync(CancellationToken.None);
+
+        var item = Assert.Single(items);
+        Assert.Equal("Valid_Item", item.Name);
+        Assert.Equal("Valid_Item", item.Label);
+        Assert.Equal("Number", item.Type);
+        Assert.Equal("42", item.State);
+    }
+
+    [Fact]
+    public async Task GetItemsThrowsFormatExceptionWhenRootIsNotArray()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, """{ "name": "Light" }""");
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var error = await Assert.ThrowsAsync<FormatException>(() => client.GetItemsAsync(CancellationToken.None));
+
+        Assert.Equal("Items response must be a JSON array.", error.Message);
+    }
+
+    [Fact]
     public async Task GetItemStateReturnsStateProperty()
     {
         var handler = new FakeHttpMessageHandler();
@@ -104,6 +139,30 @@ public sealed class OpenHabHttpClientTests
         _ = await client.GetItemStateAsync("Light/Desk", CancellationToken.None);
 
         Assert.Equal("http://openhab:8080/rest/items/Light%2FDesk", handler.Requests[0].RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task GetItemStateThrowsFormatExceptionWhenRootIsNotObject()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, """["OFF"]""");
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var error = await Assert.ThrowsAsync<FormatException>(() => client.GetItemStateAsync("Light", CancellationToken.None));
+
+        Assert.Equal("Item state response must be a JSON object.", error.Message);
+    }
+
+    [Fact]
+    public async Task GetItemStateReturnsNullWhenStateIsMissing()
+    {
+        var handler = new FakeHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, """{ "name": "Light" }""");
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var state = await client.GetItemStateAsync("Light", CancellationToken.None);
+
+        Assert.Null(state);
     }
 
     [Fact]

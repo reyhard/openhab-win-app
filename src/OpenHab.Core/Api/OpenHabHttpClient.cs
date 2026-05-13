@@ -89,6 +89,11 @@ public sealed class OpenHabHttpClient : IOpenHabClient
         var results = new List<OpenHabItemSummary>();
         foreach (var element in json.RootElement.EnumerateArray())
         {
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
             var name = ReadString(element, "name");
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -114,6 +119,12 @@ public sealed class OpenHabHttpClient : IOpenHabClient
 
         using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+
+        if (json.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            throw new FormatException("Item state response must be a JSON object.");
+        }
+
         return ReadString(json.RootElement, "state");
     }
 
