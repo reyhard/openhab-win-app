@@ -66,6 +66,8 @@ public sealed partial class SettingsPageControl : UserControl
     private ToggleSwitch? CommandMenuEnabledToggle;
     private ShortcutRecorderControl? CommandMenuShortcutRecorder;
     private ComboBox? CommandMenuActivationModeCombo;
+    private ContentControl? CommandMenuPreviewContent;
+    private int shortcutActionsSectionStartIndex = -1;
     private string? editingShortcutActionId;
     private bool creatingShortcutAction;
     private TextBox? ShortcutActionNameText;
@@ -813,11 +815,15 @@ public sealed partial class SettingsPageControl : UserControl
             "Activation mode",
             "Choose whether the command menu toggles or stays open while held",
             CommandMenuActivationModeCombo);
+        CommandMenuPreviewContent = new ContentControl
+        {
+            Content = CreateCommandMenuPreview(settings.Actions)
+        };
         var previewRow = CreateSettingsControlRow(
             "\uE8FD",
             "Command menu preview",
             "Actions currently visible in the radial command menu",
-            CreateCommandMenuPreview(settings.Actions));
+            CommandMenuPreviewContent);
 
         SettingsContent.Children.Add(CreateSettingsExpander(
             "openHAB Command Menu",
@@ -859,6 +865,12 @@ public sealed partial class SettingsPageControl : UserControl
             },
             isExpanded: false));
 
+        shortcutActionsSectionStartIndex = SettingsContent.Children.Count;
+        BuildShortcutActionsSection(settings);
+    }
+
+    private void BuildShortcutActionsSection(ShortcutSettings settings)
+    {
         var actionsHeader = new Grid
         {
             ColumnSpacing = 10
@@ -1084,6 +1096,31 @@ public sealed partial class SettingsPageControl : UserControl
             }));
     }
 
+    private void RefreshShortcutActionsSection()
+    {
+        if (currentSettingsPage != SettingsPageKind.Shortcuts
+            || shortcutActionsSectionStartIndex < 0
+            || shortcutActionsSectionStartIndex > SettingsContent.Children.Count)
+        {
+            NavigateToSettingsPage(SettingsPageKind.Shortcuts);
+            return;
+        }
+
+        var settings = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        if (CommandMenuPreviewContent is not null)
+        {
+            CommandMenuPreviewContent.Content = CreateCommandMenuPreview(settings.Actions);
+        }
+
+        ResetShortcutActionEditorReferences();
+        while (SettingsContent.Children.Count > shortcutActionsSectionStartIndex)
+        {
+            SettingsContent.Children.RemoveAt(SettingsContent.Children.Count - 1);
+        }
+
+        BuildShortcutActionsSection(settings);
+    }
+
     private SettingsExpander CreateSettingsExpander(
         string title,
         string subtitle,
@@ -1135,6 +1172,19 @@ public sealed partial class SettingsPageControl : UserControl
         CommandMenuEnabledToggle = null;
         CommandMenuShortcutRecorder = null;
         CommandMenuActivationModeCombo = null;
+        CommandMenuPreviewContent = null;
+        shortcutActionsSectionStartIndex = -1;
+        ResetShortcutActionEditorReferences();
+        DeviceInfoSyncDisabledText = null;
+        DeviceInfoSyncIdentifierText = null;
+        DeviceInfoSyncIntervalBox = null;
+        deviceInfoSyncItemMappingTexts.Clear();
+        ViewLogsButton = null;
+        VersionText = null;
+    }
+
+    private void ResetShortcutActionEditorReferences()
+    {
         ShortcutActionNameText = null;
         ShortcutActionIconCombo = null;
         ShortcutActionShowInCommandMenuToggle = null;
@@ -1143,12 +1193,6 @@ public sealed partial class SettingsPageControl : UserControl
         ShortcutActionTypeCombo = null;
         ShortcutActionValueText = null;
         ShortcutActionEditorErrorText = null;
-        DeviceInfoSyncDisabledText = null;
-        DeviceInfoSyncIdentifierText = null;
-        DeviceInfoSyncIntervalBox = null;
-        deviceInfoSyncItemMappingTexts.Clear();
-        ViewLogsButton = null;
-        VersionText = null;
     }
 
     private void RefreshSettingsBindings()
@@ -1841,7 +1885,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = true;
         editingShortcutActionId = null;
-        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
+        RefreshShortcutActionsSection();
     }
 
     private async void EditShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -1858,7 +1902,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = false;
         editingShortcutActionId = actionId;
-        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
+        RefreshShortcutActionsSection();
     }
 
     private async void MoveShortcutActionUpButton_Click(object sender, RoutedEventArgs e)
@@ -1898,7 +1942,7 @@ public sealed partial class SettingsPageControl : UserControl
             Actions = actions.ToImmutableArray()
         });
 
-        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
+        RefreshShortcutActionsSection();
     }
 
     private async void DeleteShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -1947,7 +1991,7 @@ public sealed partial class SettingsPageControl : UserControl
             creatingShortcutAction = false;
         }
 
-        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
+        RefreshShortcutActionsSection();
     }
 
     private void CancelShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -1960,7 +2004,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = false;
         editingShortcutActionId = null;
-        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
+        RefreshShortcutActionsSection();
     }
 
     private void SaveShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -2047,7 +2091,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         creatingShortcutAction = false;
         editingShortcutActionId = null;
-        NavigateToSettingsPage(SettingsPageKind.Shortcuts);
+        RefreshShortcutActionsSection();
     }
 
     private async Task<bool> ConfirmDiscardShortcutActionChangesIfNeededAsync()
