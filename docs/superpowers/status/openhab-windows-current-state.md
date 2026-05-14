@@ -19,8 +19,10 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Current High-Priority Backlog
 
+- P0: Finalize official repository governance and release ownership: README, CONTRIBUTING, NOTICE, SECURITY, CI, package identity, signing, and support policy.
 - P0: Review tracked temporary signing certificates, user publish metadata, package artifacts, and release signing inputs.
 - P0: Redact server-provided response bodies before they reach logs, diagnostics, or status text.
+- P0: Fix `OpenHab.App.Tests` VSTest host shutdown so the direct App test gate exits cleanly without blame-hang.
 - P1: Add shared Windows-layer sitemap row planning before unifying flyout and main window behavior.
 - P1: Track sitemap event-stream start/connect outcomes instead of discarding tasks.
 - P1: Replace fire-and-forget settings saves with observable serialized persistence.
@@ -47,6 +49,13 @@ Read this file before implementation. Older dated status files remain useful as 
 - Passed: `dotnet build src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj --configuration Release` (0 warnings, 0 errors).
 - Passed: `.\build-package.ps1 -Configuration Release -Platform x64` using Visual Studio MSBuild and DesktopBridge targets.
 - Caveat: `dotnet test OpenHab.Windows.sln -m:1` ran all test projects successfully (`61/61`, `39/39`, `31/31`, `291/291`) but exited non-zero because dotnet SDK MSBuild could not import `Microsoft.DesktopBridge.props` for `OpenHab.Windows.Package.wapproj`.
+
+## Official-Readiness Plan Split
+
+2026-05-14 design `docs/superpowers/specs/2026-05-14-openhab-windows-official-readiness-remediation-design.md` splits remediation into:
+
+- Plan A: fast public repository governance and CI shell.
+- Plan B: privacy-safe diagnostics, App test host shutdown, and targeted maintainability extraction.
 
 ## Historical Status References
 

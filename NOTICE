@@ -1,0 +1,23 @@
+openHAB Windows Companion App
+Copyright (c) contributors.
+
+This project is made available under the Eclipse Public License 2.0.
+See LICENSE for the full license text.
+
+openHAB names, logos, and marks belong to the openHAB project and their
+respective owners. This repository must not be treated as an official
+release channel until the openHAB maintainers have assigned package identity,
+signing, release, and support ownership.
+
+Third-party dependencies are declared in the project files under src/ and
+tests/. Review PackageReference entries before preparing a release or
+redistribution package.
+
+Current dependency entry points include:
+
+- src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj
+- src/OpenHab.Windows.Notifications/OpenHab.Windows.Notifications.csproj
+- tests/OpenHab.Core.Tests/OpenHab.Core.Tests.csproj
+- tests/OpenHab.Sitemaps.Tests/OpenHab.Sitemaps.Tests.csproj
+- tests/OpenHab.Rendering.Tests/OpenHab.Rendering.Tests.csproj
+- tests/OpenHab.App.Tests/OpenHab.App.Tests.csproj
