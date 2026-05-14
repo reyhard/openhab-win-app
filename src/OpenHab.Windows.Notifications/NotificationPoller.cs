@@ -136,7 +136,15 @@ public sealed class NotificationPoller : IDisposable, IAsyncDisposable
 
     public void Dispose()
     {
-        StopAsync().GetAwaiter().GetResult();
+        var ctsToDispose = cts;
+        Stop();
+        if (ReferenceEquals(cts, ctsToDispose))
+        {
+            cts = null;
+        }
+
+        pollingTask = null;
+        ctsToDispose?.Dispose();
     }
 
     public async ValueTask DisposeAsync()

@@ -39,6 +39,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(460, controller.Current.FlyoutWidth);
         Assert.Equal(FlyoutAnimationSpeed.Default, controller.Current.AnimationSpeed);
         Assert.Equal(ChartQuality.High, controller.Current.ChartQuality);
+        Assert.Equal(5, controller.Current.BackgroundMemoryReleaseDelayMinutes);
         Assert.Equal(AppColorTheme.FollowSystemSettings, controller.Current.AppColorTheme);
         Assert.Empty(controller.Current.ImportantNotificationTags);
         Assert.False(controller.Current.HasLocalToken);
@@ -1012,6 +1013,19 @@ public sealed class AppSettingsControllerTests
         Assert.Equal("energy", link.Uid);
         Assert.Equal("energy", link.Label);
         Assert.Equal("/page/energy", link.Route);
+    }
+
+    [Fact]
+    public void InvalidBackgroundMemoryReleaseDelayLoadedFromJsonUsesDefault()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            AppSettings.Default with { BackgroundMemoryReleaseDelayMinutes = -1 });
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+
+        Assert.Equal(5, controller.Current.BackgroundMemoryReleaseDelayMinutes);
     }
 }
 

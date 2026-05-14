@@ -30,6 +30,32 @@ public sealed partial class MainUiWebViewHost : UserControl
 
     public string CurrentRoute => pendingRoute;
 
+    public void Close()
+    {
+        navigationCompletion?.TrySetCanceled();
+        navigationCompletion = null;
+
+        if (initialized && MainWebView.CoreWebView2 is not null)
+        {
+            MainWebView.CoreWebView2.NewWindowRequested -= CoreWebView2_NewWindowRequested;
+            MainWebView.CoreWebView2.BasicAuthenticationRequested -= CoreWebView2_BasicAuthenticationRequested;
+            MainWebView.CoreWebView2.WebResourceRequested -= CoreWebView2_WebResourceRequested;
+            try
+            {
+                MainWebView.CoreWebView2.RemoveWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLogger.Warn($"Main UI WebView filter removal failed during close: {ex.GetType().Name}");
+            }
+        }
+
+        MainWebView.NavigationStarting -= MainWebView_NavigationStarting;
+        MainWebView.NavigationCompleted -= MainWebView_NavigationCompleted;
+        MainWebView.Close();
+        initialized = false;
+    }
+
     public async Task NavigateAsync(
         Uri endpoint,
         string? route,

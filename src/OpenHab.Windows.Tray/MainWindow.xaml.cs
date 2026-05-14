@@ -255,6 +255,25 @@ public sealed partial class MainWindow : Window
         sitemapSurfaceRenderer.ForceFullRebuild();
     }
 
+    public void ReleaseBackgroundResources()
+    {
+        ReleaseSitemapVisualRows();
+        ReleaseMainUiHost();
+    }
+
+    private void ReleaseMainUiHost()
+    {
+        if (mainUiHost is null)
+        {
+            return;
+        }
+
+        mainUiHost.CurrentRouteChanged -= MainUiHost_CurrentRouteChanged;
+        CenterContentHost.Children.Remove(mainUiHost);
+        mainUiHost.Close();
+        mainUiHost = null;
+    }
+
     private void ShowNotificationsPage()
     {
         notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore);
@@ -292,7 +311,9 @@ public sealed partial class MainWindow : Window
             ShowMainUi();
             var targetRoute = !string.IsNullOrWhiteSpace(state.PendingMainUiRoute)
                 ? state.PendingMainUiRoute
-                : MainUiHost.CurrentRoute;
+                : !string.IsNullOrWhiteSpace(currentMainUiRoute)
+                    ? currentMainUiRoute
+                    : MainUiHost.CurrentRoute;
             if (!string.IsNullOrWhiteSpace(targetRoute))
             {
                 var normalizedRoute = NormalizeMainUiRoute(targetRoute);
@@ -565,12 +586,12 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
+    internal void RefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
     {
-        _ = TryRefreshRuntimeBindings(targetRows);
+        _ = TryRefreshRuntimeBindings(targetRows, animateStructuralInsertions);
     }
 
-    internal bool TryRefreshRuntimeBindings(StackPanel? targetRows = null)
+    internal bool TryRefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
     {
         if (targetRows is null && !AppWindow.IsVisible)
         {
@@ -581,7 +602,7 @@ public sealed partial class MainWindow : Window
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
         EnsureMainUiEndpointMatchesActiveTransport(snapshot);
-        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
+        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot, animateStructuralInsertions);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
         return true;
     }
@@ -657,7 +678,7 @@ public sealed partial class MainWindow : Window
             }
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Forward);
 
@@ -811,7 +832,7 @@ public sealed partial class MainWindow : Window
             runtimeController.NavigateBack();
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
 

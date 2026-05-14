@@ -60,6 +60,7 @@ public partial class App : Application
     private ShortcutActionExecutor? shortcutActionExecutor;
     private HotkeyMessageWindow? hotkeyMessageWindow;
     private GlobalHotkeyService? globalHotkeyService;
+    private BackgroundResourceReleaseController? backgroundResourceReleaseController;
     private RadialCommandMenuWindow? radialCommandMenuWindow;
     private DispatcherTimer? commandMenuHoldTimer;
     private ShortcutBinding? commandMenuHoldBinding;
@@ -166,6 +167,8 @@ public partial class App : Application
 
         shellController = new TrayShellController();
         shellController.HandleLaunch();
+        backgroundResourceReleaseController = new BackgroundResourceReleaseController(
+            releaseResources: QueueBackgroundResourceRelease);
 
         shortcutActionExecutor = new ShortcutActionExecutor(
             CreateActiveShortcutClient,
@@ -812,6 +815,8 @@ public partial class App : Application
                     break;
             }
 
+            ApplyBackgroundResourceReleasePolicy(state);
+
             if (state.PendingRefresh)
             {
                 var refreshOutcome = await RefreshCurrentVisibleRuntimeSurfaceAsync(visibleSurface);
@@ -833,6 +838,36 @@ public partial class App : Application
         {
             shellApplySemaphore.Release();
         }
+    }
+
+    private void ApplyBackgroundResourceReleasePolicy(TrayShellState state)
+    {
+        var delayMinutes = settingsController?.Current.BackgroundMemoryReleaseDelayMinutes
+            ?? AppSettings.Default.BackgroundMemoryReleaseDelayMinutes;
+        backgroundResourceReleaseController?.ApplyShellState(state, TimeSpan.FromMinutes(delayMinutes));
+    }
+
+    private void QueueBackgroundResourceRelease()
+    {
+        var dispatcher = uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread();
+        if (dispatcher is null || !dispatcher.TryEnqueue(ReleaseBackgroundResourcesIfStillHidden))
+        {
+            DiagnosticLogger.Warn("Background memory release skipped: UI dispatcher unavailable.");
+        }
+    }
+
+    private void ReleaseBackgroundResourcesIfStillHidden()
+    {
+        if (IsShutdownInProgress()
+            || shellController?.Current.VisibleSurface is not TrayShellSurface.None)
+        {
+            return;
+        }
+
+        DiagnosticLogger.Info("Releasing background UI resources after idle delay.");
+        runtimeController?.StopSitemapEventStream();
+        mainWindow?.ReleaseBackgroundResources();
+        flyoutWindow?.ReleaseSitemapVisualRows();
     }
 
     private async Task CompleteStartupAsync(AppSettingsController settingsController, AppActivationArguments? activatedEventArgs)
@@ -1249,6 +1284,8 @@ public partial class App : Application
         DiagnosticLogger.Info("Shutting down notification poller");
         notificationPoller?.Dispose();
         notificationPoller = null;
+        backgroundResourceReleaseController?.Dispose();
+        backgroundResourceReleaseController = null;
         ShortcutRecorderControl.AnyRecordingChanged -= OnShortcutRecorderRecordingChanged;
         globalHotkeyService?.Dispose();
         globalHotkeyService = null;

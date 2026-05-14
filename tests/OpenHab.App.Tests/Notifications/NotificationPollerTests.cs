@@ -366,6 +366,57 @@ public sealed class NotificationPollerTests
         await cleanupTask;
     }
 
+    [Fact]
+    public async Task Dispose_CancelsWithoutWaitingForInFlightCleanup()
+    {
+        var pollStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completeCancellationPath = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var httpClient = new HttpClient(new BlockingHandler(
+            onSend: async cancellationToken =>
+            {
+                pollStarted.TrySetResult();
+                using var _ = cancellationToken.Register(() => cancellationObserved.TrySetResult());
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("[]", Encoding.UTF8, "application/json")
+                    };
+                }
+                catch (OperationCanceledException)
+                {
+                    await completeCancellationPath.Task;
+                    throw;
+                }
+            }));
+
+        var poller = new NotificationPoller(
+            httpClient,
+            new Uri("https://example.test/"),
+            pollInterval: TimeSpan.FromSeconds(10));
+
+        poller.Start();
+        await pollStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var disposeTask = Task.Run(poller.Dispose);
+        await cancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        try
+        {
+            var completed = await Task.WhenAny(disposeTask, Task.Delay(250));
+
+            Assert.Same(disposeTask, completed);
+        }
+        finally
+        {
+            completeCancellationPath.TrySetResult();
+        }
+
+        await disposeTask;
+    }
+
     private static NotificationPoller CreatePoller(
         string json,
         out List<NormalizedCloudNotification> raised,

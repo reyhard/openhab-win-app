@@ -18,6 +18,8 @@ public sealed class AppSettingsController
     public const int MaxFlyoutWidth = 900;
     public const int MinNotificationPollIntervalSeconds = 10;
     public const int MaxNotificationPollIntervalSeconds = 600;
+    public const int MinBackgroundMemoryReleaseDelayMinutes = 1;
+    public const int MaxBackgroundMemoryReleaseDelayMinutes = 1440;
 
     private static readonly Regex SitemapNamePattern = new("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
     private const string CredentialResource = "OpenHabAuth";
@@ -211,6 +213,17 @@ public sealed class AppSettingsController
         }
 
         UpdateSettings(settings => settings with { NotificationPollIntervalSeconds = seconds });
+    }
+
+    public void SetBackgroundMemoryReleaseDelay(int minutes)
+    {
+        if (minutes < MinBackgroundMemoryReleaseDelayMinutes || minutes > MaxBackgroundMemoryReleaseDelayMinutes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minutes),
+                $"Background memory release delay must be between {MinBackgroundMemoryReleaseDelayMinutes} and {MaxBackgroundMemoryReleaseDelayMinutes} minutes.");
+        }
+
+        UpdateSettings(settings => settings with { BackgroundMemoryReleaseDelayMinutes = minutes });
     }
 
     public void SetImportantNotificationTags(IEnumerable<string> tags)
@@ -534,6 +547,13 @@ public sealed class AppSettingsController
             interval = AppSettings.Default.NotificationPollIntervalSeconds;
         }
 
+        var backgroundMemoryReleaseDelay = settings.BackgroundMemoryReleaseDelayMinutes;
+        if (backgroundMemoryReleaseDelay < MinBackgroundMemoryReleaseDelayMinutes
+            || backgroundMemoryReleaseDelay > MaxBackgroundMemoryReleaseDelayMinutes)
+        {
+            backgroundMemoryReleaseDelay = AppSettings.Default.BackgroundMemoryReleaseDelayMinutes;
+        }
+
         var appColorTheme = settings.AppColorTheme;
         var legacyTheme = settings.FollowSystemTheme ?? legacyFollowSystemTheme;
         if (legacyTheme is bool followSystemTheme)
@@ -555,6 +575,7 @@ public sealed class AppSettingsController
             CloudEndpoint = NormalizeLoadedEndpoint(settings.CloudEndpoint, AppSettings.Default.CloudEndpoint),
             FlyoutWidth = width,
             NotificationPollIntervalSeconds = interval,
+            BackgroundMemoryReleaseDelayMinutes = backgroundMemoryReleaseDelay,
             ImportantNotificationTags = NormalizeImportantNotificationTags(settings.ImportantNotificationTags),
             DeviceInfoSync = settings.DeviceInfoSync?.Normalized() ?? DeviceInfoSyncSettings.Default,
             Shortcuts = (settings.Shortcuts ?? ShortcutSettings.Default).Normalized(),

@@ -307,12 +307,12 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
+    internal void RefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
     {
-        _ = TryRefreshRuntimeBindings(targetRows);
+        _ = TryRefreshRuntimeBindings(targetRows, animateStructuralInsertions);
     }
 
-    internal bool TryRefreshRuntimeBindings(StackPanel? targetRows = null)
+    internal bool TryRefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
     {
         using var scope = OpenHabProfiling.StartScope("FlyoutWindow.RefreshRuntimeBindings");
         if (targetRows is null && !AppWindow.IsVisible)
@@ -333,7 +333,7 @@ public sealed partial class FlyoutWindow : Window
             return true;
         }
 
-        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
+        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot, animateStructuralInsertions);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
         return true;
     }
@@ -387,7 +387,7 @@ public sealed partial class FlyoutWindow : Window
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
             RefreshChromeBindings(runtimeController.Current);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Forward);
@@ -578,7 +578,7 @@ public sealed partial class FlyoutWindow : Window
                 _suppressNextSnapshotRefresh = true;
                 InactiveSlotContainer.Visibility = Visibility.Visible;
                 InactiveSlotContainer.Opacity = 1d;
-                RefreshRuntimeBindings(InactiveRows);
+                RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
                 RefreshChromeBindings(runtimeController.Current);
 
                 await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
@@ -1018,7 +1018,7 @@ public sealed partial class FlyoutWindow : Window
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
             RefreshChromeBindings(runtimeController.Current);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);

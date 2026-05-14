@@ -887,6 +887,35 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task NavigateToChildDoesNotWaitForColdSitemapEventSubscriptionStartup()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithChildJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        eventClient.BlockSubscribeSynchronously = true;
+
+        var navigationTask = Task.Run(() => controller.NavigateToChildAsync(0));
+        try
+        {
+            var completed = await Task.WhenAny(navigationTask, Task.Delay(250));
+
+            Assert.Same(navigationTask, completed);
+            Assert.True(await navigationTask);
+            Assert.Equal("kitchen", controller.Current.Descriptor!.PageId);
+        }
+        finally
+        {
+            eventClient.ReleaseSubscribeBlock();
+        }
+    }
+
+    [Fact]
     public async Task WidgetEventUpdatesWidgetStateInSnapshot()
     {
         var settings = CreateSettingsController();
@@ -1115,11 +1144,13 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
     public int SubscribeCalls { get; private set; }
     public int ConnectCalls { get; private set; }
     public int DisposeCount { get; private set; }
+    public bool BlockSubscribeSynchronously { get; set; }
     public Queue<TaskCompletionSource> ConnectBlocks { get; } = new();
     public Queue<Task> ConnectResults { get; } = new();
     public bool IsConnected { get; private set; }
     private int disposeGeneration;
     private readonly List<TaskCompletionSource> connectStartedSignals = [];
+    private readonly ManualResetEventSlim subscribeBlock = new(initialState: false);
 
     public void FireEvent(OpenHabEvent e)
     {
@@ -1192,12 +1223,22 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
     public Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
         SubscribeCalls++;
+        if (BlockSubscribeSynchronously)
+        {
+            subscribeBlock.Wait(cancellationToken);
+        }
+
         if (SubscribeFailure is not null)
         {
             return Task.FromException<string?>(SubscribeFailure);
         }
 
         return Task.FromResult(SubscriptionId);
+    }
+
+    public void ReleaseSubscribeBlock()
+    {
+        subscribeBlock.Set();
     }
 
     public void Dispose()
