@@ -1,34 +1,31 @@
 using System;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Imaging;
 using OpenHab.App.Notifications;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Rendering.SitemapSurface;
-using Windows.Storage.Streams;
 
 namespace OpenHab.Windows.Tray.Notifications;
 
 public sealed partial class NotificationsPageControl : UserControl
 {
+    private const double NotificationServerIconSize = 20;
+
     private enum NotificationSortOrder
     {
         DateDescending,
         DateAscending,
         Name
     }
-
-    private static readonly HttpClient IconHttpClient = new();
 
     private readonly AppSettingsController settingsController;
     private readonly NotificationStore? notificationStore;
@@ -372,8 +369,8 @@ public sealed partial class NotificationsPageControl : UserControl
 
         var image = new Image
         {
-            Width = 20,
-            Height = 20,
+            Width = NotificationServerIconSize,
+            Height = NotificationServerIconSize,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 2, 0, 0)
         };
@@ -392,81 +389,11 @@ public sealed partial class NotificationsPageControl : UserControl
         var iconUri = SitemapControlFactory.BuildOpenHabIconUri(baseUri, iconName, null, "svg");
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, iconUri);
-            if (!string.IsNullOrWhiteSpace(iconAuth.ApiToken))
-            {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", iconAuth.ApiToken);
-            }
-            else if (!string.IsNullOrWhiteSpace(iconAuth.BasicUserName))
-            {
-                var raw = $"{iconAuth.BasicUserName}:{iconAuth.BasicPassword ?? string.Empty}";
-                var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
-                request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
-            }
-
-            using var response = await IconHttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-            if (!response.IsSuccessStatusCode)
-            {
-                return;
-            }
-
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            if (bytes.Length == 0)
-            {
-                return;
-            }
-
-            var source = await CreateImageSourceFromBytesAsync(bytes, response.Content.Headers.ContentType?.MediaType);
-            if (source is not null)
-            {
-                image.Source = source;
-            }
+            _ = await OpenHabIconImageSourceLoader.TryLoadAsync(image, iconUri, iconColor: null, iconAuth);
         }
         catch
         {
             // Best-effort icon loading
-        }
-    }
-
-    private static async Task<ImageSource?> CreateImageSourceFromBytesAsync(byte[] bytes, string? mediaType)
-    {
-        if (!string.IsNullOrWhiteSpace(mediaType) && mediaType.Contains("svg", StringComparison.OrdinalIgnoreCase)
-            || (bytes.Length > 0 && Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 256)).TrimStart().StartsWith("<svg", StringComparison.OrdinalIgnoreCase)))
-        {
-            var svgSource = new SvgImageSource();
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
-            {
-                writer.WriteBytes(bytes);
-                await writer.StoreAsync();
-                await writer.FlushAsync();
-                writer.DetachStream();
-            }
-
-            stream.Seek(0);
-            var status = await svgSource.SetSourceAsync(stream);
-            return status == SvgImageSourceLoadStatus.Success ? svgSource : null;
-        }
-
-        try
-        {
-            var bitmap = new BitmapImage();
-            using var stream = new InMemoryRandomAccessStream();
-            using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
-            {
-                writer.WriteBytes(bytes);
-                await writer.StoreAsync();
-                await writer.FlushAsync();
-                writer.DetachStream();
-            }
-
-            stream.Seek(0);
-            await bitmap.SetSourceAsync(stream);
-            return bitmap;
-        }
-        catch
-        {
-            return null;
         }
     }
 
