@@ -65,6 +65,7 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? sidebarWidthAnimationTimer;
     private DispatcherTimer? sitemapPaneWidthAnimationTimer;
     private string? pendingExplicitMainUiRoute;
+    private MainUiWebViewHost? mainUiHost;
 
     private Notifications.NotificationsPageControl? notificationsPage;
     private Settings.SettingsPageControl? settingsPage;
@@ -73,6 +74,7 @@ public sealed partial class MainWindow : Window
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
     private Grid ActiveSlotContainer => _activeSlotIsA ? SitemapPageSlotA : SitemapPageSlotB;
     private Grid InactiveSlotContainer => _activeSlotIsA ? SitemapPageSlotB : SitemapPageSlotA;
+    private MainUiWebViewHost MainUiHost => mainUiHost ??= CreateMainUiHost();
 
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
@@ -133,7 +135,6 @@ public sealed partial class MainWindow : Window
         settingsController.SettingsChanged += OnSettingsChanged;
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
         ApplyWindowTheme();
-        MainUiHost.CurrentRouteChanged += MainUiHost_CurrentRouteChanged;
         shellController = new OpenHab.App.Shell.MainWindowShellController(settingsController.Current.MainWindowSitemapPaneVisible);
         shellController.Changed += (_, _) => ApplyMainWindowShellState();
         promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
@@ -304,11 +305,19 @@ public sealed partial class MainWindow : Window
 
     private void ShowMainUi()
     {
-        if (!CenterContentHost.Children.Contains(MainUiHost))
+        var host = MainUiHost;
+        if (!CenterContentHost.Children.Contains(host))
         {
             CenterContentHost.Children.Clear();
-            CenterContentHost.Children.Add(MainUiHost);
+            CenterContentHost.Children.Add(host);
         }
+    }
+
+    private MainUiWebViewHost CreateMainUiHost()
+    {
+        var host = new MainUiWebViewHost();
+        host.CurrentRouteChanged += MainUiHost_CurrentRouteChanged;
+        return host;
     }
 
     private void MainUiHost_CurrentRouteChanged(object? sender, string route)
@@ -585,11 +594,11 @@ public sealed partial class MainWindow : Window
 
         if (currentMainUiTransport == desiredTransport)
         {
-            currentMainUiRoute = MainUiHost.CurrentRoute;
+            currentMainUiRoute = mainUiHost?.CurrentRoute ?? "/";
             return;
         }
 
-        var route = MainUiHost.CurrentRoute;
+        var route = mainUiHost?.CurrentRoute ?? "/";
         _ = NavigateMainUiAsync(route);
     }
 
@@ -770,12 +779,12 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        if (!MainUiHost.CanGoBack)
+        if (mainUiHost?.CanGoBack != true)
         {
             return false;
         }
 
-        MainUiHost.GoBack();
+        mainUiHost.GoBack();
         return true;
     }
 

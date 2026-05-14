@@ -2,7 +2,6 @@
     x:Class="OpenHab.Windows.Tray.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:mainui="using:OpenHab.Windows.Tray.MainUi"
     Title="openHAB">
     <Grid x:Name="ShellRoot" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <Grid.Resources>
@@ -133,9 +132,7 @@
 
             <Grid x:Name="CenterContentHost"
                   Grid.Column="1"
-                  Margin="12,10,12,0">
-                <mainui:MainUiWebViewHost x:Name="MainUiHost" />
-            </Grid>
+                  Margin="12,10,12,0" />
 
             <Border x:Name="SitemapContentRoot"
                     Grid.Column="2"
