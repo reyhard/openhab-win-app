@@ -805,6 +805,8 @@ public partial class App : Application
                     {
                         await flyoutWindow.AnimateFlyoutExitAndHideAsync();
                     }
+
+                    runtimeController?.StopSitemapEventStream();
                     break;
             }
 

@@ -779,6 +779,114 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task StopSitemapEventStreamClearsStateAndAllowsRestart()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        Assert.Equal(1, eventClient.SubscribeCalls);
+        Assert.Equal(1, eventClient.ConnectCalls);
+
+        controller.StopSitemapEventStream();
+
+        Assert.Equal(1, eventClient.DisposeCount);
+        Assert.False(eventClient.IsConnected);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        Assert.Equal(2, eventClient.SubscribeCalls);
+        Assert.Equal(2, eventClient.ConnectCalls);
+        Assert.True(eventClient.IsConnected);
+    }
+
+    [Fact]
+    public async Task StopSitemapEventStreamWhileConnectInFlightPreventsStaleReconnectAndAllowsRestart()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient
+        {
+            ConnectBlock = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        var staleStart = controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        await eventClient.WaitUntilConnectStartedAsync();
+
+        controller.StopSitemapEventStream();
+        Assert.False(eventClient.IsConnected);
+        Assert.Equal(1, eventClient.DisposeCount);
+
+        eventClient.ConnectBlock.SetResult();
+        await staleStart;
+
+        Assert.Equal(1, eventClient.ConnectCalls);
+        Assert.False(eventClient.IsConnected);
+        Assert.Equal(1, eventClient.DisposeCount);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        Assert.Equal(2, eventClient.SubscribeCalls);
+        Assert.Equal(2, eventClient.ConnectCalls);
+        Assert.True(eventClient.IsConnected);
+    }
+
+    [Fact]
+    public async Task StopSitemapEventStreamWhileConnectInFlightThenCanceledDoesNotFaultStaleStart()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var connectResult = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var eventClient = new FakeEventStreamClient();
+        eventClient.ConnectResults.Enqueue(connectResult.Task);
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        var staleStart = controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        await eventClient.WaitUntilConnectStartedAsync();
+
+        controller.StopSitemapEventStream();
+        Assert.False(eventClient.IsConnected);
+        Assert.Equal(1, eventClient.DisposeCount);
+
+        connectResult.SetException(new OperationCanceledException("canceled"));
+        await staleStart;
+
+        Assert.Equal(1, eventClient.ConnectCalls);
+        Assert.False(eventClient.IsConnected);
+        Assert.Equal(1, eventClient.DisposeCount);
+    }
+
+    [Fact]
+    public async Task OverlappingStartsStaleCompletionDoesNotDisposeActiveConnection()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var attemptAConnectBlock = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var eventClient = new FakeEventStreamClient();
+        eventClient.ConnectBlocks.Enqueue(attemptAConnectBlock);
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        var attemptA = controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "kitchen");
+        await eventClient.WaitUntilConnectStartedAsync(1);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "living");
+        Assert.True(eventClient.IsConnected);
+        Assert.Equal(2, eventClient.ConnectCalls);
+        Assert.Equal(0, eventClient.DisposeCount);
+
+        attemptAConnectBlock.SetResult();
+        await attemptA;
+
+        Assert.True(eventClient.IsConnected);
+        Assert.Equal(2, eventClient.ConnectCalls);
+        Assert.Equal(0, eventClient.DisposeCount);
+    }
+
+    [Fact]
     public async Task WidgetEventUpdatesWidgetStateInSnapshot()
     {
         var settings = CreateSettingsController();
@@ -1003,10 +1111,15 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
     public Exception? SubscribeFailure { get; set; }
     public Exception? ConnectFailure { get; set; }
     public string? SubscriptionId { get; set; } = "fake-subscription-id";
+    public TaskCompletionSource? ConnectBlock { get; set; }
     public int SubscribeCalls { get; private set; }
     public int ConnectCalls { get; private set; }
+    public int DisposeCount { get; private set; }
+    public Queue<TaskCompletionSource> ConnectBlocks { get; } = new();
     public Queue<Task> ConnectResults { get; } = new();
     public bool IsConnected { get; private set; }
+    private int disposeGeneration;
+    private readonly List<TaskCompletionSource> connectStartedSignals = [];
 
     public void FireEvent(OpenHabEvent e)
     {
@@ -1026,9 +1139,29 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
     public async Task ConnectAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
         ConnectCalls++;
+        var connectStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        connectStartedSignals.Add(connectStarted);
+        connectStarted.TrySetResult();
+        var generationAtStart = disposeGeneration;
+
+        if (ConnectBlock is not null)
+        {
+            await ConnectBlock.Task.WaitAsync(cancellationToken);
+        }
+
+        if (ConnectBlocks.Count > 0)
+        {
+            await ConnectBlocks.Dequeue().Task.WaitAsync(cancellationToken);
+        }
+
         if (ConnectResults.Count > 0)
         {
             await ConnectResults.Dequeue();
+            if (generationAtStart != disposeGeneration)
+            {
+                return;
+            }
+
             IsConnected = true;
             return;
         }
@@ -1038,7 +1171,22 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
             throw ConnectFailure;
         }
 
+        if (generationAtStart != disposeGeneration)
+        {
+            return;
+        }
+
         IsConnected = true;
+    }
+
+    public async Task WaitUntilConnectStartedAsync(int callNumber = 1)
+    {
+        while (connectStartedSignals.Count < callNumber)
+        {
+            await Task.Delay(10);
+        }
+
+        await connectStartedSignals[callNumber - 1].Task;
     }
 
     public Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
@@ -1052,5 +1200,10 @@ public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
         return Task.FromResult(SubscriptionId);
     }
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+        DisposeCount++;
+        disposeGeneration++;
+        IsConnected = false;
+    }
 }

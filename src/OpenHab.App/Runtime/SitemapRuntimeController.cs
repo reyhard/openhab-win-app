@@ -720,13 +720,38 @@ public sealed class SitemapRuntimeController
                 return;
             }
 
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream start before subscription assignment for page '{pageId}'");
+                return;
+            }
+
             _subscriptionId = subscriptionId;
             DiagnosticLogger.Info($"Sitemap event subscription created: {_subscriptionId}");
             var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
+
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream start before connect for page '{pageId}'");
+                return;
+            }
+
             await sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
+
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream connect completion for page '{pageId}'");
+                return;
+            }
         }
         catch (OperationCanceledException)
         {
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream cancellation for page '{pageId}'");
+                return;
+            }
+
             ResetSitemapEventStreamStart(attempt);
             throw;
         }
@@ -747,6 +772,21 @@ public sealed class SitemapRuntimeController
                 Current = Current with { ChangedRowIndices = [] };
             }
         }
+    }
+
+    public void StopSitemapEventStream()
+    {
+        if (sitemapEventStreamClient is null)
+        {
+            return;
+        }
+
+        Interlocked.Increment(ref _sitemapEventStreamAttempt);
+        _sitemapEventStreamStarted = false;
+        _sitemapEventStreamSitemapName = null;
+        _sitemapEventStreamPageId = null;
+        _subscriptionId = null;
+        sitemapEventStreamClient.Dispose();
     }
 
     private bool ResetSitemapEventStreamStart(long attempt)
