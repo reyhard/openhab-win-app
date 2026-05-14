@@ -375,6 +375,11 @@ public partial class App : Application
 
     private void SchedulePendingRefreshRetry()
     {
+        if (IsShutdownInProgress() || shellController?.Current.PendingRefresh != true)
+        {
+            return;
+        }
+
         if (Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 1) == 1)
         {
             return;
@@ -385,7 +390,20 @@ public partial class App : Application
             try
             {
                 await Task.Delay(75);
-                _ = uiDispatcherQueue?.TryEnqueue(() => _ = ApplyShellStateAsync());
+
+                if (IsShutdownInProgress() || shellController?.Current.PendingRefresh != true)
+                {
+                    return;
+                }
+
+                Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 0);
+
+                if (uiDispatcherQueue?.TryEnqueue(() => _ = ApplyShellStateAsync()) != true
+                    && !IsShutdownInProgress()
+                    && shellController?.Current.PendingRefresh == true)
+                {
+                    SchedulePendingRefreshRetry();
+                }
             }
             catch
             {
@@ -634,6 +652,8 @@ public partial class App : Application
             }
 
             var state = shellController.Current;
+            var refreshRequestVersion = state.RefreshRequestVersion;
+            var visibleSurface = state.VisibleSurface;
 
             if (state.ShouldExitProcess)
             {
@@ -641,7 +661,7 @@ public partial class App : Application
                 return;
             }
 
-            switch (state.VisibleSurface)
+            switch (visibleSurface)
             {
                 case TrayShellSurface.MainWindow:
                     var main = EnsureMainWindow();
@@ -682,13 +702,13 @@ public partial class App : Application
 
             if (state.PendingRefresh)
             {
-                var refreshOutcome = await RefreshCurrentVisibleRuntimeSurfaceAsync(state.VisibleSurface);
+                var refreshOutcome = await RefreshCurrentVisibleRuntimeSurfaceAsync(visibleSurface);
                 switch (refreshOutcome)
                 {
                     case TraySurfaceRefreshOutcome.Applied:
                     case TraySurfaceRefreshOutcome.NoVisibleSurface:
                     case TraySurfaceRefreshOutcome.Failed:
-                        shellController.HandleRefreshCompleted();
+                        shellController.HandleRefreshCompleted(refreshRequestVersion, visibleSurface);
                         break;
                     case TraySurfaceRefreshOutcome.SkippedNotVisible:
                     case TraySurfaceRefreshOutcome.SkippedBusy:
