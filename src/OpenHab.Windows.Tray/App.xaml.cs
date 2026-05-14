@@ -48,6 +48,7 @@ public partial class App : Application
     private NotificationPoller? notificationPoller;
     private SitemapRuntimeController? runtimeController;
     private ShortcutActionExecutor? shortcutActionExecutor;
+    private HotkeyMessageWindow? hotkeyMessageWindow;
     private GlobalHotkeyService? globalHotkeyService;
     private RadialCommandMenuWindow? radialCommandMenuWindow;
     private DispatcherTimer? commandMenuHoldTimer;
@@ -235,7 +236,10 @@ public partial class App : Application
             {
                 RequestApplicationExit();
             });
-        globalHotkeyService = new GlobalHotkeyService(mainWindow, uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread());
+        hotkeyMessageWindow = new HotkeyMessageWindow();
+        globalHotkeyService = new GlobalHotkeyService(
+            hotkeyMessageWindow.Handle,
+            uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread());
         globalHotkeyService.CommandMenuRequested += (_, _) =>
         {
             _ = OpenShortcutCommandMenuAsync();
@@ -972,6 +976,8 @@ public partial class App : Application
         ShortcutRecorderControl.AnyRecordingChanged -= OnShortcutRecorderRecordingChanged;
         globalHotkeyService?.Dispose();
         globalHotkeyService = null;
+        hotkeyMessageWindow?.Dispose();
+        hotkeyMessageWindow = null;
         StopCommandMenuHoldTimer();
         radialCommandMenuWindow?.CloseMenu();
         radialCommandMenuWindow = null;

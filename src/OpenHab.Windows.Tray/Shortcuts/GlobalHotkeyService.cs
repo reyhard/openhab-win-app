@@ -33,16 +33,23 @@ internal sealed class GlobalHotkeyService : IDisposable
     private bool disposed;
 
     public GlobalHotkeyService(Window window, DispatcherQueue dispatcherQueue)
+        : this(
+            WindowNative.GetWindowHandle(window ?? throw new ArgumentNullException(nameof(window))),
+            dispatcherQueue)
+    {
+    }
+
+    public GlobalHotkeyService(IntPtr hwnd, DispatcherQueue dispatcherQueue)
     {
         this.dispatcherQueue = dispatcherQueue ?? throw new ArgumentNullException(nameof(dispatcherQueue));
-        hwnd = WindowNative.GetWindowHandle(window ?? throw new ArgumentNullException(nameof(window)));
         if (hwnd == IntPtr.Zero)
         {
             throw new InvalidOperationException("Cannot register global hotkeys because the window handle is not available.");
         }
 
+        this.hwnd = hwnd;
         subclassProc = WindowProc;
-        if (!SetWindowSubclass(hwnd, subclassProc, 1, IntPtr.Zero))
+        if (!SetWindowSubclass(this.hwnd, subclassProc, 1, IntPtr.Zero))
         {
             throw new InvalidOperationException("Cannot listen for global hotkeys because the window message hook could not be installed.");
         }
