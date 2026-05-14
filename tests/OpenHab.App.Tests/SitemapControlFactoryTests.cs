@@ -134,6 +134,17 @@ public class SitemapControlFactoryTests
     }
 
     [Fact]
+    public void BuildIconPayloadCacheKey_DoesNotIncludeVisualDimensions()
+    {
+        var uri = new Uri("https://demo.local/icon/light?format=svg&state=ON");
+        var key = OpenHabIconImageSourceLoader.BuildPayloadCacheKey(uri, "#ff0000", null);
+
+        Assert.Equal("https://demo.local/icon/light?format=svg&state=ON|#ff0000|none", key);
+        Assert.DoesNotContain("Width", key, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Height", key, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void BuildChartUrl_UsesItemNamePeriodAndDpi()
     {
         var row = new SitemapRowDescriptor(
@@ -208,6 +219,23 @@ public class SitemapControlFactoryTests
 
         var controlLaneWidth = Assert.IsType<double>(controlLaneWidthField?.GetRawConstantValue());
         Assert.Equal(56, controlLaneWidth);
+    }
+
+    [Fact]
+    public void ServerIcons_KeepCompactInterfaceSizeWithBreathingRoom()
+    {
+        var iconSizeField = typeof(SitemapControlFactory).GetField(
+            "OpenHabServerIconSize",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var iconColumnWidthField = typeof(SitemapControlFactory).GetField(
+            "IconColumnWidth",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        var iconSize = Assert.IsType<double>(iconSizeField?.GetRawConstantValue());
+        var iconColumnWidth = Assert.IsType<double>(iconColumnWidthField?.GetRawConstantValue());
+
+        Assert.Equal(26, iconSize);
+        Assert.True(iconColumnWidth >= iconSize + 4);
     }
 
     [Theory]

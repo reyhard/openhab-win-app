@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using System.Reflection;
 using Microsoft.UI.Text;
@@ -28,6 +27,8 @@ public static partial class SitemapControlFactory
     private const double ValueLaneWidth = 96;
     private const double ControlLaneWidth = 56;
     private const double NavigateChevronLaneWidth = 20;
+    private const double OpenHabServerIconSize = 26;
+    private const double IconColumnWidth = 32;
     private const int SliderMoveDebounceMs = 200;
     private const int ColorPickerMoveDebounceMs = 200;
     private const double WidgetVisibilityAnimationDurationMs = 320d;
@@ -36,7 +37,6 @@ public static partial class SitemapControlFactory
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
     private static readonly Regex FirstNumberRegex = FirstNumberRegexFactory();
-    private static readonly ConcurrentDictionary<string, ImageSource> IconSourceCache = new(StringComparer.Ordinal);
     private static readonly System.Threading.Lock IconProbeSyncRoot = new();
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private sealed record IconImageTag(Uri BaseUri, string IconName, string? IconState, string? IconColor, IconAuthContext? AuthContext);
@@ -189,9 +189,6 @@ public static partial class SitemapControlFactory
 
     [GeneratedRegex(@"[-+]?\d+([.,]\d+)?", RegexOptions.Compiled)]
     private static partial Regex FirstNumberRegexFactory();
-
-    [GeneratedRegex("<svg\\b", RegexOptions.IgnoreCase)]
-    private static partial Regex SvgOpenTagRegex();
 
     /// <summary>
     /// Collapses separators and digits so common openHAB icon-name variants
@@ -929,8 +926,9 @@ public static partial class SitemapControlFactory
         {
             var image = new Image
             {
-                Width = 26,
-                Height = 26,
+                Width = OpenHabServerIconSize,
+                Height = OpenHabServerIconSize,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Tag = new IconImageTag(baseUri, iconName, requestIconState, iconColor, iconAuth)
             };
@@ -1058,185 +1056,27 @@ public static partial class SitemapControlFactory
     {
         try
         {
-            var cacheKey = $"{iconUri.AbsoluteUri}|{iconColor ?? string.Empty}|{GetAuthMode(authContext)}";
-            if (IconSourceCache.TryGetValue(cacheKey, out var cachedSource))
+            var result = await OpenHabIconImageSourceLoader.TryLoadAsync(image, iconUri, iconColor, authContext);
+            if (!result.Success)
             {
-                image.Source = cachedSource;
-                var cachedFormat = cachedSource is SvgImageSource ? "svg" : "bitmap";
-                if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Info($"Icon cache hit: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{cachedFormat}', media='cache', auth='{GetAuthMode(authContext)}'");
-                return null;
+                if (!DiagnosticLogger.SuppressIconLogging && result.Error?.StartsWith("status=", StringComparison.Ordinal) == true)
+                    DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', {result.Error}, media='{result.MediaType ?? "unknown"}', auth='{GetAuthMode(authContext)}'");
+                return $"format={format}:{result.Error}";
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, iconUri);
-            if (authContext is { } context)
-            {
-                ApplyAuthHeaders(request, context);
-            }
-
-            using var response = await IconHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead);
-            if (!response.IsSuccessStatusCode)
-            {
-                var failedMediaType = response.Content.Headers.ContentType?.MediaType ?? "unknown";
-                if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', status={(int)response.StatusCode}, media='{failedMediaType}', auth='{GetAuthMode(authContext)}'");
-                return $"format={format}:status={(int)response.StatusCode}";
-            }
-
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            if (bytes.Length == 0)
-            {
-                return $"format={format}:empty";
-            }
-
-            var mediaType = response.Content.Headers.ContentType?.MediaType;
-            var source = await CreateImageSourceFromBytesAsync(bytes, mediaType, iconColor);
-            if (source is null)
-            {
-                return $"format={format}:decode-failed(media={mediaType ?? "unknown"})";
-            }
-
-            image.Source = source;
-            IconSourceCache.TryAdd(cacheKey, source);
-            var effectiveFormat = source is SvgImageSource ? "svg" : "bitmap";
             if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Info($"Icon loaded: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{effectiveFormat}', media='{mediaType ?? "unknown"}', bytes={bytes.Length}, auth='{GetAuthMode(authContext)}'");
+            {
+                var action = result.FromCache ? "Icon cache hit" : "Icon loaded";
+                var media = result.FromCache ? "cache" : result.MediaType ?? "unknown";
+                var bytes = result.FromCache ? string.Empty : $", bytes={result.BytesLength}";
+                DiagnosticLogger.Info($"{action}: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{result.DecodedAs}', media='{media}'{bytes}, auth='{GetAuthMode(authContext)}'");
+            }
             return null;
         }
         catch (Exception ex)
         {
             return $"format={format}:error={ex.GetType().Name}";
         }
-    }
-
-    private static async Task<ImageSource?> CreateImageSourceFromBytesAsync(byte[] bytes, string? mediaType, string? iconColor = null)
-    {
-        if (LooksLikeSvg(mediaType, bytes))
-        {
-            var tintedBytes = TryApplySvgColorTint(bytes, iconColor) ?? bytes;
-            var svg = await CreateSvgFromBytesAsync(tintedBytes);
-            if (svg is not null)
-            {
-                return svg;
-            }
-        }
-
-        try
-        {
-            return await CreateBitmapFromBytesAsync(bytes);
-        }
-        catch
-        {
-            var svgFallback = await CreateSvgFromBytesAsync(bytes);
-            return svgFallback;
-        }
-    }
-
-    private static byte[]? TryApplySvgColorTint(byte[] svgBytes, string? iconColor)
-    {
-        if (string.IsNullOrWhiteSpace(iconColor))
-        {
-            return null;
-        }
-
-        if (!TryNormalizeColorToHex(iconColor, out var hexColor))
-        {
-            return null;
-        }
-
-        try
-        {
-            var svgText = Encoding.UTF8.GetString(svgBytes);
-            if (string.IsNullOrWhiteSpace(svgText) || svgText.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                return null;
-            }
-
-            // Many modern icon packs (including f7/iconify) use currentColor.
-            // Adding a root style color enables tinting without raster conversion.
-            var match = SvgOpenTagRegex().Match(svgText);
-            if (!match.Success)
-            {
-                return null;
-            }
-
-            var replacement = $"<svg style=\"color:{hexColor};\"";
-            var tinted = svgText[..match.Index] + replacement + svgText[(match.Index + match.Length)..];
-            return Encoding.UTF8.GetBytes(tinted);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool TryNormalizeColorToHex(string color, out string hex)
-    {
-        hex = string.Empty;
-        if (!TryParseColor(color, out var parsed))
-        {
-            return false;
-        }
-
-        hex = $"#{parsed.R:X2}{parsed.G:X2}{parsed.B:X2}";
-        return true;
-    }
-
-    private static async Task<SvgImageSource?> CreateSvgFromBytesAsync(byte[] bytes)
-    {
-        var svg = new SvgImageSource
-        {
-            RasterizePixelWidth = 96,
-            RasterizePixelHeight = 96
-        };
-        using var stream = new InMemoryRandomAccessStream();
-        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
-        {
-            writer.WriteBytes(bytes);
-            await writer.StoreAsync();
-            await writer.FlushAsync();
-            writer.DetachStream();
-        }
-
-        stream.Seek(0);
-        var status = await svg.SetSourceAsync(stream);
-        return status == SvgImageSourceLoadStatus.Success ? svg : null;
-    }
-
-    private static bool LooksLikeSvg(string? mediaType, byte[] bytes)
-    {
-        if (!string.IsNullOrWhiteSpace(mediaType) &&
-            mediaType.Contains("svg", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var sampleLength = Math.Min(bytes.Length, 256);
-        if (sampleLength == 0)
-        {
-            return false;
-        }
-
-        var sample = Encoding.UTF8.GetString(bytes, 0, sampleLength).TrimStart('\uFEFF', '\t', '\r', '\n', ' ');
-        return sample.StartsWith("<svg", StringComparison.OrdinalIgnoreCase) ||
-               sample.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static async Task<BitmapImage> CreateBitmapFromBytesAsync(byte[] bytes)
-    {
-        var bitmap = new BitmapImage();
-        using var stream = new InMemoryRandomAccessStream();
-        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
-        {
-            writer.WriteBytes(bytes);
-            await writer.StoreAsync();
-            await writer.FlushAsync();
-            writer.DetachStream();
-        }
-
-        stream.Seek(0);
-        await bitmap.SetSourceAsync(stream);
-        return bitmap;
     }
 
     private static void ApplyAuthHeaders(HttpRequestMessage request, IconAuthContext authContext)
@@ -1291,7 +1131,7 @@ public static partial class SitemapControlFactory
 
         if (hasIcon)
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(IconColumnWidth) });
             TryAddIcon(grid, 0, iconName, iconState, iconColor, baseUri, useWindowsIcons, iconAuth);
         }
 
@@ -2590,7 +2430,7 @@ public static partial class SitemapControlFactory
 
     private static async Task LoadRawImageBytesAsync(Image image, byte[] bytes)
     {
-        var source = await CreateImageSourceFromBytesAsync(bytes, null);
+        var source = await OpenHabIconImageSourceLoader.CreateImageSourceFromBytesAsync(bytes, null);
         if (source is not null) image.Source = source;
     }
 
@@ -2791,7 +2631,9 @@ public static partial class SitemapControlFactory
                 return;
             }
 
-            var source = await CreateImageSourceFromBytesAsync(bytes, response.Content.Headers.ContentType?.MediaType);
+            var source = await OpenHabIconImageSourceLoader.CreateImageSourceFromBytesAsync(
+                bytes,
+                response.Content.Headers.ContentType?.MediaType);
             if (source is not null)
             {
                 image.Source = source;
