@@ -39,6 +39,12 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Latest Verification Evidence
 
+2026-05-14 performance optimization verification:
+
+- Verification file: `docs/superpowers/verification/2026-05-14-performance-optimization-results.md`
+- Commands run: `dotnet build src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj --configuration Release`
+- Result: passed with 0 warnings and 0 errors after rerunning with approved network access for NuGet restore; manual memory measurements and smoke checks were not captured here.
+
 2026-05-12 Main UI shell branch `feature/main-ui-shell`:
 
 - Passed: `dotnet test tests/OpenHab.Core.Tests/OpenHab.Core.Tests.csproj` (`61/61`).

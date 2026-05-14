@@ -235,7 +235,7 @@ public sealed class SitemapRuntimeController
             };
 
             // Live updates via sitemap events only.
-            _ = StartSitemapEventStreamAsync(primary.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
+            StartSitemapEventStreamInBackground(primary.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -268,7 +268,7 @@ public sealed class SitemapRuntimeController
                     SearchResultCount = SearchSnapshotResultCount
                 };
 
-                _ = StartSitemapEventStreamAsync(fallback.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
+                StartSitemapEventStreamInBackground(fallback.BaseUri, settings.SitemapName, descriptor.PageId, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -442,7 +442,30 @@ public sealed class SitemapRuntimeController
         var endpoint = Current.ActiveTransport == TransportKind.Local
             ? settingsController.Current.LocalEndpoint
             : settingsController.Current.CloudEndpoint;
-        _ = StartSitemapEventStreamAsync(endpoint, settingsController.Current.SitemapName, pageId, CancellationToken.None);
+        StartSitemapEventStreamInBackground(endpoint, settingsController.Current.SitemapName, pageId, CancellationToken.None);
+    }
+
+    private void StartSitemapEventStreamInBackground(Uri endpoint, string sitemapName, string pageId, CancellationToken ct)
+    {
+        if (sitemapEventStreamClient is null) return;
+        var attempt = PrepareSitemapEventStreamStart(sitemapName, pageId);
+        if (attempt is null)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await StartSitemapEventStreamCoreAsync(endpoint, sitemapName, pageId, attempt.Value, ct)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Superseded navigation or shutdown canceled this background start.
+            }
+        }, CancellationToken.None);
     }
 
     public bool NavigateToBreadcrumb(int breadcrumbIndex)
@@ -686,15 +709,27 @@ public sealed class SitemapRuntimeController
     {
         if (sitemapEventStreamClient is null) return;
 
-        if (_sitemapEventStreamStarted && _sitemapEventStreamSitemapName == sitemapName && _sitemapEventStreamPageId == pageId)
+        var attempt = PrepareSitemapEventStreamStart(sitemapName, pageId);
+        if (attempt is null)
         {
             return;
         }
 
-        _sitemapEventStreamStarted = true;
-        _sitemapEventStreamSitemapName = sitemapName;
-        _sitemapEventStreamPageId = pageId;
-        var attempt = Interlocked.Increment(ref _sitemapEventStreamAttempt);
+        await StartSitemapEventStreamCoreAsync(localBaseUri, sitemapName, pageId, attempt.Value, ct);
+    }
+
+    private async Task StartSitemapEventStreamCoreAsync(
+        Uri localBaseUri,
+        string sitemapName,
+        string pageId,
+        long attempt,
+        CancellationToken ct)
+    {
+        if (sitemapEventStreamClient is null) return;
+        if (!IsCurrentSitemapEventStreamAttempt(attempt))
+        {
+            return;
+        }
 
         try
         {
@@ -720,13 +755,38 @@ public sealed class SitemapRuntimeController
                 return;
             }
 
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream start before subscription assignment for page '{pageId}'");
+                return;
+            }
+
             _subscriptionId = subscriptionId;
             DiagnosticLogger.Info($"Sitemap event subscription created: {_subscriptionId}");
             var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
+
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream start before connect for page '{pageId}'");
+                return;
+            }
+
             await sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
+
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream connect completion for page '{pageId}'");
+                return;
+            }
         }
         catch (OperationCanceledException)
         {
+            if (!IsCurrentSitemapEventStreamAttempt(attempt))
+            {
+                DiagnosticLogger.Info($"Ignoring stale sitemap event stream cancellation for page '{pageId}'");
+                return;
+            }
+
             ResetSitemapEventStreamStart(attempt);
             throw;
         }
@@ -749,6 +809,21 @@ public sealed class SitemapRuntimeController
         }
     }
 
+    public void StopSitemapEventStream()
+    {
+        if (sitemapEventStreamClient is null)
+        {
+            return;
+        }
+
+        Interlocked.Increment(ref _sitemapEventStreamAttempt);
+        _sitemapEventStreamStarted = false;
+        _sitemapEventStreamSitemapName = null;
+        _sitemapEventStreamPageId = null;
+        _subscriptionId = null;
+        sitemapEventStreamClient.Dispose();
+    }
+
     private bool ResetSitemapEventStreamStart(long attempt)
     {
         if (!IsCurrentSitemapEventStreamAttempt(attempt))
@@ -761,6 +836,19 @@ public sealed class SitemapRuntimeController
         _sitemapEventStreamPageId = null;
         _subscriptionId = null;
         return true;
+    }
+
+    private long? PrepareSitemapEventStreamStart(string sitemapName, string pageId)
+    {
+        if (_sitemapEventStreamStarted && _sitemapEventStreamSitemapName == sitemapName && _sitemapEventStreamPageId == pageId)
+        {
+            return null;
+        }
+
+        _sitemapEventStreamStarted = true;
+        _sitemapEventStreamSitemapName = sitemapName;
+        _sitemapEventStreamPageId = pageId;
+        return Interlocked.Increment(ref _sitemapEventStreamAttempt);
     }
 
     private bool IsCurrentSitemapEventStreamAttempt(long attempt)

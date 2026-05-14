@@ -1,5 +1,7 @@
 using System.Net;
+using System.Collections.Concurrent;
 using System.Text;
+using OpenHab.Core;
 using OpenHab.Core.Events;
 
 namespace OpenHab.Core.Tests.Events;
@@ -294,6 +296,137 @@ public sealed class OpenHabEventStreamClientTests
         Assert.Equal("ItemStateEvent", stateEvent.Type);
 
         client.Dispose();
+    }
+
+    [Fact]
+    public async Task EventReceived_DoesNotLogRawSseDetailsWhenVerboseDiagnosticsDisabled()
+    {
+        var capturedLines = new Queue<string>();
+        using var capture = DiagnosticLogger.BeginLogCapture(false, line =>
+        {
+            lock (capturedLines)
+            {
+                capturedLines.Enqueue(line);
+            }
+        });
+
+        DiagnosticLogger.Info("capture-sentinel");
+
+        var token = Guid.NewGuid().ToString("N");
+        var sseLine = @"data: {""topic"":""openhab/items/Light_GF/state"",""payload"":""{\""type\"":\""OnOff\"",\""value\"":\""ON\""}"",""type"":""ItemStateEvent""}";
+        sseLine = sseLine.Replace("Light_GF", token);
+        var handler = new FakeHttpMessageHandler(sseLine);
+        using var httpClient = new HttpClient(handler);
+
+        var tcs = new TaskCompletionSource<ItemStateChangedEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var client = new OpenHabEventStreamClient(httpClient, initialBackoff: TimeSpan.FromMilliseconds(50), maxBackoff: TimeSpan.FromMilliseconds(500));
+        client.EventReceived += (_, evt) =>
+        {
+            if (evt is ItemStateChangedEvent stateChanged)
+            {
+                tcs.TrySetResult(stateChanged);
+            }
+        };
+
+        await client.ConnectAsync(new Uri("http://localhost:8080/"));
+        await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        string[] lines;
+        lock (capturedLines)
+        {
+            lines = capturedLines.ToArray();
+        }
+
+        Assert.Contains(lines, line => line.Contains("capture-sentinel", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, line => line.Contains(token, StringComparison.Ordinal));
+
+        client.Dispose();
+    }
+
+    [Fact]
+    public async Task BeginLogCapture_DisposedInnerScopeDoesNotLeakIntoChildAsyncFlow()
+    {
+        var outerLines = new ConcurrentQueue<string>();
+        var flowStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFlow = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var outerCapture = DiagnosticLogger.BeginLogCapture(false, line => outerLines.Enqueue(line));
+        Task childFlow;
+
+        using (DiagnosticLogger.BeginLogCapture(true, _ => { }))
+        {
+            childFlow = Task.Run(async () =>
+            {
+                flowStarted.SetResult();
+                await releaseFlow.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+                DiagnosticLogger.Info("child-info");
+                DiagnosticLogger.Verbose("child-verbose");
+            });
+
+            await flowStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+
+        releaseFlow.SetResult();
+        await childFlow.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var lines = outerLines.ToArray();
+        Assert.Contains(lines, line => line.Contains("child-info", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, line => line.Contains("child-verbose", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task BeginLogCapture_IsolatedAcrossParallelAsyncFlows()
+    {
+        var previousVerboseEventLogging = DiagnosticLogger.VerboseEventLogging;
+        DiagnosticLogger.VerboseEventLogging = true;
+
+        try
+        {
+            var flow1Lines = new ConcurrentQueue<string>();
+            var flow2Lines = new ConcurrentQueue<string>();
+            var flow1Started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var flow2Started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseLogs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var flow1 = Task.Run(async () =>
+            {
+                using var capture = DiagnosticLogger.BeginLogCapture(false, line => flow1Lines.Enqueue(line));
+                flow1Started.SetResult();
+                await releaseLogs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+                DiagnosticLogger.Info("flow1-info");
+                DiagnosticLogger.Verbose("flow1-verbose");
+            });
+
+            await flow1Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            var flow2 = Task.Run(async () =>
+            {
+                using var capture = DiagnosticLogger.BeginLogCapture(true, line => flow2Lines.Enqueue(line));
+                flow2Started.SetResult();
+                await releaseLogs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+                DiagnosticLogger.Info("flow2-info");
+                DiagnosticLogger.Verbose("flow2-verbose");
+            });
+
+            await flow2Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            releaseLogs.SetResult();
+
+            await Task.WhenAll(flow1, flow2).WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.Collection(flow1Lines,
+                line => Assert.Contains("flow1-info", line, StringComparison.Ordinal));
+
+            Assert.Collection(flow2Lines,
+                line => Assert.Contains("flow2-info", line, StringComparison.Ordinal),
+                line => Assert.Contains("flow2-verbose", line, StringComparison.Ordinal));
+        }
+        finally
+        {
+            DiagnosticLogger.VerboseEventLogging = previousVerboseEventLogging;
+        }
     }
 
     [Fact]

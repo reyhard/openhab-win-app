@@ -34,9 +34,9 @@ public sealed class TrayShellController
         Current = Current with
         {
             VisibleSurface = TrayShellSurface.Flyout,
-            IsRunningInBackground = true,
-            PendingRefresh = true
+            IsRunningInBackground = true
         };
+        RequestRefresh();
     }
 
     public void HandleOpenMainWindow()
@@ -49,9 +49,9 @@ public sealed class TrayShellController
         Current = Current with
         {
             VisibleSurface = TrayShellSurface.MainWindow,
-            IsRunningInBackground = false,
-            PendingRefresh = true
+            IsRunningInBackground = false
         };
+        RequestRefresh();
     }
 
     public void HandleNotificationActivated()
@@ -93,6 +93,31 @@ public sealed class TrayShellController
         Current = Current with { PendingRefresh = false };
     }
 
+    public void HandleRefreshCompleted(long refreshRequestVersion, TrayShellSurface visibleSurface)
+    {
+        if (Current.ShouldExitProcess)
+        {
+            return;
+        }
+
+        if (!Current.PendingRefresh)
+        {
+            return;
+        }
+
+        if (Current.RefreshRequestVersion != refreshRequestVersion)
+        {
+            return;
+        }
+
+        if (Current.VisibleSurface != visibleSurface)
+        {
+            return;
+        }
+
+        Current = Current with { PendingRefresh = false };
+    }
+
     public void HandleExitRequested()
     {
         Current = Current with
@@ -100,6 +125,15 @@ public sealed class TrayShellController
             VisibleSurface = TrayShellSurface.None,
             IsRunningInBackground = false,
             ShouldExitProcess = true
+        };
+    }
+
+    private void RequestRefresh()
+    {
+        Current = Current with
+        {
+            PendingRefresh = true,
+            RefreshRequestVersion = Current.RefreshRequestVersion + 1
         };
     }
 }

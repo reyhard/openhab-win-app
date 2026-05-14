@@ -31,6 +31,15 @@ using VirtualKey = Windows.System.VirtualKey;
 
 namespace OpenHab.Windows.Tray;
 
+internal enum TraySurfaceRefreshOutcome
+{
+    Applied,
+    SkippedNotVisible,
+    SkippedBusy,
+    NoVisibleSurface,
+    Failed
+}
+
 public partial class App : Application
 {
     private static Mutex? instanceMutex;
@@ -46,19 +55,26 @@ public partial class App : Application
     private NotificationActionExecutor? notificationActionExecutor;
     private NotificationStore? notificationStore;
     private NotificationPoller? notificationPoller;
+    private NotificationPollingConfig? activeNotificationPollingConfig;
     private SitemapRuntimeController? runtimeController;
     private ShortcutActionExecutor? shortcutActionExecutor;
+    private HotkeyMessageWindow? hotkeyMessageWindow;
     private GlobalHotkeyService? globalHotkeyService;
+    private BackgroundResourceReleaseController? backgroundResourceReleaseController;
     private RadialCommandMenuWindow? radialCommandMenuWindow;
     private DispatcherTimer? commandMenuHoldTimer;
     private ShortcutBinding? commandMenuHoldBinding;
     private DeviceInfoSyncService? deviceInfoSyncService;
     private WindowsSessionInfoReader? windowsSessionInfoReader;
     private CancellationTokenSource? promotedMainUiDiscoveryCts;
+    private IReadOnlyList<SitemapInfo>? discoveredSitemaps;
     private bool deviceInfoEventsRegistered;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
+    private int isPendingRefreshRetryScheduled;
     private int isShuttingDown;
     private bool shortcutHotkeysSuspended;
+    private bool notificationActivationHandlersRegistered;
+    private readonly SemaphoreSlim notificationPollingSettingsChangeSemaphore = new(1, 1);
 
     [DllImport("shell32.dll", SetLastError = true)]
     private static extern void SetCurrentProcessExplicitAppUserModelID(
@@ -66,6 +82,12 @@ public partial class App : Application
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int virtualKey);
+
+    internal sealed record NotificationPollingConfig(
+        EndpointMode EndpointMode,
+        Uri CloudEndpoint,
+        int PollIntervalSeconds,
+        string? CloudCredentialsFingerprint);
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -145,80 +167,13 @@ public partial class App : Application
 
         shellController = new TrayShellController();
         shellController.HandleLaunch();
+        backgroundResourceReleaseController = new BackgroundResourceReleaseController(
+            releaseResources: QueueBackgroundResourceRelease);
 
-        mainWindow = new MainWindow(
-            settingsController,
-            runtimeController,
-            notificationStore,
-            requestHideToTray: () =>
-            {
-                shellController.HandleWindowCloseRequested(TrayShellSurface.MainWindow);
-                _ = ApplyShellStateAsync();
-            },
-            shouldAllowClose: IsShutdownInProgress,
-            openHabClientFactory: (transportKind, endpoint) =>
-            {
-                var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
-                return new OpenHabHttpClient(
-                    httpClient,
-                    endpoint,
-                    apiToken: auth.ApiToken,
-                    basicUserName: auth.BasicUserName,
-                    basicPassword: auth.BasicPassword);
-            },
-            mainUiAuthResolver: transportKind =>
-            {
-                var auth = ResolveRuntimeAuthSync(settingsController, transportKind);
-                return new MainUi.MainUiAuthContext(auth.ApiToken, auth.BasicUserName, auth.BasicPassword);
-            });
         shortcutActionExecutor = new ShortcutActionExecutor(
             CreateActiveShortcutClient,
             () => runtimeController?.Current.ConnectionState ?? ConnectionState.Offline);
         radialCommandMenuWindow = new RadialCommandMenuWindow();
-        flyoutWindow = new FlyoutWindow(
-            settingsController,
-            runtimeController,
-            notificationStore,
-            requestOpenMainWindow: () =>
-            {
-                shellController.HandleOpenMainWindow();
-                _ = ApplyShellStateAsync();
-            },
-            requestOpenSettings: () =>
-            {
-                mainWindow?.ShowSettingsTab();
-                shellController.HandleOpenMainWindow();
-                _ = ApplyShellStateAsync();
-            },
-            requestOpenNotifications: () =>
-            {
-                mainWindow?.ShowNotificationsTab();
-                shellController.HandleOpenMainWindow();
-                _ = ApplyShellStateAsync();
-            },
-            requestHideFlyout: () =>
-            {
-                shellController.HandleWindowCloseRequested(TrayShellSurface.Flyout);
-                _ = ApplyShellStateAsync();
-            });
-
-        flyoutWindow.AppWindow.Closing += (sender, args) =>
-        {
-            if (IsShutdownInProgress())
-            {
-                return;
-            }
-
-            // If the window is already hidden (by exit animation), just cancel
-            if (!flyoutWindow.AppWindow.IsVisible)
-            {
-                args.Cancel = true;
-                return;
-            }
-            args.Cancel = true;
-            shellController.HandleWindowCloseRequested(TrayShellSurface.Flyout);
-            _ = ApplyShellStateAsync();
-        };
 
         trayIcon = new TrayIconService(
             toggleFlyout: () =>
@@ -235,7 +190,10 @@ public partial class App : Application
             {
                 RequestApplicationExit();
             });
-        globalHotkeyService = new GlobalHotkeyService(mainWindow, uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread());
+        hotkeyMessageWindow = new HotkeyMessageWindow();
+        globalHotkeyService = new GlobalHotkeyService(
+            hotkeyMessageWindow.Handle,
+            uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread());
         globalHotkeyService.CommandMenuRequested += (_, _) =>
         {
             _ = OpenShortcutCommandMenuAsync();
@@ -246,9 +204,232 @@ public partial class App : Application
         };
         ShortcutRecorderControl.AnyRecordingChanged += OnShortcutRecorderRecordingChanged;
         RefreshShortcutHotkeys();
-        settingsController.SettingsChanged += (_, _) => RefreshShortcutHotkeys();
+        settingsController.SettingsChanged += (_, _) =>
+        {
+            RefreshShortcutHotkeys();
+            _ = HandleNotificationPollingSettingsChangedAsync();
+        };
 
         _ = CompleteStartupAsync(settingsController, activatedEventArgs);
+    }
+
+    private MainWindow EnsureMainWindow()
+    {
+        if (mainWindow is not null)
+        {
+            return mainWindow;
+        }
+
+        mainWindow = CreateMainWindow();
+        return mainWindow;
+    }
+
+    private FlyoutWindow EnsureFlyoutWindow()
+    {
+        if (flyoutWindow is not null)
+        {
+            return flyoutWindow;
+        }
+
+        flyoutWindow = CreateFlyoutWindow();
+        return flyoutWindow;
+    }
+
+    private MainWindow CreateMainWindow()
+    {
+        var settings = settingsController ?? throw new InvalidOperationException("Settings controller is not initialized.");
+        var runtime = runtimeController ?? throw new InvalidOperationException("Runtime controller is not initialized.");
+        var notifications = notificationStore ?? throw new InvalidOperationException("Notification store is not initialized.");
+        var sharedHttpClient = httpClient ?? throw new InvalidOperationException("HTTP client is not initialized.");
+
+        var window = new MainWindow(
+            settings,
+            runtime,
+            notifications,
+            requestHideToTray: () =>
+            {
+                shellController?.HandleWindowCloseRequested(TrayShellSurface.MainWindow);
+                _ = ApplyShellStateAsync();
+            },
+            shouldAllowClose: IsShutdownInProgress,
+            openHabClientFactory: (transportKind, endpoint) =>
+            {
+                var auth = ResolveRuntimeAuthSync(settings, transportKind);
+                return new OpenHabHttpClient(
+                    sharedHttpClient,
+                    endpoint,
+                    apiToken: auth.ApiToken,
+                    basicUserName: auth.BasicUserName,
+                    basicPassword: auth.BasicPassword);
+            },
+            mainUiAuthResolver: transportKind =>
+            {
+                var auth = ResolveRuntimeAuthSync(settings, transportKind);
+                return new MainUi.MainUiAuthContext(auth.ApiToken, auth.BasicUserName, auth.BasicPassword);
+            });
+
+        PopulateWindowSitemaps(window);
+        return window;
+    }
+
+    private FlyoutWindow CreateFlyoutWindow()
+    {
+        var settings = settingsController ?? throw new InvalidOperationException("Settings controller is not initialized.");
+        var runtime = runtimeController ?? throw new InvalidOperationException("Runtime controller is not initialized.");
+        var notifications = notificationStore ?? throw new InvalidOperationException("Notification store is not initialized.");
+
+        var window = new FlyoutWindow(
+            settings,
+            runtime,
+            notifications,
+            requestOpenMainWindow: () =>
+            {
+                shellController?.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
+            },
+            requestOpenSettings: () =>
+            {
+                EnsureMainWindow().ShowSettingsTab();
+                shellController?.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
+            },
+            requestOpenNotifications: () =>
+            {
+                EnsureMainWindow().ShowNotificationsTab();
+                shellController?.HandleOpenMainWindow();
+                _ = ApplyShellStateAsync();
+            },
+            requestHideFlyout: () =>
+            {
+                shellController?.HandleWindowCloseRequested(TrayShellSurface.Flyout);
+                _ = ApplyShellStateAsync();
+            });
+
+        window.AppWindow.Closing += (sender, args) =>
+        {
+            if (IsShutdownInProgress())
+            {
+                return;
+            }
+
+            // If the window is already hidden (by exit animation), just cancel
+            if (!window.AppWindow.IsVisible)
+            {
+                args.Cancel = true;
+                return;
+            }
+
+            args.Cancel = true;
+            shellController?.HandleWindowCloseRequested(TrayShellSurface.Flyout);
+            _ = ApplyShellStateAsync();
+        };
+
+        PopulateWindowSitemaps(window);
+        return window;
+    }
+
+    private void PopulateWindowSitemaps(MainWindow window)
+    {
+        if (discoveredSitemaps is { } sitemaps)
+        {
+            window.PopulateSitemaps(sitemaps);
+        }
+    }
+
+    private void PopulateWindowSitemaps(FlyoutWindow window)
+    {
+        if (discoveredSitemaps is { } sitemaps)
+        {
+            window.PopulateSitemaps(sitemaps);
+        }
+    }
+
+    private void PopulateCreatedWindowsWithDiscoveredSitemaps()
+    {
+        if (discoveredSitemaps is not { } sitemaps)
+        {
+            return;
+        }
+
+        flyoutWindow?.PopulateSitemaps(sitemaps);
+        mainWindow?.PopulateSitemaps(sitemaps);
+    }
+
+    private async Task LoadCurrentVisibleRuntimeSurfaceAsync()
+    {
+        if (shellController is null)
+        {
+            return;
+        }
+
+        if (shellController.Current.VisibleSurface == TrayShellSurface.MainWindow)
+        {
+            await EnsureMainWindow().LoadRuntimeAsync();
+        }
+        else if (shellController.Current.VisibleSurface == TrayShellSurface.Flyout)
+        {
+            await EnsureFlyoutWindow().LoadRuntimeAsync();
+        }
+    }
+
+    private async Task<TraySurfaceRefreshOutcome> RefreshCurrentVisibleRuntimeSurfaceAsync(TrayShellSurface visibleSurface)
+    {
+        if (visibleSurface == TrayShellSurface.MainWindow)
+        {
+            var window = EnsureMainWindow();
+            return await window.RefreshRuntimeForShellAsync();
+        }
+
+        if (visibleSurface == TrayShellSurface.Flyout)
+        {
+            var window = EnsureFlyoutWindow();
+            return await window.RefreshRuntimeForShellAsync();
+        }
+
+        return TraySurfaceRefreshOutcome.NoVisibleSurface;
+    }
+
+    private void SchedulePendingRefreshRetry()
+    {
+        if (IsShutdownInProgress() || shellController?.Current.PendingRefresh != true)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 1) == 1)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(75);
+
+                if (IsShutdownInProgress() || shellController?.Current.PendingRefresh != true)
+                {
+                    return;
+                }
+
+                Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 0);
+
+                if (uiDispatcherQueue?.TryEnqueue(() => _ = ApplyShellStateAsync()) != true
+                    && !IsShutdownInProgress()
+                    && shellController?.Current.PendingRefresh == true)
+                {
+                    SchedulePendingRefreshRetry();
+                }
+            }
+            catch
+            {
+                // Best-effort retry scheduling.
+            }
+            finally
+            {
+                Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 0);
+            }
+        });
     }
 
     private static async Task InitializeAsync(AppSettingsController settingsController)
@@ -267,8 +448,17 @@ public partial class App : Application
     {
         try
         {
+            if (notificationPoller is not null)
+            {
+                DiagnosticLogger.Info("Notification poller start skipped — poller already active");
+                return;
+            }
+
             DiagnosticLogger.Info("Starting notification polling");
             var settings = settingsController.Current;
+            var cloudCredentials = GetCloudCredentialsSync(settingsController);
+            var pollingConfig = BuildNotificationPollingConfig(settings, cloudCredentials);
+            activeNotificationPollingConfig = pollingConfig;
             if (settings.EndpointMode == EndpointMode.LocalOnly)
             {
                 DiagnosticLogger.Info("Notification polling skipped — EndpointMode is LocalOnly");
@@ -290,22 +480,26 @@ public partial class App : Application
             {
                 DiagnosticLogger.Warn("Toast notifications unavailable — notifications will be logged to diagnostics file only");
             }
-            ToastService.NotificationActivated += (_, args) =>
+            if (!notificationActivationHandlersRegistered)
             {
-                _ = HandleNotificationActivationAsync(args.Argument);
-            };
-            ToastService.PackagedActivated += arguments =>
-            {
-                _ = HandleNotificationActivationAsync(arguments);
-            };
+                ToastService.NotificationActivated += (_, args) =>
+                {
+                    _ = HandleNotificationActivationAsync(args.Argument);
+                };
+                ToastService.PackagedActivated += arguments =>
+                {
+                    _ = HandleNotificationActivationAsync(arguments);
+                };
+                notificationActivationHandlersRegistered = true;
+            }
 
-            var cloudCredentials = GetCloudCredentialsSync(settingsController);
             DiagnosticLogger.Info($"Cloud credentials resolved: {(cloudCredentials is not null ? "yes" : "no")}");
             notificationPoller = new NotificationPoller(
                 httpClient!,
                 settings.CloudEndpoint,
                 basicUserName: cloudCredentials?.UserName,
                 basicPassword: cloudCredentials?.Password,
+                pollInterval: TimeSpan.FromSeconds(settings.NotificationPollIntervalSeconds),
                 dispatcher: uiDispatcherQueue,
                 preSeenIds: notificationStore?.GetSeenUndismissedIds(),
                 isDismissedFunc: id => notificationStore?.IsDismissed(id) ?? false,
@@ -345,7 +539,8 @@ public partial class App : Application
                     }
                 });
 
-            DiagnosticLogger.Info($"Notification poller created — polling {settings.CloudEndpoint.Host} every 60s");
+            DiagnosticLogger.Info(
+                $"Notification poller created — polling {settings.CloudEndpoint.Host} every {settings.NotificationPollIntervalSeconds}s");
 
             notificationPoller.NotificationReceived += (_, notification) =>
             {
@@ -365,6 +560,87 @@ public partial class App : Application
             // (e.g., unpackaged apps without shortcut identity, or restricted user accounts).
             DiagnosticLogger.Error("Failed to start notification polling", ex);
         }
+    }
+
+    private async Task HandleNotificationPollingSettingsChangedAsync()
+    {
+        await notificationPollingSettingsChangeSemaphore.WaitAsync();
+        try
+        {
+            var controller = settingsController;
+            if (controller is null)
+            {
+                return;
+            }
+
+            var settings = controller.Current;
+            var cloudCredentials = GetCloudCredentialsSync(controller);
+            var nextConfig = BuildNotificationPollingConfig(settings, cloudCredentials);
+            if (!ShouldReconfigureNotificationPolling(activeNotificationPollingConfig, nextConfig))
+            {
+                return;
+            }
+
+            var existingPoller = notificationPoller;
+            notificationPoller = null;
+            if (existingPoller is not null)
+            {
+                await existingPoller.StopAsync();
+                existingPoller.Dispose();
+            }
+
+            activeNotificationPollingConfig = nextConfig;
+            if (settings.EndpointMode == EndpointMode.LocalOnly)
+            {
+                return;
+            }
+
+            StartNotificationPolling(controller);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Error("Failed to apply notification polling settings change", ex);
+        }
+        finally
+        {
+            notificationPollingSettingsChangeSemaphore.Release();
+        }
+    }
+
+    internal static NotificationPollingConfig BuildNotificationPollingConfig(
+        AppSettings settings,
+        CloudCredentials? cloudCredentials)
+    {
+        return new NotificationPollingConfig(
+            settings.EndpointMode,
+            settings.CloudEndpoint,
+            settings.NotificationPollIntervalSeconds,
+            BuildCloudCredentialsFingerprint(cloudCredentials));
+    }
+
+    internal static bool ShouldReconfigureNotificationPolling(
+        NotificationPollingConfig? activeConfig,
+        NotificationPollingConfig nextConfig)
+    {
+        return !Equals(activeConfig, nextConfig);
+    }
+
+    private static string? BuildCloudCredentialsFingerprint(CloudCredentials? cloudCredentials)
+    {
+        if (cloudCredentials is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(cloudCredentials.UserName)
+            || string.IsNullOrWhiteSpace(cloudCredentials.Password))
+        {
+            return null;
+        }
+
+        var fingerprintMaterial = $"{cloudCredentials.UserName.Trim()}\0{cloudCredentials.Password}";
+        var fingerprintBytes = System.Text.Encoding.UTF8.GetBytes(fingerprintMaterial);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(fingerprintBytes));
     }
 
     // Sync helper — safe because the underlying store returns Task.FromResult.
@@ -487,6 +763,8 @@ public partial class App : Application
             }
 
             var state = shellController.Current;
+            var refreshRequestVersion = state.RefreshRequestVersion;
+            var visibleSurface = state.VisibleSurface;
 
             if (state.ShouldExitProcess)
             {
@@ -494,26 +772,23 @@ public partial class App : Application
                 return;
             }
 
-            var main = mainWindow;
-            var flyout = flyoutWindow;
-
-            if (main is null || flyout is null)
-            {
-                return;
-            }
-
-            switch (state.VisibleSurface)
+            switch (visibleSurface)
             {
                 case TrayShellSurface.MainWindow:
-                    if (flyout.AppWindow.IsVisible)
+                    var main = EnsureMainWindow();
+                    if (flyoutWindow is not null && flyoutWindow.AppWindow.IsVisible)
                     {
-                        await flyout.AnimateFlyoutExitAndHideAsync();
+                        await flyoutWindow.AnimateFlyoutExitAndHideAsync();
                     }
                     main.CenterOnCurrentScreen();
                     main.Activate();
                     break;
                 case TrayShellSurface.Flyout:
-                    main.AppWindow.Hide();
+                    var flyout = EnsureFlyoutWindow();
+                    if (mainWindow is not null)
+                    {
+                        mainWindow.AppWindow.Hide();
+                    }
                     TrayFlyoutPositioner.PlaceNearTrayArea(
                         flyout,
                         settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
@@ -524,32 +799,75 @@ public partial class App : Application
                     flyout.StartEntranceAnimationIfPending();
                     break;
                 default:
-                    main.AppWindow.Hide();
-                    if (flyout.AppWindow.IsVisible)
+                    if (mainWindow is not null)
                     {
-                        await flyout.AnimateFlyoutExitAndHideAsync();
+                        mainWindow.AppWindow.Hide();
                     }
+
+                    if (flyoutWindow is not null && flyoutWindow.AppWindow.IsVisible)
+                    {
+                        await flyoutWindow.AnimateFlyoutExitAndHideAsync();
+                    }
+
+                    runtimeController?.StopSitemapEventStream();
+                    mainWindow?.ReleaseSitemapVisualRows();
+                    flyoutWindow?.ReleaseSitemapVisualRows();
                     break;
             }
 
+            ApplyBackgroundResourceReleasePolicy(state);
+
             if (state.PendingRefresh)
             {
-                if (state.VisibleSurface == TrayShellSurface.MainWindow)
+                var refreshOutcome = await RefreshCurrentVisibleRuntimeSurfaceAsync(visibleSurface);
+                switch (refreshOutcome)
                 {
-                    await main.RefreshRuntimeAsync();
+                    case TraySurfaceRefreshOutcome.Applied:
+                    case TraySurfaceRefreshOutcome.NoVisibleSurface:
+                    case TraySurfaceRefreshOutcome.Failed:
+                        shellController.HandleRefreshCompleted(refreshRequestVersion, visibleSurface);
+                        break;
+                    case TraySurfaceRefreshOutcome.SkippedNotVisible:
+                    case TraySurfaceRefreshOutcome.SkippedBusy:
+                        SchedulePendingRefreshRetry();
+                        break;
                 }
-                else if (state.VisibleSurface == TrayShellSurface.Flyout)
-                {
-                    await flyout.RefreshRuntimeAsync();
-                }
-
-                shellController.HandleRefreshCompleted();
             }
         }
         finally
         {
             shellApplySemaphore.Release();
         }
+    }
+
+    private void ApplyBackgroundResourceReleasePolicy(TrayShellState state)
+    {
+        var delayMinutes = settingsController?.Current.BackgroundMemoryReleaseDelayMinutes
+            ?? AppSettings.Default.BackgroundMemoryReleaseDelayMinutes;
+        backgroundResourceReleaseController?.ApplyShellState(state, TimeSpan.FromMinutes(delayMinutes));
+    }
+
+    private void QueueBackgroundResourceRelease()
+    {
+        var dispatcher = uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread();
+        if (dispatcher is null || !dispatcher.TryEnqueue(ReleaseBackgroundResourcesIfStillHidden))
+        {
+            DiagnosticLogger.Warn("Background memory release skipped: UI dispatcher unavailable.");
+        }
+    }
+
+    private void ReleaseBackgroundResourcesIfStillHidden()
+    {
+        if (IsShutdownInProgress()
+            || shellController?.Current.VisibleSurface is not TrayShellSurface.None)
+        {
+            return;
+        }
+
+        DiagnosticLogger.Info("Releasing background UI resources after idle delay.");
+        runtimeController?.StopSitemapEventStream();
+        mainWindow?.ReleaseBackgroundResources();
+        flyoutWindow?.ReleaseSitemapVisualRows();
     }
 
     private async Task CompleteStartupAsync(AppSettingsController settingsController, AppActivationArguments? activatedEventArgs)
@@ -568,10 +886,10 @@ public partial class App : Application
         try
         {
             var sitemaps = await runtimeController!.LoadSitemapListAsync();
+            discoveredSitemaps = sitemaps.ToArray();
             _ = uiDispatcherQueue?.TryEnqueue(() =>
             {
-                flyoutWindow?.PopulateSitemaps(sitemaps);
-                mainWindow?.PopulateSitemaps(sitemaps);
+                PopulateCreatedWindowsWithDiscoveredSitemaps();
             });
 
             var settings = settingsController.Current;
@@ -582,8 +900,7 @@ public partial class App : Application
             {
                 _ = uiDispatcherQueue?.TryEnqueue(() =>
                 {
-                    flyoutWindow?.LoadRuntimeAsync();
-                    mainWindow?.LoadRuntimeAsync();
+                    _ = LoadCurrentVisibleRuntimeSurfaceAsync();
                 });
             }
             else if (sitemaps.Count == 0)
@@ -596,8 +913,7 @@ public partial class App : Application
                 settingsController.SetSitemapName(sitemaps[0].Name);
                 _ = uiDispatcherQueue?.TryEnqueue(() =>
                 {
-                    flyoutWindow?.LoadRuntimeAsync();
-                    mainWindow?.LoadRuntimeAsync();
+                    _ = LoadCurrentVisibleRuntimeSurfaceAsync();
                 });
             }
             else // Multiple sitemaps
@@ -609,8 +925,7 @@ public partial class App : Application
                     settingsController.SetSitemapName(defaultSitemap.Name);
                     _ = uiDispatcherQueue?.TryEnqueue(() =>
                     {
-                        flyoutWindow?.LoadRuntimeAsync();
-                        mainWindow?.LoadRuntimeAsync();
+                        _ = LoadCurrentVisibleRuntimeSurfaceAsync();
                     });
                 }
                 else
@@ -631,8 +946,8 @@ public partial class App : Application
             // Best-effort; dropdown will be empty if server unreachable.
         }
 
-        DiagnosticLogger.Info("Completing startup — starting notification polling");
-        StartNotificationPolling(settingsController);
+        DiagnosticLogger.Info("Completing startup — applying notification polling configuration");
+        await HandleNotificationPollingSettingsChangedAsync();
         HandleStartupActivation(activatedEventArgs);
     }
 
@@ -969,9 +1284,13 @@ public partial class App : Application
         DiagnosticLogger.Info("Shutting down notification poller");
         notificationPoller?.Dispose();
         notificationPoller = null;
+        backgroundResourceReleaseController?.Dispose();
+        backgroundResourceReleaseController = null;
         ShortcutRecorderControl.AnyRecordingChanged -= OnShortcutRecorderRecordingChanged;
         globalHotkeyService?.Dispose();
         globalHotkeyService = null;
+        hotkeyMessageWindow?.Dispose();
+        hotkeyMessageWindow = null;
         StopCommandMenuHoldTimer();
         radialCommandMenuWindow?.CloseMenu();
         radialCommandMenuWindow = null;

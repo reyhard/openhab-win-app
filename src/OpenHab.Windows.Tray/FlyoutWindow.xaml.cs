@@ -132,9 +132,42 @@ public sealed partial class FlyoutWindow : Window
         await RunRuntimeOperationAsync(ct => runtimeController.LoadAsync(ct));
     }
 
-    public async Task RefreshRuntimeAsync()
+    public async Task<bool> RefreshRuntimeAsync()
     {
-        await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+        return await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+    }
+
+    internal async Task<TraySurfaceRefreshOutcome> RefreshRuntimeForShellAsync()
+    {
+        if (!AppWindow.IsVisible)
+        {
+            return TraySurfaceRefreshOutcome.SkippedNotVisible;
+        }
+
+        if (isRefreshing)
+        {
+            return TraySurfaceRefreshOutcome.SkippedBusy;
+        }
+
+        isRefreshing = true;
+        try
+        {
+            await runtimeController.RefreshAsync(CancellationToken.None);
+            var refreshApplied = TryRefreshRuntimeBindings();
+            RefreshSettingsBindings();
+            return refreshApplied
+                ? TraySurfaceRefreshOutcome.Applied
+                : TraySurfaceRefreshOutcome.NoVisibleSurface;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error: {ex.Message}";
+            return TraySurfaceRefreshOutcome.Failed;
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     public void PrepareForShowAnimation()
@@ -192,23 +225,37 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
+    public void ReleaseSitemapVisualRows()
+    {
+        if (_isPageTransitionRunning)
+        {
+            return;
+        }
+
+        SitemapRows.Children.Clear();
+        SitemapRowsB.Children.Clear();
+        sitemapSurfaceRenderer.ForceFullRebuild();
+    }
+
+    private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
     {
         if (isRefreshing)
         {
-            return;
+            return false;
         }
 
         isRefreshing = true;
         try
         {
             await operation(CancellationToken.None);
-            RefreshRuntimeBindings();
+            var refreshApplied = TryRefreshRuntimeBindings();
             RefreshSettingsBindings();
+            return refreshApplied;
         }
         catch (Exception ex)
         {
             StatusText.Text = $"Error: {ex.Message}";
+            return false;
         }
         finally
         {
@@ -260,9 +307,19 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
+    internal void RefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
+    {
+        _ = TryRefreshRuntimeBindings(targetRows, animateStructuralInsertions);
+    }
+
+    internal bool TryRefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
     {
         using var scope = OpenHabProfiling.StartScope("FlyoutWindow.RefreshRuntimeBindings");
+        if (targetRows is null && !AppWindow.IsVisible)
+        {
+            return false;
+        }
+
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
         scope?.SetTag("snapshot.is_search_active", snapshot.IsSearchActive);
@@ -272,11 +329,13 @@ public sealed partial class FlyoutWindow : Window
         if (ShouldSkipStaleSearchRender(snapshot))
         {
             snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
-            return;
+            // A deferred search render should not block shell-level pending refresh completion.
+            return true;
         }
 
-        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
+        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot, animateStructuralInsertions);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+        return true;
     }
 
     private bool ShouldSkipStaleSearchRender(SitemapRuntimeSnapshot snapshot)
@@ -328,7 +387,7 @@ public sealed partial class FlyoutWindow : Window
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
             RefreshChromeBindings(runtimeController.Current);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Forward);
@@ -519,7 +578,7 @@ public sealed partial class FlyoutWindow : Window
                 _suppressNextSnapshotRefresh = true;
                 InactiveSlotContainer.Visibility = Visibility.Visible;
                 InactiveSlotContainer.Opacity = 1d;
-                RefreshRuntimeBindings(InactiveRows);
+                RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
                 RefreshChromeBindings(runtimeController.Current);
 
                 await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
@@ -959,7 +1018,7 @@ public sealed partial class FlyoutWindow : Window
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
             RefreshChromeBindings(runtimeController.Current);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);

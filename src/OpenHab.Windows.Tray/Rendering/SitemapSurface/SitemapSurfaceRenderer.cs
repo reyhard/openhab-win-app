@@ -36,7 +36,10 @@ public sealed class SitemapSurfaceRenderer(
         forceFullRebuild = true;
     }
 
-    public void Refresh(StackPanel rowsPanel, SitemapRuntimeSnapshot snapshot)
+    public void Refresh(
+        StackPanel rowsPanel,
+        SitemapRuntimeSnapshot snapshot,
+        bool animateStructuralInsertions = true)
     {
         using var scope = OpenHabProfiling.StartScope("SitemapSurfaceRenderer.Refresh");
         var rows = snapshot.Descriptor?.Rows;
@@ -77,7 +80,7 @@ public sealed class SitemapSurfaceRenderer(
 
         if (rowsPanel.Children.Count > 0)
         {
-            ReconcileStructuralRows(rowsPanel, visualRows, snapshot, context);
+            ReconcileStructuralRows(rowsPanel, visualRows, snapshot, context, animateStructuralInsertions);
             return;
         }
 
@@ -229,7 +232,8 @@ public sealed class SitemapSurfaceRenderer(
         StackPanel rowsPanel,
         IReadOnlyList<SitemapVisualRow> visualRows,
         SitemapRuntimeSnapshot snapshot,
-        RenderContext context)
+        RenderContext context,
+        bool animateStructuralInsertions)
     {
         using var scope = OpenHabProfiling.StartScope("SitemapSurfaceRenderer.ReconcileStructuralRows");
         scope?.SetTag("panel.child_count_before", rowsPanel.Children.Count);
@@ -278,10 +282,17 @@ public sealed class SitemapSurfaceRenderer(
             }
 
             var inserted = CreateRowElement(visualRow.RowIndex, row, snapshot, context);
-            SitemapControlFactory.SetVisibility(inserted, visible: false);
-            if (row.IsVisible)
+            if (animateStructuralInsertions)
             {
-                pendingUpdates.Add(new PendingRowUpdate(inserted, visualRow.RowIndex, row));
+                SitemapControlFactory.SetVisibility(inserted, visible: false);
+                if (row.IsVisible)
+                {
+                    pendingUpdates.Add(new PendingRowUpdate(inserted, visualRow.RowIndex, row));
+                }
+            }
+            else
+            {
+                SitemapControlFactory.SetVisibility(inserted, row.IsVisible);
             }
 
             orderedRows.Add(inserted);

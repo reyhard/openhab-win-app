@@ -65,6 +65,7 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? sidebarWidthAnimationTimer;
     private DispatcherTimer? sitemapPaneWidthAnimationTimer;
     private string? pendingExplicitMainUiRoute;
+    private MainUiWebViewHost? mainUiHost;
 
     private Notifications.NotificationsPageControl? notificationsPage;
     private Settings.SettingsPageControl? settingsPage;
@@ -73,6 +74,7 @@ public sealed partial class MainWindow : Window
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
     private Grid ActiveSlotContainer => _activeSlotIsA ? SitemapPageSlotA : SitemapPageSlotB;
     private Grid InactiveSlotContainer => _activeSlotIsA ? SitemapPageSlotB : SitemapPageSlotA;
+    private MainUiWebViewHost MainUiHost => mainUiHost ??= CreateMainUiHost();
 
 
     public MainWindow(AppSettingsController settingsController, SitemapRuntimeController runtimeController)
@@ -133,7 +135,6 @@ public sealed partial class MainWindow : Window
         settingsController.SettingsChanged += OnSettingsChanged;
         uiSettings.ColorValuesChanged += OnColorValuesChanged;
         ApplyWindowTheme();
-        MainUiHost.CurrentRouteChanged += MainUiHost_CurrentRouteChanged;
         shellController = new OpenHab.App.Shell.MainWindowShellController(settingsController.Current.MainWindowSitemapPaneVisible);
         shellController.Changed += (_, _) => ApplyMainWindowShellState();
         promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
@@ -196,9 +197,40 @@ public sealed partial class MainWindow : Window
         await RunRuntimeOperationAsync(ct => runtimeController.LoadAsync(ct));
     }
 
-    public async Task RefreshRuntimeAsync()
+    public async Task<bool> RefreshRuntimeAsync()
     {
-        await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+        return await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+    }
+
+    internal async Task<TraySurfaceRefreshOutcome> RefreshRuntimeForShellAsync()
+    {
+        if (!AppWindow.IsVisible)
+        {
+            return TraySurfaceRefreshOutcome.SkippedNotVisible;
+        }
+
+        if (isRefreshing)
+        {
+            return TraySurfaceRefreshOutcome.SkippedBusy;
+        }
+
+        isRefreshing = true;
+        try
+        {
+            await runtimeController.RefreshAsync(CancellationToken.None);
+            return TryRefreshRuntimeBindings()
+                ? TraySurfaceRefreshOutcome.Applied
+                : TraySurfaceRefreshOutcome.NoVisibleSurface;
+        }
+        catch (Exception ex)
+        {
+            ShellConnectionText.Text = $"Error: {ex.Message}";
+            return TraySurfaceRefreshOutcome.Failed;
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     public void ShowNotificationsTab()
@@ -209,6 +241,37 @@ public sealed partial class MainWindow : Window
     public void ShowSettingsTab()
     {
         shellController.SelectCenterPage(MainWindowCenterPage.Settings);
+    }
+
+    public void ReleaseSitemapVisualRows()
+    {
+        if (_isPageTransitionRunning)
+        {
+            return;
+        }
+
+        SitemapRows.Children.Clear();
+        SitemapRowsB.Children.Clear();
+        sitemapSurfaceRenderer.ForceFullRebuild();
+    }
+
+    public void ReleaseBackgroundResources()
+    {
+        ReleaseSitemapVisualRows();
+        ReleaseMainUiHost();
+    }
+
+    private void ReleaseMainUiHost()
+    {
+        if (mainUiHost is null)
+        {
+            return;
+        }
+
+        mainUiHost.CurrentRouteChanged -= MainUiHost_CurrentRouteChanged;
+        CenterContentHost.Children.Remove(mainUiHost);
+        mainUiHost.Close();
+        mainUiHost = null;
     }
 
     private void ShowNotificationsPage()
@@ -248,7 +311,9 @@ public sealed partial class MainWindow : Window
             ShowMainUi();
             var targetRoute = !string.IsNullOrWhiteSpace(state.PendingMainUiRoute)
                 ? state.PendingMainUiRoute
-                : MainUiHost.CurrentRoute;
+                : !string.IsNullOrWhiteSpace(currentMainUiRoute)
+                    ? currentMainUiRoute
+                    : MainUiHost.CurrentRoute;
             if (!string.IsNullOrWhiteSpace(targetRoute))
             {
                 var normalizedRoute = NormalizeMainUiRoute(targetRoute);
@@ -273,11 +338,19 @@ public sealed partial class MainWindow : Window
 
     private void ShowMainUi()
     {
-        if (!CenterContentHost.Children.Contains(MainUiHost))
+        var host = MainUiHost;
+        if (!CenterContentHost.Children.Contains(host))
         {
             CenterContentHost.Children.Clear();
-            CenterContentHost.Children.Add(MainUiHost);
+            CenterContentHost.Children.Add(host);
         }
+    }
+
+    private MainUiWebViewHost CreateMainUiHost()
+    {
+        var host = new MainUiWebViewHost();
+        host.CurrentRouteChanged += MainUiHost_CurrentRouteChanged;
+        return host;
     }
 
     private void MainUiHost_CurrentRouteChanged(object? sender, string route)
@@ -489,22 +562,23 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
+    private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
     {
         if (isRefreshing)
         {
-            return;
+            return false;
         }
 
         isRefreshing = true;
         try
         {
             await operation(CancellationToken.None);
-            RefreshRuntimeBindings();
+            return TryRefreshRuntimeBindings();
         }
         catch (Exception ex)
         {
             ShellConnectionText.Text = $"Error: {ex.Message}";
+            return false;
         }
         finally
         {
@@ -512,14 +586,25 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
+    internal void RefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
     {
+        _ = TryRefreshRuntimeBindings(targetRows, animateStructuralInsertions);
+    }
+
+    internal bool TryRefreshRuntimeBindings(StackPanel? targetRows = null, bool animateStructuralInsertions = true)
+    {
+        if (targetRows is null && !AppWindow.IsVisible)
+        {
+            return false;
+        }
+
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
         EnsureMainUiEndpointMatchesActiveTransport(snapshot);
-        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
+        sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot, animateStructuralInsertions);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+        return true;
     }
 
     private void EnsureMainUiEndpointMatchesActiveTransport(SitemapRuntimeSnapshot snapshot)
@@ -542,11 +627,11 @@ public sealed partial class MainWindow : Window
 
         if (currentMainUiTransport == desiredTransport)
         {
-            currentMainUiRoute = MainUiHost.CurrentRoute;
+            currentMainUiRoute = mainUiHost?.CurrentRoute ?? "/";
             return;
         }
 
-        var route = MainUiHost.CurrentRoute;
+        var route = mainUiHost?.CurrentRoute ?? "/";
         _ = NavigateMainUiAsync(route);
     }
 
@@ -593,7 +678,7 @@ public sealed partial class MainWindow : Window
             }
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Forward);
 
@@ -727,12 +812,12 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
-        if (!MainUiHost.CanGoBack)
+        if (mainUiHost?.CanGoBack != true)
         {
             return false;
         }
 
-        MainUiHost.GoBack();
+        mainUiHost.GoBack();
         return true;
     }
 
@@ -747,7 +832,7 @@ public sealed partial class MainWindow : Window
             runtimeController.NavigateBack();
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
-            RefreshRuntimeBindings(InactiveRows);
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
 
             await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
 

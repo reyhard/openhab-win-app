@@ -5,6 +5,18 @@ namespace OpenHab.App.Tests.Tray;
 public sealed class TrayShellControllerTests
 {
     [Fact]
+    public void Launch_StartsInBackgroundWithoutVisibleSurface()
+    {
+        var controller = new TrayShellController();
+
+        controller.HandleLaunch();
+
+        Assert.Equal(TrayShellSurface.None, controller.Current.VisibleSurface);
+        Assert.True(controller.Current.IsRunningInBackground);
+        Assert.False(controller.Current.PendingRefresh);
+    }
+
+    [Fact]
     public void HandleLaunchSetsInitialTrayState()
     {
         var controller = new TrayShellController();
@@ -98,6 +110,45 @@ public sealed class TrayShellControllerTests
 
         Assert.False(controller.Current.PendingRefresh);
         Assert.Equal(TrayShellSurface.MainWindow, controller.Current.VisibleSurface);
+    }
+
+    [Fact]
+    public void HandleRefreshCompletedWithStaleVersionDoesNotClearNewerPendingRefresh()
+    {
+        var controller = new TrayShellController();
+
+        controller.HandleLaunch();
+        controller.HandleOpenMainWindow();
+
+        var firstVersion = controller.Current.RefreshRequestVersion;
+
+        controller.HandlePrimaryTrayClick();
+        controller.HandlePrimaryTrayClick();
+        controller.HandleOpenMainWindow();
+
+        var current = controller.Current;
+        Assert.True(current.PendingRefresh);
+        Assert.True(current.RefreshRequestVersion > firstVersion);
+
+        controller.HandleRefreshCompleted(firstVersion, TrayShellSurface.MainWindow);
+
+        Assert.True(controller.Current.PendingRefresh);
+        Assert.Equal(current.RefreshRequestVersion, controller.Current.RefreshRequestVersion);
+    }
+
+    [Fact]
+    public void HandleRefreshCompletedWithMatchingVersionAndSurfaceClearsPendingRefresh()
+    {
+        var controller = new TrayShellController();
+
+        controller.HandleLaunch();
+        controller.HandleOpenMainWindow();
+
+        var state = controller.Current;
+
+        controller.HandleRefreshCompleted(state.RefreshRequestVersion, state.VisibleSurface);
+
+        Assert.False(controller.Current.PendingRefresh);
     }
 
     [Fact]
