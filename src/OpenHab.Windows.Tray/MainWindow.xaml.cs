@@ -196,9 +196,40 @@ public sealed partial class MainWindow : Window
         await RunRuntimeOperationAsync(ct => runtimeController.LoadAsync(ct));
     }
 
-    public async Task RefreshRuntimeAsync()
+    public async Task<bool> RefreshRuntimeAsync()
     {
-        await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+        return await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
+    }
+
+    internal async Task<TraySurfaceRefreshOutcome> RefreshRuntimeForShellAsync()
+    {
+        if (!AppWindow.IsVisible)
+        {
+            return TraySurfaceRefreshOutcome.SkippedNotVisible;
+        }
+
+        if (isRefreshing)
+        {
+            return TraySurfaceRefreshOutcome.SkippedBusy;
+        }
+
+        isRefreshing = true;
+        try
+        {
+            await runtimeController.RefreshAsync(CancellationToken.None);
+            return TryRefreshRuntimeBindings()
+                ? TraySurfaceRefreshOutcome.Applied
+                : TraySurfaceRefreshOutcome.NoVisibleSurface;
+        }
+        catch (Exception ex)
+        {
+            ShellConnectionText.Text = $"Error: {ex.Message}";
+            return TraySurfaceRefreshOutcome.Failed;
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
     }
 
     public void ShowNotificationsTab()
@@ -489,22 +520,23 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
+    private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
     {
         if (isRefreshing)
         {
-            return;
+            return false;
         }
 
         isRefreshing = true;
         try
         {
             await operation(CancellationToken.None);
-            RefreshRuntimeBindings();
+            return TryRefreshRuntimeBindings();
         }
         catch (Exception ex)
         {
             ShellConnectionText.Text = $"Error: {ex.Message}";
+            return false;
         }
         finally
         {
@@ -514,12 +546,23 @@ public sealed partial class MainWindow : Window
 
     internal void RefreshRuntimeBindings(StackPanel? targetRows = null)
     {
+        _ = TryRefreshRuntimeBindings(targetRows);
+    }
+
+    internal bool TryRefreshRuntimeBindings(StackPanel? targetRows = null)
+    {
+        if (targetRows is null && !AppWindow.IsVisible)
+        {
+            return false;
+        }
+
         var rowsPanel = targetRows ?? ActiveRows;
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
         EnsureMainUiEndpointMatchesActiveTransport(snapshot);
         sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+        return true;
     }
 
     private void EnsureMainUiEndpointMatchesActiveTransport(SitemapRuntimeSnapshot snapshot)

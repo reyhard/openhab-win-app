@@ -31,6 +31,15 @@ using VirtualKey = Windows.System.VirtualKey;
 
 namespace OpenHab.Windows.Tray;
 
+internal enum TraySurfaceRefreshOutcome
+{
+    Applied,
+    SkippedNotVisible,
+    SkippedBusy,
+    NoVisibleSurface,
+    Failed
+}
+
 public partial class App : Application
 {
     private static Mutex? instanceMutex;
@@ -59,6 +68,7 @@ public partial class App : Application
     private IReadOnlyList<SitemapInfo>? discoveredSitemaps;
     private bool deviceInfoEventsRegistered;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
+    private int isPendingRefreshRetryScheduled;
     private int isShuttingDown;
     private bool shortcutHotkeysSuspended;
 
@@ -346,6 +356,48 @@ public partial class App : Application
         }
     }
 
+    private async Task<TraySurfaceRefreshOutcome> RefreshCurrentVisibleRuntimeSurfaceAsync(TrayShellSurface visibleSurface)
+    {
+        if (visibleSurface == TrayShellSurface.MainWindow)
+        {
+            var window = EnsureMainWindow();
+            return await window.RefreshRuntimeForShellAsync();
+        }
+
+        if (visibleSurface == TrayShellSurface.Flyout)
+        {
+            var window = EnsureFlyoutWindow();
+            return await window.RefreshRuntimeForShellAsync();
+        }
+
+        return TraySurfaceRefreshOutcome.NoVisibleSurface;
+    }
+
+    private void SchedulePendingRefreshRetry()
+    {
+        if (Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 1) == 1)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(75);
+                _ = uiDispatcherQueue?.TryEnqueue(() => _ = ApplyShellStateAsync());
+            }
+            catch
+            {
+                // Best-effort retry scheduling.
+            }
+            finally
+            {
+                Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 0);
+            }
+        });
+    }
+
     private static async Task InitializeAsync(AppSettingsController settingsController)
     {
         try
@@ -630,16 +682,19 @@ public partial class App : Application
 
             if (state.PendingRefresh)
             {
-                if (state.VisibleSurface == TrayShellSurface.MainWindow)
+                var refreshOutcome = await RefreshCurrentVisibleRuntimeSurfaceAsync(state.VisibleSurface);
+                switch (refreshOutcome)
                 {
-                    await EnsureMainWindow().RefreshRuntimeAsync();
+                    case TraySurfaceRefreshOutcome.Applied:
+                    case TraySurfaceRefreshOutcome.NoVisibleSurface:
+                    case TraySurfaceRefreshOutcome.Failed:
+                        shellController.HandleRefreshCompleted();
+                        break;
+                    case TraySurfaceRefreshOutcome.SkippedNotVisible:
+                    case TraySurfaceRefreshOutcome.SkippedBusy:
+                        SchedulePendingRefreshRetry();
+                        break;
                 }
-                else if (state.VisibleSurface == TrayShellSurface.Flyout)
-                {
-                    await EnsureFlyoutWindow().RefreshRuntimeAsync();
-                }
-
-                shellController.HandleRefreshCompleted();
             }
         }
         finally
