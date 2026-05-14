@@ -55,6 +55,7 @@ public partial class App : Application
     private NotificationActionExecutor? notificationActionExecutor;
     private NotificationStore? notificationStore;
     private NotificationPoller? notificationPoller;
+    private NotificationPollingConfig? activeNotificationPollingConfig;
     private SitemapRuntimeController? runtimeController;
     private ShortcutActionExecutor? shortcutActionExecutor;
     private HotkeyMessageWindow? hotkeyMessageWindow;
@@ -71,6 +72,8 @@ public partial class App : Application
     private int isPendingRefreshRetryScheduled;
     private int isShuttingDown;
     private bool shortcutHotkeysSuspended;
+    private bool notificationActivationHandlersRegistered;
+    private readonly SemaphoreSlim notificationPollingSettingsChangeSemaphore = new(1, 1);
 
     [DllImport("shell32.dll", SetLastError = true)]
     private static extern void SetCurrentProcessExplicitAppUserModelID(
@@ -78,6 +81,12 @@ public partial class App : Application
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int virtualKey);
+
+    internal sealed record NotificationPollingConfig(
+        EndpointMode EndpointMode,
+        Uri CloudEndpoint,
+        int PollIntervalSeconds,
+        string? CloudCredentialsFingerprint);
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
@@ -192,7 +201,11 @@ public partial class App : Application
         };
         ShortcutRecorderControl.AnyRecordingChanged += OnShortcutRecorderRecordingChanged;
         RefreshShortcutHotkeys();
-        settingsController.SettingsChanged += (_, _) => RefreshShortcutHotkeys();
+        settingsController.SettingsChanged += (_, _) =>
+        {
+            RefreshShortcutHotkeys();
+            _ = HandleNotificationPollingSettingsChangedAsync();
+        };
 
         _ = CompleteStartupAsync(settingsController, activatedEventArgs);
     }
@@ -432,8 +445,17 @@ public partial class App : Application
     {
         try
         {
+            if (notificationPoller is not null)
+            {
+                DiagnosticLogger.Info("Notification poller start skipped — poller already active");
+                return;
+            }
+
             DiagnosticLogger.Info("Starting notification polling");
             var settings = settingsController.Current;
+            var cloudCredentials = GetCloudCredentialsSync(settingsController);
+            var pollingConfig = BuildNotificationPollingConfig(settings, cloudCredentials);
+            activeNotificationPollingConfig = pollingConfig;
             if (settings.EndpointMode == EndpointMode.LocalOnly)
             {
                 DiagnosticLogger.Info("Notification polling skipped — EndpointMode is LocalOnly");
@@ -455,22 +477,26 @@ public partial class App : Application
             {
                 DiagnosticLogger.Warn("Toast notifications unavailable — notifications will be logged to diagnostics file only");
             }
-            ToastService.NotificationActivated += (_, args) =>
+            if (!notificationActivationHandlersRegistered)
             {
-                _ = HandleNotificationActivationAsync(args.Argument);
-            };
-            ToastService.PackagedActivated += arguments =>
-            {
-                _ = HandleNotificationActivationAsync(arguments);
-            };
+                ToastService.NotificationActivated += (_, args) =>
+                {
+                    _ = HandleNotificationActivationAsync(args.Argument);
+                };
+                ToastService.PackagedActivated += arguments =>
+                {
+                    _ = HandleNotificationActivationAsync(arguments);
+                };
+                notificationActivationHandlersRegistered = true;
+            }
 
-            var cloudCredentials = GetCloudCredentialsSync(settingsController);
             DiagnosticLogger.Info($"Cloud credentials resolved: {(cloudCredentials is not null ? "yes" : "no")}");
             notificationPoller = new NotificationPoller(
                 httpClient!,
                 settings.CloudEndpoint,
                 basicUserName: cloudCredentials?.UserName,
                 basicPassword: cloudCredentials?.Password,
+                pollInterval: TimeSpan.FromSeconds(settings.NotificationPollIntervalSeconds),
                 dispatcher: uiDispatcherQueue,
                 preSeenIds: notificationStore?.GetSeenUndismissedIds(),
                 isDismissedFunc: id => notificationStore?.IsDismissed(id) ?? false,
@@ -510,7 +536,8 @@ public partial class App : Application
                     }
                 });
 
-            DiagnosticLogger.Info($"Notification poller created — polling {settings.CloudEndpoint.Host} every 60s");
+            DiagnosticLogger.Info(
+                $"Notification poller created — polling {settings.CloudEndpoint.Host} every {settings.NotificationPollIntervalSeconds}s");
 
             notificationPoller.NotificationReceived += (_, notification) =>
             {
@@ -530,6 +557,87 @@ public partial class App : Application
             // (e.g., unpackaged apps without shortcut identity, or restricted user accounts).
             DiagnosticLogger.Error("Failed to start notification polling", ex);
         }
+    }
+
+    private async Task HandleNotificationPollingSettingsChangedAsync()
+    {
+        await notificationPollingSettingsChangeSemaphore.WaitAsync();
+        try
+        {
+            var controller = settingsController;
+            if (controller is null)
+            {
+                return;
+            }
+
+            var settings = controller.Current;
+            var cloudCredentials = GetCloudCredentialsSync(controller);
+            var nextConfig = BuildNotificationPollingConfig(settings, cloudCredentials);
+            if (!ShouldReconfigureNotificationPolling(activeNotificationPollingConfig, nextConfig))
+            {
+                return;
+            }
+
+            var existingPoller = notificationPoller;
+            notificationPoller = null;
+            if (existingPoller is not null)
+            {
+                await existingPoller.StopAsync();
+                existingPoller.Dispose();
+            }
+
+            activeNotificationPollingConfig = nextConfig;
+            if (settings.EndpointMode == EndpointMode.LocalOnly)
+            {
+                return;
+            }
+
+            StartNotificationPolling(controller);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Error("Failed to apply notification polling settings change", ex);
+        }
+        finally
+        {
+            notificationPollingSettingsChangeSemaphore.Release();
+        }
+    }
+
+    internal static NotificationPollingConfig BuildNotificationPollingConfig(
+        AppSettings settings,
+        CloudCredentials? cloudCredentials)
+    {
+        return new NotificationPollingConfig(
+            settings.EndpointMode,
+            settings.CloudEndpoint,
+            settings.NotificationPollIntervalSeconds,
+            BuildCloudCredentialsFingerprint(cloudCredentials));
+    }
+
+    internal static bool ShouldReconfigureNotificationPolling(
+        NotificationPollingConfig? activeConfig,
+        NotificationPollingConfig nextConfig)
+    {
+        return !Equals(activeConfig, nextConfig);
+    }
+
+    private static string? BuildCloudCredentialsFingerprint(CloudCredentials? cloudCredentials)
+    {
+        if (cloudCredentials is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(cloudCredentials.UserName)
+            || string.IsNullOrWhiteSpace(cloudCredentials.Password))
+        {
+            return null;
+        }
+
+        var fingerprintMaterial = $"{cloudCredentials.UserName.Trim()}\0{cloudCredentials.Password}";
+        var fingerprintBytes = System.Text.Encoding.UTF8.GetBytes(fingerprintMaterial);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(fingerprintBytes));
     }
 
     // Sync helper — safe because the underlying store returns Task.FromResult.
@@ -799,8 +907,8 @@ public partial class App : Application
             // Best-effort; dropdown will be empty if server unreachable.
         }
 
-        DiagnosticLogger.Info("Completing startup — starting notification polling");
-        StartNotificationPolling(settingsController);
+        DiagnosticLogger.Info("Completing startup — applying notification polling configuration");
+        await HandleNotificationPollingSettingsChangedAsync();
         HandleStartupActivation(activatedEventArgs);
     }
 

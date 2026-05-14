@@ -7,7 +7,7 @@ using OpenHab.Core;
 
 namespace OpenHab.Windows.Notifications;
 
-public sealed class NotificationPoller : IDisposable
+public sealed class NotificationPoller : IDisposable, IAsyncDisposable
 {
     private const int MaxSeenIds = 200;
 
@@ -67,6 +67,8 @@ public sealed class NotificationPoller : IDisposable
 
     public bool IsRunning => pollingTask is not null && !pollingTask.IsCompleted;
 
+    public TimeSpan PollInterval => pollInterval;
+
     public string? LastError { get; private set; }
 
     public void Start()
@@ -79,15 +81,67 @@ public sealed class NotificationPoller : IDisposable
 
     public void Stop()
     {
-        DiagnosticLogger.Info("Notification polling stopped");
-        if (Interlocked.CompareExchange(ref isStarted, 0, 1) != 1) return;
+        if (Interlocked.Exchange(ref isStarted, 0) == 1)
+        {
+            DiagnosticLogger.Info("Notification polling stopped");
+        }
+
         cts?.Cancel();
+    }
+
+    public async Task StopAsync()
+    {
+        Task? taskToAwait;
+        CancellationTokenSource? ctsToDispose;
+        var wasStarted = Interlocked.Exchange(ref isStarted, 0) == 1;
+        taskToAwait = pollingTask;
+        ctsToDispose = cts;
+        if (!wasStarted && taskToAwait is null && ctsToDispose is null)
+        {
+            return;
+        }
+
+        if (wasStarted)
+        {
+            DiagnosticLogger.Info("Notification polling stopped");
+        }
+
+        ctsToDispose?.Cancel();
+
+        if (taskToAwait is not null)
+        {
+            try
+            {
+                await taskToAwait.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                if (ReferenceEquals(pollingTask, taskToAwait))
+                {
+                    pollingTask = null;
+                }
+            }
+        }
+
+        if (ReferenceEquals(cts, ctsToDispose))
+        {
+            cts = null;
+        }
+
+        ctsToDispose?.Dispose();
     }
 
     public void Dispose()
     {
-        Stop();
-        cts?.Dispose();
+        StopAsync().GetAwaiter().GetResult();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync().ConfigureAwait(false);
     }
 
     private async Task PollLoopAsync(CancellationToken cancellationToken)
