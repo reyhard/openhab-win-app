@@ -225,6 +225,18 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
+    public void ReleaseSitemapVisualRows()
+    {
+        if (_isPageTransitionRunning)
+        {
+            return;
+        }
+
+        SitemapRows.Children.Clear();
+        SitemapRowsB.Children.Clear();
+        sitemapSurfaceRenderer.ForceFullRebuild();
+    }
+
     private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
     {
         if (isRefreshing)

@@ -243,6 +243,18 @@ public sealed partial class MainWindow : Window
         shellController.SelectCenterPage(MainWindowCenterPage.Settings);
     }
 
+    public void ReleaseSitemapVisualRows()
+    {
+        if (_isPageTransitionRunning)
+        {
+            return;
+        }
+
+        SitemapRows.Children.Clear();
+        SitemapRowsB.Children.Clear();
+        sitemapSurfaceRenderer.ForceFullRebuild();
+    }
+
     private void ShowNotificationsPage()
     {
         notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore);

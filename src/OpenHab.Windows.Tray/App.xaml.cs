@@ -807,6 +807,8 @@ public partial class App : Application
                     }
 
                     runtimeController?.StopSitemapEventStream();
+                    mainWindow?.ReleaseSitemapVisualRows();
+                    flyoutWindow?.ReleaseSitemapVisualRows();
                     break;
             }
 
