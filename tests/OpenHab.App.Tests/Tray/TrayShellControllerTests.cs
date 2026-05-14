@@ -5,6 +5,18 @@ namespace OpenHab.App.Tests.Tray;
 public sealed class TrayShellControllerTests
 {
     [Fact]
+    public void Launch_StartsInBackgroundWithoutVisibleSurface()
+    {
+        var controller = new TrayShellController();
+
+        controller.HandleLaunch();
+
+        Assert.Equal(TrayShellSurface.None, controller.Current.VisibleSurface);
+        Assert.True(controller.Current.IsRunningInBackground);
+        Assert.False(controller.Current.PendingRefresh);
+    }
+
+    [Fact]
     public void HandleLaunchSetsInitialTrayState()
     {
         var controller = new TrayShellController();
