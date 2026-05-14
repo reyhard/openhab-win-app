@@ -102,14 +102,14 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         break;
                     }
 
-                    // Log every non-empty line for debugging (icon logging is suppressed globally)
+                    // Log every non-empty line only when verbose diagnostics are enabled.
                     if (!string.IsNullOrWhiteSpace(line) && !line.StartsWith(':') && !line.StartsWith("event:"))
-                        DiagnosticLogger.Info($"SSE raw: {line[..Math.Min(line.Length, 200)]}");
+                        DiagnosticLogger.Verbose($"SSE raw: {line[..Math.Min(line.Length, 200)]}");
 
                     var parsed = SitemapEventParser.ParseLine(line);
                     if (parsed is SitemapWidgetEvent widgetEvent)
                     {
-                        DiagnosticLogger.Info($"SSE widget event: id={widgetEvent.WidgetId} vis={widgetEvent.Visibility} item={widgetEvent.ItemName} state={widgetEvent.ItemState}");
+                        DiagnosticLogger.Verbose($"SSE widget event: id={widgetEvent.WidgetId} vis={widgetEvent.Visibility} item={widgetEvent.ItemName} state={widgetEvent.ItemState}");
                         WidgetEventReceived?.Invoke(this, widgetEvent);
                     }
                     else
@@ -118,7 +118,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         var evt = SseMessageParser.ParseLine(line);
                         if (evt is not null)
                         {
-                            DiagnosticLogger.Info($"SSE raw event: {evt.GetType().Name} topic={evt.Topic}");
+                            DiagnosticLogger.Verbose($"SSE raw event: {evt.GetType().Name} topic={evt.Topic}");
                             EventReceived?.Invoke(this, evt);
                         }
                         else if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))
