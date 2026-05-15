@@ -5,10 +5,18 @@ on:
     branches:
       - main
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   direct-tests:
-    name: Direct test gate
+    name: Test + Build Gate
     runs-on: windows-latest
 
     steps:
@@ -19,6 +27,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+          cache: true
 
       - name: Restore
         run: dotnet restore OpenHab.Windows.sln
@@ -37,3 +46,23 @@ jobs:
 
       - name: Build tray project
         run: dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore
+
+  package-validation:
+    name: Package Validation
+    runs-on: windows-latest
+    needs: direct-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+          cache: true
+
+      - name: Build package (Release/x64)
+        shell: pwsh
+        run: .\build-package.ps1 -Configuration Release -Platform x64
