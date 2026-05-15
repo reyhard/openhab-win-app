@@ -87,7 +87,9 @@ if (-not [string]::IsNullOrWhiteSpace($PackageCertificateKeyFile)) {
     }
 
     $arguments += "/p:PackageCertificateKeyFile=$resolvedCertificatePath"
-    $arguments += "/p:PackageCertificatePassword=$PackageCertificatePassword"
+    if (-not [string]::IsNullOrWhiteSpace($PackageCertificatePassword)) {
+        $arguments += "/p:PackageCertificatePassword=$PackageCertificatePassword"
+    }
     $arguments += '/p:AppxPackageSigningEnabled=true'
 }
 
@@ -110,10 +112,18 @@ if ($ExportCertificate.IsPresent -and -not [string]::IsNullOrWhiteSpace($Package
     }
 
     $certificateOutputPath = [System.IO.Path]::ChangeExtension($latestBundle.FullName, '.cer')
-    $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
-        $resolvedCertificatePath,
-        $PackageCertificatePassword,
-        [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+    $certificate = if ([string]::IsNullOrWhiteSpace($PackageCertificatePassword)) {
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $resolvedCertificatePath,
+            $null,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+    }
+    else {
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+            $resolvedCertificatePath,
+            $PackageCertificatePassword,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+    }
     try {
         $certificateBytes = $certificate.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
         [System.IO.File]::WriteAllBytes($certificateOutputPath, $certificateBytes)
