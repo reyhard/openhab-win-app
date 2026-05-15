@@ -7,7 +7,7 @@
     <!-- Wygeneruj własny GUID dla projektu -->
     <ProjectGuid>{9C1A6F47-0E7E-4E5C-8B5F-5A0F2D6D9A11}</ProjectGuid>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
-    <TargetPlatformVersion>10.0.19041.0</TargetPlatformVersion>
+    <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <DefaultLanguage>en-US</DefaultLanguage>
     <AppxBundle>Always</AppxBundle>
