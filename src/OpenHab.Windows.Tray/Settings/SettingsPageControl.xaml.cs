@@ -2365,7 +2365,17 @@ public sealed partial class SettingsPageControl : UserControl
             }
             else
             {
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{logPath}\"") { UseShellExecute = true });
+                var explorerPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = explorerPath,
+                    UseShellExecute = false,
+                    ArgumentList =
+                    {
+                        "/select,",
+                        logPath
+                    }
+                });
             }
         }
         catch (Exception ex)

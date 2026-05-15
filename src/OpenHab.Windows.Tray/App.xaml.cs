@@ -42,8 +42,6 @@ internal enum TraySurfaceRefreshOutcome
 
 public partial class App : Application
 {
-    private static Mutex? instanceMutex;
-
     private MainWindow? mainWindow;
     private FlyoutWindow? flyoutWindow;
     private TrayIconService? trayIcon;
@@ -67,6 +65,7 @@ public partial class App : Application
     private DeviceInfoSyncService? deviceInfoSyncService;
     private WindowsSessionInfoReader? windowsSessionInfoReader;
     private CancellationTokenSource? promotedMainUiDiscoveryCts;
+    private Mutex? instanceMutex;
     private IReadOnlyList<SitemapInfo>? discoveredSitemaps;
     private bool deviceInfoEventsRegistered;
     private readonly SemaphoreSlim shellApplySemaphore = new(1, 1);
@@ -580,8 +579,7 @@ public partial class App : Application
             notificationPoller = null;
             if (existingPoller is not null)
             {
-                await existingPoller.StopAsync();
-                existingPoller.Dispose();
+                await existingPoller.DisposeAsync();
             }
 
             activeNotificationPollingConfig = nextConfig;
@@ -1425,7 +1423,8 @@ public partial class App : Application
             text,
             $"^\\s*\\[{escapedToken}\\]\\s*",
             string.Empty,
-            RegexOptions.IgnoreCase);
+            RegexOptions.IgnoreCase,
+            TimeSpan.FromMilliseconds(100));
     }
 
     private static string CapitalizeFirstLetter(string text)

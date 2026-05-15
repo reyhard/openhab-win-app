@@ -21,7 +21,10 @@ public sealed class AppSettingsController
     public const int MinBackgroundMemoryReleaseDelayMinutes = 1;
     public const int MaxBackgroundMemoryReleaseDelayMinutes = 1440;
 
-    private static readonly Regex SitemapNamePattern = new("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
+    private static readonly Regex SitemapNamePattern = new(
+        "^[A-Za-z0-9_-]+$",
+        RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(100));
     private const string CredentialResource = "OpenHabAuth";
     private const string LocalTokenKey = "local-token";
     private const string CloudUserNameKey = "cloud-username";

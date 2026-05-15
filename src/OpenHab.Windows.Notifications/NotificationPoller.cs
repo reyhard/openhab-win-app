@@ -106,7 +106,10 @@ public sealed class NotificationPoller : IDisposable, IAsyncDisposable
             DiagnosticLogger.Info("Notification polling stopped");
         }
 
-        ctsToDispose?.Cancel();
+        if (ctsToDispose is not null)
+        {
+            await ctsToDispose.CancelAsync().ConfigureAwait(false);
+        }
 
         if (taskToAwait is not null)
         {

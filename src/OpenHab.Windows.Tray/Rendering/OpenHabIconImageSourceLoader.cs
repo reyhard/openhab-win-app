@@ -15,7 +15,10 @@ internal static class OpenHabIconImageSourceLoader
 {
     private static readonly HttpClient IconHttpClient = new();
     private static readonly ConcurrentDictionary<string, IconPayload> IconPayloadCache = new(StringComparer.Ordinal);
-    private static readonly Regex SvgOpenTagRegex = new("<svg\\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex SvgOpenTagRegex = new(
+        "<svg\\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(100));
 
     private sealed record IconPayload(byte[] Bytes, string? MediaType);
 
