@@ -27,7 +27,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-          cache: true
 
       - name: Restore
         run: dotnet restore OpenHab.Windows.sln
@@ -61,7 +60,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-          cache: true
 
       - name: Decode signing certificate
         shell: pwsh
