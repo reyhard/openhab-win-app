@@ -79,17 +79,17 @@ jobs:
         env:
           MSIX_CERT_PASSWORD: ${{ secrets.MSIX_CERT_PASSWORD }}
         run: |
-          $args = @(
-            "-Configuration", "Release",
-            "-Platform", "x64",
-            "-PackageCertificateKeyFile", $env:MSIX_CERT_PATH
-          )
-
-          if (-not [string]::IsNullOrWhiteSpace($env:MSIX_CERT_PASSWORD)) {
-            $args += @("-PackageCertificatePassword", $env:MSIX_CERT_PASSWORD)
+          $buildPackageParams = @{
+            Configuration = "Release"
+            Platform = "x64"
+            PackageCertificateKeyFile = $env:MSIX_CERT_PATH
           }
 
-          .\build-package.ps1 @args
+          if (-not [string]::IsNullOrWhiteSpace($env:MSIX_CERT_PASSWORD)) {
+            $buildPackageParams.PackageCertificatePassword = $env:MSIX_CERT_PASSWORD
+          }
+
+          .\build-package.ps1 @buildPackageParams
 
       - name: Upload MSIX artifacts
         uses: actions/upload-artifact@v4
