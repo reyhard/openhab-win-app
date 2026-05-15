@@ -25,7 +25,7 @@ concurrency:
 jobs:
   release-msix:
     name: Build and Release MSIX Zip
-    runs-on: windows-latest
+    runs-on: windows-2025
 
     steps:
       - name: Checkout
