@@ -32,98 +32,14 @@ public static partial class SitemapControlFactory
     private const int SliderMoveDebounceMs = 200;
     private const int ColorPickerMoveDebounceMs = 200;
     private const double WidgetVisibilityAnimationDurationMs = 320d;
-    private const double WebviewDefaultHeight = 300d;
-    private const double SitemapRowHeight = 40d;
+    private const string MissingIconStateText = "(none)";
+    private const string UnknownDiagnosticText = "unknown";
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
     private static readonly Regex FirstNumberRegex = FirstNumberRegexFactory();
     private static readonly System.Threading.Lock IconProbeSyncRoot = new();
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private sealed record IconImageTag(Uri BaseUri, string IconName, string? IconState, string? IconColor, IconAuthContext? AuthContext);
-    private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // --- LIGHTING ---
-        ["light"] = "\uE706", ["lights"] = "\uE706",
-        ["lighton"] = "\uE706", ["lightoff"] = "\uE706",
-        ["lightson"] = "\uE706", ["lightsoff"] = "\uE706",
-        ["dimmer"] = "\uE706",                                // Brightness (Sun shape works well for dimmer)
-        ["colorpicker"] = "\uE790", ["color"] = "\uE790",
-
-        // --- SWITCHES & POWER ---
-        ["switch"] = "\uE7E8",                                // PowerButton
-        ["switchon"] = "\uE7E8", ["switchoff"] = "\uE7E8",
-        ["poweron"] = "\uE7E8", ["poweroff"] = "\uE7E8",
-        ["energy"] = "\uE946", ["power"] = "\uE946",          // LightningBolt
-        ["outlet"] = "\uE994", ["plug"] = "\uE994",           // Plug/Connector
-        ["poweroutlet"] = "\uE994",["power_outlet"] = "\uE994",
-        ["battery"] = "\uEBA0",["batterylevel"] = "\uEBA0",  // Battery0
-
-        // --- DOORS, WINDOWS & BLINDS ---
-        ["rollershutter"] = "\uE728", ["blinds"] = "\uE728",  // Hamburger menu mimics horizontal blind slats perfectly
-        ["window"] = "\uE7C4",                                // Windowpane (Distinct from Door)
-        ["door"] = "\uE8E1", ["garagedoor"] = "\uE8E1",
-        ["contact"] = "\uE8E1",
-        ["lock"] = "\uE72E",
-
-        // --- CLIMATE & HVAC ---
-        ["heating"] = "\uE9CA", ["temp"] = "\uE9CA",          // Thermometer
-        ["temperature"] = "\uE9CA", ["climate"] = "\uE9CA",
-        ["radiator"] = "\uE9CA",
-        ["humidity"] = "\uEB42", ["moisture"] = "\uEB42",     // Drop (Water droplet)
-        ["water"] = "\uEB42",
-        ["gas"] = "\uE825",                                   // Gas pump / generic fuel
-        ["fan"] = "\uE785", ["fan_ceiling"] = "\uE785",       // Sync / Rotating arrows
-        ["pump"] = "\uE785",
-
-        // --- SENSORS & SECURITY ---
-        ["motion"] = "\uE916",                                // Activity (Zig-zag pulse line)
-        ["presence"] = "\uE716", ["occupancy"] = "\uE716",    // Person / Account
-        ["alarm"] = "\uEA8F", ["siren"] = "\uEA8F",           // Ringer / Bell
-        ["smoke"] = "\uE7BA",                                 // Alert Warning Triangle
-        ["camera"] = "\uE722",
-
-        // --- MULTIMEDIA ---
-        ["speaker"] = "\uE7F5",["audio"] = "\uE7F5", ["receiver"] = "\uE7F5",
-        ["tv"] = "\uE7F4", ["screen"] = "\uE7F4",             // TVMonitor
-        ["player"] = "\uE768", ["music"] = "\uE768",
-        ["image"] = "\uE722", ["video"] = "\uE714",           // \uE714 is Video
-
-        // --- WEATHER ---
-        ["sun"] = "\uE706", ["sunrise"] = "\uE706", ["sunset"] = "\uE706",
-        ["moon"] = "\uE708",                                  // QuietHours (Moon shape)
-        ["cloud"] = "\uE753", ["weather"] = "\uE753",
-        ["sunclouds"] = "\uE753", ["sun_clouds"] = "\uE753",
-        ["rain"] = "\uEB42",                                  // Drop
-        ["wind"] = "\uE743",                                  // Wind/Cloud
-        ["snow"] = "\uE9C8",                                  // Snowflake
-        ["pressure"] = "\uE976",
-
-        // --- ROOMS & LOCATIONS ---
-        ["groundfloor"] = "\uE831", ["ground_floor"] = "\uE831",["firstfloor"] = "\uE831", ["first_floor"] = "\uE831",
-        ["floorplan"] = "\uE831",
-        ["kitchen"] = "\uE7A7", ["bath"] = "\uE7A8", ["bathroom"] = "\uE7A8",
-        ["bedroom"] = "\uE7A9", ["living"] = "\uE7F4",        // Mapped Living Room to TV Monitor
-        ["office"] = "\uE7AB",
-        ["garage"] = "\uE83D", ["garden"] = "\uE7A5", ["terrace"] = "\uE7A5",
-        ["attic"] = "\uE831", ["cellar"] = "\uE831", ["basement"] = "\uE831",
-        ["location"] = "\uE707",
-
-        // --- MISC & UI ---
-        ["network"] = "\uE701", ["wifi"] = "\uE701",
-        ["quality"] = "\uE769", ["co2"] = "\uE769", ["airquality"] = "\uE769",
-        ["chart"] = "\uE9D2", ["number"] = "\uE9D2",
-        ["pie"] = "\uE9D2", ["line"] = "\uE9D2",
-        ["text"] = "\uE8A5", ["string"] = "\uE8A5", ["group"] = "\uE902",
-        ["settings"] = "\uE713", ["setup"] = "\uE713",
-        ["time"] = "\uE787", ["datetime"] = "\uE787", ["date"] = "\uE787",
-        ["none"] = "\uE776"
-    };
-    // Built once: normalized-key → glyph, for fuzzy icon-name matching.
-    // GroupBy handles alias collisions (groundfloor + ground_floor, firstfloor + first_floor)
-    // that normalize to the same key but share an identical glyph.
-    private static readonly Dictionary<string, string> NormalizedWin11IconMap = Win11IconMap
-        .GroupBy(kvp => NormalizeIconName(kvp.Key))
-        .ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal);
 
     internal static string? ResolveGlyphForIcon(string? iconName)
     {
@@ -794,7 +710,7 @@ public static partial class SitemapControlFactory
         return null;
     }
 
-    private static bool TryAddIcon(
+    private static void TryAddIcon(
         Grid grid,
         int column,
         string? iconName,
@@ -804,7 +720,11 @@ public static partial class SitemapControlFactory
         bool useWindowsIcons,
         IconAuthContext? iconAuth)
     {
-        if (string.IsNullOrWhiteSpace(iconName)) return false;
+        if (string.IsNullOrWhiteSpace(iconName))
+        {
+            return;
+        }
+
         var requestIconState = OpenHabIconUriBuilder.NormalizeStateForRequest(iconState);
 
         if (useWindowsIcons)
@@ -813,7 +733,10 @@ public static partial class SitemapControlFactory
             if (winIcon is not null)
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
+                {
                     DiagnosticLogger.Info($"Icon render via Win11 glyph: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'");
+                }
+
                 winIcon.VerticalAlignment = VerticalAlignment.Center;
                 winIcon.Tag = "sitemap-icon";
                 if (TryCreateBrush(iconColor, out var iconBrush))
@@ -822,11 +745,13 @@ public static partial class SitemapControlFactory
                 }
                 Grid.SetColumn(winIcon, column);
                 grid.Children.Add(winIcon);
-                return true;
+                return;
             }
 
-                if (!DiagnosticLogger.SuppressIconLogging)
-                    DiagnosticLogger.Warn($"Win11 glyph mapping missing: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'; falling back to server icon endpoint");
+            if (!DiagnosticLogger.SuppressIconLogging)
+            {
+                DiagnosticLogger.Warn($"Win11 glyph mapping missing: icon='{iconName}', normalized='{NormalizeIconName(iconName)}'; falling back to server icon endpoint");
+            }
         }
 
         if (baseUri is not null)
@@ -846,24 +771,22 @@ public static partial class SitemapControlFactory
             {
                 StartIconProbeIfNeeded(baseUri, authContext);
                 _ = LoadIconAsync(image, baseUri, iconName, requestIconState, iconColor, authContext);
-                return true;
+                return;
             }
 
             _ = LoadIconAsync(image, baseUri, iconName, requestIconState, iconColor, null);
-            return true;
+            return;
         }
 
         if (!DiagnosticLogger.SuppressIconLogging)
         {
-            DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{requestIconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
+            DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{requestIconState ?? MissingIconStateText}', reason='no glyph mapping and no base URI'");
         }
-
-        return false;
     }
 
     private static void StartIconProbeIfNeeded(Uri baseUri, IconAuthContext authContext)
     {
-        var probeKey = $"{baseUri.Scheme}://{baseUri.Authority}|{GetAuthMode(authContext)}|{authContext.TransportKind?.ToString() ?? "unknown"}";
+        var probeKey = $"{baseUri.Scheme}://{baseUri.Authority}|{GetAuthMode(authContext)}|{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}";
         lock (IconProbeSyncRoot)
         {
             if (!ProbedIconEndpoints.Add(probeKey))
@@ -889,7 +812,7 @@ public static partial class SitemapControlFactory
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
                 {
-                    DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+                    DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
                 }
 
                 return;
@@ -897,14 +820,14 @@ public static partial class SitemapControlFactory
 
             if (!DiagnosticLogger.SuppressIconLogging)
             {
-                DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+                DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
             }
         }
         catch (Exception ex)
         {
             if (!DiagnosticLogger.SuppressIconLogging)
             {
-                DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+                DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
             }
         }
 
@@ -918,14 +841,14 @@ public static partial class SitemapControlFactory
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
                 {
-                    DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                    DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
                 }
             }
             else
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
                 {
-                    DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                    DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
                 }
             }
         }
@@ -933,7 +856,7 @@ public static partial class SitemapControlFactory
         {
             if (!DiagnosticLogger.SuppressIconLogging)
             {
-                DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+                DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
             }
         }
     }
@@ -953,7 +876,9 @@ public static partial class SitemapControlFactory
         {
             var iconUri = BuildOpenHabIconUri(baseUri, iconName, iconState, format);
             if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Info($"Icon request: icon='{iconName}', state='{iconState ?? "(none)"}', format='{format}', url='{iconUri.PathAndQuery}'");
+            {
+                DiagnosticLogger.Info($"Icon request: icon='{iconName}', state='{iconState ?? MissingIconStateText}', format='{format}', url='{iconUri.PathAndQuery}'");
+            }
 
             var attemptResult = await TryLoadIconForFormatAsync(image, iconUri, iconName, iconState, iconColor, format, authContext);
             if (attemptResult is null)
@@ -964,8 +889,10 @@ public static partial class SitemapControlFactory
             attempts.Add(attemptResult);
         }
 
-            if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Warn($"Icon failed: icon='{iconName}', state='{iconState ?? "(none)"}', formats='{string.Join(",", IconFormatsByPreference)}', attempts='{string.Join("; ", attempts)}', auth='{GetAuthMode(authContext)}'");
+        if (!DiagnosticLogger.SuppressIconLogging)
+        {
+            DiagnosticLogger.Warn($"Icon failed: icon='{iconName}', state='{iconState ?? MissingIconStateText}', formats='{string.Join(",", IconFormatsByPreference)}', attempts='{string.Join("; ", attempts)}', auth='{GetAuthMode(authContext)}'");
+        }
     }
 
     private static async Task<string?> TryLoadIconForFormatAsync(
@@ -983,16 +910,18 @@ public static partial class SitemapControlFactory
             if (!result.Success)
             {
                 if (!DiagnosticLogger.SuppressIconLogging && result.Error?.StartsWith("status=", StringComparison.Ordinal) == true)
-                    DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', {result.Error}, media='{result.MediaType ?? "unknown"}', auth='{GetAuthMode(authContext)}'");
+                {
+                    DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? MissingIconStateText}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', {result.Error}, media='{result.MediaType ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}'");
+                }
                 return $"format={format}:{result.Error}";
             }
 
             if (!DiagnosticLogger.SuppressIconLogging)
             {
                 var action = result.FromCache ? "Icon cache hit" : "Icon loaded";
-                var media = result.FromCache ? "cache" : result.MediaType ?? "unknown";
+                var media = result.FromCache ? "cache" : result.MediaType ?? UnknownDiagnosticText;
                 var bytes = result.FromCache ? string.Empty : $", bytes={result.BytesLength}";
-                DiagnosticLogger.Info($"{action}: icon='{iconName}', state='{iconState ?? "(none)"}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{result.DecodedAs}', media='{media}'{bytes}, auth='{GetAuthMode(authContext)}'");
+                DiagnosticLogger.Info($"{action}: icon='{iconName}', state='{iconState ?? MissingIconStateText}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{result.DecodedAs}', media='{media}'{bytes}, auth='{GetAuthMode(authContext)}'");
             }
             return null;
         }
@@ -2186,9 +2115,16 @@ public static partial class SitemapControlFactory
         var activeHoverBackground = CreateColor(255, 250, 45, 120);
         var activePressedBackground = CreateColor(255, 230, 30, 108);
 
-        var background = isActive
-            ? (isPressed ? activePressedBackground : isHovered ? activeHoverBackground : activeBackground)
-            : (isPressed ? inactivePressedBackground : isHovered ? inactiveHoverBackground : inactiveBackground);
+        var background = ResolveButtonGridBackground(
+            isActive,
+            isHovered,
+            isPressed,
+            inactiveBackground,
+            inactiveHoverBackground,
+            inactivePressedBackground,
+            activeBackground,
+            activeHoverBackground,
+            activePressedBackground);
         var foreground = isActive ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
 
         button.Background = new SolidColorBrush(background);
@@ -2197,6 +2133,35 @@ public static partial class SitemapControlFactory
         button.Resources["ButtonForegroundPressed"] = new SolidColorBrush(foreground);
         button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(isActive ? activeHoverBackground : inactiveHoverBackground);
         button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(isActive ? activePressedBackground : inactivePressedBackground);
+    }
+
+    private static global::Windows.UI.Color ResolveButtonGridBackground(
+        bool isActive,
+        bool isHovered,
+        bool isPressed,
+        global::Windows.UI.Color inactiveBackground,
+        global::Windows.UI.Color inactiveHoverBackground,
+        global::Windows.UI.Color inactivePressedBackground,
+        global::Windows.UI.Color activeBackground,
+        global::Windows.UI.Color activeHoverBackground,
+        global::Windows.UI.Color activePressedBackground)
+    {
+        if (isActive)
+        {
+            if (isPressed)
+            {
+                return activePressedBackground;
+            }
+
+            return isHovered ? activeHoverBackground : activeBackground;
+        }
+
+        if (isPressed)
+        {
+            return inactivePressedBackground;
+        }
+
+        return isHovered ? inactiveHoverBackground : inactiveBackground;
     }
 
     private static Border CreateImage(
@@ -2221,7 +2186,14 @@ public static partial class SitemapControlFactory
             var comma = value.IndexOf(',');
             if (comma > 0 && value.Contains("base64", StringComparison.OrdinalIgnoreCase))
             {
-                try { _ = LoadRawImageBytesAsync(image, Convert.FromBase64String(value[(comma + 1)..])); } catch { }
+                try
+                {
+                    _ = LoadRawImageBytesAsync(image, Convert.FromBase64String(value[(comma + 1)..]));
+                }
+                catch (FormatException)
+                {
+                    // Invalid inline image payloads are ignored; the row still renders its label and icon.
+                }
             }
             container.Children.Add(image);
         }

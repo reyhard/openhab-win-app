@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
-internal sealed class HotkeyMessageWindow : IDisposable
+internal sealed partial class HotkeyMessageWindow : IDisposable
 {
     private const string WindowClassName = "OpenHabHotkeyMessageWindow";
     private const int HwndMessage = -3;

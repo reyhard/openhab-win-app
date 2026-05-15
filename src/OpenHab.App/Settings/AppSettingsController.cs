@@ -25,6 +25,12 @@ public sealed class AppSettingsController
         "^[A-Za-z0-9_-]+$",
         RegexOptions.Compiled,
         TimeSpan.FromMilliseconds(100));
+    private static readonly JsonSerializerOptions IndentedJsonSerializerOptions = new()
+    {
+        WriteIndented = true
+    };
+
+    private const string MissingCredentialStoreMessage = "No credential store is configured.";
     private const string CredentialResource = "OpenHabAuth";
     private const string LocalTokenKey = "local-token";
     private const string CloudUserNameKey = "cloud-username";
@@ -293,7 +299,7 @@ public sealed class AppSettingsController
     public async Task SetApiTokenAsync(TransportKind transportKind, string token, CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)
-            throw new InvalidOperationException("No credential store is configured.");
+            throw new InvalidOperationException(MissingCredentialStoreMessage);
 
         if (string.IsNullOrWhiteSpace(token))
             throw new ArgumentException("Token must not be blank.", nameof(token));
@@ -307,17 +313,13 @@ public sealed class AppSettingsController
 
         await credentialStore.StoreAsync(CredentialResource, key, token, cancellationToken);
 
-        UpdateSettings(settings => transportKind switch
-            {
-                TransportKind.Local => settings with { HasLocalToken = true },
-                _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
-            });
+        UpdateSettings(settings => settings with { HasLocalToken = true });
     }
 
     public async Task ClearApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)
-            throw new InvalidOperationException("No credential store is configured.");
+            throw new InvalidOperationException(MissingCredentialStoreMessage);
 
         var key = transportKind switch
         {
@@ -328,17 +330,13 @@ public sealed class AppSettingsController
 
         await credentialStore.RemoveAsync(CredentialResource, key, cancellationToken);
 
-        UpdateSettings(settings => transportKind switch
-            {
-                TransportKind.Local => settings with { HasLocalToken = false },
-                _ => throw new ArgumentOutOfRangeException(nameof(transportKind))
-            });
+        UpdateSettings(settings => settings with { HasLocalToken = false });
     }
 
     public async Task<string?> GetApiTokenAsync(TransportKind transportKind, CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)
-            throw new InvalidOperationException("No credential store is configured.");
+            throw new InvalidOperationException(MissingCredentialStoreMessage);
 
         var key = transportKind switch
         {
@@ -353,7 +351,7 @@ public sealed class AppSettingsController
     public async Task SetCloudCredentialsAsync(string userName, string password, CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)
-            throw new InvalidOperationException("No credential store is configured.");
+            throw new InvalidOperationException(MissingCredentialStoreMessage);
 
         if (string.IsNullOrWhiteSpace(userName))
             throw new ArgumentException("Cloud user name must not be blank.", nameof(userName));
@@ -376,7 +374,7 @@ public sealed class AppSettingsController
     public async Task ClearCloudCredentialsAsync(CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)
-            throw new InvalidOperationException("No credential store is configured.");
+            throw new InvalidOperationException(MissingCredentialStoreMessage);
 
         await credentialStore.RemoveAsync(CredentialResource, CloudUserNameKey, cancellationToken);
         await credentialStore.RemoveAsync(CredentialResource, CloudPasswordKey, cancellationToken);
@@ -392,7 +390,7 @@ public sealed class AppSettingsController
     public async Task<CloudCredentials?> GetCloudCredentialsAsync(CancellationToken cancellationToken = default)
     {
         if (credentialStore is null)
-            throw new InvalidOperationException("No credential store is configured.");
+            throw new InvalidOperationException(MissingCredentialStoreMessage);
 
         var userName = await credentialStore.RetrieveAsync(CredentialResource, CloudUserNameKey, cancellationToken);
         var password = await credentialStore.RetrieveAsync(CredentialResource, CloudPasswordKey, cancellationToken);
@@ -437,7 +435,7 @@ public sealed class AppSettingsController
         try
         {
             Directory.CreateDirectory(SettingsDirectory);
-            var json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(snapshot, IndentedJsonSerializerOptions);
             await File.WriteAllTextAsync(settingsFilePath, json);
         }
         catch (Exception ex)
@@ -478,41 +476,6 @@ public sealed class AppSettingsController
         {
             if (!File.Exists(settingsFilePath)) return;
             var json = File.ReadAllText(settingsFilePath);
-            var legacyFollowSystemTheme = ReadLegacyFollowSystemTheme(json);
-            var loaded = JsonSerializer.Deserialize<AppSettings>(json);
-            if (loaded is not null)
-            {
-                if (legacyFollowSystemTheme is bool legacyTheme)
-                {
-                    loaded = loaded with { FollowSystemTheme = legacyTheme };
-                }
-
-                var normalized = NormalizeLoadedSettings(loaded, legacyFollowSystemTheme);
-                // Preserve credential-backed auth flags; they are hydrated separately from the credential store.
-                lock (syncRoot)
-                {
-                    Current = normalized with
-                    {
-                        HasLocalToken = Current.HasLocalToken,
-                        HasCloudCredentials = Current.HasCloudCredentials,
-                        CloudUserName = Current.CloudUserName
-                    };
-                    ApplyDiagnosticSettings(Current);
-                }
-            }
-        }
-        catch
-        {
-            // Corrupt or missing settings file — stick with defaults.
-        }
-    }
-
-    private async Task TryLoadAsync()
-    {
-        try
-        {
-            if (!File.Exists(settingsFilePath)) return;
-            var json = await File.ReadAllTextAsync(settingsFilePath);
             var legacyFollowSystemTheme = ReadLegacyFollowSystemTheme(json);
             var loaded = JsonSerializer.Deserialize<AppSettings>(json);
             if (loaded is not null)

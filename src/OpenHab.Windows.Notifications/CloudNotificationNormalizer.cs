@@ -73,7 +73,7 @@ public static class CloudNotificationNormalizer
         return CloudNotificationKind.Push;
     }
 
-    private static IReadOnlyList<NotificationHideTarget> BuildHideTargets(
+    private static List<NotificationHideTarget> BuildHideTargets(
         CloudNotificationKind kind,
         string? referenceId,
         string? tag)
@@ -182,15 +182,7 @@ public static class CloudNotificationNormalizer
 
     private static string? FirstNonEmpty(params string?[] values)
     {
-        foreach (var value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
+        return Array.Find(values, value => !string.IsNullOrWhiteSpace(value));
     }
 
     private static string? TrimToNull(string? value)

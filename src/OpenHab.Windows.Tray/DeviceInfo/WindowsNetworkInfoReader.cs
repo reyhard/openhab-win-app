@@ -4,9 +4,9 @@ namespace OpenHab.Windows.Tray.DeviceInfo;
 
 internal sealed record WindowsNetworkInfo(bool? IsWifiConnected, string? WifiName);
 
-internal sealed class WindowsNetworkInfoReader
+internal static class WindowsNetworkInfoReader
 {
-    public WindowsNetworkInfo Read()
+    public static WindowsNetworkInfo Read()
     {
         try
         {

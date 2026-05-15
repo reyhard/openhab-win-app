@@ -188,7 +188,7 @@ public sealed class NotificationActionExecutor
     {
         var baseBuilder = new UriBuilder(endpointBaseUri);
         var basePath = baseBuilder.Path ?? string.Empty;
-        if (!basePath.EndsWith("/", StringComparison.Ordinal))
+        if (!basePath.EndsWith('/'))
         {
             basePath += "/";
         }

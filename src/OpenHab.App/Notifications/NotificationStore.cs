@@ -37,6 +37,10 @@ public sealed class NotificationStore
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "OpenHab.WinApp",
         "notifications.json");
+    private static readonly JsonSerializerOptions IndentedJsonSerializerOptions = new()
+    {
+        WriteIndented = true
+    };
 
     private readonly string storageFilePath;
     private readonly bool persistChanges;
@@ -130,7 +134,6 @@ public sealed class NotificationStore
         string? actionButton2 = null,
         string? actionButton3 = null)
     {
-        bool mutated;
         lock (syncRoot)
         {
             var normalizedReferenceId = string.IsNullOrWhiteSpace(referenceId)
@@ -175,9 +178,7 @@ public sealed class NotificationStore
                     Severity = severity ?? existing.Severity,
                     Created = created,
                     ReferenceId = normalizedReferenceId ?? existing.ReferenceId,
-                    IsRead = replacedByReference && existing.IsDismissed
-                        ? true
-                        : existing.IsRead,
+                    IsRead = existing.IsRead || (replacedByReference && existing.IsDismissed),
                     OnClickAction = onClickAction ?? existing.OnClickAction,
                     MediaAttachmentUrl = mediaAttachmentUrl ?? existing.MediaAttachmentUrl,
                     ActionButton1 = actionButton1 ?? existing.ActionButton1,
@@ -191,7 +192,6 @@ public sealed class NotificationStore
                 }
 
                 notifications[id] = updated;
-                mutated = true;
             }
             else
             {
@@ -212,7 +212,6 @@ public sealed class NotificationStore
                     ActionButton2: actionButton2,
                     ActionButton3: actionButton3);
                 notifications[id] = stored;
-                mutated = true;
 
                 if (notifications.Count > MaxEntries)
                 {
@@ -221,11 +220,8 @@ public sealed class NotificationStore
             }
         }
 
-        if (mutated)
-        {
-            Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
-        }
+        Changed?.Invoke(this, EventArgs.Empty);
+        SaveIfEnabled();
     }
 
     private void HideMatchingNotifications(Func<StoredNotification, bool> matches)
@@ -490,7 +486,7 @@ public sealed class NotificationStore
             }
 
             var data = new NotificationStoreData(snapshot);
-            var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true });
+            var json = JsonSerializer.Serialize(data, IndentedJsonSerializerOptions);
             await File.WriteAllTextAsync(storageFilePath, json);
         }
         catch

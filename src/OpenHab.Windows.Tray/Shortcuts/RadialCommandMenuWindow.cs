@@ -360,11 +360,14 @@ public sealed class RadialCommandMenuWindow
         }
 
         var entry = displayedEntries[buttonIndex];
-        return entry.EntryType == RadialEntryType.PageAdvance
-            ? RadialCommandMenuHoverTarget.PageAdvance
-            : entry.Action is not null
-                ? RadialCommandMenuHoverTarget.Action(entry.Action)
-                : RadialCommandMenuHoverTarget.None;
+        if (entry.EntryType == RadialEntryType.PageAdvance)
+        {
+            return RadialCommandMenuHoverTarget.PageAdvance;
+        }
+
+        return entry.Action is not null
+            ? RadialCommandMenuHoverTarget.Action(entry.Action)
+            : RadialCommandMenuHoverTarget.None;
     }
 
     private static GraphicsPath CreateRoundedRectanglePath(RectangleF bounds, float radius)

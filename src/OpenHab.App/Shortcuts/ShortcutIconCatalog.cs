@@ -6,45 +6,51 @@ public sealed record ShortcutIconDefinition(string Id, string Label, string Grou
 
 public static class ShortcutIconCatalog
 {
+    private const string LightingGroup = "lighting";
+    private const string OpeningsGroup = "openings";
+    private const string ClimateGroup = "climate";
+    private const string MediaGroup = "media";
+    private const string ScenesToolsGroup = "scenes-tools";
+
     public static ImmutableArray<ShortcutIconDefinition> All { get; } =
     [
         // Lighting
-        new("light-bulb", "Light Bulb", "lighting"),
-        new("ceiling-light", "Ceiling Light", "lighting"),
-        new("lamp", "Lamp", "lighting"),
-        new("strip-light", "Strip Light", "lighting"),
-        new("brightness", "Brightness", "lighting"),
-        new("color-wheel", "Color Wheel", "lighting"),
-        new("power", "Power", "lighting"),
+        new("light-bulb", "Light Bulb", LightingGroup),
+        new("ceiling-light", "Ceiling Light", LightingGroup),
+        new("lamp", "Lamp", LightingGroup),
+        new("strip-light", "Strip Light", LightingGroup),
+        new("brightness", "Brightness", LightingGroup),
+        new("color-wheel", "Color Wheel", LightingGroup),
+        new("power", "Power", LightingGroup),
         // Openings
-        new("blinds", "Blinds", "openings"),
-        new("curtains", "Curtains", "openings"),
-        new("garage", "Garage", "openings"),
-        new("door", "Door", "openings"),
-        new("lock", "Lock", "openings"),
+        new("blinds", "Blinds", OpeningsGroup),
+        new("curtains", "Curtains", OpeningsGroup),
+        new("garage", "Garage", OpeningsGroup),
+        new("door", "Door", OpeningsGroup),
+        new("lock", "Lock", OpeningsGroup),
         // Climate
-        new("thermostat", "Thermostat", "climate"),
-        new("fan", "Fan", "climate"),
-        new("snowflake", "Snowflake", "climate"),
-        new("flame", "Flame", "climate"),
-        new("humidity", "Humidity", "climate"),
+        new("thermostat", "Thermostat", ClimateGroup),
+        new("fan", "Fan", ClimateGroup),
+        new("snowflake", "Snowflake", ClimateGroup),
+        new("flame", "Flame", ClimateGroup),
+        new("humidity", "Humidity", ClimateGroup),
         // Media
-        new("play", "Play", "media"),
-        new("pause", "Pause", "media"),
-        new("stop", "Stop", "media"),
-        new("speaker", "Speaker", "media"),
-        new("tv", "TV", "media"),
-        new("cast", "Cast", "media"),
-        new("music", "Music", "media"),
-        new("volume", "Volume", "media"),
+        new("play", "Play", MediaGroup),
+        new("pause", "Pause", MediaGroup),
+        new("stop", "Stop", MediaGroup),
+        new("speaker", "Speaker", MediaGroup),
+        new("tv", "TV", MediaGroup),
+        new("cast", "Cast", MediaGroup),
+        new("music", "Music", MediaGroup),
+        new("volume", "Volume", MediaGroup),
         // Scenes and tools
-        new("scene", "Scene", "scenes-tools"),
-        new("movie", "Movie", "scenes-tools"),
-        new("sleep", "Sleep", "scenes-tools"),
-        new("away", "Away", "scenes-tools"),
-        new("sparkle", "Sparkle", "scenes-tools"),
-        new("timer", "Timer", "scenes-tools"),
-        new("custom", "Custom", "scenes-tools")
+        new("scene", "Scene", ScenesToolsGroup),
+        new("movie", "Movie", ScenesToolsGroup),
+        new("sleep", "Sleep", ScenesToolsGroup),
+        new("away", "Away", ScenesToolsGroup),
+        new("sparkle", "Sparkle", ScenesToolsGroup),
+        new("timer", "Timer", ScenesToolsGroup),
+        new("custom", "Custom", ScenesToolsGroup)
     ];
 
     public static bool Contains(string iconId) =>

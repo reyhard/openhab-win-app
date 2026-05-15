@@ -5,7 +5,7 @@ using WinUIEx;
 
 namespace OpenHab.Windows.Tray.Tray;
 
-public sealed class TrayIconService : IDisposable
+public sealed partial class TrayIconService : IDisposable
 {
     private readonly TrayIcon trayIcon;
     private int isDisposed;
@@ -63,7 +63,7 @@ public sealed class TrayIconService : IDisposable
 /// <summary>
 /// Minimal ICommand implementation for MenuFlyout items.
 /// </summary>
-internal sealed class RelayCommand : System.Windows.Input.ICommand
+internal sealed partial class RelayCommand : System.Windows.Input.ICommand
 {
     private readonly Action execute;
     public RelayCommand(Action execute) => this.execute = execute;

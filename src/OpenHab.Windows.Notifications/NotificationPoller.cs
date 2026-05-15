@@ -7,7 +7,7 @@ using OpenHab.Core;
 
 namespace OpenHab.Windows.Notifications;
 
-public sealed class NotificationPoller : IDisposable, IAsyncDisposable
+public sealed partial class NotificationPoller : IDisposable, IAsyncDisposable
 {
     private const int MaxSeenIds = 200;
 
@@ -119,6 +119,7 @@ public sealed class NotificationPoller : IDisposable, IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
+                // StopAsync cancels the poll loop and then waits for this task to observe cancellation.
             }
             finally
             {

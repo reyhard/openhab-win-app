@@ -55,7 +55,7 @@ public sealed partial class MainWindow : Window
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
     private readonly UISettings uiSettings = new();
-    private IReadOnlyList<OpenHab.App.MainUi.MainUiPageLink> promotedMainUiPages = [];
+    private IReadOnlyList<OpenHab.App.MainUi.MainUiPageLink> promotedMainUiPages;
     private bool isRefreshing;
     private bool isHandlingCloseRequest;
     private bool _activeSlotIsA = true;
@@ -334,11 +334,14 @@ public sealed partial class MainWindow : Window
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
             ShowMainUi();
-            var targetRoute = !string.IsNullOrWhiteSpace(state.PendingMainUiRoute)
-                ? state.PendingMainUiRoute
-                : !string.IsNullOrWhiteSpace(currentMainUiRoute)
+            var targetRoute = state.PendingMainUiRoute;
+            if (string.IsNullOrWhiteSpace(targetRoute))
+            {
+                targetRoute = !string.IsNullOrWhiteSpace(currentMainUiRoute)
                     ? currentMainUiRoute
                     : MainUiHost.CurrentRoute;
+            }
+
             if (!string.IsNullOrWhiteSpace(targetRoute))
             {
                 var normalizedRoute = NormalizeMainUiRoute(targetRoute);
@@ -478,7 +481,7 @@ public sealed partial class MainWindow : Window
         }
 
         var normalized = route.Trim();
-        return normalized.StartsWith("/", StringComparison.Ordinal) ? normalized : "/" + normalized;
+        return normalized.StartsWith('/') ? normalized : "/" + normalized;
     }
 
     private TransportKind GetPreferredMainUiTransport()
@@ -690,19 +693,6 @@ public sealed partial class MainWindow : Window
         _ = NavigateMainUiAsync(route);
     }
 
-    private async Task OnRowActivatedAsync(int rowIndex)
-    {
-        if (isRefreshing)
-        {
-            return;
-        }
-
-        await RunRuntimeOperationAsync(async ct =>
-        {
-            await runtimeController.ActivateRowAsync(rowIndex, ct);
-        });
-    }
-
     private async Task OnRowActivatedByKeyAsync(string rowKey)
     {
         if (isRefreshing)
@@ -711,12 +701,6 @@ public sealed partial class MainWindow : Window
         }
 
         await RunRuntimeOperationAsync(ct => runtimeController.ActivateRowByKeyAsync(rowKey, ct));
-    }
-
-    private async Task OnRowNavigateAsync(int rowIndex)
-    {
-        if (isRefreshing) return;
-        await RunNavigateTransitionAsync(ct => runtimeController.NavigateToChildAsync(rowIndex, ct));
     }
 
     private async Task RunNavigateTransitionAsync(Func<CancellationToken, Task<bool>> navigateAsync)

@@ -16,18 +16,18 @@ public static class StartupManager
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValueName = "openHAB";
 
-    private static readonly bool IsPackaged;
+    private static readonly bool IsPackaged = DetectPackaged();
 
-    static StartupManager()
+    private static bool DetectPackaged()
     {
         try
         {
             // In an MSIX-packaged process, Package.Current is non-null.
-            IsPackaged = Package.Current is not null;
+            return Package.Current is not null;
         }
         catch
         {
-            IsPackaged = false;
+            return false;
         }
     }
 

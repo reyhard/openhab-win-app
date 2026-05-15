@@ -5,7 +5,7 @@ using OpenHab.Core.DeviceState;
 
 namespace OpenHab.App.DeviceInfo;
 
-public sealed class DeviceInfoSyncService : IDisposable
+public sealed partial class DeviceInfoSyncService : IDisposable
 {
     private readonly Func<DeviceInfoSyncSettings> getSettings;
     private readonly Func<IOpenHabClient?> getClient;
@@ -40,7 +40,7 @@ public sealed class DeviceInfoSyncService : IDisposable
             var settings = getSettings();
             timer?.Dispose();
             timer = new Timer(
-                _ => _ = TriggerFromTimerAsync(),
+                state => _ = TriggerFromTimerAsync(),
                 null,
                 TimeSpan.FromSeconds(3),
                 TimeSpan.FromMinutes(settings.SyncIntervalMinutes));
@@ -221,6 +221,7 @@ public sealed class DeviceInfoSyncService : IDisposable
         }
         catch (OperationCanceledException)
         {
+            // Cancellation is expected when the timer fires while the service is stopping.
         }
     }
 }

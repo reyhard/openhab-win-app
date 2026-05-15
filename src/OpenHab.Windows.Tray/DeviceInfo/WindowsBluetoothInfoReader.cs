@@ -6,9 +6,9 @@ namespace OpenHab.Windows.Tray.DeviceInfo;
 
 internal sealed record WindowsBluetoothInfo(bool? IsBluetoothConnected, string? ConnectedDeviceNames);
 
-internal sealed class WindowsBluetoothInfoReader
+internal static class WindowsBluetoothInfoReader
 {
-    public async Task<WindowsBluetoothInfo> ReadAsync(CancellationToken cancellationToken)
+    public static async Task<WindowsBluetoothInfo> ReadAsync(CancellationToken cancellationToken)
     {
         try
         {
