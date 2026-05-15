@@ -15,6 +15,8 @@ public sealed class DeviceStateMapperTests
             "PcSessionState",
             "PcWifiConnected",
             "PcWifiName",
+            null,
+            null,
             "PcOpenHabConnection",
             "PcFocusState");
         var snapshot = new DeviceStateSnapshot(
@@ -24,6 +26,8 @@ public sealed class DeviceStateMapperTests
             SessionState: "locked",
             IsWifiConnected: true,
             WifiName: "HomeNet",
+            IsBluetoothConnected: null,
+            BluetoothDeviceNames: null,
             OpenHabConnectionState: "online",
             FocusState: "ON");
 
@@ -51,9 +55,11 @@ public sealed class DeviceStateMapperTests
             SessionStateItem: null,
             WifiConnectedItem: null,
             WifiNameItem: null,
+            BluetoothConnectedItem: null,
+            BluetoothDeviceNamesItem: null,
             OpenHabConnectionItem: null,
             FocusStateItem: null);
-        var snapshot = new DeviceStateSnapshot(50, false, false, "active", false, null, "offline", "OFF");
+        var snapshot = new DeviceStateSnapshot(50, false, false, "active", false, null, null, null, "offline", "OFF");
 
         var updates = DeviceStateMapper.Map(snapshot, mapping);
 
@@ -70,9 +76,11 @@ public sealed class DeviceStateMapperTests
             "PcSessionState",
             "PcWifiConnected",
             "PcWifiName",
+            null,
+            null,
             "PcOpenHabConnection",
             "PcFocusState");
-        var snapshot = new DeviceStateSnapshot(null, null, null, null, null, null, null, null);
+        var snapshot = new DeviceStateSnapshot(null, null, null, null, null, null, null, null, null, null);
 
         var updates = DeviceStateMapper.Map(snapshot, mapping);
 
@@ -89,6 +97,8 @@ public sealed class DeviceStateMapperTests
             null,
             WifiConnectedItem: "PcWifiConnected",
             WifiNameItem: "PcWifiName",
+            BluetoothConnectedItem: null,
+            BluetoothDeviceNamesItem: null,
             OpenHabConnectionItem: null,
             FocusStateItem: null);
         var snapshot = new DeviceStateSnapshot(
@@ -98,6 +108,8 @@ public sealed class DeviceStateMapperTests
             null,
             IsWifiConnected: false,
             WifiName: null,
+            IsBluetoothConnected: null,
+            BluetoothDeviceNames: null,
             OpenHabConnectionState: null,
             FocusState: null);
 
@@ -119,6 +131,8 @@ public sealed class DeviceStateMapperTests
             null,
             WifiConnectedItem: null,
             WifiNameItem: "PcWifiName",
+            BluetoothConnectedItem: null,
+            BluetoothDeviceNamesItem: null,
             OpenHabConnectionItem: null,
             FocusStateItem: null);
         var snapshot = new DeviceStateSnapshot(
@@ -128,6 +142,8 @@ public sealed class DeviceStateMapperTests
             null,
             IsWifiConnected: false,
             WifiName: "StaleNetwork",
+            IsBluetoothConnected: null,
+            BluetoothDeviceNames: null,
             OpenHabConnectionState: null,
             FocusState: null);
 
@@ -139,8 +155,8 @@ public sealed class DeviceStateMapperTests
     [Fact]
     public void MapsFocusUnsupportedAsStringState()
     {
-        var mapping = new DeviceStateMapping(null, null, null, null, null, null, null, "PcFocusState");
-        var snapshot = new DeviceStateSnapshot(null, null, null, null, null, null, null, "UNSUPPORTED");
+        var mapping = new DeviceStateMapping(null, null, null, null, null, null, null, null, null, "PcFocusState");
+        var snapshot = new DeviceStateSnapshot(null, null, null, null, null, null, null, null, null, "UNSUPPORTED");
 
         var updates = DeviceStateMapper.Map(snapshot, mapping);
 
@@ -150,7 +166,7 @@ public sealed class DeviceStateMapperTests
     [Fact]
     public void ThrowsForNullSnapshot()
     {
-        var mapping = new DeviceStateMapping("PcBatteryLevel", null, null, null, null, null, null, null);
+        var mapping = new DeviceStateMapping("PcBatteryLevel", null, null, null, null, null, null, null, null, null);
 
         var ex = Assert.Throws<ArgumentNullException>(() => DeviceStateMapper.Map(null!, mapping));
 
@@ -160,7 +176,7 @@ public sealed class DeviceStateMapperTests
     [Fact]
     public void ThrowsForNullMapping()
     {
-        var snapshot = new DeviceStateSnapshot(87, true, true, "locked", true, "HomeNet", "online", "ON");
+        var snapshot = new DeviceStateSnapshot(87, true, true, "locked", true, "HomeNet", null, null, "online", "ON");
 
         var ex = Assert.Throws<ArgumentNullException>(() => DeviceStateMapper.Map(snapshot, null!));
 
@@ -174,8 +190,8 @@ public sealed class DeviceStateMapperTests
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("pl-PL");
-            var mapping = new DeviceStateMapping("PcBatteryLevel", null, null, null, null, null, null, null);
-            var snapshot = new DeviceStateSnapshot(87, null, null, null, null, null, null, null);
+            var mapping = new DeviceStateMapping("PcBatteryLevel", null, null, null, null, null, null, null, null, null);
+            var snapshot = new DeviceStateSnapshot(87, null, null, null, null, null, null, null, null, null);
 
             var updates = DeviceStateMapper.Map(snapshot, mapping);
 
