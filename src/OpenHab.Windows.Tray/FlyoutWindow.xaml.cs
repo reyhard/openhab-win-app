@@ -54,6 +54,7 @@ public sealed partial class FlyoutWindow : Window
     private bool isSitemapSearchBoxFocused;
     private readonly DispatcherTimer sitemapSearchDebounceTimer = new();
     private string pendingSitemapSearchQuery = string.Empty;
+    private FlyoutEntranceAnimationPlan? pendingEntranceAnimationPlan;
 
     private StackPanel ActiveRows => _activeSlotIsA ? SitemapRows : SitemapRowsB;
     private StackPanel InactiveRows => _activeSlotIsA ? SitemapRowsB : SitemapRows;
@@ -175,11 +176,13 @@ public sealed partial class FlyoutWindow : Window
     {
         shouldRunEntranceAnimation = true;
         EnsureLightDismissInitialized();
-        // Content is set to visible; entrance animation runs via StartEntranceAnimationIfPending.
+        var plan = FlyoutEntranceAnimationPlanner.Create(AppWindow.Position, ResolveOffscreenStartY());
+        pendingEntranceAnimationPlan = plan;
+        AppWindow.Move(plan.PreActivationPosition);
         var visual = GetFlyoutChromeVisual();
-        visual.Opacity = 1f;
+        visual.Opacity = plan.InitialOpacity;
         visual.Offset = Vector3.Zero;
-        visual.Scale = new Vector3(1f, 1f, 1f);
+        visual.Scale = new Vector3(plan.InitialScale, plan.InitialScale, 1f);
         ApplyFlyoutTheme();
         ScheduleNativeDecorationApply();
     }
@@ -701,25 +704,28 @@ public sealed partial class FlyoutWindow : Window
         {
             SetFlyoutAlwaysOnTop(false);
             UpdateFlyoutChromeCenterPoint(visual);
-            var targetPos = AppWindow.Position;
-            var startPos = new PointInt32(targetPos.X, ResolveOffscreenStartY());
+            var plan = pendingEntranceAnimationPlan
+                ?? FlyoutEntranceAnimationPlanner.Create(AppWindow.Position, ResolveOffscreenStartY());
+            pendingEntranceAnimationPlan = null;
+            var targetPos = plan.TargetPosition;
+            var startPos = plan.PreActivationPosition;
             AppWindow.Move(startPos);
 
             // Pre-position: hidden and slightly scaled down.
-            visual.Opacity = 0f;
+            visual.Opacity = plan.InitialOpacity;
             visual.Offset = Vector3.Zero;
-            visual.Scale = new Vector3(0.97f, 0.97f, 1f);
+            visual.Scale = new Vector3(plan.InitialScale, plan.InitialScale, 1f);
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
 
             // Opacity: 0 → 1 with EaseOut
             var opacityAnim = CompositionAnimationHelper.BuildScalarEntrance(
-                compositor, 0f, 1f, duration);
+                compositor, plan.InitialOpacity, 1f, duration);
             visual.StartAnimation(nameof(visual.Opacity), opacityAnim);
 
             // Scale: 0.97 → 1.0 with EaseOut (the subtle "Fluent pop")
             var scaleAnim = CompositionAnimationHelper.BuildScalarEntrance(
-                compositor, 0.97f, 1f, duration);
+                compositor, plan.InitialScale, 1f, duration);
             visual.StartAnimation("Scale.X", scaleAnim);
             visual.StartAnimation("Scale.Y", scaleAnim);
 
@@ -742,6 +748,7 @@ public sealed partial class FlyoutWindow : Window
             visual.Opacity = 1f;
             visual.Offset = Vector3.Zero;
             visual.Scale = new Vector3(1f, 1f, 1f);
+            pendingEntranceAnimationPlan = null;
             SetFlyoutAlwaysOnTop(true);
             isEntranceAnimationRunning = false;
         }
@@ -756,6 +763,7 @@ public sealed partial class FlyoutWindow : Window
     {
         isEntranceAnimationRunning = false;
         isExitAnimationRunning = false;
+        pendingEntranceAnimationPlan = null;
     }
 
     /// <summary>
