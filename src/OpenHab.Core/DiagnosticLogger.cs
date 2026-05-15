@@ -101,15 +101,23 @@ public static class DiagnosticLogger
 
     private static void Write(string level, string message, string caller)
     {
+        var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz} [{level}] [{caller}] {message}{Environment.NewLine}";
+
         try
         {
             Directory.CreateDirectory(LogDirectory);
-            var line = $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff zzz} [{level}] [{caller}] {message}{Environment.NewLine}";
             lock (SyncRoot)
             {
                 File.AppendAllText(LogFilePath, line);
             }
+        }
+        catch
+        {
+            // Diagnostic file logging must never throw.
+        }
 
+        try
+        {
             for (var captureScope = GetActiveLogCaptureScope(); captureScope is not null; captureScope = captureScope.Previous)
             {
                 if (captureScope.TryBeginInvoke(out var onLine))
@@ -121,7 +129,7 @@ public static class DiagnosticLogger
         }
         catch
         {
-            // Diagnostic logging must never throw — if we can't write, we silently skip.
+            // Diagnostic capture is best-effort and must never throw into callers.
         }
     }
 

@@ -6,6 +6,7 @@ using OpenHab.App.Settings;
 using OpenHab.Core.Diagnostics;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Rendering.SitemapSurface;
 using System.Threading;
 
 namespace OpenHab.Windows.Tray.Rendering.SitemapSurface;

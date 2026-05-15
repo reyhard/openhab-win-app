@@ -1,4 +1,4 @@
-using OpenHab.Windows.Tray.Rendering;
+using OpenHab.App.Runtime;
 
 namespace OpenHab.App.Tests.SitemapSurface;
 

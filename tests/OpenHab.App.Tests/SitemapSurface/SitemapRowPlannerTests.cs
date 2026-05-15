@@ -1,6 +1,6 @@
+using OpenHab.Rendering;
 using OpenHab.Rendering.Descriptors;
-using OpenHab.Windows.Tray.Rendering;
-using OpenHab.Windows.Tray.Rendering.SitemapSurface;
+using OpenHab.Rendering.SitemapSurface;
 
 namespace OpenHab.App.Tests.SitemapSurface;
 
@@ -142,7 +142,7 @@ public sealed class SitemapRowPlannerTests
     public void TryResolveRowIndexFindsCurrentRowByStableKey()
     {
         var rows = new[] { Text("Kitchen", widgetId: "w-kitchen"), Text("Hall", widgetId: "w-hall") };
-        var key = SitemapControlFactory.BuildRowIdentityKey(rows[1]);
+        var key = SitemapUiLogic.BuildRowIdentityKey(rows[1]);
 
         var found = SitemapRowPlanner.TryResolveRowIndex(rows, key, out var rowIndex);
 
@@ -158,7 +158,7 @@ public sealed class SitemapRowPlannerTests
             Toggle("Ceiling", "Kitchen_Light"),
             Toggle("Cabinet", "Kitchen_Light")
         };
-        var key = SitemapControlFactory.BuildRowIdentityKey(rows[1]);
+        var key = SitemapUiLogic.BuildRowIdentityKey(rows[1]);
 
         var found = SitemapRowPlanner.TryResolveRowIndex(rows, key, out var rowIndex);
 

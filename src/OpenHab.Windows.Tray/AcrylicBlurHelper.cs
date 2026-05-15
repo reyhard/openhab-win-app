@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using OpenHab.App.Tray;
 
 namespace OpenHab.Windows.Tray;
 

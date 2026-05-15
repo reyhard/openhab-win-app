@@ -686,23 +686,21 @@ public sealed class SitemapRuntimeControllerTests
         settings.SetSitemapName("default");
         var staleConnect = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var eventClient = new FakeEventStreamClient();
-        var localClient = new FakeOpenHabClient();
-        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
-        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
 
-        await controller.LoadAsync();
         eventClient.ConnectResults.Enqueue(staleConnect.Task);
         var staleStart = controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "kitchen");
-        await WaitUntilAsync(() => eventClient.ConnectCalls == 2);
+        await eventClient.WaitUntilConnectStartedAsync();
 
         await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "living");
+        eventClient.FireConnectionState("connected");
         staleConnect.SetException(new InvalidOperationException("stale connect failed"));
         await staleStart;
 
         await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "living");
 
         Assert.Equal(ConnectionState.Online, controller.Current.ConnectionState);
-        Assert.Equal(3, eventClient.ConnectCalls);
+        Assert.Equal(2, eventClient.ConnectCalls);
     }
 
     [Fact]

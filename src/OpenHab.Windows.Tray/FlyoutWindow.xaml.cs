@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.App.Tray;
 using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Diagnostics;

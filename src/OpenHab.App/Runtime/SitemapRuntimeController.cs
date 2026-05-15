@@ -448,6 +448,7 @@ public sealed class SitemapRuntimeController
     private void StartSitemapEventStreamInBackground(Uri endpoint, string sitemapName, string pageId, CancellationToken ct)
     {
         if (sitemapEventStreamClient is null) return;
+        EnsureSitemapEventHandlersAttached();
         var attempt = PrepareSitemapEventStreamStart(sitemapName, pageId);
         if (attempt is null)
         {
@@ -709,6 +710,7 @@ public sealed class SitemapRuntimeController
     {
         if (sitemapEventStreamClient is null) return;
 
+        EnsureSitemapEventHandlersAttached();
         var attempt = PrepareSitemapEventStreamStart(sitemapName, pageId);
         if (attempt is null)
         {
@@ -734,8 +736,6 @@ public sealed class SitemapRuntimeController
         try
         {
             DiagnosticLogger.Info($"Starting sitemap event stream to {localBaseUri} for sitemap '{sitemapName}' page '{pageId}'");
-
-            EnsureSitemapEventHandlersAttached();
 
             var subscriptionId = await sitemapEventStreamClient.SubscribeToSitemapEventsAsync(localBaseUri, ct);
             if (!IsCurrentSitemapEventStreamAttempt(attempt))

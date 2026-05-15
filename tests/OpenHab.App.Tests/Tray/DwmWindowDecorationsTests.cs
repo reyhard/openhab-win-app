@@ -1,5 +1,5 @@
-using OpenHab.Windows.Tray;
 using OpenHab.App.Settings;
+using OpenHab.App.Tray;
 
 namespace OpenHab.App.Tests.Tray;
 
@@ -8,7 +8,7 @@ public sealed class DwmWindowDecorationsTests
     [Fact]
     public void BuildRequestsForWindows11IncludesRoundedBorderlessDarkMicaChrome()
     {
-        var requests = DwmWindowDecorations.BuildRequests(isWindows11OrLater: true).ToList();
+        var requests = WindowDecorationPolicy.BuildRequests(isWindows11OrLater: true).ToList();
 
         Assert.Contains(requests, r =>
             r.Attribute == DwmWindowAttribute.WindowCornerPreference &&
@@ -27,7 +27,7 @@ public sealed class DwmWindowDecorationsTests
     [Fact]
     public void BuildRequestsForOlderWindowsOnlyUsesBestEffortDarkMode()
     {
-        var requests = DwmWindowDecorations.BuildRequests(isWindows11OrLater: false).ToList();
+        var requests = WindowDecorationPolicy.BuildRequests(isWindows11OrLater: false).ToList();
 
         var request = Assert.Single(requests);
         Assert.Equal(DwmWindowAttribute.UseImmersiveDarkMode, request.Attribute);
@@ -37,7 +37,7 @@ public sealed class DwmWindowDecorationsTests
     [Fact]
     public void BuildRequestsForLightThemeDisablesImmersiveDarkMode()
     {
-        var requests = DwmWindowDecorations.BuildRequests(
+        var requests = WindowDecorationPolicy.BuildRequests(
             isWindows11OrLater: true,
             theme: FlyoutTheme.Light).ToList();
 
@@ -52,11 +52,11 @@ public sealed class DwmWindowDecorationsTests
     [Fact]
     public void ResolveFlyoutThemeUsesSelectedColorTheme()
     {
-        Assert.Equal(FlyoutTheme.Dark, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.FollowSystemSettings, true));
-        Assert.Equal(FlyoutTheme.Light, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.FollowSystemSettings, false));
-        Assert.Equal(FlyoutTheme.Dark, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Dark, true));
-        Assert.Equal(FlyoutTheme.Dark, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Dark, false));
-        Assert.Equal(FlyoutTheme.Light, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Bright, true));
-        Assert.Equal(FlyoutTheme.Light, DwmWindowDecorations.ResolveFlyoutTheme(AppColorTheme.Bright, false));
+        Assert.Equal(FlyoutTheme.Dark, WindowDecorationPolicy.ResolveFlyoutTheme(AppColorTheme.FollowSystemSettings, true));
+        Assert.Equal(FlyoutTheme.Light, WindowDecorationPolicy.ResolveFlyoutTheme(AppColorTheme.FollowSystemSettings, false));
+        Assert.Equal(FlyoutTheme.Dark, WindowDecorationPolicy.ResolveFlyoutTheme(AppColorTheme.Dark, true));
+        Assert.Equal(FlyoutTheme.Dark, WindowDecorationPolicy.ResolveFlyoutTheme(AppColorTheme.Dark, false));
+        Assert.Equal(FlyoutTheme.Light, WindowDecorationPolicy.ResolveFlyoutTheme(AppColorTheme.Bright, true));
+        Assert.Equal(FlyoutTheme.Light, WindowDecorationPolicy.ResolveFlyoutTheme(AppColorTheme.Bright, false));
     }
 }
