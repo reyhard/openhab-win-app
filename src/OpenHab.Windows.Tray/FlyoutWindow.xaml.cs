@@ -270,39 +270,35 @@ public sealed partial class FlyoutWindow : Window
 
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
     {
-        // Keep title pinned to the root/main sitemap name instead of the current subpage.
-        TitleText.Text = snapshot.Breadcrumbs.Count > 0
-            ? snapshot.Breadcrumbs[0]
-            : string.IsNullOrWhiteSpace(settingsController.Current.SitemapName)
-                ? "openHAB"
-                : settingsController.Current.SitemapName;
-        StatusText.Text = snapshot.StatusText;
-        var rawBreadcrumbs = snapshot.Breadcrumbs.Count > 0
-            ? snapshot.Breadcrumbs
-            : [TitleText.Text];
-        var breadcrumbItems = rawBreadcrumbs
+        var chrome = SitemapChromeStateBuilder.Build(
+            snapshot,
+            settingsController.Current.SitemapName,
+            isSearchChromeOpen);
+
+        TitleText.Text = chrome.Title;
+        StatusText.Text = chrome.StatusText;
+        var breadcrumbItems = chrome.Breadcrumbs
             .Select((label, index) => index == 0
                 ? BreadcrumbDisplayItem.CreateHomeIcon()
                 : BreadcrumbDisplayItem.CreateText(label))
             .ToList();
 
         BreadcrumbBar.ItemsSource = breadcrumbItems;
-        var searchVisible = isSearchChromeOpen || snapshot.IsSearchActive;
-        BreadcrumbBar.Visibility = !searchVisible && rawBreadcrumbs.Count > 1
+        BreadcrumbBar.Visibility = chrome.ShowBreadcrumbs
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SitemapSearchBox.Visibility = searchVisible
+        SitemapSearchBox.Visibility = chrome.ShowSearch
             ? Visibility.Visible
             : Visibility.Collapsed;
-        SearchButtonIcon.Foreground = CreateChromeIconBrush(searchVisible);
+        SearchButtonIcon.Foreground = CreateChromeIconBrush(chrome.ShowSearch);
 
         if (!isUpdatingSearchBox &&
             !sitemapSearchDebounceTimer.IsEnabled &&
             !isSitemapSearchBoxFocused &&
-            SitemapSearchBox.Text != snapshot.SearchQuery)
+            SitemapSearchBox.Text != chrome.SearchText)
         {
             isUpdatingSearchBox = true;
-            SitemapSearchBox.Text = snapshot.SearchQuery;
+            SitemapSearchBox.Text = chrome.SearchText;
             isUpdatingSearchBox = false;
         }
     }

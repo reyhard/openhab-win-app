@@ -55,6 +55,11 @@ public sealed partial class MainWindow : Window
     private bool _isPageTransitionRunning;
     private bool _pendingSnapshotRefresh;
     private bool _lastRefreshUseWindows11Icons;
+    private bool isUpdatingSearchBox;
+    private bool isSearchChromeOpen;
+    private bool isSitemapSearchBoxFocused;
+    private readonly DispatcherTimer sitemapSearchDebounceTimer = new();
+    private string pendingSitemapSearchQuery = string.Empty;
     private string? currentMainUiRoute;
     private TransportKind? currentMainUiTransport;
     private bool isMainUiNavigationInProgress;
@@ -137,6 +142,10 @@ public sealed partial class MainWindow : Window
         ApplyWindowTheme();
         shellController = new OpenHab.App.Shell.MainWindowShellController(settingsController.Current.MainWindowSitemapPaneVisible);
         shellController.Changed += (_, _) => ApplyMainWindowShellState();
+        sitemapSearchDebounceTimer.Interval = TimeSpan.FromMilliseconds(150);
+        sitemapSearchDebounceTimer.Tick += SitemapSearchDebounceTimer_Tick;
+        SitemapSearchBox.GotFocus += (_, _) => isSitemapSearchBoxFocused = true;
+        SitemapSearchBox.LostFocus += (_, _) => isSitemapSearchBoxFocused = false;
         promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
         ApplyMainWindowShellState();
         SyncSidebarStateFromSettings();
@@ -602,9 +611,22 @@ public sealed partial class MainWindow : Window
         var snapshot = runtimeController.Current;
         RefreshChromeBindings(snapshot);
         EnsureMainUiEndpointMatchesActiveTransport(snapshot);
+        if (ShouldSkipStaleSearchRender(snapshot))
+        {
+            snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
+            return true;
+        }
+
         sitemapSurfaceRenderer.Refresh(rowsPanel, snapshot, animateStructuralInsertions);
         snapshotRefreshGate.Drain(() => RefreshRuntimeBindings(targetRows: null));
         return true;
+    }
+
+    private bool ShouldSkipStaleSearchRender(SitemapRuntimeSnapshot snapshot)
+    {
+        return snapshot.IsSearchActive &&
+               (isSitemapSearchBoxFocused || sitemapSearchDebounceTimer.IsEnabled) &&
+               !string.Equals(SitemapSearchBox.Text, snapshot.SearchQuery, StringComparison.Ordinal);
     }
 
     private void EnsureMainUiEndpointMatchesActiveTransport(SitemapRuntimeSnapshot snapshot)
@@ -676,6 +698,7 @@ public sealed partial class MainWindow : Window
                 _suppressNextSnapshotRefresh = false;
                 return;
             }
+            isSearchChromeOpen = false;
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
@@ -712,6 +735,7 @@ public sealed partial class MainWindow : Window
         if (runtimeController.Current.IsSearchActive)
         {
             await RunRuntimeOperationAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
+            isSearchChromeOpen = runtimeController.Current.IsSearchActive;
             RefreshRuntimeBindings(ActiveRows);
             return;
         }
@@ -744,30 +768,42 @@ public sealed partial class MainWindow : Window
 
         if (sender is MenuFlyoutItem item && item.Tag is string sitemapName)
         {
+            if (HasVisibleSearchChrome)
+            {
+                CloseSearchChrome();
+            }
+
             settingsController.SetSitemapName(sitemapName);
             await LoadRuntimeAsync();
         }
     }
 
-    private void SitemapPickerButton_Click(object sender, RoutedEventArgs e)
+    private void SitemapHeaderArea_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
     {
-        ShowSitemapMenuAt(SitemapPickerButton);
-    }
-
-    private void NavigateBack_Click(object sender, RoutedEventArgs e)
-    {
-        if (TryNavigateMainUiBack())
+        if (sender is FrameworkElement element)
         {
-            return;
+            ShowSitemapMenuAt(element);
         }
-
-        _ = NavigateBackWithAnimationAsync();
     }
 
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
+        if (e.Key == VirtualKey.Escape && HasVisibleSearchChrome)
+        {
+            CloseSearchChrome();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key != VirtualKey.GoBack)
         {
+            return;
+        }
+
+        if (HasVisibleSearchChrome && !isRefreshing)
+        {
+            CloseSearchChrome();
+            e.Handled = true;
             return;
         }
 
@@ -789,6 +825,13 @@ public sealed partial class MainWindow : Window
         var props = e.GetCurrentPoint(sender as UIElement).Properties;
         if (!props.IsXButton1Pressed)
         {
+            return;
+        }
+
+        if (HasVisibleSearchChrome && !isRefreshing)
+        {
+            CloseSearchChrome();
+            e.Handled = true;
             return;
         }
 
@@ -830,6 +873,7 @@ public sealed partial class MainWindow : Window
         {
             _suppressNextSnapshotRefresh = true;
             runtimeController.NavigateBack();
+            isSearchChromeOpen = false;
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
@@ -860,6 +904,119 @@ public sealed partial class MainWindow : Window
         }
 
         SitemapMenuFlyout.ShowAt(target);
+    }
+
+    private bool HasVisibleSearchChrome => isSearchChromeOpen || runtimeController.Current.IsSearchActive;
+
+    private void CloseSearchChrome()
+    {
+        sitemapSearchDebounceTimer.Stop();
+        isSearchChromeOpen = false;
+        runtimeController.ClearSearch();
+        RefreshChromeBindings(runtimeController.Current);
+    }
+
+    private async void SearchButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (HasVisibleSearchChrome)
+        {
+            CloseSearchChrome();
+            return;
+        }
+
+        isSearchChromeOpen = true;
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(SitemapSearchBox.Text);
+        RefreshChromeBindings(runtimeController.Current);
+        SitemapSearchBox.Focus(FocusState.Programmatic);
+    }
+
+    private void SitemapSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (isUpdatingSearchBox || args.Reason != AutoSuggestionBoxTextChangeReason.UserInput)
+        {
+            return;
+        }
+
+        pendingSitemapSearchQuery = sender.Text;
+        isSearchChromeOpen = true;
+        sitemapSearchDebounceTimer.Stop();
+        sitemapSearchDebounceTimer.Start();
+    }
+
+    private async void SitemapSearchBox_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(sender.Text);
+        isSearchChromeOpen = true;
+    }
+
+    private async void SitemapSearchDebounceTimer_Tick(object? sender, object e)
+    {
+        sitemapSearchDebounceTimer.Stop();
+        await ApplySitemapSearchQueryAsync(pendingSitemapSearchQuery);
+    }
+
+    private async Task ApplySitemapSearchQueryAsync(string query)
+    {
+        try
+        {
+            await runtimeController.ApplySearchQueryAsync(query);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Main window sitemap search failed: {ex.Message}");
+        }
+    }
+
+    private async void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
+    {
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        var previousDepth = runtimeController.Current.Breadcrumbs.Count;
+        if (!runtimeController.NavigateToBreadcrumb(args.Index))
+        {
+            return;
+        }
+
+        isSearchChromeOpen = false;
+        isRefreshing = true;
+        _isPageTransitionRunning = true;
+        try
+        {
+            var currentDepth = runtimeController.Current.Breadcrumbs.Count;
+            if (currentDepth == previousDepth)
+            {
+                _isPageTransitionRunning = false;
+                RefreshRuntimeBindings(ActiveRows);
+                RefreshChromeBindings(runtimeController.Current);
+                return;
+            }
+
+            _suppressNextSnapshotRefresh = true;
+            InactiveSlotContainer.Visibility = Visibility.Visible;
+            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
+            RefreshChromeBindings(runtimeController.Current);
+
+            await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
+
+            ActiveRows.Children.Clear();
+            ActiveSlotContainer.Visibility = Visibility.Collapsed;
+            _activeSlotIsA = !_activeSlotIsA;
+        }
+        finally
+        {
+            _isPageTransitionRunning = false;
+            if (_pendingSnapshotRefresh)
+            {
+                _pendingSnapshotRefresh = false;
+                RefreshRuntimeBindings(targetRows: null);
+            }
+            isRefreshing = false;
+        }
     }
 
     private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args)
@@ -1221,18 +1378,53 @@ public sealed partial class MainWindow : Window
     /// <summary>Updates header chrome independently of sitemap rows.</summary>
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
     {
-        var descriptorTitle = snapshot.Descriptor?.Title;
-        var configuredSitemapName = settingsController.Current.SitemapName;
-        SitemapPickerText.Text = !string.IsNullOrWhiteSpace(descriptorTitle)
-            ? descriptorTitle
-            : (!string.IsNullOrWhiteSpace(configuredSitemapName) ? configuredSitemapName : "Choose sitemap");
+        var chrome = SitemapChromeStateBuilder.Build(
+            snapshot,
+            settingsController.Current.SitemapName,
+            isSearchChromeOpen);
+
+        SitemapTitleText.Text = chrome.Title;
+        SitemapStatusText.Text = chrome.StatusText;
+        BreadcrumbBar.ItemsSource = chrome.Breadcrumbs
+            .Select((label, index) => index == 0
+                ? BreadcrumbDisplayItem.CreateHomeIcon()
+                : BreadcrumbDisplayItem.CreateText(label))
+            .ToList();
+        BreadcrumbBar.Visibility = chrome.ShowBreadcrumbs
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        SitemapSearchBox.Visibility = chrome.ShowSearch
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        SearchButtonIcon.Foreground = chrome.ShowSearch
+            ? GetThemeBrush("AccentTextFillColorPrimaryBrush")
+            : GetThemeBrush("TextFillColorPrimaryBrush");
+
+        if (!isUpdatingSearchBox &&
+            !sitemapSearchDebounceTimer.IsEnabled &&
+            !isSitemapSearchBoxFocused &&
+            SitemapSearchBox.Text != chrome.SearchText)
+        {
+            isUpdatingSearchBox = true;
+            SitemapSearchBox.Text = chrome.SearchText;
+            isUpdatingSearchBox = false;
+        }
+
         ShellConnectionText.Text = snapshot.ActiveTransport switch
         {
             TransportKind.Cloud => $"Connected via cloud ({snapshot.ConnectionState})",
             TransportKind.Local => $"Connected via local ({snapshot.ConnectionState})",
             _ => $"Connection: {snapshot.ConnectionState}"
         };
-        BackButton.Visibility = runtimeController.CanGoBack ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public sealed record BreadcrumbDisplayItem(string Label, FontFamily FontFamily, double FontSize)
+    {
+        public static BreadcrumbDisplayItem CreateHomeIcon() =>
+            new("\uEA8A", new FontFamily("Segoe MDL2 Assets"), 18);
+
+        public static BreadcrumbDisplayItem CreateText(string label) =>
+            new(label, new FontFamily("Segoe UI"), 14);
     }
 
     /// <summary>
