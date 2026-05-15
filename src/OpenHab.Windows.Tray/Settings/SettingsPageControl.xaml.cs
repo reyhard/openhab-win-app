@@ -646,7 +646,11 @@ public sealed partial class SettingsPageControl : UserControl
         Grid.SetColumn(icon, 0);
         row.Children.Add(icon);
 
-        var textPanel = new StackPanel { Spacing = 2 };
+        var textPanel = new StackPanel
+        {
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center
+        };
         textPanel.Children.Add(new TextBlock
         {
             Text = title,
