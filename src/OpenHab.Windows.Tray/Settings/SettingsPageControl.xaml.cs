@@ -765,14 +765,15 @@ public sealed partial class SettingsPageControl : UserControl
     {
         ViewLogsButton = new Button
         {
-            Content = "View diagnostic logs",
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"]
+            Content = "View logs",
+            MinWidth = 120
         };
-        ViewLogsButton.HorizontalAlignment = HorizontalAlignment.Stretch;
-        ViewLogsButton.HorizontalContentAlignment = HorizontalAlignment.Left;
         ViewLogsButton.Click += ViewLogsButton_Click;
-        SettingsContent.Children.Add(ViewLogsButton);
+        var logsRow = CreateSettingsControlRow(
+            "\uE8A5",
+            "Diagnostic logs",
+            "Open the local diagnostics log file",
+            ViewLogsButton);
 
         VerboseDiagnosticsToggle = new ToggleSwitch
         {
@@ -785,7 +786,7 @@ public sealed partial class SettingsPageControl : UserControl
             "Verbose diagnostics",
             "Log additional safe diagnostic flow details for troubleshooting",
             VerboseDiagnosticsToggle);
-        SettingsContent.Children.Add(verboseDiagnosticsRow);
+        SettingsContent.Children.Add(CreateSettingsGroup(logsRow, verboseDiagnosticsRow));
 
         VersionText = new TextBlock
         {
