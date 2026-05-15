@@ -167,8 +167,8 @@ public sealed class NotificationPoller : IDisposable, IAsyncDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                DiagnosticLogger.Error("Poll error", ex);
-                LastError = ex.Message;
+                DiagnosticLogger.Error($"Poll error: {SafeDiagnosticText.ForLog(ex)}");
+                LastError = SafeDiagnosticText.ForLog(ex);
                 DiagnosticLogger.Info("Polling will retry after error");
             }
 

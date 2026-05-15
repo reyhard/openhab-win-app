@@ -244,7 +244,8 @@ public sealed class SitemapRuntimeController
         }
         catch (Exception firstError) when (settings.EndpointMode == EndpointMode.Automatic && primary.Kind == TransportKind.Local)
         {
-            DiagnosticLogger.Warn($"Refresh#{refreshId} local load failed, trying cloud fallback: {firstError.Message}");
+            DiagnosticLogger.Warn(
+                $"Refresh#{refreshId} local load failed, trying cloud fallback: {SafeDiagnosticText.ForLog(firstError)}");
             var fallback = new TransportSelection(TransportKind.Cloud, settings.CloudEndpoint);
             try
             {
@@ -277,11 +278,12 @@ public sealed class SitemapRuntimeController
             }
             catch (Exception fallbackError)
             {
-                DiagnosticLogger.Warn($"Refresh#{refreshId} fallback failed: {fallbackError.Message}");
+                DiagnosticLogger.Warn($"Refresh#{refreshId} fallback failed: {SafeDiagnosticText.ForLog(fallbackError)}");
                 Current = Current with
                 {
                     ConnectionState = ConnectionState.Offline,
-                    StatusText = $"Connection failed: {firstError.Message}; fallback failed: {fallbackError.Message}",
+                    StatusText =
+                        $"{SafeDiagnosticText.ForUserStatus(firstError, "Connection failed.")} {SafeDiagnosticText.ForUserStatus(fallbackError, "Fallback failed.")}",
                     IsBusy = false,
                     HasError = true,
                     ChangedRowIndices = []
@@ -290,11 +292,11 @@ public sealed class SitemapRuntimeController
         }
         catch (Exception error)
         {
-            DiagnosticLogger.Warn($"Refresh#{refreshId} failed: {error.Message}");
+            DiagnosticLogger.Warn($"Refresh#{refreshId} failed: {SafeDiagnosticText.ForLog(error)}");
             Current = Current with
             {
                 ConnectionState = ConnectionState.Offline,
-                StatusText = $"Connection failed: {error.Message}",
+                StatusText = SafeDiagnosticText.ForUserStatus(error, "Connection failed."),
                 IsBusy = false,
                 HasError = true,
                 ChangedRowIndices = []
@@ -792,7 +794,7 @@ public sealed class SitemapRuntimeController
         }
         catch (Exception error)
         {
-            DiagnosticLogger.Warn($"Failed to start sitemap event stream: {error.Message}");
+            DiagnosticLogger.Warn($"Failed to start sitemap event stream: {SafeDiagnosticText.ForLog(error)}");
             if (!ResetSitemapEventStreamStart(attempt))
             {
                 return;
@@ -1095,7 +1097,7 @@ public sealed class SitemapRuntimeController
                     }
                     catch (Exception ex)
                     {
-                        DiagnosticLogger.Warn($"Widget-event refresh failed: {ex.Message}");
+                        DiagnosticLogger.Warn($"Widget-event refresh failed: {SafeDiagnosticText.ForLog(ex)}");
                     }
                 }
             }

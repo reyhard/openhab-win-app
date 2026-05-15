@@ -162,7 +162,7 @@ public sealed partial class FlyoutWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            StatusText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
             return TraySurfaceRefreshOutcome.Failed;
         }
         finally
@@ -255,7 +255,7 @@ public sealed partial class FlyoutWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            StatusText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
             return false;
         }
         finally
@@ -398,7 +398,7 @@ public sealed partial class FlyoutWindow : Window
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            StatusText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
         }
         finally
         {
@@ -514,7 +514,7 @@ public sealed partial class FlyoutWindow : Window
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Sitemap search failed: {ex.Message}");
+            DiagnosticLogger.Warn($"Sitemap search failed: {SafeDiagnosticText.ForLog(ex)}");
         }
     }
 

@@ -32,16 +32,8 @@ jobs:
       - name: Test Rendering
         run: dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore
 
-      - name: Test App with known host-shutdown caveat
-        id: app_tests
-        continue-on-error: true
-        run: dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --blame-hang --blame-hang-timeout 30s
-
-      - name: Report App test caveat
-        if: steps.app_tests.outcome == 'failure'
-        shell: pwsh
-        run: |
-          Write-Host "::warning::OpenHab.App.Tests has a known VSTest host shutdown issue. Assertions may pass before blame-hang aborts the host. See docs/superpowers/verification/openhab-windows-quality-gates.md."
+      - name: Test App
+        run: dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore
 
       - name: Build tray project
         run: dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore

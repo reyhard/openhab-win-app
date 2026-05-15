@@ -1962,7 +1962,12 @@ public static partial class SitemapControlFactory
 
     private static global::Windows.UI.Color ToWindowsColor(SitemapColor color)
     {
-        return Microsoft.UI.ColorHelper.FromArgb(color.A, color.R, color.G, color.B);
+        return global::Windows.UI.Color.FromArgb(color.A, color.R, color.G, color.B);
+    }
+
+    private static global::Windows.UI.Color CreateColor(byte a, byte r, byte g, byte b)
+    {
+        return global::Windows.UI.Color.FromArgb(a, r, g, b);
     }
 
     private static SitemapColor ToSitemapColor(global::Windows.UI.Color color)
@@ -2158,12 +2163,12 @@ public static partial class SitemapControlFactory
 
     private static void ApplyButtonGridColors(Button button, bool isActive, bool isHovered, bool isPressed)
     {
-        var inactiveBackground = Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 245);
-        var inactiveHoverBackground = Microsoft.UI.ColorHelper.FromArgb(255, 237, 237, 237);
-        var inactivePressedBackground = Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 226);
-        var activeBackground = Microsoft.UI.ColorHelper.FromArgb(255, 255, 62, 133);
-        var activeHoverBackground = Microsoft.UI.ColorHelper.FromArgb(255, 250, 45, 120);
-        var activePressedBackground = Microsoft.UI.ColorHelper.FromArgb(255, 230, 30, 108);
+        var inactiveBackground = CreateColor(255, 245, 245, 245);
+        var inactiveHoverBackground = CreateColor(255, 237, 237, 237);
+        var inactivePressedBackground = CreateColor(255, 226, 226, 226);
+        var activeBackground = CreateColor(255, 255, 62, 133);
+        var activeHoverBackground = CreateColor(255, 250, 45, 120);
+        var activePressedBackground = CreateColor(255, 230, 30, 108);
 
         var background = isActive
             ? (isPressed ? activePressedBackground : isHovered ? activeHoverBackground : activeBackground)

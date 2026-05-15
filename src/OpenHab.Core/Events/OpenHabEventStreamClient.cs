@@ -104,7 +104,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
 
                     // Log every non-empty line only when verbose diagnostics are enabled.
                     if (!string.IsNullOrWhiteSpace(line) && !line.StartsWith(':') && !line.StartsWith("event:"))
-                        DiagnosticLogger.Verbose($"SSE raw: {line[..Math.Min(line.Length, 200)]}");
+                        DiagnosticLogger.Verbose($"SSE raw: {SafeDiagnosticText.ForLog(line, 200)}");
 
                     var parsed = SitemapEventParser.ParseLine(line);
                     if (parsed is SitemapWidgetEvent widgetEvent)
@@ -123,7 +123,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         }
                         else if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))
                         {
-                            DiagnosticLogger.Warn($"SSE unparsed data line: {line[..Math.Min(line.Length, 200)]}");
+                            DiagnosticLogger.Warn($"SSE unparsed data line: {SafeDiagnosticText.ForLog(line, 200)}");
                         }
                     }
                 }
@@ -134,7 +134,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             }
             catch (Exception ex)
             {
-                DiagnosticLogger.Warn($"SSE event stream error: {ex.GetType().Name}: {ex.Message}");
+                DiagnosticLogger.Warn($"SSE event stream error: {SafeDiagnosticText.ForLog(ex)}");
                 if (firstAttempt.TrySetException(ex))
                 {
                     cts.Cancel();
@@ -199,7 +199,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             }
             catch (Exception ex)
             {
-                DiagnosticLogger.Warn($"SSE connection state handler error for '{state}': {ex.GetType().Name}: {ex.Message}");
+                DiagnosticLogger.Warn($"SSE connection state handler error for '{state}': {SafeDiagnosticText.ForLog(ex)}");
             }
         }
     }

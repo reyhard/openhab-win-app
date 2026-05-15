@@ -1,6 +1,7 @@
 using OpenHab.App.Settings;
 using OpenHab.App.Shortcuts;
 using OpenHab.App.Tests.Settings;
+using OpenHab.Core;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
@@ -8,6 +9,7 @@ using System.IO;
 
 namespace OpenHab.App.Tests;
 
+[Collection("App settings controller")]
 public sealed class AppSettingsControllerTests
 {
     private readonly string settingsFilePath = Path.Combine(
@@ -42,6 +44,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(5, controller.Current.BackgroundMemoryReleaseDelayMinutes);
         Assert.Equal(AppColorTheme.FollowSystemSettings, controller.Current.AppColorTheme);
         Assert.Empty(controller.Current.ImportantNotificationTags);
+        Assert.False(controller.Current.VerboseDiagnostics);
         Assert.False(controller.Current.HasLocalToken);
         Assert.False(controller.Current.HasCloudCredentials);
         Assert.Null(controller.Current.CloudUserName);
@@ -743,6 +746,61 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(1, changedCount);
     }
 
+    [Fact]
+    public async Task VerboseDiagnosticsPersistsAndControlsDiagnosticLogger()
+    {
+        var previousVerbose = DiagnosticLogger.VerboseEventLogging;
+        try
+        {
+            DiagnosticLogger.VerboseEventLogging = false;
+            var controller = CreateController();
+
+            controller.SetVerboseDiagnostics(true);
+            await controller.FlushAsync();
+
+            Assert.True(controller.Current.VerboseDiagnostics);
+            Assert.True(DiagnosticLogger.VerboseEventLogging);
+
+            var reloaded = CreateController();
+
+            Assert.True(reloaded.Current.VerboseDiagnostics);
+            Assert.True(DiagnosticLogger.VerboseEventLogging);
+        }
+        finally
+        {
+            DiagnosticLogger.VerboseEventLogging = previousVerbose;
+        }
+    }
+
+    [Fact]
+    public void LegacySettingsWithoutVerboseDiagnosticsDisablesDiagnosticLogger()
+    {
+        var previousVerbose = DiagnosticLogger.VerboseEventLogging;
+        try
+        {
+            DiagnosticLogger.VerboseEventLogging = true;
+            Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+            File.WriteAllText(settingsFilePath, """
+                {
+                  "Skin": 1,
+                  "EndpointMode": 0,
+                  "LocalEndpoint": "http://openhab:8080/",
+                  "CloudEndpoint": "https://myopenhab.org/",
+                  "SitemapName": "home"
+                }
+                """);
+
+            var controller = CreateController();
+
+            Assert.False(controller.Current.VerboseDiagnostics);
+            Assert.False(DiagnosticLogger.VerboseEventLogging);
+        }
+        finally
+        {
+            DiagnosticLogger.VerboseEventLogging = previousVerbose;
+        }
+    }
+
     [Theory]
     [InlineData(true, "FollowSystemSettings")]
     [InlineData(false, "Dark")]
@@ -1027,5 +1085,10 @@ public sealed class AppSettingsControllerTests
 
         Assert.Equal(5, controller.Current.BackgroundMemoryReleaseDelayMinutes);
     }
+}
+
+[CollectionDefinition("App settings controller", DisableParallelization = true)]
+public sealed class AppSettingsControllerCollection
+{
 }
 
