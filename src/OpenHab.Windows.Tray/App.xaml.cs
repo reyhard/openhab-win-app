@@ -62,6 +62,7 @@ public partial class App : Application
     private GlobalHotkeyService? globalHotkeyService;
     private BackgroundResourceReleaseController? backgroundResourceReleaseController;
     private RadialCommandMenuWindow? radialCommandMenuWindow;
+    private ShortcutInteractiveCommandWindow? shortcutInteractiveCommandWindow;
     private DispatcherTimer? commandMenuHoldTimer;
     private ShortcutBinding? commandMenuHoldBinding;
     private DeviceInfoSyncService? deviceInfoSyncService;
@@ -1148,6 +1149,12 @@ public partial class App : Application
     {
         try
         {
+            if (action.CommandType is ShortcutCommandType.OpenSlider or ShortcutCommandType.OpenColorPicker)
+            {
+                await OpenShortcutInteractiveCommandWindowAsync(action);
+                return;
+            }
+
             var executor = shortcutActionExecutor;
             if (executor is null)
             {
@@ -1170,6 +1177,54 @@ public partial class App : Application
         {
             DiagnosticLogger.Warn(
                 $"Shortcut action execution failed unexpectedly: action='{action.Name}', error='{ex.GetType().Name}: {ex.Message}'");
+        }
+    }
+
+    private async Task OpenShortcutInteractiveCommandWindowAsync(ShortcutAction action)
+    {
+        if (runtimeController?.Current.ConnectionState != ConnectionState.Online)
+        {
+            SetShellStatusText("Cannot execute action while disconnected.");
+            return;
+        }
+
+        var client = CreateActiveShortcutClient();
+        if (client is null)
+        {
+            SetShellStatusText("Client is unavailable.");
+            return;
+        }
+
+        shortcutInteractiveCommandWindow?.Close();
+        var window = new ShortcutInteractiveCommandWindow(action, client);
+        shortcutInteractiveCommandWindow = window;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(shortcutInteractiveCommandWindow, window))
+            {
+                shortcutInteractiveCommandWindow = null;
+            }
+        };
+
+        try
+        {
+            await window.LoadAsync(CancellationToken.None);
+            window.ShowNearCursor();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(shortcutInteractiveCommandWindow, window))
+            {
+                shortcutInteractiveCommandWindow = null;
+            }
+
+            window.Close();
+            DiagnosticLogger.Warn(
+                $"Shortcut interactive surface failed: action='{action.Name}', error='{ex.GetType().Name}'");
+            SetShellStatusText("Command surface could not be opened.");
         }
     }
 
@@ -1253,6 +1308,8 @@ public partial class App : Application
         StopCommandMenuHoldTimer();
         radialCommandMenuWindow?.CloseMenu();
         radialCommandMenuWindow = null;
+        shortcutInteractiveCommandWindow?.Close();
+        shortcutInteractiveCommandWindow = null;
         shortcutActionExecutor = null;
         trayIcon?.Dispose();
         trayIcon = null;

@@ -13,12 +13,16 @@ namespace OpenHab.Windows.Tray.Shortcuts;
 
 public sealed class RadialCommandMenuWindow
 {
-    private const int WindowSize = 260;
+    private const int WindowSize = 440;
     private const int MaxVisibleRadialSlots = 8;
     private const int MaxActionSlotsPerPage = 7;
     private const float ActionButtonSize = 52f;
     private const float CloseButtonSize = 58f;
     private const float ActionRadius = 82f;
+    private const float HoverCaptionMaxWidth = 156f;
+    private const float HoverCaptionSideMaxWidth = 96f;
+    private const float HoverCaptionPaddingX = 8f;
+    private const float HoverCaptionPaddingY = 4f;
     private const string WindowClassName = "OpenHabRadialCommandMenuLayeredWindow";
 
     private static readonly ConcurrentDictionary<IntPtr, RadialCommandMenuWindow> Instances = new();
@@ -246,6 +250,8 @@ public sealed class RadialCommandMenuWindow
         {
             DrawButton(graphics, layout);
         }
+
+        DrawHoverCaption(graphics);
     }
 
     private void AddButtonLayout(int buttonIndex, PointF center, float size)
@@ -286,6 +292,91 @@ public sealed class RadialCommandMenuWindow
         var glyph = ResolveButtonGlyph(layout.ButtonIndex);
         using var glyphBrush = new SolidBrush(isClose ? Color.FromArgb(255, 12, 18, 26) : Color.FromArgb(255, 15, 23, 42));
         DrawCenteredGlyph(graphics, glyph, glyphBrush, layout.Bounds, isClose ? 19f : 17f);
+    }
+
+    private void DrawHoverCaption(Graphics graphics)
+    {
+        if (hoveredButtonIndex == int.MinValue)
+        {
+            return;
+        }
+
+        var layout = buttonLayouts.FirstOrDefault(layout => layout.ButtonIndex == hoveredButtonIndex);
+        if (layout is null)
+        {
+            return;
+        }
+
+        var caption = RadialCommandMenuLogic.ResolveHoverCaption(ResolveHoverTarget(hoveredButtonIndex));
+        if (string.IsNullOrWhiteSpace(caption))
+        {
+            return;
+        }
+
+        using var font = new Font("Segoe UI", 9.5f, FontStyle.Regular, GraphicsUnit.Point);
+        using var format = new StringFormat
+        {
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center,
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
+
+        var menuSize = new SizeF(WindowSize, WindowSize);
+        var placement = RadialCommandMenuLogic.ResolveHoverCaptionPlacement(layout.Bounds, menuSize);
+        var maxWidth = placement is RadialCommandMenuCaptionPlacement.Left or RadialCommandMenuCaptionPlacement.Right
+            ? HoverCaptionSideMaxWidth
+            : HoverCaptionMaxWidth;
+        var measured = graphics.MeasureString(caption, font, new SizeF(maxWidth, 24f), format);
+        var width = Math.Min(maxWidth, measured.Width + (HoverCaptionPaddingX * 2f));
+        var height = measured.Height + (HoverCaptionPaddingY * 2f);
+        var bounds = RadialCommandMenuLogic.ResolveHoverCaptionBounds(
+            layout.Bounds,
+            new SizeF(width, height),
+            menuSize,
+            gap: 7f,
+            edgePadding: 6f);
+
+        using var backgroundPath = CreateRoundedRectanglePath(bounds, 7f);
+        using var shadowBrush = new SolidBrush(Color.FromArgb(70, 15, 23, 42));
+        using var backgroundBrush = new SolidBrush(Color.FromArgb(248, 15, 23, 42));
+        using var textBrush = new SolidBrush(Color.White);
+        using var shadowPath = CreateRoundedRectanglePath(new RectangleF(bounds.X, bounds.Y + 1f, bounds.Width, bounds.Height), 7f);
+        graphics.FillPath(shadowBrush, shadowPath);
+        graphics.FillPath(backgroundBrush, backgroundPath);
+        graphics.DrawString(caption, font, textBrush, bounds, format);
+    }
+
+    private RadialCommandMenuHoverTarget ResolveHoverTarget(int buttonIndex)
+    {
+        if (buttonIndex == ButtonIndexClose)
+        {
+            return RadialCommandMenuHoverTarget.Close;
+        }
+
+        if (buttonIndex < 0 || buttonIndex >= displayedEntries.Count)
+        {
+            return RadialCommandMenuHoverTarget.None;
+        }
+
+        var entry = displayedEntries[buttonIndex];
+        return entry.EntryType == RadialEntryType.PageAdvance
+            ? RadialCommandMenuHoverTarget.PageAdvance
+            : entry.Action is not null
+                ? RadialCommandMenuHoverTarget.Action(entry.Action)
+                : RadialCommandMenuHoverTarget.None;
+    }
+
+    private static GraphicsPath CreateRoundedRectanglePath(RectangleF bounds, float radius)
+    {
+        var diameter = radius * 2f;
+        var path = new GraphicsPath();
+        path.AddArc(bounds.Left, bounds.Top, diameter, diameter, 180, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Top, diameter, diameter, 270, 90);
+        path.AddArc(bounds.Right - diameter, bounds.Bottom - diameter, diameter, diameter, 0, 90);
+        path.AddArc(bounds.Left, bounds.Bottom - diameter, diameter, diameter, 90, 90);
+        path.CloseFigure();
+        return path;
     }
 
     private static void DrawCenteredGlyph(Graphics graphics, string glyph, Brush brush, RectangleF bounds, float size)
