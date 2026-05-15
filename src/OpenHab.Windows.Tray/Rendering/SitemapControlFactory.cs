@@ -838,7 +838,7 @@ public static partial class SitemapControlFactory
 
             if (hex.Length == 6 && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
             {
-                parsed = Microsoft.UI.ColorHelper.FromArgb(
+                parsed = CreateColor(
                     255,
                     (byte)((rgb >> 16) & 0xFF),
                     (byte)((rgb >> 8) & 0xFF),
@@ -848,7 +848,7 @@ public static partial class SitemapControlFactory
 
             if (hex.Length == 8 && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var argb))
             {
-                parsed = Microsoft.UI.ColorHelper.FromArgb(
+                parsed = CreateColor(
                     (byte)((argb >> 24) & 0xFF),
                     (byte)((argb >> 16) & 0xFF),
                     (byte)((argb >> 8) & 0xFF),
@@ -2107,13 +2107,13 @@ public static partial class SitemapControlFactory
         var ratio = range <= double.Epsilon ? 0d : (value - min) / range;
         ratio = Math.Clamp(ratio, 0d, 1d);
 
-        var warm = Microsoft.UI.ColorHelper.FromArgb(255, 255, 180, 96);
-        var cool = Microsoft.UI.ColorHelper.FromArgb(255, 201, 226, 255);
+        var warm = CreateColor(255, 255, 180, 96);
+        var cool = CreateColor(255, 201, 226, 255);
 
         var r = (byte)Math.Round(warm.R + ((cool.R - warm.R) * ratio), MidpointRounding.AwayFromZero);
         var g = (byte)Math.Round(warm.G + ((cool.G - warm.G) * ratio), MidpointRounding.AwayFromZero);
         var b = (byte)Math.Round(warm.B + ((cool.B - warm.B) * ratio), MidpointRounding.AwayFromZero);
-        return Microsoft.UI.ColorHelper.FromArgb(255, r, g, b);
+        return CreateColor(255, r, g, b);
     }
 
     private static string BuildOpenHabColorHex(global::Windows.UI.Color color)
@@ -2121,6 +2121,11 @@ public static partial class SitemapControlFactory
         return string.Create(
             CultureInfo.InvariantCulture,
             $"#{color.R:X2}{color.G:X2}{color.B:X2}");
+    }
+
+    private static global::Windows.UI.Color CreateColor(byte a, byte r, byte g, byte b)
+    {
+        return global::Windows.UI.Color.FromArgb(a, r, g, b);
     }
 
     private static bool TryParseDoubleInvariant(string input, out double value)
@@ -2152,7 +2157,7 @@ public static partial class SitemapControlFactory
         var r = (byte)Math.Round((r1 + m) * 255d, MidpointRounding.AwayFromZero);
         var g = (byte)Math.Round((g1 + m) * 255d, MidpointRounding.AwayFromZero);
         var b = (byte)Math.Round((b1 + m) * 255d, MidpointRounding.AwayFromZero);
-        return Microsoft.UI.ColorHelper.FromArgb(255, r, g, b);
+        return CreateColor(255, r, g, b);
     }
 
     internal static void ColorToHsv(global::Windows.UI.Color color, out double hue, out double saturation, out double brightness)
@@ -2379,12 +2384,12 @@ public static partial class SitemapControlFactory
 
     private static void ApplyButtonGridColors(Button button, bool isActive, bool isHovered, bool isPressed)
     {
-        var inactiveBackground = Microsoft.UI.ColorHelper.FromArgb(255, 245, 245, 245);
-        var inactiveHoverBackground = Microsoft.UI.ColorHelper.FromArgb(255, 237, 237, 237);
-        var inactivePressedBackground = Microsoft.UI.ColorHelper.FromArgb(255, 226, 226, 226);
-        var activeBackground = Microsoft.UI.ColorHelper.FromArgb(255, 255, 62, 133);
-        var activeHoverBackground = Microsoft.UI.ColorHelper.FromArgb(255, 250, 45, 120);
-        var activePressedBackground = Microsoft.UI.ColorHelper.FromArgb(255, 230, 30, 108);
+        var inactiveBackground = CreateColor(255, 245, 245, 245);
+        var inactiveHoverBackground = CreateColor(255, 237, 237, 237);
+        var inactivePressedBackground = CreateColor(255, 226, 226, 226);
+        var activeBackground = CreateColor(255, 255, 62, 133);
+        var activeHoverBackground = CreateColor(255, 250, 45, 120);
+        var activePressedBackground = CreateColor(255, 230, 30, 108);
 
         var background = isActive
             ? (isPressed ? activePressedBackground : isHovered ? activeHoverBackground : activeBackground)

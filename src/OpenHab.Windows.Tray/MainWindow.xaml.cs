@@ -224,7 +224,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShellConnectionText.Text = $"Error: {ex.Message}";
+            ShellConnectionText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
             return TraySurfaceRefreshOutcome.Failed;
         }
         finally
@@ -577,7 +577,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShellConnectionText.Text = $"Error: {ex.Message}";
+            ShellConnectionText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
             return false;
         }
         finally
@@ -688,7 +688,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShellConnectionText.Text = $"Error: {ex.Message}";
+            ShellConnectionText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
         }
         finally
         {

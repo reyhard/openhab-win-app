@@ -1400,7 +1400,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
         catch (Exception ex)
         {
-            setStatusText($"Failed to save token: {ex.Message}");
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Failed to save token."));
             RefreshSettingsBindings();
         }
     }
@@ -1515,7 +1515,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
         catch (Exception ex)
         {
-            setStatusText($"Failed to save cloud credentials: {ex.Message}");
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Failed to save cloud credentials."));
             RefreshSettingsBindings();
         }
     }
@@ -2298,7 +2298,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
         catch (Exception ex)
         {
-            setStatusText($"Could not open logs: {ex.Message}");
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Could not open logs."));
         }
     }
 }

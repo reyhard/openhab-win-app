@@ -151,6 +151,30 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task RefreshAsync_UsesSafeStatusForRequestFailure()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        settings.SetEndpointMode(EndpointMode.LocalOnly);
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        localClient.EnqueueSitemapFailure(
+            new OpenHabRequestException(
+                System.Net.HttpStatusCode.Unauthorized,
+                "openHAB request failed with 401 Unauthorized: {\"token\":\"secret\"}"));
+
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+        await controller.LoadAsync();
+
+        await controller.RefreshAsync(CancellationToken.None);
+
+        Assert.Contains("HTTP 401", controller.Current.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret", controller.Current.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("token", controller.Current.StatusText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task RefreshCancellationIsPropagatedAndNotConvertedToOfflineError()
     {
         var settings = CreateSettingsController();
@@ -691,6 +715,7 @@ public sealed class SitemapRuntimeControllerTests
         var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
 
         await controller.LoadAsync();
+        await eventClient.WaitUntilConnectStartedAsync();
         eventClient.ConnectResults.Enqueue(staleConnect.Task);
         var staleStart = controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "kitchen");
         await WaitUntilAsync(() => eventClient.ConnectCalls == 2);

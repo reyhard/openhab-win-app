@@ -221,7 +221,7 @@ internal static class OpenHabIconImageSourceLoader
 
             if (hex.Length == 6 && uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var rgb))
             {
-                parsed = Microsoft.UI.ColorHelper.FromArgb(
+                parsed = CreateColor(
                     255,
                     (byte)((rgb >> 16) & 0xFF),
                     (byte)((rgb >> 8) & 0xFF),
@@ -231,7 +231,7 @@ internal static class OpenHabIconImageSourceLoader
 
             if (hex.Length == 8 && uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var argb))
             {
-                parsed = Microsoft.UI.ColorHelper.FromArgb(
+                parsed = CreateColor(
                     (byte)((argb >> 24) & 0xFF),
                     (byte)((argb >> 16) & 0xFF),
                     (byte)((argb >> 8) & 0xFF),
@@ -314,6 +314,11 @@ internal static class OpenHabIconImageSourceLoader
         stream.Seek(0);
         await bitmap.SetSourceAsync(stream);
         return bitmap;
+    }
+
+    private static global::Windows.UI.Color CreateColor(byte a, byte r, byte g, byte b)
+    {
+        return global::Windows.UI.Color.FromArgb(a, r, g, b);
     }
 
     private static void ApplyAuthHeaders(HttpRequestMessage request, SitemapControlFactory.IconAuthContext authContext)

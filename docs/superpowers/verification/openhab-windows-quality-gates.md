@@ -10,19 +10,18 @@ Use this for everyday logic changes when the packaging project cannot load becau
 dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj
 dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj
 dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj
-dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --blame-hang --blame-hang-timeout 30s
+dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj
 ```
 
 Expected current behavior:
 
-- Core, Sitemaps, and Rendering should pass and exit cleanly.
-- App assertions are expected to pass, but the VSTest host can stay alive until blame-hang aborts it. This is a known blocker tracked for Plan B of the official-readiness remediation.
+- All direct test projects pass and exit cleanly.
 
 ## CI Gate
 
 `.github/workflows/ci.yml` runs the direct test projects and the tray Release build on `windows-latest`.
 
-The App test step is temporarily marked `continue-on-error` so the workflow exposes the known test-host shutdown issue without hiding Core, Sitemaps, Rendering, or tray build regressions. Remove that temporary allowance after the App test host exits cleanly.
+The App test step is blocking. Failures in Core, Sitemaps, Rendering, App, or the tray Release build should fail the workflow.
 
 ## Full Solution Gate
 

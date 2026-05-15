@@ -50,7 +50,7 @@ public static class ToastService
             {
                 isAvailable = false;
                 DiagnosticLogger.Error(
-                    $"ToastService.EnsureRegistered (packaged) FAILED — {ex.GetType().FullName}: {ex.Message}", ex);
+                    $"ToastService.EnsureRegistered (packaged) FAILED - {SafeDiagnosticText.ForLog(ex)}");
                 return;
             }
         }
@@ -67,7 +67,7 @@ public static class ToastService
         {
             isAvailable = false;
             DiagnosticLogger.Error(
-                $"ToastService.EnsureRegistered (unpackaged) FAILED — {ex.GetType().FullName}: {ex.Message}", ex);
+                $"ToastService.EnsureRegistered (unpackaged) FAILED - {SafeDiagnosticText.ForLog(ex)}");
         }
     }
 
@@ -154,8 +154,7 @@ public static class ToastService
         catch (Exception ex)
         {
             DiagnosticLogger.Error(
-                $"Toast.Show#{seq} FAILED — {ex.GetType().FullName}: {ex.Message}{Environment.NewLine}{ex.StackTrace}",
-                ex);
+                $"Toast.Show#{seq} FAILED - {SafeDiagnosticText.ForLog(ex)}");
             if (ex is InvalidOperationException || ex is COMException)
             {
                 isAvailable = false;
@@ -244,7 +243,7 @@ public static class ToastService
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Toast history remove failed: {ex.GetType().Name}: {ex.Message}");
+            DiagnosticLogger.Warn($"Toast history remove failed: {SafeDiagnosticText.ForLog(ex)}");
         }
     }
 }

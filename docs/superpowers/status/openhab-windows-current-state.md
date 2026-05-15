@@ -22,7 +22,6 @@ Read this file before implementation. Older dated status files remain useful as 
 - P0: Finalize official repository governance and release ownership: README, CONTRIBUTING, NOTICE, SECURITY, CI, package identity, signing, and support policy.
 - P0: Review tracked temporary signing certificates, user publish metadata, package artifacts, and release signing inputs.
 - P0: Redact server-provided response bodies before they reach logs, diagnostics, or status text.
-- P0: Fix `OpenHab.App.Tests` VSTest host shutdown so the direct App test gate exits cleanly without blame-hang.
 - P1: Add shared Windows-layer sitemap row planning before unifying flyout and main window behavior.
 - P1: Track sitemap event-stream start/connect outcomes instead of discarding tasks.
 - P1: Replace fire-and-forget settings saves with observable serialized persistence.
@@ -38,6 +37,10 @@ Read this file before implementation. Older dated status files remain useful as 
 - 2026-05-13 advanced notification verification: Core, Sitemaps, Rendering direct test projects passed; App notification tests passed 117/117; `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore` passed. `dotnet test OpenHab.Windows.sln --no-restore --blame-hang --blame-hang-timeout 20s` hit the known DesktopBridge import issue, then completed Core/Sitemaps/Rendering and executed App assertions 230/230 successfully, but the App VSTest host did not exit and was aborted by blame-hang after 20 seconds; listed active tests were existing tray/UI helper tests rather than notification failures.
 
 ## Latest Verification Evidence
+
+2026-05-15 official-readiness Plan B verification:
+
+- Passed: `dotnet test tests/OpenHab.App.Tests/OpenHab.App.Tests.csproj --no-restore`; App tests passed (`457/457`) and the VSTest host exited cleanly without blame-hang.
 
 2026-05-14 performance optimization verification:
 
