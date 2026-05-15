@@ -52,6 +52,7 @@ public sealed class AppSettingsController
         this.settingsFilePath = Path.GetFullPath(settingsFilePath ?? DefaultSettingsFilePath);
         WaitForQueuedSave();
         TryLoad();
+        ApplyDiagnosticSettings(Current);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -224,6 +225,11 @@ public sealed class AppSettingsController
         }
 
         UpdateSettings(settings => settings with { BackgroundMemoryReleaseDelayMinutes = minutes });
+    }
+
+    public void SetVerboseDiagnostics(bool enabled)
+    {
+        UpdateSettings(settings => settings with { VerboseDiagnostics = enabled });
     }
 
     public void SetImportantNotificationTags(IEnumerable<string> tags)
@@ -402,6 +408,7 @@ public sealed class AppSettingsController
             lock (syncRoot)
             {
                 Current = update(Current);
+                ApplyDiagnosticSettings(Current);
                 QueueSave(saveQueue, Current);
             }
         }
@@ -485,6 +492,7 @@ public sealed class AppSettingsController
                         HasCloudCredentials = Current.HasCloudCredentials,
                         CloudUserName = Current.CloudUserName
                     };
+                    ApplyDiagnosticSettings(Current);
                 }
             }
         }
@@ -519,6 +527,7 @@ public sealed class AppSettingsController
                         HasCloudCredentials = Current.HasCloudCredentials,
                         CloudUserName = Current.CloudUserName
                     };
+                    ApplyDiagnosticSettings(Current);
                 }
             }
         }
@@ -581,6 +590,11 @@ public sealed class AppSettingsController
             Shortcuts = (settings.Shortcuts ?? ShortcutSettings.Default).Normalized(),
             CachedMainUiPageLinks = NormalizeMainUiPageLinks(settings.CachedMainUiPageLinks)
         };
+    }
+
+    private static void ApplyDiagnosticSettings(AppSettings settings)
+    {
+        DiagnosticLogger.VerboseEventLogging = settings.VerboseDiagnostics;
     }
 
     private static bool? ReadLegacyFollowSystemTheme(string json)

@@ -83,6 +83,7 @@ public sealed partial class SettingsPageControl : UserControl
     private NumberBox? DeviceInfoSyncIntervalBox;
     private readonly Dictionary<string, TextBox> deviceInfoSyncItemMappingTexts = new(StringComparer.Ordinal);
     private Button? ViewLogsButton;
+    private ToggleSwitch? VerboseDiagnosticsToggle;
     private TextBlock? VersionText;
 
     public SettingsPageControl(
@@ -773,6 +774,19 @@ public sealed partial class SettingsPageControl : UserControl
         ViewLogsButton.Click += ViewLogsButton_Click;
         SettingsContent.Children.Add(ViewLogsButton);
 
+        VerboseDiagnosticsToggle = new ToggleSwitch
+        {
+            OnContent = string.Empty,
+            OffContent = string.Empty
+        };
+        VerboseDiagnosticsToggle.Toggled += VerboseDiagnosticsToggle_Toggled;
+        var verboseDiagnosticsRow = CreateSettingsToggleRow(
+            "\uE9D9",
+            "Verbose diagnostics",
+            "Log additional safe diagnostic flow details for troubleshooting",
+            VerboseDiagnosticsToggle);
+        SettingsContent.Children.Add(verboseDiagnosticsRow);
+
         VersionText = new TextBlock
         {
             Margin = new Thickness(0, 8, 0, 0),
@@ -1180,6 +1194,7 @@ public sealed partial class SettingsPageControl : UserControl
         DeviceInfoSyncIntervalBox = null;
         deviceInfoSyncItemMappingTexts.Clear();
         ViewLogsButton = null;
+        VerboseDiagnosticsToggle = null;
         VersionText = null;
     }
 
@@ -1276,6 +1291,10 @@ public sealed partial class SettingsPageControl : UserControl
             if (CommandMenuActivationModeCombo is not null)
             {
                 CommandMenuActivationModeCombo.SelectedItem = shortcuts.CommandMenu.RadialActivationMode;
+            }
+            if (VerboseDiagnosticsToggle is not null)
+            {
+                VerboseDiagnosticsToggle.IsOn = settingsController.Current.VerboseDiagnostics;
             }
             if (DeviceInfoSyncIdentifierText is not null)
             {
@@ -1559,6 +1578,19 @@ public sealed partial class SettingsPageControl : UserControl
         var enabled = toggle.IsOn;
         settingsController.SetLaunchAtStartup(enabled);
         await StartupManager.SetEnabledAsync(enabled);
+    }
+
+    private void VerboseDiagnosticsToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ToggleSwitch toggle)
+        {
+            return;
+        }
+
+        settingsController.SetVerboseDiagnostics(toggle.IsOn);
+        setStatusText(toggle.IsOn
+            ? "Verbose diagnostics enabled."
+            : "Verbose diagnostics disabled.");
     }
 
     private void FlyoutWidthBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

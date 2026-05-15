@@ -50,6 +50,7 @@ public sealed record AppSettings(
     bool MainWindowSidebarCollapsed = false,
     ShortcutSettings? Shortcuts = null,
     ImmutableArray<MainUiPageLink> CachedMainUiPageLinks = default,
+    bool VerboseDiagnostics = false,
     int BackgroundMemoryReleaseDelayMinutes = 5,
     [property: JsonIgnore] bool HasLocalToken = false,
     [property: JsonIgnore] bool HasCloudCredentials = false,
