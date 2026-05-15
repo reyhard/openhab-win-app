@@ -49,6 +49,9 @@ jobs:
           [System.IO.File]::WriteAllBytes($certPath, [System.Convert]::FromBase64String($env:MSIX_CERT_BASE64))
           "MSIX_CERT_PATH=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Restore
+        run: dotnet restore OpenHab.Windows.sln
+
       - name: Build signed package and export CER
         shell: pwsh
         env:
