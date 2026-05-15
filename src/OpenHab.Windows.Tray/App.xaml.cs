@@ -83,12 +83,6 @@ public partial class App : Application
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int virtualKey);
 
-    internal sealed record NotificationPollingConfig(
-        EndpointMode EndpointMode,
-        Uri CloudEndpoint,
-        int PollIntervalSeconds,
-        string? CloudCredentialsFingerprint);
-
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         instanceMutex = new Mutex(initiallyOwned: true, name: "OpenHab.Windows.Tray.SingleInstance", out bool createdNew);
@@ -457,7 +451,7 @@ public partial class App : Application
             DiagnosticLogger.Info("Starting notification polling");
             var settings = settingsController.Current;
             var cloudCredentials = GetCloudCredentialsSync(settingsController);
-            var pollingConfig = BuildNotificationPollingConfig(settings, cloudCredentials);
+            var pollingConfig = NotificationPollingPolicy.BuildConfig(settings, cloudCredentials);
             activeNotificationPollingConfig = pollingConfig;
             if (settings.EndpointMode == EndpointMode.LocalOnly)
             {
@@ -575,8 +569,8 @@ public partial class App : Application
 
             var settings = controller.Current;
             var cloudCredentials = GetCloudCredentialsSync(controller);
-            var nextConfig = BuildNotificationPollingConfig(settings, cloudCredentials);
-            if (!ShouldReconfigureNotificationPolling(activeNotificationPollingConfig, nextConfig))
+            var nextConfig = NotificationPollingPolicy.BuildConfig(settings, cloudCredentials);
+            if (!NotificationPollingPolicy.ShouldReconfigure(activeNotificationPollingConfig, nextConfig))
             {
                 return;
             }
@@ -605,42 +599,6 @@ public partial class App : Application
         {
             notificationPollingSettingsChangeSemaphore.Release();
         }
-    }
-
-    internal static NotificationPollingConfig BuildNotificationPollingConfig(
-        AppSettings settings,
-        CloudCredentials? cloudCredentials)
-    {
-        return new NotificationPollingConfig(
-            settings.EndpointMode,
-            settings.CloudEndpoint,
-            settings.NotificationPollIntervalSeconds,
-            BuildCloudCredentialsFingerprint(cloudCredentials));
-    }
-
-    internal static bool ShouldReconfigureNotificationPolling(
-        NotificationPollingConfig? activeConfig,
-        NotificationPollingConfig nextConfig)
-    {
-        return !Equals(activeConfig, nextConfig);
-    }
-
-    private static string? BuildCloudCredentialsFingerprint(CloudCredentials? cloudCredentials)
-    {
-        if (cloudCredentials is null)
-        {
-            return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(cloudCredentials.UserName)
-            || string.IsNullOrWhiteSpace(cloudCredentials.Password))
-        {
-            return null;
-        }
-
-        var fingerprintMaterial = $"{cloudCredentials.UserName.Trim()}\0{cloudCredentials.Password}";
-        var fingerprintBytes = System.Text.Encoding.UTF8.GetBytes(fingerprintMaterial);
-        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(fingerprintBytes));
     }
 
     // Sync helper — safe because the underlying store returns Task.FromResult.

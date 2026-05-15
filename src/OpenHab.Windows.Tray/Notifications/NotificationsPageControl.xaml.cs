@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Notifications;
+using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
@@ -18,8 +19,6 @@ namespace OpenHab.Windows.Tray.Notifications;
 
 public sealed partial class NotificationsPageControl : UserControl
 {
-    private const double NotificationServerIconSize = 20;
-
     private enum NotificationSortOrder
     {
         DateDescending,
@@ -369,8 +368,8 @@ public sealed partial class NotificationsPageControl : UserControl
 
         var image = new Image
         {
-            Width = NotificationServerIconSize,
-            Height = NotificationServerIconSize,
+            Width = NotificationUiMetrics.ServerIconSize,
+            Height = NotificationUiMetrics.ServerIconSize,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 2, 0, 0)
         };

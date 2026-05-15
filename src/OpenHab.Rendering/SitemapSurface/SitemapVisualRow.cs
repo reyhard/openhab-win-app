@@ -1,6 +1,6 @@
 using OpenHab.Rendering.Descriptors;
 
-namespace OpenHab.Windows.Tray.Rendering.SitemapSurface;
+namespace OpenHab.Rendering.SitemapSurface;
 
 public sealed record SitemapVisualRow(
     int RowIndex,

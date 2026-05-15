@@ -18,6 +18,7 @@ using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Shell;
 using OpenHab.App.Settings;
+using OpenHab.App.Tray;
 using OpenHab.App.MainUi;
 using OpenHab.Core;
 using OpenHab.Core.Api;

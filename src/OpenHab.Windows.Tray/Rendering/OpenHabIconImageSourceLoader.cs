@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using OpenHab.Rendering;
 using Windows.Storage.Streams;
 
 namespace OpenHab.Windows.Tray.Rendering;
@@ -94,8 +95,7 @@ internal static class OpenHabIconImageSourceLoader
         string? iconColor,
         SitemapControlFactory.IconAuthContext? authContext)
     {
-        ArgumentNullException.ThrowIfNull(iconUri);
-        return $"{iconUri.AbsoluteUri}|{iconColor ?? string.Empty}|{GetAuthMode(authContext)}";
+        return SitemapUiLogic.BuildIconPayloadCacheKey(iconUri, iconColor, GetAuthMode(authContext));
     }
 
     internal static async Task<ImageSource?> CreateImageSourceFromBytesAsync(

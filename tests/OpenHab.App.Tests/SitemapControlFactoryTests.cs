@@ -1,5 +1,4 @@
-#define ENABLE_WINUI_FACTORY_TESTS
-
+#if ENABLE_WINUI_FACTORY_TESTS
 using OpenHab.Windows.Tray.Rendering;
 using Microsoft.UI.Xaml;
 using OpenHab.Rendering.Descriptors;
@@ -10,7 +9,6 @@ namespace OpenHab.App.Tests;
 // Touching the WinUI tray factory type currently hangs the xUnit testhost in
 // normal CLI runs. Keep these legacy tests opt-in and cover pure helper logic
 // from non-WinUI test projects instead.
-#if ENABLE_WINUI_FACTORY_TESTS
 public class SitemapControlFactoryTests
 {
     // ── Pure helper: NormalizeIconName ──────────────────────────────

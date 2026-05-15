@@ -1,4 +1,4 @@
-namespace OpenHab.Windows.Tray.Rendering;
+namespace OpenHab.App.Runtime;
 
 public sealed class DispatcherRefreshGate(Func<Action, bool> tryEnqueue)
 {

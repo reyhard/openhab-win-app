@@ -5,7 +5,6 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Reflection;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -15,6 +14,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 using OpenHab.Core;
 using OpenHab.Core.Diagnostics;
 using OpenHab.Core.Profiles;
+using OpenHab.Rendering;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Rendering.Icons;
 using OpenHab.Sitemaps.Models;
@@ -127,18 +127,7 @@ public static partial class SitemapControlFactory
 
     internal static string? ResolveGlyphForIcon(string? iconName)
     {
-        if (string.IsNullOrWhiteSpace(iconName)) return null;
-
-        // Exact match first (case-insensitive, preserves the original map behaviour).
-        if (Win11IconMap.TryGetValue(iconName, out var glyph))
-            return glyph;
-
-        // Fallback: normalize and try again so common variants still match.
-        var normalized = NormalizeIconName(iconName);
-        if (NormalizedWin11IconMap.TryGetValue(normalized, out glyph))
-            return glyph;
-
-        return null;
+        return SitemapUiLogic.ResolveWin11Glyph(iconName);
     }
 
     private static FontIcon? ResolveWin11Icon(string? iconName)
@@ -196,75 +185,29 @@ public static partial class SitemapControlFactory
     /// </summary>
     internal static string NormalizeIconName(string? iconName)
     {
-        if (string.IsNullOrWhiteSpace(iconName)) return string.Empty;
-        ReadOnlySpan<char> span = iconName.Trim();
-
-        // Estimate worst-case capacity (trim + removed separators/digits).
-        var sb = new System.Text.StringBuilder(span.Length);
-        foreach (var ch in span)
-        {
-            if (ch is '_' or '-') continue;   // collapse separators
-            if (char.IsDigit(ch)) continue;   // strip numeric suffixes
-            sb.Append(char.ToLowerInvariant(ch));
-        }
-
-        return sb.ToString();
+        return SitemapUiLogic.NormalizeIconName(iconName);
     }
 
     /// <summary>Pure-logic query: does the normalized icon name resolve
     /// to a known Win11 glyph?  Safe to call in tests without WinUI runtime.</summary>
     internal static bool CanResolveNormalizedIcon(string? iconName)
     {
-        if (string.IsNullOrWhiteSpace(iconName)) return false;
-        // Exact match first.
-        if (Win11IconMap.ContainsKey(iconName)) return true;
-        // Normalized fallback.
-        var normalized = NormalizeIconName(iconName);
-        return NormalizedWin11IconMap.ContainsKey(normalized);
+        return SitemapUiLogic.CanResolveWin11Glyph(iconName);
     }
 
     internal static double ResolveWebviewHeight(SitemapRowDescriptor row)
     {
-        ArgumentNullException.ThrowIfNull(row);
-
-        return row.HeightRows is > 0
-            ? row.HeightRows.Value * SitemapRowHeight
-            : WebviewDefaultHeight;
+        return SitemapUiLogic.ResolveWebviewHeight(row);
     }
 
     internal static string BuildRowIdentityKey(SitemapRowDescriptor row)
     {
-        ArgumentNullException.ThrowIfNull(row);
-
-        if (!string.IsNullOrWhiteSpace(row.SearchResultKey))
-        {
-            return row.SearchResultKey;
-        }
-
-        if (!string.IsNullOrWhiteSpace(row.WidgetId))
-        {
-            return $"widget:{row.WidgetId}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(row.ItemName))
-        {
-            return string.Create(
-                CultureInfo.InvariantCulture,
-                $"item:{row.ItemName}:{row.Control}:{row.Action}:{row.Label}:{row.IconName ?? string.Empty}:{row.Command ?? string.Empty}:{row.ReleaseCommand ?? string.Empty}:{row.Period ?? string.Empty}");
-        }
-
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"row:{row.Control}:{row.Action}:{row.IconName ?? string.Empty}:{row.Label}");
+        return SitemapUiLogic.BuildRowIdentityKey(row);
     }
 
     internal static string BuildRowVisualStateKey(SitemapRowDescriptor row, int rowIndex)
     {
-        ArgumentNullException.ThrowIfNull(row);
-
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"key:{BuildRowIdentityKey(row)}|control:{row.Control}|action:{row.Action}|label:{row.Label}|icon:{row.IconName ?? string.Empty}|command:{row.Command ?? string.Empty}|release:{row.ReleaseCommand ?? string.Empty}");
+        return SitemapUiLogic.BuildRowVisualStateKey(row, rowIndex);
     }
 
     public static FrameworkElement Create(
@@ -821,49 +764,13 @@ public static partial class SitemapControlFactory
 
     private static bool TryParseColor(string? color, out global::Windows.UI.Color parsed)
     {
-        parsed = default;
-        if (string.IsNullOrWhiteSpace(color))
+        if (SitemapUiLogic.TryResolveOpenHabColor(color, out var sitemapColor))
         {
-            return false;
-        }
-
-        var input = color.Trim();
-        if (input.StartsWith('#'))
-        {
-            var hex = input[1..];
-            if (hex.Length == 3)
-            {
-                hex = string.Concat(hex.Select(c => $"{c}{c}"));
-            }
-
-            if (hex.Length == 6 && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
-            {
-                parsed = Microsoft.UI.ColorHelper.FromArgb(
-                    255,
-                    (byte)((rgb >> 16) & 0xFF),
-                    (byte)((rgb >> 8) & 0xFF),
-                    (byte)(rgb & 0xFF));
-                return true;
-            }
-
-            if (hex.Length == 8 && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var argb))
-            {
-                parsed = Microsoft.UI.ColorHelper.FromArgb(
-                    (byte)((argb >> 24) & 0xFF),
-                    (byte)((argb >> 16) & 0xFF),
-                    (byte)((argb >> 8) & 0xFF),
-                    (byte)(argb & 0xFF));
-                return true;
-            }
-        }
-
-        var property = typeof(Microsoft.UI.Colors).GetProperty(input, BindingFlags.Public | BindingFlags.Static | BindingFlags.IgnoreCase);
-        if (property?.PropertyType == typeof(global::Windows.UI.Color))
-        {
-            parsed = (global::Windows.UI.Color)property.GetValue(null)!;
+            parsed = ToWindowsColor(sitemapColor);
             return true;
         }
 
+        parsed = default;
         return false;
     }
 
@@ -1996,40 +1903,7 @@ public static partial class SitemapControlFactory
 
     internal static string? NormalizeInputByHint(string? raw, SitemapInputHint hint)
     {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        var value = raw.Trim();
-        return hint switch
-        {
-            SitemapInputHint.Date when TryParseDateOnly(value, out var date) => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            SitemapInputHint.Time when TryParseTimeOnly(value, out var time) => time.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture),
-            SitemapInputHint.DateTime when TryParseDateTime(value, out var dateTime) => dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture),
-            SitemapInputHint.Color when TryResolveOpenHabColor(value, out var color) => BuildOpenHabColorCommand(color),
-            SitemapInputHint.Number when HasIntegerLeadingZeros(value) => value,
-            SitemapInputHint.Number when TryParseNumericState(value, out var number) => number.ToString(CultureInfo.InvariantCulture),
-            _ => value
-        };
-    }
-
-    private static bool HasIntegerLeadingZeros(string value)
-    {
-        if (value.Length < 2 || value[0] != '0')
-        {
-            return false;
-        }
-
-        foreach (var ch in value)
-        {
-            if (!char.IsAsciiDigit(ch))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return SitemapUiLogic.NormalizeInputByHint(raw, hint);
     }
 
     private static string FormatInputDisplayValue(string? raw, SitemapInputHint hint)
@@ -2051,144 +1925,49 @@ public static partial class SitemapControlFactory
 
     internal static bool TryParseOpenHabColorState(string? raw, out double hue, out double saturation, out double brightness)
     {
-        hue = 0;
-        saturation = 0;
-        brightness = 0;
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return false;
-        }
-
-        var parts = raw.Trim().Split(',');
-        if (parts.Length < 3)
-        {
-            return false;
-        }
-
-        if (!TryParseDoubleInvariant(parts[0], out hue)
-            || !TryParseDoubleInvariant(parts[1], out saturation)
-            || !TryParseDoubleInvariant(parts[2], out brightness))
-        {
-            return false;
-        }
-
-        hue = Math.Clamp(hue, 0d, 360d);
-        saturation = Math.Clamp(saturation, 0d, 100d);
-        brightness = Math.Clamp(brightness, 0d, 100d);
-        return true;
+        return SitemapUiLogic.TryParseOpenHabColorState(raw, out hue, out saturation, out brightness);
     }
 
     internal static bool TryResolveOpenHabColor(string? raw, out global::Windows.UI.Color color)
     {
-        color = default;
-        if (TryParseOpenHabColorState(raw, out var hue, out var saturation, out var brightness))
+        if (SitemapUiLogic.TryResolveOpenHabColor(raw, out var sitemapColor))
         {
-            color = ColorFromHsv(hue, saturation, brightness);
+            color = ToWindowsColor(sitemapColor);
             return true;
         }
 
-        return TryParseColor(raw, out color);
+        color = default;
+        return false;
     }
 
     internal static string BuildOpenHabColorCommand(global::Windows.UI.Color color)
     {
-        ColorToHsv(color, out var hue, out var saturation, out var brightness);
-        var roundedHue = (int)Math.Round(hue, MidpointRounding.AwayFromZero);
-        var roundedSaturation = (int)Math.Round(saturation, MidpointRounding.AwayFromZero);
-        var roundedBrightness = (int)Math.Round(brightness, MidpointRounding.AwayFromZero);
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"{roundedHue},{roundedSaturation},{roundedBrightness}");
+        return SitemapUiLogic.BuildOpenHabColorCommand(ToSitemapColor(color));
     }
 
     internal static global::Windows.UI.Color ResolveColorTemperaturePreview(double value, double min, double max)
     {
-        var range = max - min;
-        var ratio = range <= double.Epsilon ? 0d : (value - min) / range;
-        ratio = Math.Clamp(ratio, 0d, 1d);
-
-        var warm = Microsoft.UI.ColorHelper.FromArgb(255, 255, 180, 96);
-        var cool = Microsoft.UI.ColorHelper.FromArgb(255, 201, 226, 255);
-
-        var r = (byte)Math.Round(warm.R + ((cool.R - warm.R) * ratio), MidpointRounding.AwayFromZero);
-        var g = (byte)Math.Round(warm.G + ((cool.G - warm.G) * ratio), MidpointRounding.AwayFromZero);
-        var b = (byte)Math.Round(warm.B + ((cool.B - warm.B) * ratio), MidpointRounding.AwayFromZero);
-        return Microsoft.UI.ColorHelper.FromArgb(255, r, g, b);
+        return ToWindowsColor(SitemapUiLogic.ResolveColorTemperaturePreview(value, min, max));
     }
 
     private static string BuildOpenHabColorHex(global::Windows.UI.Color color)
     {
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"#{color.R:X2}{color.G:X2}{color.B:X2}");
-    }
-
-    private static bool TryParseDoubleInvariant(string input, out double value)
-    {
-        var candidate = input.Trim();
-        return double.TryParse(candidate, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
-            || double.TryParse(candidate, NumberStyles.Float, CultureInfo.CurrentCulture, out value);
-    }
-
-    private static global::Windows.UI.Color ColorFromHsv(double hue, double saturation, double brightness)
-    {
-        var normalizedHue = ((hue % 360d) + 360d) % 360d;
-        var s = Math.Clamp(saturation, 0d, 100d) / 100d;
-        var v = Math.Clamp(brightness, 0d, 100d) / 100d;
-        var chroma = v * s;
-        var x = chroma * (1d - Math.Abs((normalizedHue / 60d) % 2d - 1d));
-        var m = v - chroma;
-
-        var (r1, g1, b1) = normalizedHue switch
-        {
-            < 60d => (chroma, x, 0d),
-            < 120d => (x, chroma, 0d),
-            < 180d => (0d, chroma, x),
-            < 240d => (0d, x, chroma),
-            < 300d => (x, 0d, chroma),
-            _ => (chroma, 0d, x)
-        };
-
-        var r = (byte)Math.Round((r1 + m) * 255d, MidpointRounding.AwayFromZero);
-        var g = (byte)Math.Round((g1 + m) * 255d, MidpointRounding.AwayFromZero);
-        var b = (byte)Math.Round((b1 + m) * 255d, MidpointRounding.AwayFromZero);
-        return Microsoft.UI.ColorHelper.FromArgb(255, r, g, b);
+        return SitemapUiLogic.BuildOpenHabColorHex(ToSitemapColor(color));
     }
 
     internal static void ColorToHsv(global::Windows.UI.Color color, out double hue, out double saturation, out double brightness)
     {
-        var r = color.R / 255d;
-        var g = color.G / 255d;
-        var b = color.B / 255d;
+        SitemapUiLogic.ColorToHsv(ToSitemapColor(color), out hue, out saturation, out brightness);
+    }
 
-        var max = Math.Max(r, Math.Max(g, b));
-        var min = Math.Min(r, Math.Min(g, b));
-        var delta = max - min;
+    private static global::Windows.UI.Color ToWindowsColor(SitemapColor color)
+    {
+        return Microsoft.UI.ColorHelper.FromArgb(color.A, color.R, color.G, color.B);
+    }
 
-        if (delta <= double.Epsilon)
-        {
-            hue = 0d;
-        }
-        else if (Math.Abs(max - r) < double.Epsilon)
-        {
-            hue = 60d * (((g - b) / delta) % 6d);
-        }
-        else if (Math.Abs(max - g) < double.Epsilon)
-        {
-            hue = 60d * (((b - r) / delta) + 2d);
-        }
-        else
-        {
-            hue = 60d * (((r - g) / delta) + 4d);
-        }
-
-        if (hue < 0d)
-        {
-            hue += 360d;
-        }
-
-        saturation = max <= double.Epsilon ? 0d : (delta / max) * 100d;
-        brightness = max * 100d;
+    private static SitemapColor ToSitemapColor(global::Windows.UI.Color color)
+    {
+        return new SitemapColor(color.A, color.R, color.G, color.B);
     }
 
     private static string NormalizeInputStateValue(string? raw)
@@ -2587,26 +2366,7 @@ public static partial class SitemapControlFactory
     /// <summary>Builds an openHAB chart image URL from the row descriptor and base URI.</summary>
     internal static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi = 96, bool cacheBust = true)
     {
-        var itemName = row.ItemName ?? row.RawItemState ?? row.RawState ?? row.State;
-        if (string.IsNullOrWhiteSpace(itemName) && string.IsNullOrWhiteSpace(row.Command))
-        {
-            return null;
-        }
-
-        if (baseUri is null)
-        {
-            return null;
-        }
-
-        var items = Uri.EscapeDataString(itemName ?? row.Command ?? string.Empty);
-        var period = row.Period ?? "D";
-        var query = $"items={items}&period={Uri.EscapeDataString(period)}&dpi={chartDpi}";
-        if (cacheBust)
-        {
-            query += $"&random={Random.Shared.Next()}";
-        }
-
-        return new Uri(baseUri, $"chart?{query}");
+        return SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi, cacheBust);
     }
 
     private static async Task LoadChartImageWithAuthAsync(Image image, Uri chartUrl, IconAuthContext? iconAuth)

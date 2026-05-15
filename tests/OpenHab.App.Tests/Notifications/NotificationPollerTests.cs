@@ -1,9 +1,9 @@
 using System.Net;
 using System.Text;
+using OpenHab.App.Notifications;
 using OpenHab.App.Settings;
 using OpenHab.Core.Profiles;
 using OpenHab.Windows.Notifications;
-using TrayApp = global::OpenHab.Windows.Tray.App;
 
 namespace OpenHab.App.Tests.Notifications;
 
@@ -29,19 +29,19 @@ public sealed class NotificationPollerTests
             EndpointMode = EndpointMode.CloudOnly
         };
 
-        var firstPassword = TrayApp.BuildNotificationPollingConfig(
+        var firstPassword = NotificationPollingPolicy.BuildConfig(
             settings,
             new CloudCredentials("user@example.com", "password-one"));
-        var secondPassword = TrayApp.BuildNotificationPollingConfig(
+        var secondPassword = NotificationPollingPolicy.BuildConfig(
             settings,
             new CloudCredentials("user@example.com", "password-two"));
 
         Assert.NotEqual(firstPassword, secondPassword);
 
-        var firstUser = TrayApp.BuildNotificationPollingConfig(
+        var firstUser = NotificationPollingPolicy.BuildConfig(
             settings,
             new CloudCredentials("first-user@example.com", "shared-password"));
-        var secondUser = TrayApp.BuildNotificationPollingConfig(
+        var secondUser = NotificationPollingPolicy.BuildConfig(
             settings,
             new CloudCredentials("second-user@example.com", "shared-password"));
 
@@ -55,11 +55,11 @@ public sealed class NotificationPollerTests
         {
             EndpointMode = EndpointMode.CloudOnly
         };
-        var config = TrayApp.BuildNotificationPollingConfig(
+        var config = NotificationPollingPolicy.BuildConfig(
             settings,
             new CloudCredentials("user@example.com", "password"));
 
-        var shouldReconfigure = TrayApp.ShouldReconfigureNotificationPolling(config, config);
+        var shouldReconfigure = NotificationPollingPolicy.ShouldReconfigure(config, config);
 
         Assert.False(shouldReconfigure);
     }
@@ -71,11 +71,11 @@ public sealed class NotificationPollerTests
         {
             EndpointMode = EndpointMode.CloudOnly
         };
-        var nextConfig = TrayApp.BuildNotificationPollingConfig(
+        var nextConfig = NotificationPollingPolicy.BuildConfig(
             settings,
             new CloudCredentials("user@example.com", "password"));
 
-        var shouldReconfigure = TrayApp.ShouldReconfigureNotificationPolling(null, nextConfig);
+        var shouldReconfigure = NotificationPollingPolicy.ShouldReconfigure(null, nextConfig);
 
         Assert.True(shouldReconfigure);
     }
