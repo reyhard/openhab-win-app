@@ -459,7 +459,28 @@ public sealed partial class FlyoutWindow : Window
         sitemapSearchDebounceTimer.Stop();
         await ApplySitemapSearchQueryAsync(SitemapSearchBox.Text);
         RefreshChromeBindings(runtimeController.Current);
-        SitemapSearchBox.Focus(FocusState.Programmatic);
+        await FocusSitemapSearchBoxAsync();
+    }
+
+    private async Task FocusSitemapSearchBoxAsync()
+    {
+        if (!HasVisibleSearchChrome || SitemapSearchBox.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        SitemapSearchBox.UpdateLayout();
+        _ = SitemapSearchBox.Focus(FocusState.Programmatic);
+
+        await Task.Yield();
+
+        if (!HasVisibleSearchChrome || SitemapSearchBox.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        SitemapSearchBox.UpdateLayout();
+        _ = SitemapSearchBox.Focus(FocusState.Programmatic);
     }
 
     private void SitemapSearchBox_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
