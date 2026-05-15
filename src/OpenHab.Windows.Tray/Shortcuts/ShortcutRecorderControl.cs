@@ -395,10 +395,10 @@ internal sealed partial class ShortcutRecorderControl : UserControl
                 return;
             }
 
-            foreach (var key in PollableShortcutKeys.Where(IsDown))
+            var activeKey = PollableShortcutKeys.FirstOrDefault(IsDown);
+            if (activeKey != default)
             {
-                CaptureBinding(modifiers, key);
-                return;
+                CaptureBinding(modifiers, activeKey);
             }
         };
 

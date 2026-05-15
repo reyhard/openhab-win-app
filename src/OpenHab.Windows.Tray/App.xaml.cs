@@ -1689,10 +1689,12 @@ public partial class App : Application
         }
 
         const string prefix = "action=";
-        foreach (var part in arguments.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                     .Where(part => part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+        var matchingPart = arguments
+            .Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault(part => part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        if (matchingPart is not null)
         {
-            actionArgument = Uri.UnescapeDataString(part[prefix.Length..]);
+            actionArgument = Uri.UnescapeDataString(matchingPart[prefix.Length..]);
             return true;
         }
 
