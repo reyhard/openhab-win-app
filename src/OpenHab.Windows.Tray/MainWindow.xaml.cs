@@ -72,11 +72,13 @@ public sealed partial class MainWindow : Window
     private TransportKind? currentMainUiTransport;
     private bool isMainUiNavigationInProgress;
     private bool isSidebarCollapsed;
+    private SidebarLayoutState sidebarLayoutState = SidebarLayoutState.Expanded;
     private TransportKind? activeMainUiNavigationTransport;
     private bool pendingMainUiTransportResync;
     private bool hasAppliedInitialShellState;
     private DispatcherTimer? sidebarWidthAnimationTimer;
     private DispatcherTimer? sitemapPaneWidthAnimationTimer;
+    private DispatcherTimer? mainUiPagesListAnimationTimer;
     private string? pendingExplicitMainUiRoute;
     private MainUiWebViewHost? mainUiHost;
     private DateTimeOffset lastSettingsTouchUtc = DateTimeOffset.MinValue;
@@ -517,7 +519,7 @@ public sealed partial class MainWindow : Window
                 settingsController.SetMainUiPagesExpanded(true);
             }
 
-            RefreshPromotedMainUiPagesList();
+            RefreshPromotedMainUiPagesList(animate: settingsController.Current.MainUiPagesExpanded);
         }
         catch (OperationCanceledException)
         {
@@ -527,20 +529,28 @@ public sealed partial class MainWindow : Window
         {
             DiagnosticLogger.Warn($"Main UI page discovery failed: {ex.GetType().Name}");
             promotedMainUiPages = settingsController.Current.CachedMainUiPageLinks;
-            RefreshPromotedMainUiPagesList(discoveryError: true);
+            RefreshPromotedMainUiPagesList(discoveryError: true, animate: settingsController.Current.MainUiPagesExpanded);
         }
     }
 
-    private void RefreshPromotedMainUiPagesList(bool discoveryError = false)
+    private void RefreshPromotedMainUiPagesList(bool discoveryError = false, bool animate = false)
     {
-        var isExpanded = settingsController.Current.MainUiPagesExpanded;
-        MainUiPagesList.Children.Clear();
-        ApplyMainUiPagesVisibilityState();
-        if (isSidebarCollapsed || !isExpanded)
+        UpdateMainUiPagesChrome();
+        var shouldShow = ShouldShowMainUiPagesList();
+        if (!shouldShow)
         {
+            if (animate)
+            {
+                AnimateMainUiPagesListVisibility(targetVisible: false);
+            }
+            else
+            {
+                SetMainUiPagesListVisibility(visible: false);
+            }
             return;
         }
 
+        MainUiPagesList.Children.Clear();
         if (discoveryError)
         {
             MainUiPagesList.Children.Add(new TextBlock
@@ -574,6 +584,15 @@ public sealed partial class MainWindow : Window
             };
             button.Click += PromotedMainUiPageButton_Click;
             MainUiPagesList.Children.Add(button);
+        }
+
+        if (animate)
+        {
+            AnimateMainUiPagesListVisibility(targetVisible: true);
+        }
+        else
+        {
+            SetMainUiPagesListVisibility(visible: true);
         }
     }
 
@@ -1122,7 +1141,7 @@ public sealed partial class MainWindow : Window
     private void HomePagesToggleButton_Click(object sender, RoutedEventArgs e)
     {
         settingsController.SetMainUiPagesExpanded(!settingsController.Current.MainUiPagesExpanded);
-        RefreshPromotedMainUiPagesList();
+        RefreshPromotedMainUiPagesList(animate: true);
     }
 
     private void NotificationsNavButton_Click(object sender, RoutedEventArgs e)
@@ -1165,49 +1184,75 @@ public sealed partial class MainWindow : Window
 
     private void ApplySidebarState(bool animate = false)
     {
-        var targetWidth = isSidebarCollapsed ? CollapsedSidebarWidth : ExpandedSidebarWidth;
-        if (animate)
+        var plan = MainWindowShellAnimationPlanner.CreateSidebarPlan(
+            isSidebarCollapsed,
+            GetCurrentColumnWidth(SidebarColumn),
+            ExpandedSidebarWidth,
+            CollapsedSidebarWidth);
+
+        if (animate && plan.AnimatesWidth)
         {
-            AnimateSidebarWidth(targetWidth);
+            ApplySidebarLayoutState(plan.LayoutAtAnimationStart);
+            AnimateSidebarWidth(plan.TargetWidth, () => ApplySidebarLayoutState(plan.LayoutAtAnimationEnd));
         }
         else
         {
             sidebarWidthAnimationTimer?.Stop();
             sidebarWidthAnimationTimer = null;
-            SidebarColumn.Width = new GridLength(targetWidth);
+            SidebarColumn.Width = new GridLength(plan.TargetWidth);
+            ApplySidebarLayoutState(plan.LayoutAtAnimationEnd);
         }
-
-        SidebarLayoutRoot.Padding = isSidebarCollapsed ? new Thickness(8, 18, 8, 12) : new Thickness(12, 18, 12, 12);
-        SidebarBrandTextPanel.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        HomeNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        NotificationsNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        SettingsNavText.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        SidebarConnectionPanel.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        ApplyMainUiPagesVisibilityState();
-
-        Grid.SetColumnSpan(HomeNavButton, isSidebarCollapsed ? 2 : 1);
-        HomeNavButton.Padding = isSidebarCollapsed ? new Thickness(0) : new Thickness(10, 0, 10, 0);
-        NotificationsNavButton.Padding = isSidebarCollapsed ? new Thickness(0) : new Thickness(10, 0, 10, 0);
-        SettingsNavButton.Padding = isSidebarCollapsed ? new Thickness(0) : new Thickness(10, 0, 10, 0);
-        HomeNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        NotificationsNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        SettingsNavButton.HorizontalContentAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-
-        SidebarBrandPanel.Margin = isSidebarCollapsed ? new Thickness(0, 0, 0, 14) : new Thickness(4, 0, 0, 14);
-        SidebarBrandPanel.HorizontalAlignment = isSidebarCollapsed ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        SidebarCollapseIcon.Glyph = isSidebarCollapsed ? "\uE970" : "\uE96F";
-        ToolTipService.SetToolTip(SidebarCollapseButton, isSidebarCollapsed ? "Expand navigation" : "Collapse navigation");
-        AutomationProperties.SetName(SidebarCollapseButton, isSidebarCollapsed ? "Expand navigation" : "Collapse navigation");
     }
 
-    private void ApplyMainUiPagesVisibilityState()
+    private void ApplySidebarLayoutState(SidebarLayoutState layoutState)
+    {
+        sidebarLayoutState = layoutState;
+        var isCollapsedLayout = layoutState == SidebarLayoutState.Collapsed;
+
+        SidebarLayoutRoot.Padding = isCollapsedLayout ? new Thickness(8, 18, 8, 12) : new Thickness(12, 18, 12, 12);
+        SidebarBrandTextPanel.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
+        HomeNavText.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
+        NotificationsNavText.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
+        SettingsNavText.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
+        SidebarConnectionPanel.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
+        UpdateMainUiPagesChrome();
+        if (ShouldShowMainUiPagesList())
+        {
+            SetMainUiPagesListVisibility(visible: true);
+        }
+        else
+        {
+            SetMainUiPagesListVisibility(visible: false);
+        }
+
+        Grid.SetColumnSpan(HomeNavButton, isCollapsedLayout ? 2 : 1);
+        HomeNavButton.Padding = isCollapsedLayout ? new Thickness(0) : new Thickness(10, 0, 10, 0);
+        NotificationsNavButton.Padding = isCollapsedLayout ? new Thickness(0) : new Thickness(10, 0, 10, 0);
+        SettingsNavButton.Padding = isCollapsedLayout ? new Thickness(0) : new Thickness(10, 0, 10, 0);
+        HomeNavButton.HorizontalContentAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        NotificationsNavButton.HorizontalContentAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        SettingsNavButton.HorizontalContentAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+
+        SidebarBrandPanel.Margin = isCollapsedLayout ? new Thickness(0, 0, 0, 14) : new Thickness(4, 0, 0, 14);
+        SidebarBrandPanel.HorizontalAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        SidebarCollapseIcon.Glyph = isCollapsedLayout ? "\uE970" : "\uE96F";
+        ToolTipService.SetToolTip(SidebarCollapseButton, isCollapsedLayout ? "Expand navigation" : "Collapse navigation");
+        AutomationProperties.SetName(SidebarCollapseButton, isCollapsedLayout ? "Expand navigation" : "Collapse navigation");
+    }
+
+    private void UpdateMainUiPagesChrome()
     {
         var isExpanded = settingsController.Current.MainUiPagesExpanded;
         MainUiPagesChevron.Glyph = isExpanded ? "\uE70E" : "\uE70D";
-        HomePagesToggleButton.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        MainUiPagesList.Visibility = isExpanded && !isSidebarCollapsed
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        HomePagesToggleButton.Visibility = sidebarLayoutState == SidebarLayoutState.Collapsed
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    private bool ShouldShowMainUiPagesList()
+    {
+        return settingsController.Current.MainUiPagesExpanded
+            && sidebarLayoutState != SidebarLayoutState.Collapsed;
     }
 
     private void SyncSidebarStateFromSettings()
@@ -1218,29 +1263,35 @@ public sealed partial class MainWindow : Window
 
     private void SetSitemapPaneVisibility(bool isVisible, bool animate)
     {
-        var targetWidth = isVisible ? ExpandedSitemapPaneWidth : 0d;
-        var currentWidth = GetCurrentColumnWidth(SitemapPaneColumn);
-        if (!animate || Math.Abs(currentWidth - targetWidth) < 0.5d)
+        var plan = MainWindowShellAnimationPlanner.CreateSitemapPanePlan(
+            isVisible,
+            GetCurrentColumnWidth(SitemapPaneColumn),
+            ExpandedSitemapPaneWidth,
+            SitemapPaneClipHost.Visibility == Visibility.Visible);
+        if (!animate || !plan.Animates)
         {
             sitemapPaneWidthAnimationTimer?.Stop();
             sitemapPaneWidthAnimationTimer = null;
-            SitemapPaneColumn.Width = new GridLength(targetWidth);
-            SitemapContentRoot.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
-            SitemapContentRoot.Opacity = 1d;
+            SitemapPaneColumn.Width = new GridLength(plan.TargetWidth);
+            SitemapPaneClipHost.Width = plan.TargetClipWidth;
+            SitemapPaneClipHost.Visibility = plan.VisibleAtAnimationEnd ? Visibility.Visible : Visibility.Collapsed;
+            SitemapContentTranslateTransform.X = plan.TargetTranslationX;
+            SitemapContentRoot.Opacity = plan.VisibleAtAnimationEnd ? 1d : 0d;
             UpdateSitemapPaneClip();
             return;
         }
 
-        AnimateSitemapPaneWidth(targetWidth, isVisible);
+        AnimateSitemapPaneWidth(plan);
     }
 
-    private void AnimateSidebarWidth(double targetWidth)
+    private void AnimateSidebarWidth(double targetWidth, Action? completed = null)
     {
         sidebarWidthAnimationTimer?.Stop();
         var startWidth = GetCurrentColumnWidth(SidebarColumn);
         if (Math.Abs(startWidth - targetWidth) < 0.5d)
         {
             SidebarColumn.Width = new GridLength(targetWidth);
+            completed?.Invoke();
             return;
         }
 
@@ -1264,15 +1315,140 @@ public sealed partial class MainWindow : Window
             }
 
             SidebarColumn.Width = new GridLength(targetWidth);
+            completed?.Invoke();
         };
         timer.Start();
     }
 
-    private void AnimateSitemapPaneWidth(double targetWidth, bool targetVisible)
+    private void SetMainUiPagesListVisibility(bool visible)
+    {
+        mainUiPagesListAnimationTimer?.Stop();
+        mainUiPagesListAnimationTimer = null;
+        MainUiPagesList.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        MainUiPagesList.Opacity = visible ? 1d : 0d;
+        MainUiPagesList.MaxHeight = visible ? double.PositiveInfinity : 0d;
+        if (visible)
+        {
+            MainUiPagesList.Clip = null;
+        }
+        else
+        {
+            UpdateMainUiPagesListClip(0d);
+        }
+    }
+
+    private void AnimateMainUiPagesListVisibility(bool targetVisible)
+    {
+        mainUiPagesListAnimationTimer?.Stop();
+        var wasVisibleBeforeMeasure = MainUiPagesList.Visibility == Visibility.Visible;
+        if (!targetVisible && !wasVisibleBeforeMeasure)
+        {
+            SetMainUiPagesListVisibility(visible: false);
+            return;
+        }
+
+        var currentHeightBeforeMeasure = wasVisibleBeforeMeasure
+            ? Math.Max(MainUiPagesList.ActualHeight, 0d)
+            : 0d;
+        var desiredHeight = MeasureMainUiPagesListDesiredHeight();
+        var plan = MainWindowShellAnimationPlanner.CreatePageListPlan(
+            targetVisible,
+            wasVisibleBeforeMeasure,
+            currentHeightBeforeMeasure,
+            desiredHeight);
+        var durationMs = SitemapPageTransitionAnimator.ResolveDurationMs(settingsController.GetFlyoutAnimationDurationMs());
+        if (durationMs <= 0 || Math.Abs(plan.StartHeight - plan.TargetHeight) < 0.5d && Math.Abs(plan.StartOpacity - plan.TargetOpacity) < 0.01d)
+        {
+            SetMainUiPagesListVisibility(plan.VisibleAtAnimationEnd);
+            return;
+        }
+
+        MainUiPagesList.Visibility = plan.VisibleAtAnimationStart ? Visibility.Visible : Visibility.Collapsed;
+        MainUiPagesList.MaxHeight = plan.StartHeight;
+        MainUiPagesList.Opacity = plan.StartOpacity;
+        UpdateMainUiPagesListClip(plan.StartHeight);
+
+        var started = DateTimeOffset.UtcNow;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        mainUiPagesListAnimationTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / durationMs, 0d, 1d);
+            var eased = EaseOutCubic(progress);
+            var height = Lerp(plan.StartHeight, plan.TargetHeight, eased);
+            MainUiPagesList.MaxHeight = height;
+            MainUiPagesList.Opacity = Lerp(plan.StartOpacity, plan.TargetOpacity, eased);
+            UpdateMainUiPagesListClip(height);
+            if (progress < 1d)
+            {
+                return;
+            }
+
+            timer.Stop();
+            if (ReferenceEquals(mainUiPagesListAnimationTimer, timer))
+            {
+                mainUiPagesListAnimationTimer = null;
+            }
+
+            MainUiPagesList.Visibility = plan.VisibleAtAnimationEnd ? Visibility.Visible : Visibility.Collapsed;
+            MainUiPagesList.MaxHeight = plan.VisibleAtAnimationEnd ? double.PositiveInfinity : 0d;
+            MainUiPagesList.Opacity = plan.TargetOpacity;
+            if (plan.VisibleAtAnimationEnd)
+            {
+                MainUiPagesList.Clip = null;
+            }
+            else
+            {
+                UpdateMainUiPagesListClip(0d);
+            }
+        };
+        timer.Start();
+    }
+
+    private double MeasureMainUiPagesListDesiredHeight()
+    {
+        MainUiPagesList.Visibility = Visibility.Visible;
+        MainUiPagesList.MaxHeight = double.PositiveInfinity;
+        MainUiPagesList.Opacity = 1d;
+        var availableWidth = Math.Max(0d, SidebarColumn.ActualWidth - MainUiPagesList.Margin.Left - MainUiPagesList.Margin.Right);
+        if (availableWidth <= 0d)
+        {
+            availableWidth = Math.Max(0d, ExpandedSidebarWidth - MainUiPagesList.Margin.Left - MainUiPagesList.Margin.Right);
+        }
+
+        MainUiPagesList.Measure(new Size(availableWidth, double.PositiveInfinity));
+        return Math.Max(0d, MainUiPagesList.DesiredSize.Height);
+    }
+
+    private void UpdateMainUiPagesListClip(double height)
+    {
+        MainUiPagesList.Clip = new RectangleGeometry
+        {
+            Rect = new Rect(0, 0, Math.Max(0d, MainUiPagesList.ActualWidth), Math.Max(0d, height))
+        };
+    }
+
+    private void AnimateSitemapPaneWidth(SitemapPaneAnimationPlan plan)
     {
         sitemapPaneWidthAnimationTimer?.Stop();
-        var startWidth = GetCurrentColumnWidth(SitemapPaneColumn);
-        SitemapContentRoot.Visibility = Visibility.Visible;
+        var durationMs = MainWindowShellAnimationPlanner.ResolveSitemapPaneDurationMs(settingsController.GetFlyoutAnimationDurationMs());
+        if (durationMs <= 0)
+        {
+            SitemapPaneColumn.Width = new GridLength(plan.TargetWidth);
+            SitemapPaneClipHost.Width = plan.TargetClipWidth;
+            SitemapPaneClipHost.Visibility = plan.VisibleAtAnimationEnd ? Visibility.Visible : Visibility.Collapsed;
+            SitemapContentTranslateTransform.X = plan.TargetTranslationX;
+            SitemapContentRoot.Opacity = plan.VisibleAtAnimationEnd ? 1d : 0d;
+            UpdateSitemapPaneClip();
+            return;
+        }
+
+        SitemapPaneColumn.Width = new GridLength(plan.StartWidth);
+        SitemapPaneClipHost.Width = plan.StartClipWidth;
+        SitemapPaneClipHost.Visibility = plan.VisibleAtAnimationStart ? Visibility.Visible : Visibility.Collapsed;
+        SitemapContentRoot.Width = ExpandedSitemapPaneWidth;
+        SitemapContentTranslateTransform.X = plan.StartTranslationX;
+        SitemapContentRoot.Opacity = plan.StartOpacity;
         UpdateSitemapPaneClip();
 
         var started = DateTimeOffset.UtcNow;
@@ -1280,12 +1456,15 @@ public sealed partial class MainWindow : Window
         sitemapPaneWidthAnimationTimer = timer;
         timer.Tick += (_, _) =>
         {
-            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / ShellChromeAnimationDurationMs, 0d, 1d);
-            var width = Lerp(startWidth, targetWidth, EaseOutCubic(progress));
+            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / durationMs, 0d, 1d);
+            var eased = EaseOutCubic(progress);
+            var width = Lerp(plan.StartWidth, plan.TargetWidth, eased);
+            var clipWidth = Lerp(plan.StartClipWidth, plan.TargetClipWidth, eased);
+            var translationX = Lerp(plan.StartTranslationX, plan.TargetTranslationX, eased);
             SitemapPaneColumn.Width = new GridLength(width);
-            SitemapContentRoot.Opacity = targetVisible
-                ? Math.Clamp(width / ExpandedSitemapPaneWidth, 0.25d, 1d)
-                : Math.Clamp(width / Math.Max(startWidth, 1d), 0d, 1d);
+            SitemapPaneClipHost.Width = clipWidth;
+            SitemapContentTranslateTransform.X = translationX;
+            SitemapContentRoot.Opacity = Lerp(plan.StartOpacity, plan.TargetOpacity, eased);
             UpdateSitemapPaneClip();
             if (progress < 1d)
             {
@@ -1298,12 +1477,19 @@ public sealed partial class MainWindow : Window
                 sitemapPaneWidthAnimationTimer = null;
             }
 
-            SitemapPaneColumn.Width = new GridLength(targetWidth);
-            SitemapContentRoot.Opacity = 1d;
-            SitemapContentRoot.Visibility = targetVisible ? Visibility.Visible : Visibility.Collapsed;
+            SitemapPaneColumn.Width = new GridLength(plan.TargetWidth);
+            SitemapPaneClipHost.Width = plan.TargetClipWidth;
+            SitemapContentTranslateTransform.X = plan.TargetTranslationX;
+            SitemapContentRoot.Opacity = plan.VisibleAtAnimationEnd ? 1d : 0d;
+            SitemapPaneClipHost.Visibility = plan.VisibleAtAnimationEnd ? Visibility.Visible : Visibility.Collapsed;
             UpdateSitemapPaneClip();
         };
         timer.Start();
+    }
+
+    private void SitemapPaneClipHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSitemapPaneClip();
     }
 
     private void MarkSettingsTouched()
@@ -1322,11 +1508,12 @@ public sealed partial class MainWindow : Window
     {
         var width = SitemapPaneColumn.Width.IsAbsolute
             ? SitemapPaneColumn.Width.Value
-            : SitemapContentRoot.ActualWidth;
-        var height = SitemapContentRoot.ActualHeight;
-        SitemapContentRoot.Clip = new RectangleGeometry
+            : SitemapPaneClipHost.ActualWidth;
+        var clipWidth = SitemapPaneClipHost.Width > 0d ? SitemapPaneClipHost.Width : width;
+        var height = Math.Max(SitemapPaneClipHost.ActualHeight, SitemapContentRoot.ActualHeight);
+        SitemapPaneClipHost.Clip = new RectangleGeometry
         {
-            Rect = new Rect(0, 0, Math.Max(0d, width), Math.Max(0d, height))
+            Rect = new Rect(0, 0, Math.Max(0d, clipWidth), Math.Max(0d, height))
         };
     }
 

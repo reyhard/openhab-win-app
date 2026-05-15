@@ -134,16 +134,25 @@
                   Grid.Column="1"
                   Margin="12,10,12,0" />
 
-            <Border x:Name="SitemapContentRoot"
-                    Grid.Column="2"
-                    Visibility="Collapsed"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1,0,0,0"
-                    Padding="12"
-                    PointerPressed="SitemapContentRoot_PointerPressed"
-                    SizeChanged="SitemapContentRoot_SizeChanged">
-                <Grid RowSpacing="10">
+            <Grid x:Name="SitemapPaneClipHost"
+                  Grid.Column="2"
+                  Width="0"
+                  HorizontalAlignment="Stretch"
+                  Visibility="Collapsed"
+                  SizeChanged="SitemapPaneClipHost_SizeChanged">
+                <Border x:Name="SitemapContentRoot"
+                        Width="380"
+                        HorizontalAlignment="Left"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1,0,0,0"
+                        Padding="12"
+                        PointerPressed="SitemapContentRoot_PointerPressed"
+                        SizeChanged="SitemapContentRoot_SizeChanged">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="SitemapContentTranslateTransform" />
+                    </Border.RenderTransform>
+                    <Grid RowSpacing="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -233,7 +242,8 @@
                         </Grid>
                     </Grid>
                 </Grid>
-            </Border>
+                </Border>
+            </Grid>
         </Grid>
     </Grid>
 </Window>
