@@ -66,7 +66,22 @@ jobs:
           dotnet tool update dotnet-sonarscanner --tool-path .\.sonar\scanner
 
       - name: Restore
-        run: dotnet restore src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          $projects = @(
+            "src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj",
+            "tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj",
+            "tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj",
+            "tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj",
+            "tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj"
+          )
+
+          foreach ($project in $projects) {
+            dotnet restore $project
+          }
 
       - name: Build and analyze
         shell: pwsh
@@ -90,13 +105,33 @@ jobs:
             throw "Missing required repository secret: SONAR_TOKEN"
           }
 
+          Write-Host "Sonar organization: $env:SONAR_ORGANIZATION"
+          Write-Host "Sonar project key: $env:SONAR_PROJECT_KEY"
+
           .\.sonar\scanner\dotnet-sonarscanner begin `
             /k:"$env:SONAR_PROJECT_KEY" `
             /o:"$env:SONAR_ORGANIZATION" `
             /d:sonar.token="$env:SONAR_TOKEN" `
             /d:sonar.host.url="https://sonarcloud.io" `
+            /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml" `
             /d:sonar.qualitygate.wait=true
 
           dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore --no-incremental
+
+          $testProjects = @(
+            "tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj",
+            "tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj",
+            "tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj",
+            "tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj"
+          )
+
+          foreach ($testProject in $testProjects) {
+            dotnet test $testProject `
+              --configuration Release `
+              --no-restore `
+              --collect "XPlat Code Coverage" `
+              --results-directory TestResults `
+              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+          }
 
           .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
