@@ -42,6 +42,8 @@ public sealed class AppSettingsController
 
     private string SettingsDirectory => Path.GetDirectoryName(settingsFilePath)!;
 
+    public string SettingsDirectoryPath => SettingsDirectory;
+
     public AppSettings Current { get; private set; } = AppSettings.Default;
 
     public event EventHandler? SettingsChanged;

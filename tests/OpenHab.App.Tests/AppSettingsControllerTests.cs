@@ -23,6 +23,14 @@ public sealed class AppSettingsControllerTests
         return new AppSettingsController(credentialStore, settingsFilePath);
     }
 
+    [Fact]
+    public void SettingsDirectoryPathExposesConfiguredSettingsDirectory()
+    {
+        var controller = CreateController();
+
+        Assert.Equal(Path.GetDirectoryName(settingsFilePath), controller.SettingsDirectoryPath);
+    }
+
     private static ShortcutSettings AssertShortcuts(AppSettings settings)
     {
         return Assert.IsType<ShortcutSettings>(settings.Shortcuts);

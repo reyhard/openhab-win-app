@@ -83,6 +83,7 @@ public sealed partial class SettingsPageControl : UserControl
     private NumberBox? DeviceInfoSyncIntervalBox;
     private readonly Dictionary<string, TextBox> deviceInfoSyncItemMappingTexts = new(StringComparer.Ordinal);
     private Button? ViewLogsButton;
+    private Button? ViewSettingsFolderButton;
     private ToggleSwitch? VerboseDiagnosticsToggle;
     private TextBlock? VersionText;
 
@@ -789,11 +790,24 @@ public sealed partial class SettingsPageControl : UserControl
             MinWidth = 120
         };
         ViewLogsButton.Click += ViewLogsButton_Click;
+        ViewSettingsFolderButton = new Button
+        {
+            Content = "Settings folder",
+            MinWidth = 140
+        };
+        ViewSettingsFolderButton.Click += ViewSettingsFolderButton_Click;
+        var diagnosticsActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8
+        };
+        diagnosticsActions.Children.Add(ViewLogsButton);
+        diagnosticsActions.Children.Add(ViewSettingsFolderButton);
         var logsRow = CreateSettingsControlRow(
             "\uE8A5",
             "Diagnostic logs",
-            "Open the local diagnostics log file",
-            ViewLogsButton);
+            "Open the local diagnostics log file or settings folder",
+            diagnosticsActions);
 
         VerboseDiagnosticsToggle = new ToggleSwitch
         {
@@ -1215,6 +1229,7 @@ public sealed partial class SettingsPageControl : UserControl
         DeviceInfoSyncIntervalBox = null;
         deviceInfoSyncItemMappingTexts.Clear();
         ViewLogsButton = null;
+        ViewSettingsFolderButton = null;
         VerboseDiagnosticsToggle = null;
         VersionText = null;
     }
@@ -2356,6 +2371,20 @@ public sealed partial class SettingsPageControl : UserControl
         catch (Exception ex)
         {
             setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Could not open logs."));
+        }
+    }
+
+    private void ViewSettingsFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var settingsDirectory = settingsController.SettingsDirectoryPath;
+            Directory.CreateDirectory(settingsDirectory);
+            Process.Start(new ProcessStartInfo(settingsDirectory) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Could not open settings folder."));
         }
     }
 }
