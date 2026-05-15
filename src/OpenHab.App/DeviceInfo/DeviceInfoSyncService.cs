@@ -68,12 +68,15 @@ public sealed class DeviceInfoSyncService : IDisposable
             return;
         }
 
-        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, serviceCancellation.Token);
-        var effectiveCancellation = linkedCancellation.Token;
         var enteredGate = false;
 
         try
         {
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken,
+                serviceCancellation.Token);
+            var effectiveCancellation = linkedCancellation.Token;
+
             await syncGate.WaitAsync(effectiveCancellation);
             enteredGate = true;
 
@@ -207,13 +210,14 @@ public sealed class DeviceInfoSyncService : IDisposable
 
         serviceCancellation.Cancel();
         timerToDispose?.Dispose();
+        serviceCancellation.Dispose();
     }
 
     private async Task TriggerFromTimerAsync()
     {
         try
         {
-            await TriggerSyncAsync(serviceCancellation.Token);
+            await TriggerSyncAsync();
         }
         catch (OperationCanceledException)
         {

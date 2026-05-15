@@ -853,8 +853,11 @@ public static partial class SitemapControlFactory
             return true;
         }
 
-            if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{requestIconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
+        if (!DiagnosticLogger.SuppressIconLogging)
+        {
+            DiagnosticLogger.Warn($"Icon skipped: icon='{iconName}', state='{requestIconState ?? "(none)"}', reason='no glyph mapping and no base URI'");
+        }
+
         return false;
     }
 
@@ -885,17 +888,24 @@ public static partial class SitemapControlFactory
             if (headResponse.IsSuccessStatusCode)
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+                {
+                    DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+                }
+
                 return;
             }
 
             if (!DiagnosticLogger.SuppressIconLogging)
+            {
                 DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+            }
         }
         catch (Exception ex)
         {
             if (!DiagnosticLogger.SuppressIconLogging)
+            {
                 DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+            }
         }
 
         try
@@ -907,18 +917,24 @@ public static partial class SitemapControlFactory
             if (getResponse.IsSuccessStatusCode)
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                {
+                    DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                }
             }
             else
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
-                DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                {
+                    DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                }
             }
         }
         catch (Exception ex)
         {
             if (!DiagnosticLogger.SuppressIconLogging)
+            {
                 DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? "unknown"}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+            }
         }
     }
 

@@ -7,7 +7,6 @@ public sealed class BackgroundResourceReleaseController : IDisposable
     private readonly object syncRoot = new();
 
     private CancellationTokenSource? pendingReleaseCts;
-    private Task? pendingReleaseTask;
     private bool disposed;
 
     public BackgroundResourceReleaseController(
@@ -53,7 +52,6 @@ public sealed class BackgroundResourceReleaseController : IDisposable
 
             ctsToCancel = pendingReleaseCts;
             pendingReleaseCts = null;
-            pendingReleaseTask = null;
         }
 
         ctsToCancel.Cancel();
@@ -84,7 +82,7 @@ public sealed class BackgroundResourceReleaseController : IDisposable
 
             cts = new CancellationTokenSource();
             pendingReleaseCts = cts;
-            pendingReleaseTask = RunReleaseAsync(releaseDelay, cts);
+            _ = RunReleaseAsync(releaseDelay, cts);
         }
     }
 
@@ -106,7 +104,6 @@ public sealed class BackgroundResourceReleaseController : IDisposable
                 if (ReferenceEquals(pendingReleaseCts, cts))
                 {
                     pendingReleaseCts = null;
-                    pendingReleaseTask = null;
                 }
             }
 

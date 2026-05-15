@@ -44,22 +44,26 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             throw new ArgumentException("Configure either bearer token auth or basic auth, not both.");
     }
 
-    public async Task ConnectAsync(Uri sseUri, CancellationToken cancellationToken = default)
+    public async Task ConnectAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
-        var uriChanged = _sseUri is null || _sseUri != sseUri;
+        var uriChanged = _sseUri is null || _sseUri != baseUri;
         if (IsConnected && !uriChanged)
             return;
 
-        _sseUri = sseUri;
+        _sseUri = baseUri;
 
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var previous = Interlocked.Exchange(ref _internalCts, cts);
-        previous?.Cancel();
-        previous?.Dispose();
+        if (previous is not null)
+        {
+            await previous.CancelAsync().ConfigureAwait(false);
+            previous.Dispose();
+        }
+
         Interlocked.Exchange(ref _isConnected, 0);
 
         var firstAttempt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = Task.Run(() => ReadLoopAsync(sseUri, cts, firstAttempt), CancellationToken.None);
+        _ = Task.Run(() => ReadLoopAsync(baseUri, cts, firstAttempt), CancellationToken.None);
 
         await firstAttempt.Task.WaitAsync(cancellationToken);
     }
@@ -137,7 +141,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                 DiagnosticLogger.Warn($"SSE event stream error: {SafeDiagnosticText.ForLog(ex)}");
                 if (firstAttempt.TrySetException(ex))
                 {
-                    cts.Cancel();
+                    await cts.CancelAsync().ConfigureAwait(false);
                     break;
                 }
             }

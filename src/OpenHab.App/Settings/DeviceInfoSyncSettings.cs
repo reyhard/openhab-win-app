@@ -22,7 +22,10 @@ public sealed record DeviceInfoSyncSettings(
     public const int MaxSyncIntervalMinutes = 240;
     public const int DefaultSyncIntervalMinutes = 15;
 
-    private static readonly Regex InvalidIdentifierCharacters = new("[^A-Za-z0-9_]", RegexOptions.Compiled);
+    private static readonly Regex InvalidIdentifierCharacters = new(
+        "[^A-Za-z0-9_]",
+        RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(100));
 
     public bool HasAnyMapping =>
         BatteryLevelItem is not null ||

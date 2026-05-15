@@ -148,7 +148,7 @@ public static class DiagnosticLogger
     private sealed class LogCaptureScope : IDisposable
     {
         private readonly LogCaptureScope? _previous;
-        private readonly bool? _verboseEventLogging;
+        private readonly bool? _verboseEventLoggingOverride;
         private readonly Action<string> _onLine;
         private readonly object _syncRoot = new();
         private bool _disposed;
@@ -156,11 +156,11 @@ public static class DiagnosticLogger
         internal LogCaptureScope(LogCaptureScope? previous, bool? verboseEventLogging, Action<string> onLine)
         {
             _previous = previous;
-            _verboseEventLogging = verboseEventLogging;
+            _verboseEventLoggingOverride = verboseEventLogging;
             _onLine = onLine;
         }
 
-        internal bool? VerboseEventLoggingOverride => _verboseEventLogging;
+        internal bool? VerboseEventLoggingOverride => _verboseEventLoggingOverride;
 
         internal LogCaptureScope? Previous => _previous;
 
