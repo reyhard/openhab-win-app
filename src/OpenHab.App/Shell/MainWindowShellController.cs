@@ -78,7 +78,7 @@ public sealed class MainWindowShellController
         }
 
         var normalized = route.Trim();
-        if (!normalized.StartsWith("/", StringComparison.Ordinal))
+        if (!normalized.StartsWith('/'))
         {
             normalized = "/" + normalized;
         }

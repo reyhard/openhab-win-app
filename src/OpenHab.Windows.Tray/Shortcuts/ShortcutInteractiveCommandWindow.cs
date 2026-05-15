@@ -12,7 +12,7 @@ using Windows.UI;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
-public sealed class ShortcutInteractiveCommandWindow : Window
+public sealed partial class ShortcutInteractiveCommandWindow : Window
 {
     private const int SliderWidth = 300;
     private const int SliderHeight = 156;
@@ -79,7 +79,7 @@ public sealed class ShortcutInteractiveCommandWindow : Window
         }
     }
 
-    private FrameworkElement CreateLoadingContent()
+    private Border CreateLoadingContent()
     {
         return CreateRoot(new ProgressRing
         {
@@ -90,7 +90,7 @@ public sealed class ShortcutInteractiveCommandWindow : Window
         });
     }
 
-    private FrameworkElement CreateMessageContent(string message)
+    private Border CreateMessageContent(string message)
     {
         return CreateRoot(new TextBlock
         {
@@ -99,7 +99,7 @@ public sealed class ShortcutInteractiveCommandWindow : Window
         });
     }
 
-    private FrameworkElement CreateSliderContent(string? rawState)
+    private Border CreateSliderContent(string? rawState)
     {
         var state = ShortcutInteractiveCommandLogic.CreateSliderState(rawState);
         statusText.Text = ShortcutInteractiveCommandLogic.FormatSliderCommand(state.InitialValue);
@@ -132,7 +132,7 @@ public sealed class ShortcutInteractiveCommandWindow : Window
         return CreateRoot(panel);
     }
 
-    private FrameworkElement CreateColorContent(string? rawState)
+    private Border CreateColorContent(string? rawState)
     {
         var state = ShortcutInteractiveCommandLogic.CreateColorState(rawState);
         var selectedColor = ToWindowsColor(state.Color);
@@ -170,7 +170,7 @@ public sealed class ShortcutInteractiveCommandWindow : Window
         return CreateRoot(panel);
     }
 
-    private StackPanel CreatePanel()
+    private static StackPanel CreatePanel()
     {
         return new StackPanel
         {
@@ -179,7 +179,7 @@ public sealed class ShortcutInteractiveCommandWindow : Window
         };
     }
 
-    private FrameworkElement CreateHeader()
+    private Grid CreateHeader()
     {
         var grid = new Grid
         {
@@ -217,7 +217,7 @@ public sealed class ShortcutInteractiveCommandWindow : Window
         return grid;
     }
 
-    private Border CreateRoot(UIElement content)
+    private static Border CreateRoot(UIElement content)
     {
         return new Border
         {

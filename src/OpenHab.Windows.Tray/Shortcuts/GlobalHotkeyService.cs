@@ -14,7 +14,7 @@ internal sealed record HotkeyRefreshResult(ImmutableArray<HotkeyRegistrationFail
     public bool Succeeded => Failures.IsDefaultOrEmpty;
 }
 
-internal sealed class GlobalHotkeyService : IDisposable
+internal sealed partial class GlobalHotkeyService : IDisposable
 {
     private const int FirstHotkeyId = 0x4F00;
     private const string InvalidBindingMessage = "This shortcut is invalid and could not be registered.";
@@ -188,8 +188,8 @@ internal sealed class GlobalHotkeyService : IDisposable
         string owner,
         ShortcutBinding? binding,
         ShortcutAction? action,
-        ISet<string> seenBindings,
-        ICollection<HotkeyRegistrationFailure> failures)
+        HashSet<string> seenBindings,
+        ImmutableArray<HotkeyRegistrationFailure>.Builder failures)
     {
         if (!ShortcutBindingFormatter.TryNormalize(binding, out var normalizedBinding))
         {
@@ -240,11 +240,6 @@ internal sealed class GlobalHotkeyService : IDisposable
 
         subclassRemoved = true;
         _ = RemoveWindowSubclass(hwnd, subclassProc, 1);
-    }
-
-    private void ThrowIfDisposed()
-    {
-        ObjectDisposedException.ThrowIf(disposed, this);
     }
 
     private delegate IntPtr SubclassProc(

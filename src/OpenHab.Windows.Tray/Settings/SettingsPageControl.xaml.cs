@@ -25,6 +25,11 @@ namespace OpenHab.Windows.Tray.Settings;
 
 public sealed partial class SettingsPageControl : UserControl
 {
+    private const string DeviceInfoSyncTitle = "Device Info Sync";
+    private const string CustomShortcutIconId = "custom";
+    private const string CardStrokeBrushResourceKey = "CardStrokeColorDefaultBrush";
+    private const string LocalTransportTag = "Local";
+
     private sealed record AppColorThemeOption(string Label, AppColorTheme Theme)
     {
         public override string ToString() => Label;
@@ -138,7 +143,7 @@ public sealed partial class SettingsPageControl : UserControl
                 SettingsContent.Children.Add(CreateCategoryRow("\uE713", "Connection", "Endpoints and credentials", SettingsPageKind.Connection));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPageKind.General));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPageKind.Appearance));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", "Device Info Sync", "Configure device metadata sync", SettingsPageKind.DeviceInfoSync));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", DeviceInfoSyncTitle, "Configure device metadata sync", SettingsPageKind.DeviceInfoSync));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE765", "Shortcuts", "Command menu and global shortcuts", SettingsPageKind.Shortcuts));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE946", "About", "Logs and version", SettingsPageKind.About));
                 break;
@@ -158,7 +163,7 @@ public sealed partial class SettingsPageControl : UserControl
                 BuildAppearanceSettingsPage();
                 break;
             case SettingsPageKind.DeviceInfoSync:
-                UpdateSettingsBreadcrumb("Device Info Sync");
+                UpdateSettingsBreadcrumb(DeviceInfoSyncTitle);
                 SettingsSubtitleText.Text = "Configure device metadata sync";
                 BuildDeviceInfoSyncSettingsPage();
                 break;
@@ -264,7 +269,7 @@ public sealed partial class SettingsPageControl : UserControl
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
             Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources[CardStrokeBrushResourceKey],
             BorderThickness = new Thickness(1),
             Margin = new Thickness(0, 0, 0, 4)
         };
@@ -349,7 +354,7 @@ public sealed partial class SettingsPageControl : UserControl
         LocalTokenBox = new PasswordBox
         {
             PlaceholderText = "Enter token (optional)",
-            Tag = "Local",
+            Tag = LocalTransportTag,
             Width = 520
         };
         LocalTokenBox.GotFocus += TokenBox_GotFocus;
@@ -523,7 +528,7 @@ public sealed partial class SettingsPageControl : UserControl
             };
             syncContent.Children.Add(DeviceInfoSyncDisabledText);
             SettingsContent.Children.Add(CreateSettingsExpander(
-                "Device Info Sync",
+                DeviceInfoSyncTitle,
                 "Send selected Windows device state to openHAB Items",
                 CreateExpanderRows(syncContent),
                 enabledAction));
@@ -549,7 +554,7 @@ public sealed partial class SettingsPageControl : UserControl
         syncContent.Children.Add(DeviceInfoSyncIntervalBox);
 
         SettingsContent.Children.Add(CreateSettingsExpander(
-            "Device Info Sync",
+            DeviceInfoSyncTitle,
             "Send selected Windows device state to openHAB Items",
             CreateExpanderRows(syncContent),
             enabledAction));
@@ -745,7 +750,7 @@ public sealed partial class SettingsPageControl : UserControl
             CornerRadius = new CornerRadius(size / 2d),
             Background = (Brush)Application.Current.Resources[
                 isCenter ? "AccentFillColorSecondaryBrush" : "SubtleFillColorSecondaryBrush"],
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources[CardStrokeBrushResourceKey],
             BorderThickness = new Thickness(1),
             Child = new FontIcon
             {
@@ -976,7 +981,7 @@ public sealed partial class SettingsPageControl : UserControl
         {
             actionsCardStack.Children.Add(new Border
             {
-                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderBrush = (Brush)Application.Current.Resources[CardStrokeBrushResourceKey],
                 BorderThickness = new Thickness(0, 1, 0, 0),
                 Padding = new Thickness(12, 12, 12, 12),
                 Child = new TextBlock
@@ -1004,7 +1009,7 @@ public sealed partial class SettingsPageControl : UserControl
             Content = new Border
             {
                 Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderBrush = (Brush)Application.Current.Resources[CardStrokeBrushResourceKey],
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(4),
                 Child = actionsCardStack
@@ -1048,7 +1053,7 @@ public sealed partial class SettingsPageControl : UserControl
             .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, draftAction.IconId, StringComparison.Ordinal))
             ?? ShortcutActionIconCombo.Items
                 .OfType<ComboBoxItem>()
-                .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, "custom", StringComparison.Ordinal));
+                .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, CustomShortcutIconId, StringComparison.Ordinal));
         var iconRow = CreateSettingsControlRow("\uE8D4", "Icon", "Select an icon from the shortcut icon catalog", ShortcutActionIconCombo);
 
         ShortcutActionShowInCommandMenuToggle = new ToggleSwitch
@@ -1170,7 +1175,7 @@ public sealed partial class SettingsPageControl : UserControl
         BuildShortcutActionsSection(settings);
     }
 
-    private SettingsExpander CreateSettingsExpander(
+    private static SettingsExpander CreateSettingsExpander(
         string title,
         string subtitle,
         IEnumerable<SettingsCard> items,
@@ -1439,7 +1444,7 @@ public sealed partial class SettingsPageControl : UserControl
             return;
         }
 
-        var transportKind = tag == "Local" ? TransportKind.Local : TransportKind.Cloud;
+        var transportKind = tag == LocalTransportTag ? TransportKind.Local : TransportKind.Cloud;
         var token = box.Password;
 
         try
@@ -1482,11 +1487,11 @@ public sealed partial class SettingsPageControl : UserControl
         SetTokenBoxEdited(tag, true);
     }
 
-    private bool IsTokenBoxEdited(string tag) => tag == "Local" ? localTokenEdited : cloudTokenEdited;
+    private bool IsTokenBoxEdited(string tag) => tag == LocalTransportTag ? localTokenEdited : cloudTokenEdited;
 
     private void SetTokenBoxEdited(string tag, bool edited)
     {
-        if (tag == "Local")
+        if (tag == LocalTransportTag)
         {
             localTokenEdited = edited;
             return;
@@ -1779,7 +1784,7 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(cell);
     }
 
-    private FrameworkElement CreateShortcutActionRow(ShortcutAction action, int index, int actionCount)
+    private Border CreateShortcutActionRow(ShortcutAction action, int index, int actionCount)
     {
         var row = new Grid
         {
@@ -1828,7 +1833,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         return new Border
         {
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources[CardStrokeBrushResourceKey],
             BorderThickness = new Thickness(0, 1, 0, 0),
             Child = row
         };
@@ -1872,14 +1877,14 @@ public sealed partial class SettingsPageControl : UserControl
         row.Children.Add(element);
     }
 
-    private static FrameworkElement CreateShortcutIconPresenter(string iconId, bool includeId)
+    private static StackPanel CreateShortcutIconPresenter(string iconId, bool includeId)
     {
         var icon = ShortcutIconCatalog.All.FirstOrDefault(entry => string.Equals(entry.Id, iconId, StringComparison.Ordinal))
-            ?? new ShortcutIconDefinition(iconId, iconId, "custom");
+            ?? new ShortcutIconDefinition(iconId, iconId, CustomShortcutIconId);
         return CreateShortcutIconPresenter(icon, includeId);
     }
 
-    private static FrameworkElement CreateShortcutIconPresenter(ShortcutIconDefinition icon, bool includeId)
+    private static StackPanel CreateShortcutIconPresenter(ShortcutIconDefinition icon, bool includeId)
     {
         var label = includeId ? $"{icon.Label} ({icon.Id})" : icon.Label;
         return new StackPanel
@@ -1930,7 +1935,7 @@ public sealed partial class SettingsPageControl : UserControl
             return new ShortcutAction(
                 Guid.NewGuid().ToString("N"),
                 string.Empty,
-                "custom",
+                CustomShortcutIconId,
                 ShowInCommandMenu: true,
                 GlobalShortcut: null,
                 TargetItem: string.Empty,
@@ -2091,7 +2096,7 @@ public sealed partial class SettingsPageControl : UserControl
         var updated = new ShortcutAction(
             actionId,
             ShortcutActionNameText?.Text?.Trim() ?? string.Empty,
-            selectedIcon?.Id ?? "custom",
+            selectedIcon?.Id ?? CustomShortcutIconId,
             ShortcutActionShowInCommandMenuToggle?.IsOn ?? false,
             ShortcutActionGlobalShortcutRecorder?.Binding,
             ShortcutActionTargetItemText?.Text?.Trim() ?? string.Empty,
@@ -2214,7 +2219,7 @@ public sealed partial class SettingsPageControl : UserControl
         return new ShortcutAction(
             actionId,
             ShortcutActionNameText.Text.Trim(),
-            selectedIcon?.Id ?? "custom",
+            selectedIcon?.Id ?? CustomShortcutIconId,
             ShortcutActionShowInCommandMenuToggle.IsOn,
             ShortcutActionGlobalShortcutRecorder?.Binding,
             ShortcutActionTargetItemText.Text.Trim(),

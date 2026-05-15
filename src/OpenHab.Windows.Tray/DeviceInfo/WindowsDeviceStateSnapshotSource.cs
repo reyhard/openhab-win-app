@@ -6,9 +6,6 @@ namespace OpenHab.Windows.Tray.DeviceInfo;
 
 internal sealed class WindowsDeviceStateSnapshotSource(
     SitemapRuntimeController runtimeController,
-    WindowsBatteryInfoReader batteryReader,
-    WindowsNetworkInfoReader networkReader,
-    WindowsBluetoothInfoReader bluetoothReader,
     WindowsFocusInfoReader focusReader,
     WindowsSessionInfoReader sessionReader) : IDeviceStateSnapshotSource
 {
@@ -16,9 +13,9 @@ internal sealed class WindowsDeviceStateSnapshotSource(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var battery = batteryReader.Read();
-        var network = networkReader.Read();
-        var bluetooth = await bluetoothReader.ReadAsync(cancellationToken);
+        var battery = WindowsBatteryInfoReader.Read();
+        var network = WindowsNetworkInfoReader.Read();
+        var bluetooth = await WindowsBluetoothInfoReader.ReadAsync(cancellationToken);
 
         var snapshot = new DeviceStateSnapshot(
             BatteryLevelPercent: battery.BatteryLevelPercent,

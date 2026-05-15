@@ -29,10 +29,7 @@ public sealed class NotificationMediaResolver
         ArgumentNullException.ThrowIfNull(getApiToken);
         ArgumentNullException.ThrowIfNull(getCloudCredentials);
 
-        if (maxBytes <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxBytes));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
 
         this.httpClient = httpClient;
         this.getSettings = getSettings;
@@ -139,7 +136,7 @@ public sealed class NotificationMediaResolver
     {
         var baseBuilder = new UriBuilder(endpointBaseUri);
         var basePath = baseBuilder.Path ?? string.Empty;
-        if (!basePath.EndsWith("/", StringComparison.Ordinal))
+        if (!basePath.EndsWith('/'))
         {
             basePath += "/";
         }

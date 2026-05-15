@@ -176,7 +176,7 @@ public sealed partial class FlyoutWindow : Window
     {
         shouldRunEntranceAnimation = true;
         EnsureLightDismissInitialized();
-        var plan = FlyoutEntranceAnimationPlanner.Create(AppWindow.Position, ResolveOffscreenStartY());
+        var plan = FlyoutEntranceAnimationPlanner.Create(AppWindow.Position, ResolveOffscreenY());
         pendingEntranceAnimationPlan = plan;
         AppWindow.Move(plan.PreActivationPosition);
         var visual = GetFlyoutChromeVisual();
@@ -220,7 +220,6 @@ public sealed partial class FlyoutWindow : Window
     public void PopulateSitemaps(IReadOnlyList<SitemapInfo> sitemaps)
     {
         SitemapMenuFlyout.Items.Clear();
-        var current = settingsController.Current.SitemapName;
         foreach (var s in sitemaps)
         {
             var item = new MenuFlyoutItem { Text = s.Label, Tag = s.Name };
@@ -267,7 +266,7 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    private void RefreshSettingsBindings()
+    private static void RefreshSettingsBindings()
     {
         // Sitemap selection is now reflected via the title; no ComboBox to update.
     }
@@ -345,16 +344,6 @@ public sealed partial class FlyoutWindow : Window
                !string.Equals(SitemapSearchBox.Text, snapshot.SearchQuery, StringComparison.Ordinal);
     }
 
-    private async Task OnRowActivatedAsync(int rowIndex)
-    {
-        if (isRefreshing)
-        {
-            return;
-        }
-
-        await RunRuntimeOperationAsync(async ct => await runtimeController.ActivateRowAsync(rowIndex, ct));
-    }
-
     private async Task OnRowActivatedByKeyAsync(string rowKey)
     {
         if (isRefreshing)
@@ -363,12 +352,6 @@ public sealed partial class FlyoutWindow : Window
         }
 
         await RunRuntimeOperationAsync(ct => runtimeController.ActivateRowByKeyAsync(rowKey, ct));
-    }
-
-    private async Task OnRowNavigateAsync(int rowIndex)
-    {
-        if (isRefreshing) return;
-        await RunNavigateTransitionAsync(ct => runtimeController.NavigateToChildAsync(rowIndex, ct));
     }
 
     private async Task RunNavigateTransitionAsync(Func<CancellationToken, Task<bool>> navigateAsync)
@@ -705,7 +688,7 @@ public sealed partial class FlyoutWindow : Window
             SetFlyoutAlwaysOnTop(false);
             UpdateFlyoutChromeCenterPoint(visual);
             var plan = pendingEntranceAnimationPlan
-                ?? FlyoutEntranceAnimationPlanner.Create(AppWindow.Position, ResolveOffscreenStartY());
+                ?? FlyoutEntranceAnimationPlanner.Create(AppWindow.Position, ResolveOffscreenY());
             pendingEntranceAnimationPlan = null;
             var targetPos = plan.TargetPosition;
             var startPos = plan.PreActivationPosition;
@@ -801,7 +784,7 @@ public sealed partial class FlyoutWindow : Window
             SetFlyoutAlwaysOnTop(false);
             UpdateFlyoutChromeCenterPoint(visual);
             var startPos = AppWindow.Position;
-            var endPos = new PointInt32(startPos.X, ResolveOffscreenEndY());
+            var endPos = new PointInt32(startPos.X, ResolveOffscreenY());
 
             var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
 
@@ -1105,27 +1088,14 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    private int ResolveOffscreenStartY()
+    private int ResolveOffscreenY()
     {
         var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
         var size = AppWindow.Size;
         var isTopAnchored = IsTopAnchored(workArea);
         var margin = 8;
 
-        // Top-anchored flyouts enter from above; bottom-anchored enter from below.
-        return isTopAnchored
-            ? workArea.Y - size.Height - margin
-            : workArea.Y + workArea.Height + margin;
-    }
-
-    private int ResolveOffscreenEndY()
-    {
-        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        var size = AppWindow.Size;
-        var isTopAnchored = IsTopAnchored(workArea);
-        var margin = 8;
-
-        // Exit in the same direction as entrance.
+        // Flyouts exit in the same direction as entrance.
         return isTopAnchored
             ? workArea.Y - size.Height - margin
             : workArea.Y + workArea.Height + margin;
@@ -1177,11 +1147,11 @@ public sealed partial class FlyoutWindow : Window
 
         var style = GetWindowLong(hwnd, GWL_STYLE);
         style &= ~(WS_BORDER | WS_DLGFRAME | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU);
-        SetWindowLong(hwnd, GWL_STYLE, style);
+        _ = SetWindowLong(hwnd, GWL_STYLE, style);
 
         var exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
         exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE | WS_EX_WINDOWEDGE);
-        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+        _ = SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
 
         _ = SetWindowPos(
             hwnd,

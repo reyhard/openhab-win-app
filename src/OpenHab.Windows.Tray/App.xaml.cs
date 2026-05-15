@@ -24,7 +24,6 @@ using OpenHab.Windows.Tray.DeviceInfo;
 using OpenHab.Windows.Tray.Shortcuts;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
-using System.Text.RegularExpressions;
 using Microsoft.Win32;
 using Windows.Networking.Connectivity;
 using VirtualKey = Windows.System.VirtualKey;
@@ -150,9 +149,6 @@ public partial class App : Application
         windowsSessionInfoReader = new WindowsSessionInfoReader();
         var deviceStateSource = new WindowsDeviceStateSnapshotSource(
             runtimeController,
-            new WindowsBatteryInfoReader(),
-            new WindowsNetworkInfoReader(),
-            new WindowsBluetoothInfoReader(),
             new WindowsFocusInfoReader(),
             windowsSessionInfoReader);
         deviceInfoSyncService = new DeviceInfoSyncService(
@@ -189,11 +185,11 @@ public partial class App : Application
         globalHotkeyService = new GlobalHotkeyService(
             hotkeyMessageWindow.Handle,
             uiDispatcherQueue ?? DispatcherQueue.GetForCurrentThread());
-        globalHotkeyService.CommandMenuRequested += (_, _) =>
+        globalHotkeyService.CommandMenuRequested += (sender, args) =>
         {
             _ = OpenShortcutCommandMenuAsync();
         };
-        globalHotkeyService.ActionRequested += (_, action) =>
+        globalHotkeyService.ActionRequested += (sender, action) =>
         {
             _ = ExecuteShortcutActionAsync(action);
         };
@@ -477,7 +473,7 @@ public partial class App : Application
             }
             if (!notificationActivationHandlersRegistered)
             {
-                ToastService.NotificationActivated += (_, args) =>
+                ToastService.NotificationActivated += (sender, args) =>
                 {
                     _ = HandleNotificationActivationAsync(args.Argument);
                 };
@@ -537,7 +533,7 @@ public partial class App : Application
             DiagnosticLogger.Info(
                 $"Notification poller created — polling {settings.CloudEndpoint.Host} every {settings.NotificationPollIntervalSeconds}s");
 
-            notificationPoller.NotificationReceived += (_, notification) =>
+            notificationPoller.NotificationReceived += (sender, notification) =>
             {
                 DiagnosticLogger.Info($"Notification received - tag: {notification.Tag ?? "none"}");
                 var importantTags = settingsController.Current.ImportantNotificationTags;
@@ -641,7 +637,7 @@ public partial class App : Application
 
     private readonly record struct RuntimeAuth(string? ApiToken, string? BasicUserName, string? BasicPassword);
 
-    private IOpenHabClient? CreateActiveShortcutClient()
+    private OpenHabHttpClient? CreateActiveShortcutClient()
     {
         var settings = settingsController?.Current;
         var runtime = runtimeController;
@@ -665,7 +661,7 @@ public partial class App : Application
             basicPassword: auth.BasicPassword);
     }
 
-    private IOpenHabClient? CreateDeviceInfoSyncClient()
+    private OpenHabHttpClient? CreateDeviceInfoSyncClient()
     {
         var settings = settingsController?.Current;
         var sharedClient = httpClient;
@@ -1115,15 +1111,7 @@ public partial class App : Application
             return false;
         }
 
-        foreach (var modifier in normalized.Modifiers)
-        {
-            if (!IsModifierDown(modifier))
-            {
-                return false;
-            }
-        }
-
-        return IsVirtualKeyDown(virtualKey);
+        return normalized.Modifiers.All(IsModifierDown) && IsVirtualKeyDown(virtualKey);
     }
 
     private static bool IsModifierDown(ShortcutModifier modifier)
@@ -1170,6 +1158,7 @@ public partial class App : Application
         }
         catch (OperationCanceledException)
         {
+            // Cancellation is expected when a shortcut action is superseded or shutdown starts.
         }
         catch (Exception ex)
         {
@@ -1211,6 +1200,7 @@ public partial class App : Application
         }
         catch (OperationCanceledException)
         {
+            // Cancellation is expected when the interactive command window is replaced.
         }
         catch (Exception ex)
         {
@@ -1431,57 +1421,12 @@ public partial class App : Application
         }
         catch (OperationCanceledException)
         {
+            // Cancellation is expected when device info sync is canceled during shutdown.
         }
         catch (Exception ex)
         {
             DiagnosticLogger.Warn($"Device Info Sync trigger failed: {ex.GetType().Name}: {ex.Message}");
         }
-    }
-
-    private static string BuildNotificationHeader(NormalizedCloudNotification notification)
-    {
-        var tag = notification.Tag;
-        if (!string.IsNullOrWhiteSpace(notification.Title))
-        {
-            var title = notification.Title;
-            if (!string.IsNullOrWhiteSpace(tag))
-            {
-                title = StripLeadingBracketToken(title, tag);
-            }
-
-            return CapitalizeFirstLetter(title.Trim());
-        }
-
-        return "openHAB";
-    }
-
-    private static string BuildNotificationBody(NormalizedCloudNotification notification)
-    {
-        var body = notification.Message ?? string.Empty;
-        var tag = notification.Tag;
-        if (!string.IsNullOrWhiteSpace(tag))
-        {
-            body = StripLeadingBracketToken(body, tag);
-        }
-
-        body = CapitalizeFirstLetter(body.Trim());
-        if (body.Length > 200)
-        {
-            return body[..197] + "...";
-        }
-
-        return body;
-    }
-
-    private static string StripLeadingBracketToken(string text, string token)
-    {
-        var escapedToken = Regex.Escape(token.Trim());
-        return Regex.Replace(
-            text,
-            $"^\\s*\\[{escapedToken}\\]\\s*",
-            string.Empty,
-            RegexOptions.IgnoreCase,
-            TimeSpan.FromMilliseconds(100));
     }
 
     private static string CapitalizeFirstLetter(string text)
@@ -1691,12 +1636,9 @@ public partial class App : Application
             else
             {
                 var executor = notificationActionExecutor;
-                if (executor is not null)
+                if (executor is not null && await TryExecuteNotificationActionAsync(executor, parsed))
                 {
-                    if (await TryExecuteNotificationActionAsync(executor, parsed))
-                    {
-                        return;
-                    }
+                    return;
                 }
             }
         }
@@ -1706,12 +1648,9 @@ public partial class App : Application
             if (parsed is not null && IsInlineToastAction(parsed))
             {
                 var executor = notificationActionExecutor;
-                if (executor is not null)
+                if (executor is not null && await TryExecuteNotificationActionAsync(executor, parsed))
                 {
-                    if (await TryExecuteNotificationActionAsync(executor, parsed))
-                    {
-                        return;
-                    }
+                    return;
                 }
             }
         }
@@ -1750,13 +1689,11 @@ public partial class App : Application
         }
 
         const string prefix = "action=";
-        foreach (var part in arguments.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in arguments.Split('&', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                     .Where(part => part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
         {
-            if (part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                actionArgument = Uri.UnescapeDataString(part[prefix.Length..]);
-                return true;
-            }
+            actionArgument = Uri.UnescapeDataString(part[prefix.Length..]);
+            return true;
         }
 
         return false;

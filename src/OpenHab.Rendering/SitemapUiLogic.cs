@@ -407,15 +407,7 @@ public static class SitemapUiLogic
             return false;
         }
 
-        foreach (var ch in value)
-        {
-            if (!char.IsAsciiDigit(ch))
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return value.All(char.IsAsciiDigit);
     }
 
     private static bool TryParseDoubleInvariant(string input, out double value)

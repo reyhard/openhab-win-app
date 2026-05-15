@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.UI.Input;
@@ -15,7 +16,7 @@ using Windows.UI.Core;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
-internal sealed class ShortcutRecorderControl : UserControl
+internal sealed partial class ShortcutRecorderControl : UserControl
 {
     private static readonly VirtualKey[] PollableShortcutKeys =
     [
@@ -268,7 +269,7 @@ internal sealed class ShortcutRecorderControl : UserControl
             Content = "Reset",
             MinWidth = 86
         };
-        var clearButton = new Button
+        var clearDialogButton = new Button
         {
             Content = "Clear",
             MinWidth = 86
@@ -282,7 +283,7 @@ internal sealed class ShortcutRecorderControl : UserControl
             Children =
             {
                 resetButton,
-                clearButton
+                clearDialogButton
             }
         };
 
@@ -394,13 +395,10 @@ internal sealed class ShortcutRecorderControl : UserControl
                 return;
             }
 
-            foreach (var key in PollableShortcutKeys)
+            foreach (var key in PollableShortcutKeys.Where(IsDown))
             {
-                if (IsDown(key))
-                {
-                    CaptureBinding(modifiers, key);
-                    return;
-                }
+                CaptureBinding(modifiers, key);
+                return;
             }
         };
 
@@ -411,7 +409,7 @@ internal sealed class ShortcutRecorderControl : UserControl
             SetDialogError(null);
             RenderPreview();
         };
-        clearButton.Click += (_, _) =>
+        clearDialogButton.Click += (_, _) =>
         {
             capturedBinding = null;
             dialogStatus.Text = AllowClear ? "Shortcut cleared." : "Shortcut is required for this control.";

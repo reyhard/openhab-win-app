@@ -137,7 +137,7 @@ public static class ShortcutRegistrar
         private readonly ushort reserved1;
         private readonly ushort reserved2;
         private readonly ushort reserved3;
-        private IntPtr value;
+        private readonly IntPtr value;
         private readonly IntPtr reserved;
 
         public PropVariant(string value)

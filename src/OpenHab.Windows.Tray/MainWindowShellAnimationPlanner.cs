@@ -113,9 +113,7 @@ internal static class MainWindowShellAnimationPlanner
         var opacityFromWidth = Math.Clamp(startWidth / Math.Max(fullWidth, 1d), 0d, 1d);
         var startTranslationX = Math.Max(0d, fullWidth - startWidth);
         var targetTranslationX = targetVisible ? 0d : fullWidth;
-        var startOpacity = startWidth > 0.5d
-            ? opacityFromWidth
-            : targetVisible ? 0d : 1d;
+        var startOpacity = ResolveSitemapPaneStartOpacity(startWidth, opacityFromWidth, targetVisible);
         return new SitemapPaneAnimationPlan(
             VisibleAtAnimationStart: targetVisible || startWidth > 0.5d,
             VisibleAtAnimationEnd: targetVisible,
@@ -133,5 +131,15 @@ internal static class MainWindowShellAnimationPlanner
     public static int ResolveSitemapPaneDurationMs(int configuredFlyoutMs)
     {
         return configuredFlyoutMs <= 0 ? 0 : (int)Math.Round(configuredFlyoutMs * SitemapPaneDurationMultiplier);
+    }
+
+    private static double ResolveSitemapPaneStartOpacity(double startWidth, double opacityFromWidth, bool targetVisible)
+    {
+        if (startWidth > 0.5d)
+        {
+            return opacityFromWidth;
+        }
+
+        return targetVisible ? 0d : 1d;
     }
 }

@@ -69,9 +69,9 @@ public static class MainUiUrlBuilder
             return "/" + normalized;
         }
 
-        if (!normalized.StartsWith("/", StringComparison.Ordinal)
-            && !normalized.StartsWith("?", StringComparison.Ordinal)
-            && !normalized.StartsWith("#", StringComparison.Ordinal))
+        if (!normalized.StartsWith('/')
+            && !normalized.StartsWith('?')
+            && !normalized.StartsWith('#'))
         {
             return "/" + normalized;
         }

@@ -9,11 +9,13 @@ public static class SitemapRowPlanner
         ArgumentNullException.ThrowIfNull(rows);
 
         var visualRows = new List<SitemapVisualRow>();
-        for (var index = 0; index < rows.Count; index++)
+        var index = 0;
+        while (index < rows.Count)
         {
             var row = rows[index];
             if (row.Control == RenderControlKind.Button)
             {
+                index++;
                 continue;
             }
 
@@ -21,11 +23,12 @@ public static class SitemapRowPlanner
             {
                 var mergedRow = BuildMergedButtonGridRow(index, rows, out var nextIndex);
                 visualRows.Add(new SitemapVisualRow(index, mergedRow, nextIndex));
-                index = nextIndex - 1;
+                index = nextIndex;
                 continue;
             }
 
             visualRows.Add(new SitemapVisualRow(index, row, index + 1));
+            index++;
         }
 
         return visualRows;

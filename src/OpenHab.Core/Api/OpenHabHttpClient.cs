@@ -213,7 +213,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
     private Uri BuildUri(string relativePath)
     {
         var baseBuilder = new UriBuilder(_baseUri);
-        if (!baseBuilder.Path.EndsWith("/", StringComparison.Ordinal))
+        if (!baseBuilder.Path.EndsWith('/'))
         {
             baseBuilder.Path += "/";
         }

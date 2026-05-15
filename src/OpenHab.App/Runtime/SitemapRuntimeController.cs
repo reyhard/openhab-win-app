@@ -10,12 +10,15 @@ using OpenHab.Sitemaps.Parsing;
 using OpenHab.Sitemaps.Runtime;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 
 namespace OpenHab.App.Runtime;
 
 public sealed class SitemapRuntimeController
 {
+    private const string NullDiagnosticText = "<null>";
+
     private readonly AppSettingsController settingsController;
     private readonly SitemapRenderController renderController;
     private readonly Func<TransportKind, Uri, IOpenHabClient> clientFactory;
@@ -195,7 +198,7 @@ public sealed class SitemapRuntimeController
         var previousPageId = currentPage?.Id;
         DiagnosticLogger.Info(
             $"Refresh#{refreshId} start reason={reason} inProgress={inProgress} " +
-            $"activeTransport={Current.ActiveTransport?.ToString() ?? "<null>"} currentPage={previousPageId ?? "<null>"}");
+            $"activeTransport={Current.ActiveTransport?.ToString() ?? NullDiagnosticText} currentPage={previousPageId ?? NullDiagnosticText}");
 
         Current = Current with { IsBusy = true, StatusText = "Loading...", ChangedRowIndices = [] };
         var settings = settingsController.Current;
@@ -309,7 +312,7 @@ public sealed class SitemapRuntimeController
             var remaining = Interlocked.Decrement(ref _refreshInProgress);
             DiagnosticLogger.Info(
                 $"Refresh#{refreshId} done reason={reason} durationMs={sw.ElapsedMilliseconds} " +
-                $"remainingInProgress={remaining} status='{Current.StatusText}' page={Current.Descriptor?.PageId ?? "<null>"}");
+                $"remainingInProgress={remaining} status='{Current.StatusText}' page={Current.Descriptor?.PageId ?? NullDiagnosticText}");
         }
     }
 
@@ -526,20 +529,14 @@ public sealed class SitemapRuntimeController
 
     public async Task<bool> ActivateRowAsync(int rowIndex, CancellationToken cancellationToken = default)
     {
-        if (rowIndex < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(rowIndex));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(rowIndex);
 
         if (currentPage is null)
         {
             return false;
         }
 
-        if (rowIndex >= currentPage.Widgets.Count)
-        {
-            throw new ArgumentOutOfRangeException(nameof(rowIndex));
-        }
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(rowIndex, currentPage.Widgets.Count);
 
         var widget = currentPage.Widgets[rowIndex];
         if (widget.Type != SitemapWidgetType.Switch || string.IsNullOrWhiteSpace(widget.ItemName))
@@ -995,13 +992,13 @@ public sealed class SitemapRuntimeController
         };
 
         DiagnosticLogger.Info(
-            $"ApplyWidgetEvent applied id={e.WidgetId} indices=[{string.Join(",", changedIndices)}] item={e.ItemName ?? "<null>"} " +
-            $"state={e.ItemState ?? "<null>"} vis={e.Visibility} descChanged={e.DescriptionChanged} " +
+            $"ApplyWidgetEvent applied id={e.WidgetId} indices=[{string.Join(",", changedIndices)}] item={e.ItemName ?? NullDiagnosticText} " +
+            $"state={e.ItemState ?? NullDiagnosticText} vis={e.Visibility} descChanged={e.DescriptionChanged} " +
             $"threadId={Environment.CurrentManagedThreadId}");
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private IReadOnlyList<int> ResolveTargetWidgetIndices(SitemapWidgetEvent e)
+    private List<int> ResolveTargetWidgetIndices(SitemapWidgetEvent e)
     {
         // Prefer direct widget id mapping when present and found.
         if (!string.IsNullOrEmpty(e.WidgetId) && widgetIdMap is not null && widgetIdMap.TryGetValue(e.WidgetId, out var widIndex))
@@ -1133,7 +1130,7 @@ public sealed class SitemapRuntimeController
         var currentPageId = currentPage?.Id;
 
         DiagnosticLogger.Info(
-            $"ReconcileCurrentPageAsync start transport={transport} sitemap={settings.SitemapName} page={currentPageId ?? "<null>"}");
+            $"ReconcileCurrentPageAsync start transport={transport} sitemap={settings.SitemapName} page={currentPageId ?? NullDiagnosticText}");
 
         var client = clientFactory(transport, endpoint);
         var json = await client.GetSitemapJsonAsync(settings.SitemapName, cancellationToken).ConfigureAwait(false);
@@ -1245,13 +1242,10 @@ public sealed class SitemapRuntimeController
         if (string.Equals(current.Id, targetId, StringComparison.Ordinal))
             return true;
 
-        foreach (var widget in current.Widgets)
+        foreach (var child in current.Widgets.SelectMany(static widget => widget.Children))
         {
-            foreach (var child in widget.Children)
-            {
-                if (FindPageChainWalk(child, targetId, path))
-                    return true;
-            }
+            if (FindPageChainWalk(child, targetId, path))
+                return true;
         }
 
         path.RemoveAt(path.Count - 1);
@@ -1354,7 +1348,7 @@ public sealed class SitemapRuntimeController
         return false;
     }
 
-    private void CollectSearchSourceWidgetIdMatches(
+    private static void CollectSearchSourceWidgetIdMatches(
         NormalizedSitemapPage page,
         SitemapSearchSource source,
         IReadOnlyList<NormalizedSitemapPage> pageChain,
@@ -1444,7 +1438,7 @@ public sealed class SitemapRuntimeController
                widget.Type == source.SourceWidgetType;
     }
 
-    private static IReadOnlyList<NormalizedSitemapPage> Append(
+    private static NormalizedSitemapPage[] Append(
         IReadOnlyList<NormalizedSitemapPage> path,
         NormalizedSitemapPage segment)
     {
@@ -1478,7 +1472,7 @@ public sealed class SitemapRuntimeController
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private static IReadOnlyList<int> ComputeChangedRowIndices(
+    private static List<int> ComputeChangedRowIndices(
         SitemapRenderDescriptor? oldDescriptor,
         SitemapRenderDescriptor newDescriptor)
     {
@@ -1563,7 +1557,7 @@ public sealed class SitemapRuntimeController
         return true;
     }
 
-    private IReadOnlyList<string> BuildBreadcrumbTrail()
+    private string[] BuildBreadcrumbTrail()
     {
         return BuildBreadcrumbPages()
             .Select(page => page.Label)

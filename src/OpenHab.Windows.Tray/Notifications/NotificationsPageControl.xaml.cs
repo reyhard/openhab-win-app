@@ -19,6 +19,8 @@ namespace OpenHab.Windows.Tray.Notifications;
 
 public sealed partial class NotificationsPageControl : UserControl
 {
+    private const string DefaultNotificationTitle = "openHAB";
+
     private enum NotificationSortOrder
     {
         DateDescending,
@@ -172,18 +174,18 @@ public sealed partial class NotificationsPageControl : UserControl
             {
                 NotificationSortOrder.DateAscending => notifications
                     .OrderBy(n => n.Created)
-                    .ThenBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Title ?? DefaultNotificationTitle, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Id, StringComparer.Ordinal)
                     .ToList(),
                 NotificationSortOrder.Name => notifications
-                    .OrderBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n.Title ?? DefaultNotificationTitle, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Id, StringComparer.Ordinal)
                     .ToList(),
                 _ => notifications
                     .OrderByDescending(n => n.Created)
-                    .ThenBy(n => n.Title ?? "openHAB", StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Title ?? DefaultNotificationTitle, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Id, StringComparer.Ordinal)
                     .ToList()
@@ -203,13 +205,10 @@ public sealed partial class NotificationsPageControl : UserControl
             foreach (var n in notifications)
             {
                 var elapsed = DateTimeOffset.UtcNow - n.Created;
-                var timeStr = elapsed.TotalMinutes < 1 ? "Just now"
-                    : elapsed.TotalHours < 1 ? $"{(int)elapsed.TotalMinutes}m ago"
-                    : elapsed.TotalDays < 1 ? $"{(int)elapsed.TotalHours}h ago"
-                    : $"{(int)elapsed.TotalDays}d ago";
+                var timeStr = FormatElapsedTime(elapsed);
 
                 var isUnread = !n.IsRead && !n.IsDismissed;
-                var title = n.Title ?? "openHAB";
+                var title = n.Title ?? DefaultNotificationTitle;
                 var hasTag = !string.IsNullOrWhiteSpace(n.Severity);
 
                 var row = new Grid
@@ -403,31 +402,41 @@ public sealed partial class NotificationsPageControl : UserControl
 
     private void NotificationSearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        if (!notificationControlsReady)
-        {
-            return;
-        }
-
-        RefreshNotificationList();
+        RefreshNotificationListIfReady();
     }
 
     private void NotificationFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!notificationControlsReady)
-        {
-            return;
-        }
-
-        RefreshNotificationList();
+        RefreshNotificationListIfReady();
     }
 
     private void NotificationSortBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!notificationControlsReady)
+        RefreshNotificationListIfReady();
+    }
+
+    private void RefreshNotificationListIfReady()
+    {
+        if (notificationControlsReady)
         {
-            return;
+            RefreshNotificationList();
+        }
+    }
+
+    private static string FormatElapsedTime(TimeSpan elapsed)
+    {
+        if (elapsed.TotalMinutes < 1)
+        {
+            return "Just now";
         }
 
-        RefreshNotificationList();
+        if (elapsed.TotalHours < 1)
+        {
+            return $"{(int)elapsed.TotalMinutes}m ago";
+        }
+
+        return elapsed.TotalDays < 1
+            ? $"{(int)elapsed.TotalHours}h ago"
+            : $"{(int)elapsed.TotalDays}d ago";
     }
 }

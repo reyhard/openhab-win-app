@@ -326,9 +326,9 @@ public sealed partial class MainUiWebViewHost : UserControl
         }
 
         var normalized = route.Trim();
-        if (normalized.StartsWith("/", StringComparison.Ordinal)
-            || normalized.StartsWith("?", StringComparison.Ordinal)
-            || normalized.StartsWith("#", StringComparison.Ordinal))
+        if (normalized.StartsWith('/')
+            || normalized.StartsWith('?')
+            || normalized.StartsWith('#'))
         {
             return normalized;
         }

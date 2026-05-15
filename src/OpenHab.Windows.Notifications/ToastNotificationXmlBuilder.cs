@@ -27,7 +27,7 @@ public static partial class ToastNotificationXmlBuilder
         {
             builder.Append(" launch=\"");
             builder.Append(XmlEscape(request.LaunchAction!.Trim()));
-            builder.Append("\"");
+            builder.Append('"');
         }
 
         builder.Append('>');

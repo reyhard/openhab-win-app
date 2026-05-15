@@ -1,6 +1,6 @@
 namespace OpenHab.App.Tray;
 
-public sealed class BackgroundResourceReleaseController : IDisposable
+public sealed partial class BackgroundResourceReleaseController : IDisposable
 {
     private readonly Func<TimeSpan, CancellationToken, Task> delayAsync;
     private readonly Action releaseResources;
@@ -96,6 +96,7 @@ public sealed class BackgroundResourceReleaseController : IDisposable
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
+            // Cancellation is the normal path when a pending release is superseded.
         }
         finally
         {

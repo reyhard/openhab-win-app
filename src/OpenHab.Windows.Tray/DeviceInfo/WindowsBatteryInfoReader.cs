@@ -4,9 +4,9 @@ namespace OpenHab.Windows.Tray.DeviceInfo;
 
 internal sealed record WindowsBatteryInfo(int? BatteryLevelPercent, bool? IsCharging);
 
-internal sealed class WindowsBatteryInfoReader
+internal static class WindowsBatteryInfoReader
 {
-    public WindowsBatteryInfo Read()
+    public static WindowsBatteryInfo Read()
     {
         var report = PowerManager.BatteryStatus;
         bool? isCharging = report switch
