@@ -22,3 +22,5 @@ publish/
 /src/OpenHab.Windows.Package/*.cache
 /src/OpenHab.Windows.Package/*.user
 *.lscache
+.superpowers
+*.xbf
