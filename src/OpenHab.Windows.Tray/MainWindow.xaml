@@ -141,6 +141,7 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                     BorderThickness="1,0,0,0"
                     Padding="12"
+                    PointerPressed="SitemapContentRoot_PointerPressed"
                     SizeChanged="SitemapContentRoot_SizeChanged">
                 <Grid RowSpacing="10">
                     <Grid.RowDefinitions>

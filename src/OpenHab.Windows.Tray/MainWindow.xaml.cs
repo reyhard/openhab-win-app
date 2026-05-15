@@ -31,6 +31,13 @@ namespace OpenHab.Windows.Tray;
 
 public sealed partial class MainWindow : Window
 {
+    private enum BackNavigationContext
+    {
+        None,
+        Settings,
+        Sitemap
+    }
+
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 56d;
     private const double ExpandedSitemapPaneWidth = 380d;
@@ -72,6 +79,9 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? sitemapPaneWidthAnimationTimer;
     private string? pendingExplicitMainUiRoute;
     private MainUiWebViewHost? mainUiHost;
+    private DateTimeOffset lastSettingsTouchUtc = DateTimeOffset.MinValue;
+    private DateTimeOffset lastSitemapTouchUtc = DateTimeOffset.MinValue;
+    private BackNavigationContext lastBackNavigationContext = BackNavigationContext.None;
 
     private Notifications.NotificationsPageControl? notificationsPage;
     private Settings.SettingsPageControl? settingsPage;
@@ -250,6 +260,7 @@ public sealed partial class MainWindow : Window
 
     public void ShowSettingsTab()
     {
+        MarkSettingsTouched();
         shellController.SelectCenterPage(MainWindowCenterPage.Settings);
     }
 
@@ -294,6 +305,8 @@ public sealed partial class MainWindow : Window
     private void ShowSettingsPage()
     {
         settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, SetShellStatusText);
+        settingsPage.PointerPressed -= SettingsPage_PointerPressed;
+        settingsPage.PointerPressed += SettingsPage_PointerPressed;
         settingsPage.ShowRoot();
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(settingsPage);
@@ -808,17 +821,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (TryNavigateMainUiBack())
-        {
-            e.Handled = true;
-            return;
-        }
-
-        if (runtimeController.CanGoBack && !isRefreshing)
-        {
-            e.Handled = true;
-            _ = NavigateBackWithAnimationAsync();
-        }
+        e.Handled = TryHandleContextualBackNavigation();
     }
 
     private void MainContent_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
@@ -836,17 +839,72 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        e.Handled = TryHandleContextualBackNavigation();
+    }
+
+    private bool TryHandleContextualBackNavigation()
+    {
+        if (TryNavigateContextualSettingsBack())
+        {
+            return true;
+        }
+
+        if (TryNavigateContextualSitemapBack())
+        {
+            return true;
+        }
+
         if (TryNavigateMainUiBack())
         {
-            e.Handled = true;
-            return;
+            return true;
         }
 
         if (runtimeController.CanGoBack && !isRefreshing)
         {
-            e.Handled = true;
             _ = NavigateBackWithAnimationAsync();
+            return true;
         }
+
+        return false;
+    }
+
+    private bool TryNavigateContextualSettingsBack()
+    {
+        if (shellController.Current.CenterPage != MainWindowCenterPage.Settings || settingsPage is null)
+        {
+            return false;
+        }
+
+        if (lastBackNavigationContext == BackNavigationContext.Sitemap || lastSitemapTouchUtc > lastSettingsTouchUtc)
+        {
+            return false;
+        }
+
+        if (!settingsPage.CanGoBack)
+        {
+            return false;
+        }
+
+        _ = settingsPage.TryNavigateBackAsync();
+        MarkSettingsTouched();
+        return true;
+    }
+
+    private bool TryNavigateContextualSitemapBack()
+    {
+        if (!runtimeController.CanGoBack || isRefreshing)
+        {
+            return false;
+        }
+
+        if (lastBackNavigationContext == BackNavigationContext.Settings || lastSettingsTouchUtc > lastSitemapTouchUtc)
+        {
+            return false;
+        }
+
+        _ = NavigateBackWithAnimationAsync();
+        MarkSitemapTouched();
+        return true;
     }
 
     private bool TryNavigateMainUiBack()
@@ -1074,7 +1132,23 @@ public sealed partial class MainWindow : Window
 
     private void SettingsNavButton_Click(object sender, RoutedEventArgs e)
     {
+        MarkSettingsTouched();
         shellController.SelectCenterPage(MainWindowCenterPage.Settings);
+    }
+
+    private void SettingsPage_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        MarkSettingsTouched();
+    }
+
+    private void SitemapContentRoot_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        UpdateSitemapPaneClip();
+    }
+
+    private void SitemapContentRoot_PointerPressed(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        MarkSitemapTouched();
     }
 
     private void ToggleSitemapButton_Click(object sender, RoutedEventArgs e)
@@ -1232,9 +1306,16 @@ public sealed partial class MainWindow : Window
         timer.Start();
     }
 
-    private void SitemapContentRoot_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void MarkSettingsTouched()
     {
-        UpdateSitemapPaneClip();
+        lastSettingsTouchUtc = DateTimeOffset.UtcNow;
+        lastBackNavigationContext = BackNavigationContext.Settings;
+    }
+
+    private void MarkSitemapTouched()
+    {
+        lastSitemapTouchUtc = DateTimeOffset.UtcNow;
+        lastBackNavigationContext = BackNavigationContext.Sitemap;
     }
 
     private void UpdateSitemapPaneClip()

@@ -104,6 +104,20 @@ public sealed partial class SettingsPageControl : UserControl
         NavigateToSettingsPage(SettingsPageKind.Root);
     }
 
+    public bool CanGoBack => currentSettingsPage != SettingsPageKind.Root;
+
+    public async Task<bool> TryNavigateBackAsync()
+    {
+        if (!CanGoBack || isSettingsPageTransitionRunning)
+        {
+            return false;
+        }
+
+        var previousPage = currentSettingsPage;
+        await NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPageKind.Root);
+        return currentSettingsPage != previousPage;
+    }
+
     private void InitializeSettingsControls()
     {
         NavigateToSettingsPage(SettingsPageKind.Root);
