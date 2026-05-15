@@ -75,7 +75,13 @@ $arguments = @(
 ) + $MSBuildArgs
 
 if (-not [string]::IsNullOrWhiteSpace($PackageCertificateKeyFile)) {
-    $resolvedCertificatePath = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot $PackageCertificateKeyFile))
+    $certificatePathCandidate = if ([System.IO.Path]::IsPathRooted($PackageCertificateKeyFile)) {
+        $PackageCertificateKeyFile
+    }
+    else {
+        Join-Path $PSScriptRoot $PackageCertificateKeyFile
+    }
+    $resolvedCertificatePath = [System.IO.Path]::GetFullPath($certificatePathCandidate)
     if (-not (Test-Path -LiteralPath $resolvedCertificatePath)) {
         throw "Package certificate key file was not found: $resolvedCertificatePath"
     }
