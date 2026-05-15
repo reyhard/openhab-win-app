@@ -41,7 +41,7 @@ jobs:
         run: dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore
 
       - name: Test App
-        run: dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore
+        run: dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1
 
       - name: Build tray project
         run: dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore
