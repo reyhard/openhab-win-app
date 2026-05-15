@@ -11,7 +11,7 @@ public sealed class DeviceInfoSyncServiceTests
     public async Task TriggerSyncAsyncDoesNothingWhenDisabled()
     {
         var client = new FakeOpenHabClient();
-        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", "online", "OFF"));
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", null, null, "online", "OFF"));
         var service = new DeviceInfoSyncService(
             () => DeviceInfoSyncSettings.CreateDefault("Desk") with { IsEnabled = false },
             () => client,
@@ -27,7 +27,7 @@ public sealed class DeviceInfoSyncServiceTests
     public async Task TriggerSyncAsyncSendsConfiguredMappedStates()
     {
         var client = new FakeOpenHabClient();
-        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", "online", "ON"));
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", null, null, "online", "ON"));
         var service = new DeviceInfoSyncService(
             () => DeviceInfoSyncSettings.CreateDefault("Desk") with { IsEnabled = true },
             () => client,
@@ -51,7 +51,7 @@ public sealed class DeviceInfoSyncServiceTests
     public async Task TriggerSyncAsyncSkipsBlankItemMappings()
     {
         var client = new FakeOpenHabClient();
-        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", "online", "OFF"));
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", null, null, "online", "OFF"));
         var settings = DeviceInfoSyncSettings.CreateDefault("Desk") with
         {
             IsEnabled = true,
@@ -74,7 +74,7 @@ public sealed class DeviceInfoSyncServiceTests
         {
             SetItemStateFailure = new InvalidOperationException("network down")
         };
-        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, null, null, null, null, null, null, null));
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, null, null, null, null, null, null, null, null, null));
         var service = new DeviceInfoSyncService(
             () => DeviceInfoSyncSettings.CreateDefault("Desk") with { IsEnabled = true },
             () => client,
@@ -92,7 +92,7 @@ public sealed class DeviceInfoSyncServiceTests
     {
         var client = new FakeOpenHabClient();
         client.SetItemStateFailuresByItem["DeskWifiName"] = new InvalidOperationException("wifi rejected");
-        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", "online", "ON"));
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", null, null, "online", "ON"));
         var service = new DeviceInfoSyncService(
             () => DeviceInfoSyncSettings.CreateDefault("Desk") with { IsEnabled = true },
             () => client,
@@ -111,7 +111,7 @@ public sealed class DeviceInfoSyncServiceTests
     public async Task TriggerSyncAsyncClearsStaleSuccessResultWhenFailureOccurs()
     {
         var successClient = new FakeOpenHabClient();
-        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", "online", "ON"));
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", null, null, "online", "ON"));
         FakeOpenHabClient currentClient = successClient;
         var service = new DeviceInfoSyncService(
             () => DeviceInfoSyncSettings.CreateDefault("Desk") with { IsEnabled = true },
@@ -157,7 +157,7 @@ public sealed class DeviceInfoSyncServiceTests
     public async Task StartAndRefreshIntervalAfterDisposeDoNothingWithoutThrowing()
     {
         var client = new FakeOpenHabClient();
-        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", "online", "ON"));
+        var source = new FakeSnapshotSource(new DeviceStateSnapshot(87, true, false, "active", true, "HomeNet", null, null, "online", "ON"));
         var service = new DeviceInfoSyncService(
             () => DeviceInfoSyncSettings.CreateDefault("Desk") with { IsEnabled = true },
             () => client,

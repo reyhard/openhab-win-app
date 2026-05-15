@@ -464,20 +464,28 @@ public sealed class OpenHabEventStreamClientTests
     [Fact]
     public async Task Dispose_StopsReadLoop()
     {
-        var sseLine = @"data: {""topic"":""openhab/items/TestItem/state"",""payload"":""{\""type\"":\""Number\"",\""value\"":\""42\""}"",""type"":""ItemStateEvent""}";
-        var handler = new FakeHttpMessageHandler(sseLine);
+        var handler = new DelegateHandler((_, _, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new BlockingReadStream())
+            }));
         using var httpClient = new HttpClient(handler);
 
         using var client = new OpenHabEventStreamClient(httpClient, initialBackoff: TimeSpan.FromMilliseconds(50), maxBackoff: TimeSpan.FromMilliseconds(500));
         await client.ConnectAsync(new Uri("http://localhost:8080/"));
 
+        for (var i = 0; i < 20 && !client.IsConnected; i++)
+        {
+            await Task.Delay(25);
+        }
         Assert.True(client.IsConnected);
 
         client.Dispose();
 
-        // Give the read loop time to exit
-        await Task.Delay(300);
-
+        for (var i = 0; i < 20 && client.IsConnected; i++)
+        {
+            await Task.Delay(25);
+        }
         Assert.False(client.IsConnected);
     }
 }

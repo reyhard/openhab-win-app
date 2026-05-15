@@ -547,16 +547,25 @@ public sealed class NotificationStoreTests : IDisposable
     [Fact]
     public void Store_SurvivesRoundTrip_LoadsCorrectly()
     {
-        // Give the fire-and-forget save time to complete.
         var original = CreateStore(persistChanges: true);
         var created = new DateTimeOffset(2026, 5, 7, 14, 0, 0, TimeSpan.Zero);
         original.AddOrUpdate("persist1", "Hello", created, title: "T", severity: "info");
-        Thread.Sleep(200);
 
-        // A new instance should load from the same file.
-        var loaded = CreateStore();
+        NotificationStore? loaded = null;
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline)
+        {
+            loaded = CreateStore();
+            if (loaded.IsSeen("persist1"))
+            {
+                break;
+            }
 
-        Assert.True(loaded.IsSeen("persist1"));
+            Thread.Sleep(50);
+        }
+
+        Assert.NotNull(loaded);
+        Assert.True(loaded!.IsSeen("persist1"));
         var n = loaded.GetAll()[0];
         Assert.Equal("persist1", n.Id);
         Assert.Equal("Hello", n.Message);
