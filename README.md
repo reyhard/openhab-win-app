@@ -10,10 +10,9 @@ Known release-readiness items still need maintainer decisions or follow-up imple
 
 - Official package identity and signing ownership.
 - Microsoft Store or other distribution ownership.
-- Privacy hardening for diagnostics and user-visible error text.
-- Clean shutdown of `OpenHab.App.Tests` without VSTest blame-hang.
 - Localization and broader accessibility review.
 - Full dependency/license review beyond the initial `NOTICE` file.
+- Manual smoke and memory/performance verification for the Windows tray, flyout, main window, notifications, and shortcut workflows.
 
 ## Features
 
@@ -50,10 +49,10 @@ Everyday direct test gate:
 dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj
 dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj
 dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj
-dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --blame-hang --blame-hang-timeout 30s
+dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj
 ```
 
-The App test project currently executes its assertions successfully but can leave the VSTest host running. The blame-hang flags make that failure mode explicit until the test-host shutdown issue is fixed.
+The direct test projects are the normal logic gate. The package project has DesktopBridge/MSIX prerequisites, so use the package build script for release/package validation.
 
 Build the tray app:
 

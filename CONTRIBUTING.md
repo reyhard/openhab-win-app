@@ -58,7 +58,7 @@ Run the direct test gate for normal logic changes:
 dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj
 dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj
 dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj
-dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --blame-hang --blame-hang-timeout 30s
+dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj
 ```
 
 Run the tray build for UI or Windows-shell changes:
