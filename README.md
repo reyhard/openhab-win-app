@@ -68,6 +68,25 @@ Build the MSIX package when Visual Studio MSIX/DesktopBridge targets are install
 
 The package project imports DesktopBridge targets that are not always available through standalone .NET SDK MSBuild. Use `build-package.ps1` for package builds because it locates Visual Studio MSBuild and verifies the required DesktopBridge props file.
 
+## CI And Static Analysis
+
+GitHub Actions workflows live under `.github/workflows`:
+
+- `ci.yml` runs the direct test projects and Release tray build.
+- `codeql.yml` runs GitHub CodeQL analysis for C#.
+- `sonarcloud.yml` runs SonarCloud analysis for the tray project dependency graph.
+- `release-msix.yml` builds and publishes signed MSIX release artifacts.
+
+To enable SonarCloud, create a SonarCloud project for this repository and configure these GitHub repository settings:
+
+- Repository variables:
+  - `SONAR_ORGANIZATION`
+  - `SONAR_PROJECT_KEY`
+- Repository secret:
+  - `SONAR_TOKEN`
+
+The SonarCloud workflow skips pull requests from forks because repository secrets are not available to untrusted fork workflows. It builds `src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj` under the SonarScanner for .NET instead of the full solution, because the MSIX packaging project requires DesktopBridge tooling that is validated separately by the package workflows.
+
 ## Runtime Data
 
 Runtime logs and app state are written under:
