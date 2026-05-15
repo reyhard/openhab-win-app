@@ -1,0 +1,78 @@
+<h2>How should hidden notifications be revealed?</h2>
+<p class="subtitle">Pick the pattern that feels clearest for a Windows notifications inbox.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a-toggle" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. Show hidden toggle</div>
+        <div class="mockup-body">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+            <strong style="font-size:18px;">Notifications</strong>
+            <span style="background:#2563eb;color:white;border-radius:10px;padding:2px 7px;font-size:12px;">3</span>
+            <span style="margin-left:auto;font-size:13px;">Show hidden</span>
+            <span style="width:34px;height:18px;border-radius:99px;background:#2563eb;display:inline-block;"></span>
+          </div>
+          <div style="padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:8px;opacity:.55;">Hidden: Battery alert</div>
+          <div style="padding:10px;border:1px solid #ddd;border-radius:6px;opacity:.55;">Hidden: Motion event</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Simple Toggle</h3>
+      <p>Fast to understand, but visible/unread/search filters remain separate decisions.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b-filter" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. Unified filter</div>
+        <div class="mockup-body">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <strong style="font-size:18px;">Notifications</strong>
+            <span style="background:#2563eb;color:white;border-radius:10px;padding:2px 7px;font-size:12px;">3</span>
+            <button class="mock-button" style="margin-left:auto;">Visible</button>
+          </div>
+          <input class="mock-input" placeholder="Search notifications" style="margin-bottom:10px;width:100%;">
+          <div style="display:flex;gap:6px;margin-bottom:10px;font-size:12px;">
+            <span style="padding:4px 8px;border-radius:6px;background:#e5e7eb;">Visible</span>
+            <span style="padding:4px 8px;border-radius:6px;border:1px solid #d1d5db;">Unread</span>
+            <span style="padding:4px 8px;border-radius:6px;border:1px solid #d1d5db;">Hidden</span>
+          </div>
+          <div style="padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:8px;">Water leak detected</div>
+          <div style="padding:10px;border:1px solid #ddd;border-radius:6px;">Garage door open</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Filter + Search</h3>
+      <p>One model covers visible, unread, read, hidden, all, and text search.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c-search-hidden" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. Search hidden option</div>
+        <div class="mockup-body">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+            <strong style="font-size:18px;">Notifications</strong>
+            <button class="mock-button" style="margin-left:auto;">Dismiss</button>
+          </div>
+          <input class="mock-input" placeholder="Search notifications" style="margin-bottom:8px;width:100%;">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;">
+            <span style="width:14px;height:14px;border:1px solid #777;display:inline-block;"></span>
+            Search hidden
+          </label>
+          <div style="padding:10px;border:1px solid #ddd;border-radius:6px;margin-bottom:8px;">Matched visible alert</div>
+          <div style="padding:10px;border:1px dashed #aaa;border-radius:6px;opacity:.55;">Matched hidden alert</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Search-Only Reveal</h3>
+      <p>Lowest header clutter, but hidden items are harder to browse and manage.</p>
+    </div>
+  </div>
+</div>

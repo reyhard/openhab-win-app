@@ -7,5 +7,7 @@ public sealed record DeviceStateMapping(
     string? SessionStateItem,
     string? WifiConnectedItem,
     string? WifiNameItem,
+    string? BluetoothConnectedItem,
+    string? BluetoothDeviceNamesItem,
     string? OpenHabConnectionItem,
     string? FocusStateItem);

@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+message_file="$1"
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/openhab-commit-msg.XXXXXX")"
+
+cleanup() {
+  rm -f "$tmp_file"
+}
+trap cleanup EXIT
+
+grep -v -E '^(Ultraworked with \[Sisyphus\]\(https://github\.com/code-yeongyu/oh-my-openagent\)|Co-authored-by: Sisyphus <clio-agent@sisyphuslabs\.ai>)$' "$message_file" > "$tmp_file"
+mv "$tmp_file" "$message_file"

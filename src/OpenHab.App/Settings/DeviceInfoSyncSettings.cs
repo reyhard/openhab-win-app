@@ -13,6 +13,8 @@ public sealed record DeviceInfoSyncSettings(
     string? SessionStateItem,
     string? WifiConnectedItem,
     string? WifiNameItem,
+    string? BluetoothConnectedItem,
+    string? BluetoothDeviceNamesItem,
     string? OpenHabConnectionItem,
     string? FocusStateItem)
 {
@@ -29,6 +31,8 @@ public sealed record DeviceInfoSyncSettings(
         SessionStateItem is not null ||
         WifiConnectedItem is not null ||
         WifiNameItem is not null ||
+        BluetoothConnectedItem is not null ||
+        BluetoothDeviceNamesItem is not null ||
         OpenHabConnectionItem is not null ||
         FocusStateItem is not null;
 
@@ -47,6 +51,8 @@ public sealed record DeviceInfoSyncSettings(
             SessionStateItem: identifier + "SessionState",
             WifiConnectedItem: identifier + "WifiConnected",
             WifiNameItem: identifier + "WifiName",
+            BluetoothConnectedItem: identifier + "BluetoothConnected",
+            BluetoothDeviceNamesItem: identifier + "BluetoothDeviceNames",
             OpenHabConnectionItem: identifier + "OpenHabConnection",
             FocusStateItem: identifier + "FocusState");
     }
@@ -60,6 +66,8 @@ public sealed record DeviceInfoSyncSettings(
             NormalizeItemName(SessionStateItem),
             NormalizeItemName(WifiConnectedItem),
             NormalizeItemName(WifiNameItem),
+            NormalizeItemName(BluetoothConnectedItem),
+            NormalizeItemName(BluetoothDeviceNamesItem),
             NormalizeItemName(OpenHabConnectionItem),
             NormalizeItemName(FocusStateItem));
     }
@@ -83,6 +91,8 @@ public sealed record DeviceInfoSyncSettings(
             SessionStateItem = NormalizeItemName(SessionStateItem),
             WifiConnectedItem = NormalizeItemName(WifiConnectedItem),
             WifiNameItem = NormalizeItemName(WifiNameItem),
+            BluetoothConnectedItem = NormalizeItemName(BluetoothConnectedItem),
+            BluetoothDeviceNamesItem = NormalizeItemName(BluetoothDeviceNamesItem),
             OpenHabConnectionItem = NormalizeItemName(OpenHabConnectionItem),
             FocusStateItem = NormalizeItemName(FocusStateItem)
         };

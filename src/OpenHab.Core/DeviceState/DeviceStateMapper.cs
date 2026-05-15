@@ -48,6 +48,23 @@ public static class DeviceStateMapper
             }
         }
 
+        if (mapping.BluetoothConnectedItem is not null && snapshot.IsBluetoothConnected is not null)
+        {
+            updates.Add(new DeviceStateUpdate(mapping.BluetoothConnectedItem, snapshot.IsBluetoothConnected.Value ? "ON" : "OFF"));
+        }
+
+        if (mapping.BluetoothDeviceNamesItem is not null)
+        {
+            if (snapshot.IsBluetoothConnected is false)
+            {
+                updates.Add(new DeviceStateUpdate(mapping.BluetoothDeviceNamesItem, "UNDEF"));
+            }
+            else if (snapshot.BluetoothDeviceNames is not null)
+            {
+                updates.Add(new DeviceStateUpdate(mapping.BluetoothDeviceNamesItem, snapshot.BluetoothDeviceNames));
+            }
+        }
+
         if (mapping.OpenHabConnectionItem is not null && snapshot.OpenHabConnectionState is not null)
         {
             updates.Add(new DeviceStateUpdate(mapping.OpenHabConnectionItem, snapshot.OpenHabConnectionState));

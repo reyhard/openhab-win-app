@@ -1,0 +1,83 @@
+<h2>Where should sitemap search live?</h2>
+<p class="subtitle">All options use your chosen semantics: current-page subtree, labels only, frame matches show all child widgets.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="width:260px;margin:auto;background:#f7f7f7;border-radius:14px;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:Segoe UI,sans-serif;color:#222">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <div style="width:18px;height:18px;border:1px solid #e54;border-radius:50%"></div>
+          <div style="flex:1"><b>Kronsztad</b><div style="font-size:10px;color:#666">Connected via local.</div></div>
+          <button style="width:30px;height:30px;border:1px solid #ddd;border-radius:6px;background:#fff">⌕</button>
+          <button style="width:30px;height:30px;border:1px solid #ddd;border-radius:6px;background:#fff">⌄</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;border:1px solid #ddd;border-radius:8px;background:#fff;padding:7px 9px;margin-bottom:10px;color:#555">
+          <span>⌕</span><span style="font-size:12px">Search current section...</span><span style="margin-left:auto;font-size:11px">Esc</span>
+        </div>
+        <div style="font-weight:600;margin:8px 0">Oświetlenie</div>
+        <div style="display:grid;gap:5px">
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">🔴 Kuchnia <span style="float:right;color:#777">OFF</span></div>
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">🔴 Lampka nocna <span style="float:right;color:#777">OFF</span></div>
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">▦ Zaciemnienie ›</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Breadcrumb Row Replacement</h3>
+      <p>Search icon appears in the header. When active, the breadcrumb row below the title becomes the search box. Recommended: it preserves the existing hierarchy and consumes no content height beyond the existing breadcrumb slot.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="width:260px;margin:auto;background:#f7f7f7;border-radius:14px;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:Segoe UI,sans-serif;color:#222">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <div style="width:18px;height:18px;border:1px solid #e54;border-radius:50%"></div>
+          <div style="flex:1"><b>Kronsztad</b><div style="font-size:10px;color:#666">Connected via local.</div></div>
+          <button style="width:30px;height:30px;border:1px solid #ddd;border-radius:6px;background:#fff">⌕</button>
+          <button style="width:30px;height:30px;border:1px solid #ddd;border-radius:6px;background:#fff">⌄</button>
+        </div>
+        <div style="font-size:12px;color:#777;margin-bottom:8px">⌂ › Oświetlenie</div>
+        <div style="font-weight:600;margin:8px 0">Oświetlenie</div>
+        <div style="display:grid;gap:5px;margin-bottom:8px">
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">🔴 Kuchnia <span style="float:right;color:#777">OFF</span></div>
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">🔴 Lampka nocna <span style="float:right;color:#777">OFF</span></div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;border:1px solid #ddd;border-radius:8px;background:#fff;padding:7px 9px;color:#555">
+          <span>⌕</span><span style="font-size:12px">Search current section...</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Footer Search Bar</h3>
+      <p>Search appears near the bottom controls. It keeps breadcrumbs visible, but competes with app actions and is farther from the search toggle.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="width:260px;margin:auto;background:#f7f7f7;border-radius:14px;padding:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:Segoe UI,sans-serif;color:#222;position:relative">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+          <div style="width:18px;height:18px;border:1px solid #e54;border-radius:50%"></div>
+          <div style="flex:1"><b>Kronsztad</b><div style="font-size:10px;color:#666">Connected via local.</div></div>
+          <button style="width:30px;height:30px;border:1px solid #ddd;border-radius:6px;background:#fff">⌕</button>
+          <button style="width:30px;height:30px;border:1px solid #ddd;border-radius:6px;background:#fff">⌄</button>
+        </div>
+        <div style="font-size:12px;color:#777;margin-bottom:8px">⌂ › Oświetlenie</div>
+        <div style="position:absolute;left:14px;right:14px;top:70px;display:flex;gap:6px;align-items:center;border:1px solid #ccc;border-radius:10px;background:#fff;padding:9px;box-shadow:0 8px 20px rgba(0,0,0,.16);color:#555">
+          <span>⌕</span><span style="font-size:12px">Search...</span>
+        </div>
+        <div style="font-weight:600;margin:20px 0 8px">Oświetlenie</div>
+        <div style="display:grid;gap:5px;opacity:.55">
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">🔴 Kuchnia <span style="float:right;color:#777">OFF</span></div>
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">🔴 Lampka nocna <span style="float:right;color:#777">OFF</span></div>
+          <div style="background:#fff;border:1px solid #e6e6e6;border-radius:6px;padding:8px;font-size:12px">▦ Zaciemnienie ›</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Floating Overlay</h3>
+      <p>Search floats above content. It feels quick, but may obscure rows and complicate keyboard/focus behavior in the compact flyout.</p>
+    </div>
+  </div>
+</div>

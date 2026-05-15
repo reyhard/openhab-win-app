@@ -152,6 +152,7 @@ public partial class App : Application
             runtimeController,
             new WindowsBatteryInfoReader(),
             new WindowsNetworkInfoReader(),
+            new WindowsBluetoothInfoReader(),
             new WindowsFocusInfoReader(),
             windowsSessionInfoReader);
         deviceInfoSyncService = new DeviceInfoSyncService(

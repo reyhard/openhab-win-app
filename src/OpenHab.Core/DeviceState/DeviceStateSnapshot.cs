@@ -7,5 +7,7 @@ public sealed record DeviceStateSnapshot(
     string? SessionState,
     bool? IsWifiConnected,
     string? WifiName,
+    bool? IsBluetoothConnected,
+    string? BluetoothDeviceNames,
     string? OpenHabConnectionState,
     string? FocusState);

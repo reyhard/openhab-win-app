@@ -1,0 +1,2 @@
+{"type":"server-started","port":56678,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:56678","screen_dir":"D:\\Source\\Openhab\\openhab-win-app\\.superpowers\\brainstorm\\24040-1778669288\\content","state_dir":"D:\\Source\\Openhab\\openhab-win-app\\.superpowers\\brainstorm\\24040-1778669288\\state"}
+{"type":"server-stopped","reason":"owner process exited"}

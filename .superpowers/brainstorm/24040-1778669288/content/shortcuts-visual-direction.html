@@ -1,0 +1,112 @@
+<h2>Shortcuts Settings Direction</h2>
+<p class="subtitle">Pick the direction the spec should optimize for. I recommend A: it keeps the calm WinUI settings feel from mockup 1, while borrowing only the useful affordances from mockup 2.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:260px;padding:14px;background:#f8f8f8;border:1px solid #d8d8d8;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#202020">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">Shortcuts</div>
+        <div style="font-size:11px;color:#666;margin-bottom:16px">Configure global shortcuts and command menu actions.</div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">Built-in shortcuts</div>
+        <div style="border:1px solid #ddd;border-radius:6px;background:white;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #eee">
+            <div style="width:24px;height:24px;border-radius:50%;border:1px solid #aaa;display:grid;place-items:center;font-size:12px">⌘</div>
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:600">openHAB Command Menu</div>
+              <div style="font-size:10px;color:#666">Open the command menu anywhere.</div>
+            </div>
+            <div style="font-size:11px">On</div>
+            <div style="width:34px;height:18px;border-radius:10px;background:#1f5fae;position:relative"><div style="position:absolute;right:2px;top:2px;width:14px;height:14px;border-radius:50%;background:white"></div></div>
+          </div>
+          <div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:11px;color:#555;margin-bottom:8px">Global shortcut</div>
+              <div style="display:inline-flex;border:1px solid #d0d0d0;border-radius:4px;overflow:hidden;font-size:11px">
+                <span style="padding:6px 10px;background:#fafafa;border-right:1px solid #ddd">Win</span>
+                <span style="padding:6px 10px;background:#fafafa;border-right:1px solid #ddd">+</span>
+                <span style="padding:6px 10px;background:#fafafa">O</span>
+              </div>
+            </div>
+            <div style="width:230px;height:120px;border-radius:6px;background:#eef1f8;border:1px solid #d6dbe7;display:grid;place-items:center;color:#333;font-size:11px">Subtle command menu preview only where useful</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
+          <div style="height:86px;border:1px solid #ddd;border-radius:6px;background:white"></div>
+          <div style="height:86px;border:1px solid #ddd;border-radius:6px;background:white"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Restrained Hybrid</h3>
+      <p>Use mockup 1's calmer density and neutral styling. Borrow from mockup 2 only the useful parts: settings category entry, split edit panel, import action button, shortcut chips, and clearer action states.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:260px;padding:14px;background:#fbfdff;border:1px solid #cbd8e8;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#111">
+        <div style="display:grid;grid-template-columns:170px 1fr 150px;gap:12px;height:100%">
+          <div style="border:1px solid #d8e1ee;border-radius:8px;background:white;padding:10px">
+            <div style="font-weight:600;font-size:13px;margin-bottom:12px">Settings</div>
+            <div style="height:28px;background:#eef6ff;border-radius:4px;color:#0a65c7;font-size:10px;padding:8px">Shortcuts</div>
+          </div>
+          <div>
+            <div style="font-size:17px;font-weight:600;margin-bottom:14px">Shortcuts</div>
+            <div style="height:78px;border:1px solid #dbe3ee;border-radius:6px;background:white;margin-bottom:8px"></div>
+            <div style="height:78px;border:1px solid #dbe3ee;border-radius:6px;background:white;margin-bottom:10px"></div>
+            <div style="height:78px;border:1px solid #dbe3ee;border-radius:6px;background:white"></div>
+          </div>
+          <div style="border:1px solid #d3dbe8;border-radius:8px;background:white;padding:10px">
+            <div style="font-size:13px;font-weight:600;margin-bottom:12px">Edit action</div>
+            <div style="height:58px;border-radius:6px;background:#f2f5fb;margin-bottom:10px"></div>
+            <div style="height:24px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px"></div>
+            <div style="height:24px;border:1px solid #ddd;border-radius:4px;margin-bottom:8px"></div>
+            <div style="height:28px;background:#0067c0;border-radius:4px;margin-top:20px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Rich Settings Workspace</h3>
+      <p>Spec the full side navigation, table, and permanent right editor from mockup 2. More productive for power users, but larger scope and visually busier.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:260px;padding:14px;background:#fafafa;border:1px solid #ddd;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#222">
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px">Shortcuts</div>
+        <div style="font-size:11px;color:#666;margin-bottom:16px">Command menu and global shortcuts.</div>
+        <div style="height:72px;border:1px solid #ddd;border-radius:6px;background:white;margin-bottom:8px"></div>
+        <div style="height:72px;border:1px solid #ddd;border-radius:6px;background:white;margin-bottom:14px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:12px;font-weight:600">Actions</div>
+          <div style="height:28px;width:90px;background:#283145;border-radius:4px"></div>
+        </div>
+        <div style="height:94px;border:1px dashed #c8c8c8;border-radius:6px;background:white;display:grid;place-items:center;color:#777;font-size:12px">No actions yet</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Staged MVP</h3>
+      <p>Spec only the category shell, built-in cards, persistence, recorder, and empty/actions basics first. Defer command menu execution and global registration to later specs.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Recommendation</h4>
+      <ul>
+        <li>A fits the current settings implementation and the app's quieter Windows 11 direction.</li>
+        <li>It still gives us a complete spec for settings, command menu actions, shortcut registration, and execution.</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Key question</h4>
+      <ul>
+        <li>Should this spec describe the full feature end-to-end, or should it explicitly split the implementation into staged milestones?</li>
+      </ul>
+    </div>
+  </div>
+</div>

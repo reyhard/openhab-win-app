@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shortcuts Settings Direction</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f5f5f5;
+      color: #1f1f1f;
+    }
+    body {
+      margin: 0;
+      padding: 32px;
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      font-weight: 650;
+    }
+    .subtitle {
+      margin: 0 0 24px;
+      max-width: 900px;
+      color: #5f5f5f;
+      line-height: 1.45;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(260px, 1fr));
+      gap: 18px;
+      align-items: stretch;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #d8d8d8;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    .card.recommended {
+      border-color: #0067c0;
+      box-shadow: 0 0 0 2px rgba(0, 103, 192, 0.12), 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    .preview {
+      height: 280px;
+      padding: 14px;
+      background: #f8f8f8;
+      border-bottom: 1px solid #e2e2e2;
+      box-sizing: border-box;
+    }
+    .body {
+      padding: 14px 16px 16px;
+    }
+    .body h2 {
+      margin: 0 0 6px;
+      font-size: 17px;
+    }
+    .body p {
+      margin: 0;
+      color: #606060;
+      line-height: 1.45;
+      font-size: 13px;
+    }
+    .badge {
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: #e9f2ff;
+      color: #005a9e;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .mock-title {
+      font-size: 18px;
+      font-weight: 650;
+      margin-bottom: 4px;
+    }
+    .mock-subtitle {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 14px;
+    }
+    .section-label {
+      font-size: 12px;
+      font-weight: 650;
+      margin-bottom: 8px;
+    }
+    .row-card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .row-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+    }
+    .icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 1px solid #aaa;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      flex: 0 0 auto;
+    }
+    .grow { flex: 1; }
+    .row-title {
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .row-sub {
+      font-size: 10px;
+      color: #666;
+      margin-top: 2px;
+    }
+    .toggle {
+      width: 34px;
+      height: 18px;
+      border-radius: 10px;
+      background: #1f5fae;
+      position: relative;
+    }
+    .toggle:after {
+      content: "";
+      position: absolute;
+      right: 2px;
+      top: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+    }
+    .chips {
+      display: inline-flex;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      overflow: hidden;
+      font-size: 11px;
+      background: #fafafa;
+    }
+    .chips span {
+      padding: 6px 10px;
+      border-right: 1px solid #ddd;
+    }
+    .chips span:last-child {
+      border-right: 0;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 10px;
+    }
+    .blank {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: #fff;
+    }
+    .workspace {
+      display: grid;
+      grid-template-columns: 116px 1fr 104px;
+      gap: 10px;
+      height: 100%;
+    }
+    .side {
+      border: 1px solid #d8e1ee;
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    .blue-pill {
+      height: 28px;
+      background: #eef6ff;
+      border-radius: 4px;
+      color: #0a65c7;
+      font-size: 10px;
+      padding: 8px;
+      box-sizing: border-box;
+      margin-top: 12px;
+    }
+    .field {
+      height: 24px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+    .button {
+      height: 28px;
+      background: #0067c0;
+      border-radius: 4px;
+      margin-top: 16px;
+    }
+    .notes {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      max-width: 1100px;
+    }
+    .note {
+      background: #fff;
+      border: 1px solid #d8d8d8;
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .note h3 {
+      margin: 0 0 8px;
+      font-size: 15px;
+    }
+    .note ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #5d5d5d;
+      line-height: 1.45;
+      font-size: 13px;
+    }
+    @media (max-width: 1000px) {
+      .grid, .notes {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Shortcuts Settings Direction</h1>
+  <p class="subtitle">Pick the direction the spec should optimize for. I recommend A: it keeps the calm WinUI settings feel from mockup 1, while borrowing only the useful affordances from mockup 2.</p>
+
+  <div class="grid">
+    <section class="card recommended">
+      <div class="preview">
+        <div class="mock-title">Shortcuts</div>
+        <div class="mock-subtitle">Configure global shortcuts and command menu actions.</div>
+        <div class="section-label">Built-in shortcuts</div>
+        <div class="row-card">
+          <div class="row-head">
+            <div class="icon">⌘</div>
+            <div class="grow">
+              <div class="row-title">openHAB Command Menu</div>
+              <div class="row-sub">Open the command menu anywhere.</div>
+            </div>
+            <div style="font-size:11px">On</div>
+            <div class="toggle"></div>
+          </div>
+          <div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div>
+              <div style="font-size:11px;color:#555;margin-bottom:8px">Global shortcut</div>
+              <div class="chips"><span>Win</span><span>+</span><span>O</span></div>
+            </div>
+            <div style="width:180px;height:96px;border-radius:6px;background:#eef1f8;border:1px solid #d6dbe7;display:grid;place-items:center;color:#333;font-size:11px;text-align:center;padding:8px">Subtle command menu preview only where useful</div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="blank" style="height:68px"></div>
+          <div class="blank" style="height:68px"></div>
+        </div>
+      </div>
+      <div class="body">
+        <span class="badge">Recommended</span>
+        <h2>A. Restrained Hybrid</h2>
+        <p>Use mockup 1's calmer density and neutral styling. Borrow from mockup 2 only the useful parts: settings category entry, split edit panel, import action button, shortcut chips, and clearer action states.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="preview" style="background:#fbfdff">
+        <div class="workspace">
+          <div class="side">
+            <div style="font-weight:650;font-size:13px">Settings</div>
+            <div class="blue-pill">Shortcuts</div>
+          </div>
+          <div>
+            <div class="mock-title">Shortcuts</div>
+            <div class="blank" style="height:70px;margin-bottom:8px"></div>
+            <div class="blank" style="height:70px;margin-bottom:10px"></div>
+            <div class="blank" style="height:70px"></div>
+          </div>
+          <div class="side">
+            <div style="font-size:13px;font-weight:650;margin-bottom:12px">Edit action</div>
+            <div style="height:54px;border-radius:6px;background:#f2f5fb;margin-bottom:10px"></div>
+            <div class="field"></div>
+            <div class="field"></div>
+            <div class="button"></div>
+          </div>
+        </div>
+      </div>
+      <div class="body">
+        <h2>B. Rich Settings Workspace</h2>
+        <p>Spec the full side navigation, table, and permanent right editor from mockup 2. More productive for power users, but larger scope and visually busier.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="preview">
+        <div class="mock-title">Shortcuts</div>
+        <div class="mock-subtitle">Command menu and global shortcuts.</div>
+        <div class="blank" style="height:72px;margin-bottom:8px"></div>
+        <div class="blank" style="height:72px;margin-bottom:14px"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div class="section-label" style="margin:0">Actions</div>
+          <div style="height:28px;width:90px;background:#283145;border-radius:4px"></div>
+        </div>
+        <div style="height:86px;border:1px dashed #c8c8c8;border-radius:6px;background:white;display:grid;place-items:center;color:#777;font-size:12px">No actions yet</div>
+      </div>
+      <div class="body">
+        <h2>C. Staged MVP</h2>
+        <p>Spec only the category shell, built-in cards, persistence, recorder, and empty/actions basics first. Defer command menu execution and global registration to later specs.</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="notes">
+    <section class="note">
+      <h3>Recommendation</h3>
+      <ul>
+        <li>A fits the current settings implementation and the app's quieter Windows 11 direction.</li>
+        <li>It still gives us a complete spec for settings, command menu actions, shortcut registration, and execution.</li>
+      </ul>
+    </section>
+    <section class="note">
+      <h3>Decision Needed</h3>
+      <ul>
+        <li>Should the spec describe the full feature end-to-end, or explicitly split implementation into staged milestones?</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

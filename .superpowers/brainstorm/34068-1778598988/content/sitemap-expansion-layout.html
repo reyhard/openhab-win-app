@@ -1,0 +1,71 @@
+<h2>How should the sitemap expansion affect Main UI?</h2>
+<p class="subtitle">Main UI is the default center surface. The question is what happens when the user clicks the sitemap toggle.</p>
+
+<div class="cards">
+  <div class="card" data-choice="expand-window-preserve-main" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:300px;border-radius:16px;background:#f4f5f7;border:1px solid #d8dce3;display:grid;grid-template-columns:86px 1fr 300px;gap:10px;padding:12px;font-size:11px;color:#222;">
+        <div style="background:#fff;border:1px solid #dfe3ea;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px;">
+          <div style="font-weight:700;color:#f06423;">openHAB</div>
+          <div style="background:#eef2f7;border-radius:8px;padding:8px;">Home</div>
+          <div>Notifications</div>
+          <div>Settings</div>
+        </div>
+        <div style="background:#fff;border:1px solid #dfe3ea;border-radius:12px;padding:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><b>Main UI</b><span style="background:#f06423;color:white;border-radius:14px;padding:4px 8px;">Sitemap on</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="height:72px;background:#f7f8fb;border-radius:10px;"></div>
+            <div style="height:72px;background:#f7f8fb;border-radius:10px;"></div>
+            <div style="height:72px;background:#f7f8fb;border-radius:10px;"></div>
+            <div style="height:72px;background:#f7f8fb;border-radius:10px;"></div>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #dfe3ea;border-radius:12px;padding:14px;box-shadow:-14px 0 30px rgba(15,23,42,.08);">
+          <b>Native Sitemap</b>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+            <div style="height:42px;background:#f7f8fb;border-radius:8px;"></div>
+            <div style="height:42px;background:#f7f8fb;border-radius:8px;"></div>
+            <div style="height:42px;background:#f7f8fb;border-radius:8px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Expand Window, Preserve Main UI</h3>
+      <p>The window grows to the right and adds a sitemap column. Main UI keeps its working width, which best matches “possible to see both” without squeezing web content.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="split-current-window" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:300px;border-radius:16px;background:#f4f5f7;border:1px solid #d8dce3;display:grid;grid-template-columns:86px 1fr 300px;gap:10px;padding:12px;font-size:11px;color:#222;">
+        <div style="background:#fff;border:1px solid #dfe3ea;border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px;">
+          <div style="font-weight:700;color:#f06423;">openHAB</div>
+          <div style="background:#eef2f7;border-radius:8px;padding:8px;">Home</div>
+          <div>Notifications</div>
+          <div>Settings</div>
+        </div>
+        <div style="background:#fff;border:1px solid #dfe3ea;border-radius:12px;padding:14px;opacity:.85;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;"><b>Main UI squeezed</b><span style="background:#f06423;color:white;border-radius:14px;padding:4px 8px;">Sitemap</span></div>
+          <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+            <div style="height:48px;background:#f7f8fb;border-radius:10px;"></div>
+            <div style="height:48px;background:#f7f8fb;border-radius:10px;"></div>
+            <div style="height:48px;background:#f7f8fb;border-radius:10px;"></div>
+          </div>
+        </div>
+        <div style="background:#fff;border:1px solid #dfe3ea;border-radius:12px;padding:14px;">
+          <b>Native Sitemap</b>
+          <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+            <div style="height:42px;background:#f7f8fb;border-radius:8px;"></div>
+            <div style="height:42px;background:#f7f8fb;border-radius:8px;"></div>
+            <div style="height:42px;background:#f7f8fb;border-radius:8px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Split Existing Width</h3>
+      <p>The sitemap appears inside the current window width. It is simpler mechanically, but Main UI becomes narrow and may trigger mobile layouts or awkward wrapping.</p>
+    </div>
+  </div>
+</div>

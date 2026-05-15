@@ -18,3 +18,7 @@ publish/
 *.pubxml.user
 **/AppPackages/
 **/BundleArtifacts/
+/src/OpenHab.App/*.lscache
+/src/OpenHab.Windows.Package/*.cache
+/src/OpenHab.Windows.Package/*.user
+*.lscache

@@ -565,6 +565,8 @@ public sealed partial class SettingsPageControl : UserControl
         AddDeviceInfoSyncMappingTextBox(mappingContent, "SessionStateItem", "Session state", "SessionState");
         AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiConnectedItem", "Wi-Fi connected", "WifiConnected");
         AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiNameItem", "Wi-Fi name", "WifiName");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "BluetoothConnectedItem", "Bluetooth connected", "BluetoothConnected");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "BluetoothDeviceNamesItem", "Bluetooth devices", "BluetoothDeviceNames");
         AddDeviceInfoSyncMappingTextBox(mappingContent, "OpenHabConnectionItem", "openHAB connection", "OpenHabConnection");
         AddDeviceInfoSyncMappingTextBox(mappingContent, "FocusStateItem", "Focus / DND", "FocusState");
         SettingsContent.Children.Add(CreateSettingsExpander(
@@ -1329,6 +1331,8 @@ public sealed partial class SettingsPageControl : UserControl
             SetDeviceInfoSyncMappingText("SessionStateItem", deviceInfoSync.SessionStateItem);
             SetDeviceInfoSyncMappingText("WifiConnectedItem", deviceInfoSync.WifiConnectedItem);
             SetDeviceInfoSyncMappingText("WifiNameItem", deviceInfoSync.WifiNameItem);
+            SetDeviceInfoSyncMappingText("BluetoothConnectedItem", deviceInfoSync.BluetoothConnectedItem);
+            SetDeviceInfoSyncMappingText("BluetoothDeviceNamesItem", deviceInfoSync.BluetoothDeviceNamesItem);
             SetDeviceInfoSyncMappingText("OpenHabConnectionItem", deviceInfoSync.OpenHabConnectionItem);
             SetDeviceInfoSyncMappingText("FocusStateItem", deviceInfoSync.FocusStateItem);
             suppressFlyoutWidthChange = false;
@@ -2275,6 +2279,8 @@ public sealed partial class SettingsPageControl : UserControl
             SessionStateItem = GetDeviceInfoSyncMappingText("SessionStateItem", current.SessionStateItem),
             WifiConnectedItem = GetDeviceInfoSyncMappingText("WifiConnectedItem", current.WifiConnectedItem),
             WifiNameItem = GetDeviceInfoSyncMappingText("WifiNameItem", current.WifiNameItem),
+            BluetoothConnectedItem = GetDeviceInfoSyncMappingText("BluetoothConnectedItem", current.BluetoothConnectedItem),
+            BluetoothDeviceNamesItem = GetDeviceInfoSyncMappingText("BluetoothDeviceNamesItem", current.BluetoothDeviceNamesItem),
             OpenHabConnectionItem = GetDeviceInfoSyncMappingText("OpenHabConnectionItem", current.OpenHabConnectionItem),
             FocusStateItem = GetDeviceInfoSyncMappingText("FocusStateItem", current.FocusStateItem)
         };
