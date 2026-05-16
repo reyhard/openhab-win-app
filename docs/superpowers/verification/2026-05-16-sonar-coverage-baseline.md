@@ -38,3 +38,12 @@ The live Sonar measures and the local OpenCover reports both show the same shape
 ## Coverage Policy Evidence
 
 No coverage policy change is recorded in this baseline artifact. This file records measurement evidence only.
+
+## Post-Implementation Verification
+
+- Local commit under verification: `eb46c56`.
+- Sonar MCP snapshot after local commits, before a new remote analysis: coverage `31.6%`, line coverage `32.2%`, branch coverage `30.1%`, lines to cover `13,576`, uncovered lines `9,204`, conditions to cover `6,182`, uncovered conditions `4,320`, NCLOC `22,053`.
+- Quality gate snapshot after local commits, before a new remote analysis: `ERROR` due to `new_coverage` `29.6%` below the `80%` threshold; reliability, security, maintainability, duplication, and hotspot conditions were OK.
+- Local direct tests: `OpenHab.Sitemaps.Tests` passed with 39 tests; `OpenHab.Rendering.Tests` and `OpenHab.App.Tests` commands exited `0`; `OpenHab.Core.Tests` was blocked by `NU1301` socket access denial to `https://api.nuget.org/v3/index.json` even when retried with elevated sandbox permissions.
+- Local tray Release build: blocked by the same `NU1301` socket access denial to `https://api.nuget.org/v3/index.json` even when retried with elevated sandbox permissions.
+- Local coverage report regeneration was not completed because the Core test project could not run in this environment without NuGet access.
