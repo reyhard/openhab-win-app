@@ -7,11 +7,13 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using OpenHab.App.Localization;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
+using OpenHab.Windows.Tray.Localization;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Rendering.SitemapSurface;
 
@@ -19,8 +21,6 @@ namespace OpenHab.Windows.Tray.Notifications;
 
 public sealed partial class NotificationsPageControl : UserControl
 {
-    private const string DefaultNotificationTitle = "openHAB";
-
     private enum NotificationSortOrder
     {
         DateDescending,
@@ -32,12 +32,14 @@ public sealed partial class NotificationsPageControl : UserControl
     private readonly NotificationStore? notificationStore;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly DispatcherRefreshGate notificationRefreshGate;
+    private readonly ITextLocalizer text;
     private bool notificationControlsReady;
 
-    public NotificationsPageControl(AppSettingsController settingsController, NotificationStore? notificationStore)
+    public NotificationsPageControl(AppSettingsController settingsController, NotificationStore? notificationStore, ITextLocalizer? text = null)
     {
         this.settingsController = settingsController;
         this.notificationStore = notificationStore;
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
         sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
@@ -87,20 +89,20 @@ public sealed partial class NotificationsPageControl : UserControl
         }
     }
 
-    private static string GetEmptyNotificationsText(NotificationVisibilityFilter filter, string searchText)
+    private string GetEmptyNotificationsText(NotificationVisibilityFilter filter, string searchText)
     {
         if (!string.IsNullOrWhiteSpace(searchText))
         {
-            return "No matching notifications";
+            return text.Get("Notifications.Empty.NoMatches");
         }
 
         return filter switch
         {
-            NotificationVisibilityFilter.Unread => "No unread notifications",
-            NotificationVisibilityFilter.Read => "No read notifications",
-            NotificationVisibilityFilter.Hidden => "No hidden notifications",
-            NotificationVisibilityFilter.All => "No notifications",
-            _ => "No notifications"
+            NotificationVisibilityFilter.Unread => text.Get("Notifications.Empty.NoUnread"),
+            NotificationVisibilityFilter.Read => text.Get("Notifications.Empty.NoRead"),
+            NotificationVisibilityFilter.Hidden => text.Get("Notifications.Empty.NoHidden"),
+            NotificationVisibilityFilter.All => text.Get(AppResourceKeys.NotificationsEmptyNoNotifications),
+            _ => text.Get(AppResourceKeys.NotificationsEmptyNoNotifications)
         };
     }
 
@@ -110,7 +112,7 @@ public sealed partial class NotificationsPageControl : UserControl
 
         var readItem = new MenuFlyoutItem
         {
-            Text = notification.IsRead ? "Mark unread" : "Mark read",
+            Text = notification.IsRead ? text.Get("Notifications.MarkUnread") : text.Get("Notifications.MarkRead"),
             Icon = new FontIcon { Glyph = notification.IsRead ? "\uE119" : "\uE715" }
         };
         readItem.Click += (_, _) =>
@@ -128,7 +130,7 @@ public sealed partial class NotificationsPageControl : UserControl
 
         var visibilityItem = new MenuFlyoutItem
         {
-            Text = notification.IsDismissed ? "Unhide" : "Hide",
+            Text = notification.IsDismissed ? text.Get("Notifications.Unhide") : text.Get("Notifications.Hide"),
             Icon = new FontIcon { Glyph = notification.IsDismissed ? "\uE8A7" : "\uE8F5" }
         };
         visibilityItem.Click += (_, _) =>
@@ -174,18 +176,18 @@ public sealed partial class NotificationsPageControl : UserControl
             {
                 NotificationSortOrder.DateAscending => notifications
                     .OrderBy(n => n.Created)
-                    .ThenBy(n => n.Title ?? DefaultNotificationTitle, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle), StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Id, StringComparer.Ordinal)
                     .ToList(),
                 NotificationSortOrder.Name => notifications
-                    .OrderBy(n => n.Title ?? DefaultNotificationTitle, StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(n => n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle), StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Id, StringComparer.Ordinal)
                     .ToList(),
                 _ => notifications
                     .OrderByDescending(n => n.Created)
-                    .ThenBy(n => n.Title ?? DefaultNotificationTitle, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(n => n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle), StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(n => n.Id, StringComparer.Ordinal)
                     .ToList()
@@ -208,7 +210,7 @@ public sealed partial class NotificationsPageControl : UserControl
                 var timeStr = FormatElapsedTime(elapsed);
 
                 var isUnread = !n.IsRead && !n.IsDismissed;
-                var title = n.Title ?? DefaultNotificationTitle;
+                var title = n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle);
                 var hasTag = !string.IsNullOrWhiteSpace(n.Severity);
 
                 var row = new Grid
@@ -423,20 +425,20 @@ public sealed partial class NotificationsPageControl : UserControl
         }
     }
 
-    private static string FormatElapsedTime(TimeSpan elapsed)
+    private string FormatElapsedTime(TimeSpan elapsed)
     {
         if (elapsed.TotalMinutes < 1)
         {
-            return "Just now";
+            return text.Get(AppResourceKeys.NotificationsElapsedJustNow);
         }
 
         if (elapsed.TotalHours < 1)
         {
-            return $"{(int)elapsed.TotalMinutes}m ago";
+            return text.Format(AppResourceKeys.NotificationsElapsedMinutesAgo, (int)elapsed.TotalMinutes);
         }
 
         return elapsed.TotalDays < 1
-            ? $"{(int)elapsed.TotalHours}h ago"
-            : $"{(int)elapsed.TotalDays}d ago";
+            ? text.Format(AppResourceKeys.NotificationsElapsedHoursAgo, (int)elapsed.TotalHours)
+            : text.Format(AppResourceKeys.NotificationsElapsedDaysAgo, (int)elapsed.TotalDays);
     }
 }

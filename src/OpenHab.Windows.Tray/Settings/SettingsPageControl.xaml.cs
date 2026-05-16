@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using OpenHab.App.Localization;
 using OpenHab.App.Settings;
 using OpenHab.App.Shortcuts;
 using OpenHab.Core;
@@ -45,6 +46,7 @@ public sealed partial class SettingsPageControl : UserControl
     private readonly AppSettingsController settingsController;
     private readonly Func<Task> refreshRuntimeAsync;
     private readonly Action<string> setStatusText;
+    private readonly ITextLocalizer text;
     private SettingsPageKind currentSettingsPage = SettingsPageKind.Root;
     private bool isSettingsPageTransitionRunning;
     private bool suppressTokenEditTracking;
@@ -95,11 +97,13 @@ public sealed partial class SettingsPageControl : UserControl
     public SettingsPageControl(
         AppSettingsController settingsController,
         Func<Task> refreshRuntimeAsync,
-        Action<string> setStatusText)
+        Action<string> setStatusText,
+        ITextLocalizer? text = null)
     {
         this.settingsController = settingsController;
         this.refreshRuntimeAsync = refreshRuntimeAsync;
         this.setStatusText = setStatusText;
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
         InitializeComponent();
         InitializeSettingsControls();
         RefreshSettingsBindings();
@@ -139,42 +143,42 @@ public sealed partial class SettingsPageControl : UserControl
         {
             case SettingsPageKind.Root:
                 UpdateSettingsBreadcrumb(null);
-                SettingsSubtitleText.Text = "Choose a category";
-                SettingsContent.Children.Add(CreateCategoryRow("\uE713", "Connection", "Endpoints and credentials", SettingsPageKind.Connection));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE770", "General", "Startup, flyout width, notifications", SettingsPageKind.General));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE790", "Appearance", "Skin, theme, icon style", SettingsPageKind.Appearance));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", DeviceInfoSyncTitle, "Configure device metadata sync", SettingsPageKind.DeviceInfoSync));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE765", "Shortcuts", "Command menu and global shortcuts", SettingsPageKind.Shortcuts));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE946", "About", "Logs and version", SettingsPageKind.About));
+                SettingsSubtitleText.Text = text.Get("Settings.Root.Subtitle");
+                SettingsContent.Children.Add(CreateCategoryRow("\uE713", text.Get("Settings.Connection.Title"), text.Get("Settings.Connection.Subtitle"), SettingsPageKind.Connection));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE770", text.Get("Settings.General.Title"), text.Get("Settings.General.Subtitle"), SettingsPageKind.General));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE790", text.Get("Settings.Appearance.Title"), text.Get("Settings.Appearance.Subtitle"), SettingsPageKind.Appearance));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", text.Get("Settings.DeviceInfoSync.Title"), text.Get("Settings.DeviceInfoSync.Subtitle"), SettingsPageKind.DeviceInfoSync));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE765", text.Get("Settings.Shortcuts.Title"), text.Get("Settings.Shortcuts.Subtitle"), SettingsPageKind.Shortcuts));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE946", text.Get("Settings.About.Title"), text.Get("Settings.About.Subtitle"), SettingsPageKind.About));
                 break;
             case SettingsPageKind.Connection:
-                UpdateSettingsBreadcrumb("Connection");
-                SettingsSubtitleText.Text = "Endpoints and credentials";
+                UpdateSettingsBreadcrumb(text.Get("Settings.Connection.Title"));
+                SettingsSubtitleText.Text = text.Get("Settings.Connection.Subtitle");
                 BuildConnectionSettingsPage();
                 break;
             case SettingsPageKind.General:
-                UpdateSettingsBreadcrumb("General");
-                SettingsSubtitleText.Text = "Startup and runtime behavior";
+                UpdateSettingsBreadcrumb(text.Get("Settings.General.Title"));
+                SettingsSubtitleText.Text = text.Get("Settings.General.PageSubtitle");
                 BuildGeneralSettingsPage();
                 break;
             case SettingsPageKind.Appearance:
-                UpdateSettingsBreadcrumb("Appearance");
-                SettingsSubtitleText.Text = "Visual options";
+                UpdateSettingsBreadcrumb(text.Get("Settings.Appearance.Title"));
+                SettingsSubtitleText.Text = text.Get("Settings.Appearance.PageSubtitle");
                 BuildAppearanceSettingsPage();
                 break;
             case SettingsPageKind.DeviceInfoSync:
-                UpdateSettingsBreadcrumb(DeviceInfoSyncTitle);
-                SettingsSubtitleText.Text = "Configure device metadata sync";
+                UpdateSettingsBreadcrumb(text.Get("Settings.DeviceInfoSync.Title"));
+                SettingsSubtitleText.Text = text.Get("Settings.DeviceInfoSync.Subtitle");
                 BuildDeviceInfoSyncSettingsPage();
                 break;
             case SettingsPageKind.Shortcuts:
-                UpdateSettingsBreadcrumb("Shortcuts");
-                SettingsSubtitleText.Text = "Configure global shortcuts and command menu actions.";
+                UpdateSettingsBreadcrumb(text.Get("Settings.Shortcuts.Title"));
+                SettingsSubtitleText.Text = text.Get("Settings.Shortcuts.PageSubtitle");
                 BuildShortcutsSettingsPage();
                 break;
             case SettingsPageKind.About:
-                UpdateSettingsBreadcrumb("About");
-                SettingsSubtitleText.Text = "Diagnostics and version";
+                UpdateSettingsBreadcrumb(text.Get("Settings.About.Title"));
+                SettingsSubtitleText.Text = text.Get("Settings.About.Subtitle");
                 BuildAboutSettingsPage();
                 break;
         }
@@ -248,7 +252,7 @@ public sealed partial class SettingsPageControl : UserControl
         var isRoot = string.IsNullOrWhiteSpace(pageTitle);
         SettingsBreadcrumbRootButton.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
         SettingsBreadcrumbChevron.Visibility = isRoot ? Visibility.Collapsed : Visibility.Visible;
-        SettingsTitleText.Text = isRoot ? "Settings" : pageTitle;
+        SettingsTitleText.Text = isRoot ? text.Get("Settings.Title") : pageTitle;
     }
 
     private void AddSettingsSectionTitle(string title)

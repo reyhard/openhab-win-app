@@ -232,6 +232,57 @@
   <data name="Tray.Exit" xml:space="preserve">
     <value>Exit</value>
   </data>
+  <data name="Settings.Title" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Settings.Root.Subtitle" xml:space="preserve">
+    <value>Choose a category</value>
+  </data>
+  <data name="Settings.Connection.Title" xml:space="preserve">
+    <value>Connection</value>
+  </data>
+  <data name="Settings.Connection.Subtitle" xml:space="preserve">
+    <value>Endpoints and credentials</value>
+  </data>
+  <data name="Settings.General.Title" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings.General.Subtitle" xml:space="preserve">
+    <value>Startup, flyout width, notifications</value>
+  </data>
+  <data name="Settings.General.PageSubtitle" xml:space="preserve">
+    <value>Startup and runtime behavior</value>
+  </data>
+  <data name="Settings.Appearance.Title" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Settings.Appearance.Subtitle" xml:space="preserve">
+    <value>Skin, theme, icon style</value>
+  </data>
+  <data name="Settings.Appearance.PageSubtitle" xml:space="preserve">
+    <value>Visual options</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Title" xml:space="preserve">
+    <value>Device Info Sync</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Subtitle" xml:space="preserve">
+    <value>Configure device metadata sync</value>
+  </data>
+  <data name="Settings.Shortcuts.Title" xml:space="preserve">
+    <value>Shortcuts</value>
+  </data>
+  <data name="Settings.Shortcuts.Subtitle" xml:space="preserve">
+    <value>Command menu and global shortcuts</value>
+  </data>
+  <data name="Settings.Shortcuts.PageSubtitle" xml:space="preserve">
+    <value>Configure global shortcuts and command menu actions.</value>
+  </data>
+  <data name="Settings.About.Title" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="Settings.About.Subtitle" xml:space="preserve">
+    <value>Logs and version</value>
+  </data>
   <data name="Runtime.Status.Loading" xml:space="preserve">
     <value>Loading...</value>
   </data>
@@ -326,6 +377,12 @@
   </data>
   <data name="ShortcutRecorder.ShortcutRequired" xml:space="preserve">
     <value>Shortcut is required.</value>
+  </data>
+  <data name="ShortcutRecorder.UnsupportedKey" xml:space="preserve">
+    <value>Unsupported key.</value>
+  </data>
+  <data name="ShortcutRecorder.UseAtLeastOneModifier" xml:space="preserve">
+    <value>Use at least one modifier key.</value>
   </data>
   <data name="ShortcutInteractive.CommandSendFailed" xml:space="preserve">
     <value>Command could not be sent.</value>

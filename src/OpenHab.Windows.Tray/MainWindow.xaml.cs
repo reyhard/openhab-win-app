@@ -14,6 +14,7 @@ using Windows.Graphics;
 using Windows.System;
 using Windows.UI;
 using Windows.UI.ViewManagement;
+using OpenHab.App.Localization;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Shell;
@@ -25,6 +26,7 @@ using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.MainUi;
+using OpenHab.Windows.Tray.Localization;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Rendering.SitemapSurface;
 namespace OpenHab.Windows.Tray;
@@ -51,6 +53,7 @@ public sealed partial class MainWindow : Window
     private readonly Func<bool> shouldAllowClose;
     private readonly Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory;
     private readonly Func<TransportKind, MainUiAuthContext> mainUiAuthResolver;
+    private readonly ITextLocalizer text;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
@@ -129,7 +132,8 @@ public sealed partial class MainWindow : Window
         Action requestHideToTray,
         Func<bool>? shouldAllowClose,
         Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory,
-        Func<TransportKind, MainUiAuthContext>? mainUiAuthResolver = null)
+        Func<TransportKind, MainUiAuthContext>? mainUiAuthResolver = null,
+        ITextLocalizer? text = null)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
@@ -138,6 +142,7 @@ public sealed partial class MainWindow : Window
         this.shouldAllowClose = shouldAllowClose ?? (() => false);
         this.openHabClientFactory = openHabClientFactory;
         this.mainUiAuthResolver = mainUiAuthResolver ?? (_ => MainUiAuthContext.None);
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
         sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
         sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
             settingsController,
@@ -299,14 +304,14 @@ public sealed partial class MainWindow : Window
 
     private void ShowNotificationsPage()
     {
-        notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore);
+        notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore, text);
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(notificationsPage);
     }
 
     private void ShowSettingsPage()
     {
-        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, SetShellStatusText);
+        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, SetShellStatusText, text);
         settingsPage.PointerPressed -= SettingsPage_PointerPressed;
         settingsPage.PointerPressed += SettingsPage_PointerPressed;
         settingsPage.ShowRoot();

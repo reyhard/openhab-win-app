@@ -10,6 +10,7 @@ using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
 using OpenHab.App.Notifications;
 using OpenHab.App.Sitemaps;
+using OpenHab.App.Localization;
 using OpenHab.Core.Api;
 using OpenHab.Core.Auth;
 using OpenHab.Core.Profiles;
@@ -18,6 +19,7 @@ using OpenHab.Core.Events;
 using OpenHab.App.DeviceInfo;
 using OpenHab.Windows.Notifications;
 using OpenHab.Windows.Tray.Rendering;
+using OpenHab.Windows.Tray.Localization;
 using OpenHab.Windows.Tray.Tray;
 using OpenHab.Windows.Tray.Startup;
 using OpenHab.Windows.Tray.DeviceInfo;
@@ -44,6 +46,7 @@ public partial class App : Application
     private MainWindow? mainWindow;
     private FlyoutWindow? flyoutWindow;
     private TrayIconService? trayIcon;
+    private readonly ITextLocalizer textLocalizer = new WinUiTextLocalizer();
     private TrayShellController? shellController;
     private AppSettingsController? settingsController;
     private DispatcherQueue? uiDispatcherQueue;
@@ -165,6 +168,8 @@ public partial class App : Application
             CreateActiveShortcutClient,
             () => runtimeController?.Current.ConnectionState ?? ConnectionState.Offline);
         radialCommandMenuWindow = new RadialCommandMenuWindow();
+        ShortcutRecorderControl.TextLocalizer = textLocalizer;
+        SitemapControlFactory.TextLocalizer = textLocalizer;
 
         trayIcon = new TrayIconService(
             toggleFlyout: () =>
@@ -180,7 +185,8 @@ public partial class App : Application
             exitApplication: () =>
             {
                 RequestApplicationExit();
-            });
+            },
+            text: textLocalizer);
         hotkeyMessageWindow = new HotkeyMessageWindow();
         globalHotkeyService = new GlobalHotkeyService(
             hotkeyMessageWindow.Handle,
@@ -257,7 +263,8 @@ public partial class App : Application
             {
                 var auth = ResolveRuntimeAuthSync(settings, transportKind);
                 return new MainUi.MainUiAuthContext(auth.ApiToken, auth.BasicUserName, auth.BasicPassword);
-            });
+            },
+            text: textLocalizer);
 
         PopulateWindowSitemaps(window);
         return window;
