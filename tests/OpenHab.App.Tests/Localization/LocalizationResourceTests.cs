@@ -41,6 +41,28 @@ public sealed partial class LocalizationResourceTests
         }
     }
 
+    [Fact]
+    public void XamlResourceIdsHaveEnglishResourceEntries()
+    {
+        var document = XDocument.Load(EnglishResourcesPath);
+        var resourceNames = ReadResourceNames(document);
+        var xamlFiles = Directory.GetFiles(
+            Path.Combine(RepositoryRootPath, "src", "OpenHab.Windows.Tray"),
+            "*.xaml",
+            SearchOption.AllDirectories);
+
+        var resourceIds = xamlFiles
+            .SelectMany(File.ReadLines)
+            .SelectMany(line => XamlUidRegex().Matches(line).Select(match => match.Groups[1].Value))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var resourceId in resourceIds)
+        {
+            Assert.Contains(resourceNames, name => name.StartsWith(resourceId + ".", StringComparison.Ordinal));
+        }
+    }
+
     private static string EnglishResourcesPath => Path.Combine(StringsRootPath, "en-US", "Resources.resw");
 
     private static string StringsRootPath => Path.Combine(RepositoryRootPath, "src", "OpenHab.Windows.Tray", "Strings");
@@ -77,4 +99,7 @@ public sealed partial class LocalizationResourceTests
 
     [GeneratedRegex("\\{\\d+[^}]*\\}")]
     private static partial Regex CompositePlaceholderRegex();
+
+    [GeneratedRegex("x:Uid=\"([^\"]+)\"")]
+    private static partial Regex XamlUidRegex();
 }
