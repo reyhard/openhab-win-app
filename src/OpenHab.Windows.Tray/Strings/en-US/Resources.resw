@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!-- Attention translators: translate app-owned UI text only. Do not translate openHAB, item names, URL examples, file names, shortcut key names, or placeholders like {0}. -->
+  <data name="App.Name" xml:space="preserve">
+    <value>openHAB</value>
+    <comment>Product name. Usually not translated.</comment>
+  </data>
+  <data name="App.Description" xml:space="preserve">
+    <value>openHAB Windows companion app</value>
+  </data>
+  <data name="AppDisplayName" xml:space="preserve">
+    <value>openHAB</value>
+    <comment>Product name. Usually not translated.</comment>
+  </data>
+  <data name="AppDescription" xml:space="preserve">
+    <value>openHAB Windows companion app</value>
+  </data>
+  <data name="Common.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Common.Continue" xml:space="preserve">
+    <value>Continue</value>
+  </data>
+  <data name="Common.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Common.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Common.Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Common.Reset" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="Common.Edit" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="MainWindow_SidebarCollapseButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Collapse navigation</value>
+  </data>
+  <data name="MainWindow_SidebarCollapseButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Collapse navigation</value>
+  </data>
+  <data name="MainWindow_ToggleSitemapButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Show sitemap</value>
+  </data>
+  <data name="MainWindow_ToggleSitemapButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Show sitemap</value>
+  </data>
+  <data name="MainWindow_SidebarBrandSubtitle.Text" xml:space="preserve">
+    <value>Windows companion</value>
+  </data>
+  <data name="MainWindow_HomeNavButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="MainWindow_HomeNavButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="MainWindow_HomeNavText.Text" xml:space="preserve">
+    <value>Home</value>
+  </data>
+  <data name="MainWindow_HomePagesToggleButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Show Main UI pages</value>
+  </data>
+  <data name="MainWindow_HomePagesToggleButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Show Main UI pages</value>
+  </data>
+  <data name="MainWindow_NotificationsNavButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="MainWindow_NotificationsNavButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="MainWindow_NotificationsNavText.Text" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="MainWindow_SettingsNavButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="MainWindow_SettingsNavButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="MainWindow_SettingsNavText.Text" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="MainWindow_ShellConnectionText.Text" xml:space="preserve">
+    <value>Connecting...</value>
+  </data>
+  <data name="MainWindow_ShellConnectionSubtitle.Text" xml:space="preserve">
+    <value>to openHAB server</value>
+  </data>
+  <data name="MainWindow_SitemapHeaderArea.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Choose sitemap</value>
+  </data>
+  <data name="MainWindow_SitemapHeaderArea.AutomationProperties.Name" xml:space="preserve">
+    <value>Choose sitemap</value>
+  </data>
+  <data name="MainWindow_SitemapTitleText.Text" xml:space="preserve">
+    <value>Sitemap</value>
+  </data>
+  <data name="MainWindow_SearchSitemapButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Search sitemap</value>
+  </data>
+  <data name="MainWindow_SearchSitemapButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Search sitemap</value>
+  </data>
+  <data name="MainWindow_RefreshSitemapButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Refresh sitemap</value>
+  </data>
+  <data name="MainWindow_RefreshSitemapButton.AutomationProperties.Name" xml:space="preserve">
+    <value>Refresh sitemap</value>
+  </data>
+  <data name="MainWindow_SitemapSearchBox.PlaceholderText" xml:space="preserve">
+    <value>Search current section...</value>
+  </data>
+  <data name="Flyout_SearchButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Search sitemap</value>
+  </data>
+  <data name="Flyout_MinimizeButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Minimize flyout</value>
+  </data>
+  <data name="Flyout_SitemapSearchBox.PlaceholderText" xml:space="preserve">
+    <value>Search current section...</value>
+  </data>
+  <data name="Flyout_RefreshButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Flyout_NotificationsButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Open notifications</value>
+  </data>
+  <data name="Flyout_OpenMainWindowButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Open main window</value>
+  </data>
+  <data name="Flyout_SettingsButton.ToolTipService.ToolTip" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SettingsPage_RootButton.Content" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="SettingsPage_TitleText.Text" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="NotificationsPage_SearchBox.PlaceholderText" xml:space="preserve">
+    <value>Search notifications</value>
+  </data>
+  <data name="NotificationsPage_FilterVisible.Content" xml:space="preserve">
+    <value>Visible</value>
+  </data>
+  <data name="NotificationsPage_FilterUnread.Content" xml:space="preserve">
+    <value>Unread</value>
+  </data>
+  <data name="NotificationsPage_FilterRead.Content" xml:space="preserve">
+    <value>Read</value>
+  </data>
+  <data name="NotificationsPage_FilterHidden.Content" xml:space="preserve">
+    <value>Hidden</value>
+  </data>
+  <data name="NotificationsPage_FilterAll.Content" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="NotificationsPage_SortNewest.Content" xml:space="preserve">
+    <value>Newest</value>
+  </data>
+  <data name="NotificationsPage_SortOldest.Content" xml:space="preserve">
+    <value>Oldest</value>
+  </data>
+  <data name="NotificationsPage_SortName.Content" xml:space="preserve">
+    <value>Name</value>
+  </data>
+  <data name="NotificationsPage_MarkAllReadButton.Content" xml:space="preserve">
+    <value>Mark all read</value>
+  </data>
+  <data name="NotificationsPage_LocalOnlyNote.Text" xml:space="preserve">
+    <value>New notifications unavailable in Local-Only mode. Switch to Automatic or Cloud to receive alerts.</value>
+  </data>
+  <data name="NotificationsPage_EmptyText.Text" xml:space="preserve">
+    <value>No notifications</value>
+  </data>
+  <data name="Notifications.DefaultTitle" xml:space="preserve">
+    <value>openHAB</value>
+    <comment>Fallback notification title. Usually not translated.</comment>
+  </data>
+  <data name="Notifications.Empty.NoMatches" xml:space="preserve">
+    <value>No matching notifications</value>
+  </data>
+  <data name="Notifications.Empty.NoUnread" xml:space="preserve">
+    <value>No unread notifications</value>
+  </data>
+  <data name="Notifications.Empty.NoRead" xml:space="preserve">
+    <value>No read notifications</value>
+  </data>
+  <data name="Notifications.Empty.NoHidden" xml:space="preserve">
+    <value>No hidden notifications</value>
+  </data>
+  <data name="Notifications.Empty.NoNotifications" xml:space="preserve">
+    <value>No notifications</value>
+  </data>
+  <data name="Notifications.MarkUnread" xml:space="preserve">
+    <value>Mark unread</value>
+  </data>
+  <data name="Notifications.MarkRead" xml:space="preserve">
+    <value>Mark read</value>
+  </data>
+  <data name="Notifications.Unhide" xml:space="preserve">
+    <value>Unhide</value>
+  </data>
+  <data name="Notifications.Hide" xml:space="preserve">
+    <value>Hide</value>
+  </data>
+  <data name="Notifications.Elapsed.JustNow" xml:space="preserve">
+    <value>Just now</value>
+  </data>
+  <data name="Notifications.Elapsed.MinutesAgo" xml:space="preserve">
+    <value>{0}m ago</value>
+    <comment>{0}: number of elapsed minutes. Keep short for narrow notification rows.</comment>
+  </data>
+  <data name="Notifications.Elapsed.HoursAgo" xml:space="preserve">
+    <value>{0}h ago</value>
+    <comment>{0}: number of elapsed hours. Keep short for narrow notification rows.</comment>
+  </data>
+  <data name="Notifications.Elapsed.DaysAgo" xml:space="preserve">
+    <value>{0}d ago</value>
+    <comment>{0}: number of elapsed days. Keep short for narrow notification rows.</comment>
+  </data>
+  <data name="Tray.OpenFlyout" xml:space="preserve">
+    <value>Open flyout</value>
+  </data>
+  <data name="Tray.OpenMainWindow" xml:space="preserve">
+    <value>Open main window</value>
+  </data>
+  <data name="Tray.Exit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="Runtime.Status.Loading" xml:space="preserve">
+    <value>Loading...</value>
+  </data>
+  <data name="Runtime.Connection.Failed" xml:space="preserve">
+    <value>Connection failed.</value>
+  </data>
+  <data name="Runtime.Connection.FallbackFailed" xml:space="preserve">
+    <value>Fallback failed.</value>
+  </data>
+  <data name="Runtime.Connection.ConnectedViaCloudLocalFailed" xml:space="preserve">
+    <value>Connected via cloud (local failed).</value>
+  </data>
+  <data name="Runtime.Connection.ConnectedViaCloud" xml:space="preserve">
+    <value>Connected via cloud ({0})</value>
+    <comment>{0}: connection state.</comment>
+  </data>
+  <data name="Runtime.Connection.ConnectedViaLocal" xml:space="preserve">
+    <value>Connected via local ({0})</value>
+    <comment>{0}: connection state.</comment>
+  </data>
+  <data name="Runtime.Connection.State" xml:space="preserve">
+    <value>Connection: {0}</value>
+    <comment>{0}: connection state.</comment>
+  </data>
+  <data name="Runtime.LiveUpdates.UnavailableRefreshManually" xml:space="preserve">
+    <value>Live updates unavailable. Refresh manually.</value>
+  </data>
+  <data name="Runtime.MainUi.LoadError" xml:space="preserve">
+    <value>Error: Main UI could not be loaded.</value>
+  </data>
+  <data name="Runtime.Error" xml:space="preserve">
+    <value>Error.</value>
+  </data>
+  <data name="Sitemap.Search.ResultsTitle" xml:space="preserve">
+    <value>Search results</value>
+  </data>
+  <data name="Sitemap.Action.Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Sitemap.WebView.NoUrlConfigured" xml:space="preserve">
+    <value>No URL configured</value>
+  </data>
+  <data name="Sitemap.WebView.OpenInBrowser" xml:space="preserve">
+    <value>Open in browser</value>
+  </data>
+  <data name="Sitemap.Chart.RequiresItem" xml:space="preserve">
+    <value>Chart requires an item</value>
+  </data>
+  <data name="Shortcuts.Validation.TargetItemRequired" xml:space="preserve">
+    <value>Target Item is required.</value>
+  </data>
+  <data name="Shortcuts.Validation.CommandValueRequired" xml:space="preserve">
+    <value>Command value is required for this action type.</value>
+  </data>
+  <data name="Shortcuts.Validation.BindingAlreadyUsed" xml:space="preserve">
+    <value>Shortcut is already used by {0}.</value>
+    <comment>{0}: owner of the existing shortcut.</comment>
+  </data>
+  <data name="Shortcuts.CommandMenu.OwnerName" xml:space="preserve">
+    <value>openHAB Command Menu</value>
+  </data>
+  <data name="Shortcuts.ActionOwner" xml:space="preserve">
+    <value>Action: {0}</value>
+    <comment>{0}: action name.</comment>
+  </data>
+  <data name="Shortcuts.UnnamedAction" xml:space="preserve">
+    <value>Unnamed action</value>
+  </data>
+  <data name="ShortcutRecorder.Dialog.Title" xml:space="preserve">
+    <value>Activation shortcut</value>
+  </data>
+  <data name="ShortcutRecorder.EditShortcut" xml:space="preserve">
+    <value>Edit shortcut</value>
+  </data>
+  <data name="ShortcutRecorder.ClearShortcut" xml:space="preserve">
+    <value>Clear shortcut</value>
+  </data>
+  <data name="ShortcutRecorder.PressModifierAndKey" xml:space="preserve">
+    <value>Press a modifier and key.</value>
+  </data>
+  <data name="ShortcutRecorder.RequiresModifier" xml:space="preserve">
+    <value>Shortcut must start with Windows, Ctrl, Alt, or Shift.</value>
+  </data>
+  <data name="ShortcutRecorder.ResetToCurrent" xml:space="preserve">
+    <value>Reset to current shortcut.</value>
+  </data>
+  <data name="ShortcutRecorder.ShortcutCleared" xml:space="preserve">
+    <value>Shortcut cleared.</value>
+  </data>
+  <data name="ShortcutRecorder.ShortcutRequiredForControl" xml:space="preserve">
+    <value>Shortcut is required for this control.</value>
+  </data>
+  <data name="ShortcutRecorder.ShortcutRequired" xml:space="preserve">
+    <value>Shortcut is required.</value>
+  </data>
+  <data name="ShortcutInteractive.CommandSendFailed" xml:space="preserve">
+    <value>Command could not be sent.</value>
+  </data>
+</root>

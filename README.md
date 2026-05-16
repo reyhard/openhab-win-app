@@ -104,6 +104,14 @@ Useful files include:
 
 Do not post full logs publicly if they can include endpoint URLs, item names, notification payloads, credentials, tokens, or other private information.
 
+## Localization
+
+English source strings live in `src/OpenHab.Windows.Tray/Strings/en-US/Resources.resw`.
+Translated `src/OpenHab.Windows.Tray/Strings/<locale>/Resources.resw` files are managed through Crowdin.
+Please do not submit direct pull requests for generated translation files; submit translations through the Crowdin project once it is published.
+
+Only app-owned UI text belongs in the resource file. Do not localize openHAB-provided sitemap labels, item names, endpoint URLs, notification payload text, command values, diagnostic details, or other user/server data.
+
 ## Packaging And Signing
 
 Release signing is not finalized. Official distribution must use signing certificates, package identity, and release infrastructure owned by the appropriate openHAB maintainers.
