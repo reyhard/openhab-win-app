@@ -112,6 +112,8 @@ Please do not submit direct pull requests for generated translation files; submi
 
 Only app-owned UI text belongs in the resource file. Do not localize openHAB-provided sitemap labels, item names, endpoint URLs, notification payload text, command values, diagnostic details, or other user/server data.
 
+Maintainers still need to create or connect the Crowdin project, preferably under the openHAB organization. The repository is prepared for a project slug such as `openhab-windows`, but the final slug, bot identity, and supported-language list should be owned by the release maintainers.
+
 ## Packaging And Signing
 
 Release signing is not finalized. Official distribution must use signing certificates, package identity, and release infrastructure owned by the appropriate openHAB maintainers.
