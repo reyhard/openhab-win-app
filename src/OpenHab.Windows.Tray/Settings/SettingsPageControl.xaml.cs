@@ -45,6 +45,7 @@ public sealed partial class SettingsPageControl : UserControl
     private readonly AppSettingsController settingsController;
     private readonly Func<Task> refreshRuntimeAsync;
     private readonly Action<string> setStatusText;
+    private readonly ShortcutActionEditorPlanner shortcutActionEditorPlanner = new();
     private SettingsPageKind currentSettingsPage = SettingsPageKind.Root;
     private bool isSettingsPageTransitionRunning;
     private bool suppressTokenEditTracking;
@@ -1932,15 +1933,7 @@ public sealed partial class SettingsPageControl : UserControl
     {
         if (creatingShortcutAction)
         {
-            return new ShortcutAction(
-                Guid.NewGuid().ToString("N"),
-                string.Empty,
-                CustomShortcutIconId,
-                ShowInCommandMenu: true,
-                GlobalShortcut: null,
-                TargetItem: string.Empty,
-                CommandType: ShortcutCommandType.Toggle,
-                CommandValue: null);
+            return shortcutActionEditorPlanner.BuildAction(ShortcutActionEditorPlanner.CreateDraft(null));
         }
 
         if (string.IsNullOrWhiteSpace(editingShortcutActionId))
@@ -1948,7 +1941,13 @@ public sealed partial class SettingsPageControl : UserControl
             return null;
         }
 
-        return actions.FirstOrDefault(action => string.Equals(action.Id, editingShortcutActionId, StringComparison.Ordinal));
+        var existing = actions.FirstOrDefault(action => string.Equals(action.Id, editingShortcutActionId, StringComparison.Ordinal));
+        if (existing is null)
+        {
+            return null;
+        }
+
+        return shortcutActionEditorPlanner.BuildAction(ShortcutActionEditorPlanner.CreateDraft(existing));
     }
 
     private async void AddShortcutActionButton_Click(object sender, RoutedEventArgs e)
@@ -2003,18 +2002,15 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
-        var actions = shortcuts.Actions.ToList();
-        var index = actions.FindIndex(candidate => string.Equals(candidate.Id, actionId, StringComparison.Ordinal));
-        var targetIndex = index + offset;
-        if (index < 0 || targetIndex < 0 || targetIndex >= actions.Count)
+        var updatedActions = shortcutActionEditorPlanner.MoveAction(shortcuts.Actions, actionId, offset);
+        if (updatedActions.SequenceEqual(shortcuts.Actions))
         {
             return;
         }
 
-        (actions[index], actions[targetIndex]) = (actions[targetIndex], actions[index]);
         settingsController.SetShortcutSettings(shortcuts with
         {
-            Actions = actions.ToImmutableArray()
+            Actions = updatedActions
         });
 
         RefreshShortcutActionsSection();
@@ -2058,7 +2054,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         settingsController.SetShortcutSettings(shortcuts with
         {
-            Actions = shortcuts.Actions.Where(candidate => !string.Equals(candidate.Id, actionId, StringComparison.Ordinal)).ToImmutableArray()
+            Actions = shortcutActionEditorPlanner.RemoveAction(shortcuts.Actions, actionId)
         });
         if (string.Equals(editingShortcutActionId, actionId, StringComparison.Ordinal))
         {
@@ -2090,18 +2086,16 @@ public sealed partial class SettingsPageControl : UserControl
             : ShortcutCommandType.Toggle;
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
-        var actionId = creatingShortcutAction
-            ? Guid.NewGuid().ToString("N")
-            : editingShortcutActionId ?? Guid.NewGuid().ToString("N");
-        var updated = new ShortcutAction(
-            actionId,
-            ShortcutActionNameText?.Text?.Trim() ?? string.Empty,
-            selectedIcon?.Id ?? CustomShortcutIconId,
-            ShortcutActionShowInCommandMenuToggle?.IsOn ?? false,
-            ShortcutActionGlobalShortcutRecorder?.Binding,
-            ShortcutActionTargetItemText?.Text?.Trim() ?? string.Empty,
-            selectedType,
-            string.IsNullOrWhiteSpace(ShortcutActionValueText?.Text) ? null : ShortcutActionValueText!.Text.Trim());
+        var draft = new ShortcutActionEditorDraft(
+            Id: creatingShortcutAction ? null : editingShortcutActionId,
+            Name: ShortcutActionNameText?.Text ?? string.Empty,
+            IconId: selectedIcon?.Id ?? CustomShortcutIconId,
+            ShowInCommandMenu: ShortcutActionShowInCommandMenuToggle?.IsOn ?? false,
+            GlobalShortcut: ShortcutActionGlobalShortcutRecorder?.Binding,
+            TargetItem: ShortcutActionTargetItemText?.Text ?? string.Empty,
+            CommandType: selectedType,
+            CommandValue: ShortcutActionValueText?.Text);
+        var updated = shortcutActionEditorPlanner.BuildAction(draft);
 
         var errors = new List<string>();
         var actionValidation = ShortcutValidation.ValidateAction(updated);
@@ -2158,10 +2152,7 @@ public sealed partial class SettingsPageControl : UserControl
             ShortcutActionGlobalShortcutRecorder.Error = null;
         }
 
-        var hasExisting = shortcuts.Actions.Any(action => string.Equals(action.Id, updated.Id, StringComparison.Ordinal));
-        var updatedActions = hasExisting
-            ? shortcuts.Actions.Select(action => string.Equals(action.Id, updated.Id, StringComparison.Ordinal) ? updated : action).ToImmutableArray()
-            : shortcuts.Actions.Add(updated);
+        var updatedActions = shortcutActionEditorPlanner.UpsertAction(shortcuts.Actions, updated);
         settingsController.SetShortcutSettings(shortcuts with { Actions = updatedActions });
 
         creatingShortcutAction = false;
@@ -2178,7 +2169,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         var savedDraft = ResolveShortcutActionDraft((settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized().Actions);
-        if (savedDraft is not null && ShortcutActionDraftEquals(currentDraft, savedDraft))
+        if (savedDraft is not null && ShortcutActionEditorPlanner.DraftEqualsAction(currentDraft, savedDraft))
         {
             return true;
         }
@@ -2196,7 +2187,7 @@ public sealed partial class SettingsPageControl : UserControl
         return await dialog.ShowAsync() == ContentDialogResult.Primary;
     }
 
-    private ShortcutAction? GetCurrentShortcutActionEditorDraft()
+    private ShortcutActionEditorDraft? GetCurrentShortcutActionEditorDraft()
     {
         if (ShortcutActionNameText is null
             || ShortcutActionIconCombo is null
@@ -2208,34 +2199,20 @@ public sealed partial class SettingsPageControl : UserControl
             return null;
         }
 
-        var actionId = creatingShortcutAction
-            ? string.Empty
-            : editingShortcutActionId ?? string.Empty;
         var selectedType = ShortcutActionTypeCombo.SelectedItem is ShortcutCommandType commandType
             ? commandType
             : ShortcutCommandType.Toggle;
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
-        return new ShortcutAction(
-            actionId,
-            ShortcutActionNameText.Text.Trim(),
-            selectedIcon?.Id ?? CustomShortcutIconId,
-            ShortcutActionShowInCommandMenuToggle.IsOn,
-            ShortcutActionGlobalShortcutRecorder?.Binding,
-            ShortcutActionTargetItemText.Text.Trim(),
-            selectedType,
-            string.IsNullOrWhiteSpace(ShortcutActionValueText.Text) ? null : ShortcutActionValueText.Text.Trim());
-    }
-
-    private static bool ShortcutActionDraftEquals(ShortcutAction current, ShortcutAction saved)
-    {
-        return string.Equals(current.Name, saved.Name, StringComparison.Ordinal)
-            && string.Equals(current.IconId, saved.IconId, StringComparison.Ordinal)
-            && current.ShowInCommandMenu == saved.ShowInCommandMenu
-            && ShortcutBindingFormatter.Format(current.GlobalShortcut).Equals(ShortcutBindingFormatter.Format(saved.GlobalShortcut), StringComparison.Ordinal)
-            && string.Equals(current.TargetItem, saved.TargetItem, StringComparison.Ordinal)
-            && current.CommandType == saved.CommandType
-            && string.Equals(current.CommandValue ?? string.Empty, saved.CommandValue ?? string.Empty, StringComparison.Ordinal);
+        return new ShortcutActionEditorDraft(
+            Id: creatingShortcutAction ? null : editingShortcutActionId,
+            Name: ShortcutActionNameText.Text,
+            IconId: selectedIcon?.Id ?? CustomShortcutIconId,
+            ShowInCommandMenu: ShortcutActionShowInCommandMenuToggle.IsOn,
+            GlobalShortcut: ShortcutActionGlobalShortcutRecorder?.Binding,
+            TargetItem: ShortcutActionTargetItemText.Text,
+            CommandType: selectedType,
+            CommandValue: ShortcutActionValueText.Text);
     }
 
     private static ShortcutIconDefinition? GetSelectedShortcutIcon(ComboBox? combo)
