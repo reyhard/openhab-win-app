@@ -23,6 +23,7 @@
             </Grid.ColumnDefinitions>
 
             <Button x:Name="SidebarCollapseButton"
+                    x:Uid="MainWindow_SidebarCollapseButton"
                     Width="34"
                     Height="30"
                     Padding="0"
@@ -37,6 +38,7 @@
                   Background="Transparent" />
 
             <Button x:Name="ToggleSitemapButton"
+                    x:Uid="MainWindow_ToggleSitemapButton"
                     Grid.Column="2"
                     Width="34"
                     Height="30"
@@ -81,7 +83,7 @@
                             </Image>
                             <StackPanel x:Name="SidebarBrandTextPanel">
                                 <TextBlock Text="openHAB" FontSize="18" FontWeight="SemiBold" />
-                                <TextBlock Text="Windows companion" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" />
+                                <TextBlock x:Uid="MainWindow_SidebarBrandSubtitle" Text="Windows companion" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" />
                             </StackPanel>
                         </StackPanel>
 
@@ -90,37 +92,37 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="HomeNavButton" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="10,0,10,0" Click="HomeNavButton_Click" ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
+                            <Button x:Name="HomeNavButton" x:Uid="MainWindow_HomeNavButton" Grid.Column="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="10,0,10,0" Click="HomeNavButton_Click" ToolTipService.ToolTip="Home" AutomationProperties.Name="Home">
                                 <StackPanel x:Name="HomeNavContent" Orientation="Horizontal" Spacing="12">
                                     <FontIcon Glyph="&#xE80F;" FontSize="14" />
-                                    <TextBlock x:Name="HomeNavText" Text="Home" />
+                                    <TextBlock x:Name="HomeNavText" x:Uid="MainWindow_HomeNavText" Text="Home" />
                                 </StackPanel>
                             </Button>
-                            <Button x:Name="HomePagesToggleButton" Grid.Column="1" Width="34" MinWidth="0" Height="34" Padding="0" Click="HomePagesToggleButton_Click" ToolTipService.ToolTip="Show Main UI pages" AutomationProperties.Name="Show Main UI pages">
+                            <Button x:Name="HomePagesToggleButton" x:Uid="MainWindow_HomePagesToggleButton" Grid.Column="1" Width="34" MinWidth="0" Height="34" Padding="0" Click="HomePagesToggleButton_Click" ToolTipService.ToolTip="Show Main UI pages" AutomationProperties.Name="Show Main UI pages">
                                 <FontIcon x:Name="MainUiPagesChevron" Glyph="&#xE70D;" FontSize="12" />
                             </Button>
                         </Grid>
 
                         <StackPanel x:Name="MainUiPagesList" Spacing="6" Margin="28,0,0,2" />
 
-                        <Button x:Name="NotificationsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="10,0,10,0" Click="NotificationsNavButton_Click" ToolTipService.ToolTip="Notifications" AutomationProperties.Name="Notifications">
+                        <Button x:Name="NotificationsNavButton" x:Uid="MainWindow_NotificationsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="10,0,10,0" Click="NotificationsNavButton_Click" ToolTipService.ToolTip="Notifications" AutomationProperties.Name="Notifications">
                             <StackPanel Orientation="Horizontal" Spacing="12">
                                 <FontIcon Glyph="&#xE7F4;" FontSize="14" />
-                                <TextBlock x:Name="NotificationsNavText" Text="Notifications" />
+                                <TextBlock x:Name="NotificationsNavText" x:Uid="MainWindow_NotificationsNavText" Text="Notifications" />
                             </StackPanel>
                         </Button>
 
-                        <Button x:Name="SettingsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="10,0,10,0" Click="SettingsNavButton_Click" ToolTipService.ToolTip="Settings" AutomationProperties.Name="Settings">
+                        <Button x:Name="SettingsNavButton" x:Uid="MainWindow_SettingsNavButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" MinWidth="0" Height="34" Padding="10,0,10,0" Click="SettingsNavButton_Click" ToolTipService.ToolTip="Settings" AutomationProperties.Name="Settings">
                             <StackPanel Orientation="Horizontal" Spacing="12">
                                 <FontIcon Glyph="&#xE713;" FontSize="14" />
-                                <TextBlock x:Name="SettingsNavText" Text="Settings" />
+                                <TextBlock x:Name="SettingsNavText" x:Uid="MainWindow_SettingsNavText" Text="Settings" />
                             </StackPanel>
                         </Button>
                     </StackPanel>
 
                     <StackPanel x:Name="SidebarConnectionPanel" Grid.Row="2" Spacing="2">
-                        <TextBlock x:Name="ShellConnectionText" Text="Connecting..." Opacity="0.8" />
-                        <TextBlock Text="to openHAB server" Opacity="0.55" Style="{StaticResource CaptionTextBlockStyle}" />
+                        <TextBlock x:Name="ShellConnectionText" x:Uid="MainWindow_ShellConnectionText" Text="Connecting..." Opacity="0.8" />
+                        <TextBlock x:Uid="MainWindow_ShellConnectionSubtitle" Text="to openHAB server" Opacity="0.55" Style="{StaticResource CaptionTextBlockStyle}" />
                         <TextBlock x:Name="ShellStatusText"
                                    Visibility="Collapsed"
                                    Opacity="0.8"
@@ -167,6 +169,7 @@
                         </Grid.ColumnDefinitions>
 
                         <StackPanel x:Name="SitemapHeaderArea"
+                                    x:Uid="MainWindow_SitemapHeaderArea"
                                     Grid.Column="0"
                                     Spacing="2"
                                     Background="Transparent"
@@ -175,6 +178,7 @@
                                     ToolTipService.ToolTip="Choose sitemap"
                                     AutomationProperties.Name="Choose sitemap">
                             <TextBlock x:Name="SitemapTitleText"
+                                       x:Uid="MainWindow_SitemapTitleText"
                                        FontSize="20"
                                        FontWeight="SemiBold"
                                        Text="Sitemap"
@@ -186,6 +190,7 @@
                         </StackPanel>
 
                         <Button x:Name="SearchSitemapButton"
+                                x:Uid="MainWindow_SearchSitemapButton"
                                 Grid.Column="1"
                                 Width="34"
                                 Height="34"
@@ -197,6 +202,7 @@
                         </Button>
 
                         <Button x:Name="RefreshSitemapButton"
+                                x:Uid="MainWindow_RefreshSitemapButton"
                                 Grid.Column="2"
                                 Width="34"
                                 Height="34"
@@ -222,6 +228,7 @@
                         </BreadcrumbBar>
 
                         <AutoSuggestBox x:Name="SitemapSearchBox"
+                                        x:Uid="MainWindow_SitemapSearchBox"
                                         Visibility="Collapsed"
                                         PlaceholderText="Search current section..."
                                         QueryIcon="Find"

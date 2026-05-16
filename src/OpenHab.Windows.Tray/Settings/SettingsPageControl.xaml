@@ -15,9 +15,9 @@
             <Grid>
                 <StackPanel Spacing="2">
                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Button x:Name="SettingsBreadcrumbRootButton" Content="Settings" Padding="0" BorderThickness="0" Background="Transparent" FontSize="18" Opacity="0.65" Visibility="Collapsed" Click="SettingsBreadcrumbRootButton_Click" />
+                        <Button x:Name="SettingsBreadcrumbRootButton" x:Uid="SettingsPage_RootButton" Content="Settings" Padding="0" BorderThickness="0" Background="Transparent" FontSize="18" Opacity="0.65" Visibility="Collapsed" Click="SettingsBreadcrumbRootButton_Click" />
                         <FontIcon x:Name="SettingsBreadcrumbChevron" Glyph="&#xE76C;" FontSize="12" Opacity="0.65" Visibility="Collapsed" VerticalAlignment="Center" />
-                        <TextBlock x:Name="SettingsTitleText" Text="Settings" FontSize="18" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SettingsTitleText" x:Uid="SettingsPage_TitleText" Text="Settings" FontSize="18" FontWeight="SemiBold" />
                     </StackPanel>
                     <TextBlock x:Name="SettingsSubtitleText" Opacity="0.6" Style="{StaticResource CaptionTextBlockStyle}" />
                 </StackPanel>
