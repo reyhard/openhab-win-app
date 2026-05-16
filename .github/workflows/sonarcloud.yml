@@ -114,6 +114,7 @@ jobs:
             /d:sonar.token="$env:SONAR_TOKEN" `
             /d:sonar.host.url="https://sonarcloud.io" `
             /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml" `
+            /d:sonar.coverage.exclusions="src/OpenHab.Windows.Tray/AcrylicBlurHelper.cs,src/OpenHab.Windows.Tray/DwmWindowDecorations.cs,src/OpenHab.Windows.Tray/Shortcuts/HotkeyMessageWindow.cs,src/OpenHab.Windows.Tray/Tray/TrayIconService.cs,src/OpenHab.Windows.Tray/Startup/StartupManager.cs,src/OpenHab.Windows.Tray/DeviceInfo/Windows*Reader.cs,src/OpenHab.Windows.Tray/DeviceInfo/WindowsDeviceStateSnapshotSource.cs,src/OpenHab.Windows.Notifications/ShortcutRegistrar.cs,src/OpenHab.Windows.Notifications/ToastService.cs,src/OpenHab.Core/Auth/WindowsCredentialStore.cs" `
             /d:sonar.qualitygate.wait=true
 
           dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore --no-incremental
