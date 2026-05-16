@@ -8,6 +8,7 @@ obj/
 .sisyphus/
 .vs/
 publish/
+TestResults/
 /.dotnethome
 /.dotnethome/
 /.dotnet-home/

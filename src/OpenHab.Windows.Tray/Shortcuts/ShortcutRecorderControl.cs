@@ -348,7 +348,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
 
         void CaptureBinding(IReadOnlyCollection<ShortcutModifier> modifiers, VirtualKey key)
         {
-            var keyText = FormatKey(key);
+            var keyText = ShortcutWindowsMapper.FormatKey(key);
             if (string.IsNullOrWhiteSpace(keyText))
             {
                 SetDialogError("Unsupported key.");
@@ -368,7 +368,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
                 return;
             }
 
-            if (IsModifierKey(args.Key))
+            if (ShortcutWindowsMapper.IsModifierKey(args.Key))
             {
                 SetDialogError(null);
                 args.Handled = true;
@@ -547,58 +547,6 @@ internal sealed partial class ShortcutRecorderControl : UserControl
     {
         return InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down)
             || (GetAsyncKeyState((int)key) & 0x8000) != 0;
-    }
-
-    private static bool IsModifierKey(VirtualKey key)
-    {
-        return key is VirtualKey.LeftWindows
-            or VirtualKey.RightWindows
-            or VirtualKey.Control
-            or VirtualKey.LeftControl
-            or VirtualKey.RightControl
-            or VirtualKey.Menu
-            or VirtualKey.LeftMenu
-            or VirtualKey.RightMenu
-            or VirtualKey.Shift
-            or VirtualKey.LeftShift
-            or VirtualKey.RightShift;
-    }
-
-    private static string FormatKey(VirtualKey key)
-    {
-        if (key >= VirtualKey.A && key <= VirtualKey.Z)
-        {
-            return key.ToString();
-        }
-
-        if (key >= VirtualKey.Number0 && key <= VirtualKey.Number9)
-        {
-            return ((int)key - (int)VirtualKey.Number0).ToString();
-        }
-
-        if (key >= VirtualKey.F1 && key <= VirtualKey.F24)
-        {
-            return key.ToString();
-        }
-
-        return key switch
-        {
-            VirtualKey.Space => "Space",
-            VirtualKey.Back => "Backspace",
-            VirtualKey.Delete => "Delete",
-            VirtualKey.Insert => "Insert",
-            VirtualKey.Up => "Up",
-            VirtualKey.Down => "Down",
-            VirtualKey.Left => "Left",
-            VirtualKey.Right => "Right",
-            VirtualKey.PageUp => "PageUp",
-            VirtualKey.PageDown => "PageDown",
-            VirtualKey.Home => "Home",
-            VirtualKey.End => "End",
-            VirtualKey.Enter => "Enter",
-            VirtualKey.Tab => "Tab",
-            _ => string.Empty
-        };
     }
 
     private static Border CreatePreviewChip(string text)
