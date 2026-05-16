@@ -705,8 +705,18 @@ public sealed partial class MainWindow : Window
 
     private async Task RunNavigateTransitionAsync(Func<CancellationToken, Task<bool>> navigateAsync)
     {
+        var transitionPlan = SitemapNavigationTransitionPlanner.PlanNavigate(
+            isRefreshing: isRefreshing,
+            isTransitionRunning: _isPageTransitionRunning,
+            canNavigate: true,
+            direction: SitemapNavigationTransitionDirection.Forward);
+        if (!transitionPlan.ShouldNavigate)
+        {
+            return;
+        }
+
         isRefreshing = true;
-        _isPageTransitionRunning = true;
+        _isPageTransitionRunning = transitionPlan.ShouldAnimate;
         try
         {
             _suppressNextSnapshotRefresh = true;
@@ -720,7 +730,7 @@ public sealed partial class MainWindow : Window
             InactiveSlotContainer.Visibility = Visibility.Visible;
             RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
 
-            await AnimatePageTransitionOverlapAsync(NavigationDirection.Forward);
+            await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
 
             ActiveRows.Children.Clear();
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
@@ -862,7 +872,7 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
-        if (runtimeController.CanGoBack && !isRefreshing)
+        if (CanStartSitemapBackTransition())
         {
             _ = NavigateBackWithAnimationAsync();
             return true;
@@ -895,7 +905,7 @@ public sealed partial class MainWindow : Window
 
     private bool TryNavigateContextualSitemapBack()
     {
-        if (!runtimeController.CanGoBack || isRefreshing)
+        if (!CanStartSitemapBackTransition())
         {
             return false;
         }
@@ -928,9 +938,18 @@ public sealed partial class MainWindow : Window
 
     private async Task NavigateBackWithAnimationAsync()
     {
-        if (!runtimeController.CanGoBack || isRefreshing) return;
+        var transitionPlan = SitemapNavigationTransitionPlanner.PlanNavigate(
+            isRefreshing: isRefreshing,
+            isTransitionRunning: _isPageTransitionRunning,
+            canNavigate: runtimeController.CanGoBack,
+            direction: SitemapNavigationTransitionDirection.Back);
+        if (!transitionPlan.ShouldNavigate)
+        {
+            return;
+        }
+
         isRefreshing = true;
-        _isPageTransitionRunning = true;
+        _isPageTransitionRunning = transitionPlan.ShouldAnimate;
         try
         {
             _suppressNextSnapshotRefresh = true;
@@ -940,7 +959,7 @@ public sealed partial class MainWindow : Window
             InactiveSlotContainer.Visibility = Visibility.Visible;
             RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
 
-            await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
+            await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
 
             ActiveRows.Children.Clear();
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
@@ -956,6 +975,29 @@ public sealed partial class MainWindow : Window
             }
             isRefreshing = false;
         }
+    }
+
+    private bool CanStartSitemapBackTransition()
+    {
+        return PlanSitemapBackTransition(runtimeController.CanGoBack).ShouldNavigate;
+    }
+
+    private SitemapNavigationTransitionPlan PlanSitemapBackTransition(bool canNavigate)
+    {
+        var transitionPlan = SitemapNavigationTransitionPlanner.PlanNavigate(
+            isRefreshing: isRefreshing,
+            isTransitionRunning: _isPageTransitionRunning,
+            canNavigate: canNavigate,
+            direction: SitemapNavigationTransitionDirection.Back);
+
+        return transitionPlan;
+    }
+
+    private static NavigationDirection ToWinUiNavigationDirection(SitemapNavigationTransitionDirection direction)
+    {
+        return direction == SitemapNavigationTransitionDirection.Back
+            ? NavigationDirection.Back
+            : NavigationDirection.Forward;
     }
 
     private void ShowSitemapMenuAt(FrameworkElement target)
@@ -1033,7 +1075,8 @@ public sealed partial class MainWindow : Window
 
     private async void BreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
     {
-        if (isRefreshing)
+        var transitionPlan = PlanSitemapBackTransition(canNavigate: true);
+        if (!transitionPlan.ShouldNavigate)
         {
             return;
         }
@@ -1046,7 +1089,7 @@ public sealed partial class MainWindow : Window
 
         isSearchChromeOpen = false;
         isRefreshing = true;
-        _isPageTransitionRunning = true;
+        _isPageTransitionRunning = transitionPlan.ShouldAnimate;
         try
         {
             var currentDepth = runtimeController.Current.Breadcrumbs.Count;
@@ -1063,7 +1106,7 @@ public sealed partial class MainWindow : Window
             RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
             RefreshChromeBindings(runtimeController.Current);
 
-            await AnimatePageTransitionOverlapAsync(NavigationDirection.Back);
+            await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
 
             ActiveRows.Children.Clear();
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
