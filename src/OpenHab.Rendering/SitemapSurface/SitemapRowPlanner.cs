@@ -80,7 +80,7 @@ public static class SitemapRowPlanner
 
         for (var index = 0; index < rows.Count; index++)
         {
-            if (string.Equals(SitemapUiLogic.BuildRowIdentityKey(rows[index]), rowKey, StringComparison.Ordinal))
+            if (string.Equals(SitemapRowVisualPolicy.BuildRowIdentityKey(rows[index]), rowKey, StringComparison.Ordinal))
             {
                 rowIndex = index;
                 return true;

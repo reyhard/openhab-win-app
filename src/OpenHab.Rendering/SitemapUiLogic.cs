@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Rendering.SitemapSurface;
 using OpenHab.Sitemaps.Models;
 
 namespace OpenHab.Rendering;
@@ -9,9 +10,6 @@ public readonly record struct SitemapColor(byte A, byte R, byte G, byte B);
 
 public static class SitemapUiLogic
 {
-    private const double WebviewDefaultHeight = 300d;
-    private const double SitemapRowHeight = 40d;
-
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["light"] = "\uE706", ["lights"] = "\uE706",
@@ -121,49 +119,14 @@ public static class SitemapUiLogic
 
     public static bool CanResolveWin11Glyph(string? iconName) => ResolveWin11Glyph(iconName) is not null;
 
-    public static double ResolveWebviewHeight(SitemapRowDescriptor row)
-    {
-        ArgumentNullException.ThrowIfNull(row);
+    public static double ResolveWebviewHeight(SitemapRowDescriptor row) =>
+        SitemapRowVisualPolicy.ResolveWebviewHeight(row);
 
-        return row.HeightRows is > 0
-            ? row.HeightRows.Value * SitemapRowHeight
-            : WebviewDefaultHeight;
-    }
+    public static string BuildRowIdentityKey(SitemapRowDescriptor row) =>
+        SitemapRowVisualPolicy.BuildRowIdentityKey(row);
 
-    public static string BuildRowIdentityKey(SitemapRowDescriptor row)
-    {
-        ArgumentNullException.ThrowIfNull(row);
-
-        if (!string.IsNullOrWhiteSpace(row.SearchResultKey))
-        {
-            return row.SearchResultKey;
-        }
-
-        if (!string.IsNullOrWhiteSpace(row.WidgetId))
-        {
-            return $"widget:{row.WidgetId}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(row.ItemName))
-        {
-            return string.Create(
-                CultureInfo.InvariantCulture,
-                $"item:{row.ItemName}:{row.Control}:{row.Action}:{row.Label}:{row.IconName ?? string.Empty}:{row.Command ?? string.Empty}:{row.ReleaseCommand ?? string.Empty}:{row.Period ?? string.Empty}");
-        }
-
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"row:{row.Control}:{row.Action}:{row.IconName ?? string.Empty}:{row.Label}");
-    }
-
-    public static string BuildRowVisualStateKey(SitemapRowDescriptor row, int rowIndex)
-    {
-        ArgumentNullException.ThrowIfNull(row);
-
-        return string.Create(
-            CultureInfo.InvariantCulture,
-            $"key:{BuildRowIdentityKey(row)}|control:{row.Control}|action:{row.Action}|label:{row.Label}|icon:{row.IconName ?? string.Empty}|command:{row.Command ?? string.Empty}|release:{row.ReleaseCommand ?? string.Empty}");
-    }
+    public static string BuildRowVisualStateKey(SitemapRowDescriptor row, int rowIndex) =>
+        SitemapRowVisualPolicy.BuildRowVisualStateKey(row, rowIndex);
 
     public static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi = 96, bool cacheBust = true)
     {

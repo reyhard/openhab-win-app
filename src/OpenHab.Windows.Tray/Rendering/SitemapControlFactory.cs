@@ -17,6 +17,7 @@ using OpenHab.Core.Profiles;
 using OpenHab.Rendering;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Rendering.Icons;
+using OpenHab.Rendering.SitemapSurface;
 using OpenHab.Sitemaps.Models;
 using Windows.Storage.Streams;
 
@@ -113,17 +114,17 @@ public static partial class SitemapControlFactory
 
     internal static double ResolveWebviewHeight(SitemapRowDescriptor row)
     {
-        return SitemapUiLogic.ResolveWebviewHeight(row);
+        return SitemapRowVisualPolicy.ResolveWebviewHeight(row);
     }
 
     internal static string BuildRowIdentityKey(SitemapRowDescriptor row)
     {
-        return SitemapUiLogic.BuildRowIdentityKey(row);
+        return SitemapRowVisualPolicy.BuildRowIdentityKey(row);
     }
 
     internal static string BuildRowVisualStateKey(SitemapRowDescriptor row, int rowIndex)
     {
-        return SitemapUiLogic.BuildRowVisualStateKey(row, rowIndex);
+        return SitemapRowVisualPolicy.BuildRowVisualStateKey(row, rowIndex);
     }
 
     public static FrameworkElement Create(
@@ -1967,19 +1968,7 @@ public static partial class SitemapControlFactory
 
     private static string FormatSliderStateText(string? template, double value)
     {
-        var numeric = value.ToString("F0", CultureInfo.InvariantCulture);
-        if (string.IsNullOrWhiteSpace(template))
-        {
-            return numeric;
-        }
-
-        var match = FirstNumberRegex.Match(template);
-        if (!match.Success)
-        {
-            return numeric;
-        }
-
-        return string.Concat(template.AsSpan(0, match.Index), numeric, template.AsSpan(match.Index + match.Length));
+        return SitemapRowVisualPolicy.FormatSliderStateText(template, value);
     }
 
     private static Border CreateButton(
