@@ -286,6 +286,9 @@
   <data name="Runtime.Status.Loading" xml:space="preserve">
     <value>Loading...</value>
   </data>
+  <data name="Runtime.Sitemap.NoSitemapSelected" xml:space="preserve">
+    <value>No sitemap selected</value>
+  </data>
   <data name="Runtime.Connection.Failed" xml:space="preserve">
     <value>Connection failed.</value>
   </data>
@@ -294,6 +297,12 @@
   </data>
   <data name="Runtime.Connection.ConnectedViaCloudLocalFailed" xml:space="preserve">
     <value>Connected via cloud (local failed).</value>
+  </data>
+  <data name="Runtime.Connection.ConnectedViaCloudSimple" xml:space="preserve">
+    <value>Connected via cloud.</value>
+  </data>
+  <data name="Runtime.Connection.ConnectedViaLocalSimple" xml:space="preserve">
+    <value>Connected via local.</value>
   </data>
   <data name="Runtime.Connection.ConnectedViaCloud" xml:space="preserve">
     <value>Connected via cloud ({0})</value>
@@ -319,6 +328,16 @@
   <data name="Sitemap.Search.ResultsTitle" xml:space="preserve">
     <value>Search results</value>
   </data>
+  <data name="Sitemap.Search.SearchingScope" xml:space="preserve">
+    <value>Searching current section and child pages</value>
+  </data>
+  <data name="Sitemap.Search.ResultCountInScope" xml:space="preserve">
+    <value>{0} results in current section and child pages</value>
+    <comment>{0}: number of search results.</comment>
+  </data>
+  <data name="Sitemap.Search.EmptyLabel" xml:space="preserve">
+    <value>No matching sitemap elements</value>
+  </data>
   <data name="Sitemap.Action.Run" xml:space="preserve">
     <value>Run</value>
   </data>
@@ -331,15 +350,62 @@
   <data name="Sitemap.Chart.RequiresItem" xml:space="preserve">
     <value>Chart requires an item</value>
   </data>
+  <data name="Shortcuts.Validation.ShortcutRequired" xml:space="preserve">
+    <value>Shortcut is required.</value>
+  </data>
+  <data name="Shortcuts.Validation.ModifierRequired" xml:space="preserve">
+    <value>Shortcut must include at least one modifier.</value>
+  </data>
+  <data name="Shortcuts.Validation.KeyRequired" xml:space="preserve">
+    <value>Shortcut must include a key.</value>
+  </data>
+  <data name="Shortcuts.Validation.SingleKeyBlocked" xml:space="preserve">
+    <value>'{0}' by itself cannot be used as a shortcut.</value>
+    <comment>{0}: shortcut key name.</comment>
+  </data>
+  <data name="Shortcuts.Validation.KeyInvalid" xml:space="preserve">
+    <value>Shortcut key is invalid.</value>
+  </data>
+  <data name="Shortcuts.Validation.ReservedByWindows" xml:space="preserve">
+    <value>'{0}' is reserved by Windows and cannot be used.</value>
+    <comment>{0}: shortcut text, for example Win + V.</comment>
+  </data>
+  <data name="Shortcuts.Validation.BindingAlreadyUsed" xml:space="preserve">
+    <value>'{0}' is already used by '{1}'.</value>
+    <comment>{0}: shortcut text. {1}: owner of the existing shortcut.</comment>
+  </data>
+  <data name="Shortcuts.Validation.ActionRequired" xml:space="preserve">
+    <value>Action is required.</value>
+  </data>
+  <data name="Shortcuts.Validation.ActionIdRequired" xml:space="preserve">
+    <value>Action ID is required.</value>
+  </data>
+  <data name="Shortcuts.Validation.ActionNameRequired" xml:space="preserve">
+    <value>Action name is required.</value>
+  </data>
   <data name="Shortcuts.Validation.TargetItemRequired" xml:space="preserve">
-    <value>Target Item is required.</value>
+    <value>Target item is required.</value>
+  </data>
+  <data name="Shortcuts.Validation.CommandTypeInvalid" xml:space="preserve">
+    <value>Command type is invalid.</value>
+  </data>
+  <data name="Shortcuts.Validation.OnOffValueRequired" xml:space="preserve">
+    <value>OnOff action requires command value ON or OFF.</value>
+  </data>
+  <data name="Shortcuts.Validation.OpenCloseValueRequired" xml:space="preserve">
+    <value>OpenClose action requires command value OPEN or CLOSE.</value>
+  </data>
+  <data name="Shortcuts.Validation.SendCommandValueRequired" xml:space="preserve">
+    <value>SendCommand action requires a command value.</value>
+  </data>
+  <data name="Shortcuts.Validation.GlobalShortcutInvalid" xml:space="preserve">
+    <value>Global shortcut is invalid.</value>
+  </data>
+  <data name="Shortcuts.Validation.ActionAvailabilityRequired" xml:space="preserve">
+    <value>Action must be shown in command menu, have a global shortcut, or both.</value>
   </data>
   <data name="Shortcuts.Validation.CommandValueRequired" xml:space="preserve">
     <value>Command value is required for this action type.</value>
-  </data>
-  <data name="Shortcuts.Validation.BindingAlreadyUsed" xml:space="preserve">
-    <value>Shortcut is already used by {0}.</value>
-    <comment>{0}: owner of the existing shortcut.</comment>
   </data>
   <data name="Shortcuts.CommandMenu.OwnerName" xml:space="preserve">
     <value>openHAB Command Menu</value>

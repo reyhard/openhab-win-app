@@ -1752,13 +1752,14 @@ public sealed partial class SettingsPageControl : UserControl
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
         var existingBindings = shortcuts.Actions
             .Where(action => action.GlobalShortcut is not null)
-            .Select(action => new ShortcutBindingOwner($"Action: {action.Name}", action.GlobalShortcut!))
+            .Select(action => new ShortcutBindingOwner(text.Format("Shortcuts.ActionOwner", action.Name), action.GlobalShortcut!))
             .ToArray();
         var validation = ShortcutValidation.ValidateBinding(
             binding,
-            "openHAB Command Menu",
+            text.Get("Shortcuts.CommandMenu.OwnerName"),
             existingBindings,
-            allowUnassigned: false);
+            allowUnassigned: false,
+            text);
         if (!validation.IsValid)
         {
             recorder.Error = string.Join(Environment.NewLine, validation.Errors);
@@ -2108,7 +2109,7 @@ public sealed partial class SettingsPageControl : UserControl
             string.IsNullOrWhiteSpace(ShortcutActionValueText?.Text) ? null : ShortcutActionValueText!.Text.Trim());
 
         var errors = new List<string>();
-        var actionValidation = ShortcutValidation.ValidateAction(updated);
+        var actionValidation = ShortcutValidation.ValidateAction(updated, text);
         if (!actionValidation.IsValid)
         {
             errors.AddRange(actionValidation.Errors);
@@ -2117,19 +2118,20 @@ public sealed partial class SettingsPageControl : UserControl
         var existingBindings = new List<ShortcutBindingOwner>();
         if (shortcuts.CommandMenu.Binding is not null)
         {
-            existingBindings.Add(new ShortcutBindingOwner("openHAB Command Menu", shortcuts.CommandMenu.Binding));
+            existingBindings.Add(new ShortcutBindingOwner(text.Get("Shortcuts.CommandMenu.OwnerName"), shortcuts.CommandMenu.Binding));
         }
 
         foreach (var action in shortcuts.Actions.Where(action => action.GlobalShortcut is not null && !string.Equals(action.Id, updated.Id, StringComparison.Ordinal)))
         {
-            existingBindings.Add(new ShortcutBindingOwner($"Action: {action.Name}", action.GlobalShortcut!));
+            existingBindings.Add(new ShortcutBindingOwner(text.Format("Shortcuts.ActionOwner", action.Name), action.GlobalShortcut!));
         }
 
         var bindingValidation = ShortcutValidation.ValidateBinding(
             updated.GlobalShortcut,
             $"Current action:{updated.Id}",
             existingBindings,
-            allowUnassigned: true);
+            allowUnassigned: true,
+            text);
         if (!bindingValidation.IsValid)
         {
             errors.AddRange(bindingValidation.Errors);

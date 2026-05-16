@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using OpenHab.App.Localization;
 
 namespace OpenHab.App.Shortcuts;
 
@@ -25,13 +26,15 @@ public static class ShortcutValidation
         ShortcutBinding? binding,
         string ownerName,
         IEnumerable<ShortcutBindingOwner>? existingBindings,
-        bool allowUnassigned = false)
+        bool allowUnassigned = false,
+        ITextLocalizer? text = null)
     {
+        text ??= DefaultEnglishTextLocalizer.Instance;
         if (binding is null)
         {
             return allowUnassigned
                 ? ShortcutValidationResult.Valid
-                : ShortcutValidationResult.Invalid(["Shortcut is required."]);
+                : ShortcutValidationResult.Invalid([text.Get("Shortcuts.Validation.ShortcutRequired")]);
         }
 
         var errors = new List<string>();
@@ -39,18 +42,18 @@ public static class ShortcutValidation
         var hasModifier = binding.Modifiers.Any();
         if (!hasModifier)
         {
-            errors.Add("Shortcut must include at least one modifier.");
+            errors.Add(text.Get("Shortcuts.Validation.ModifierRequired"));
         }
 
         var key = (binding.Key ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(key))
         {
-            errors.Add("Shortcut must include a key.");
+            errors.Add(text.Get("Shortcuts.Validation.KeyRequired"));
         }
 
         if (!hasModifier && IsBlockedSingleKey(key))
         {
-            errors.Add($"'{key}' by itself cannot be used as a shortcut.");
+            errors.Add(text.Format("Shortcuts.Validation.SingleKeyBlocked", key));
         }
 
         if (errors.Count > 0)
@@ -60,13 +63,13 @@ public static class ShortcutValidation
 
         if (!ShortcutBindingFormatter.TryNormalize(binding, out var normalized))
         {
-            return ShortcutValidationResult.Invalid(["Shortcut key is invalid."]);
+            return ShortcutValidationResult.Invalid([text.Get("Shortcuts.Validation.KeyInvalid")]);
         }
 
         var normalizedBinding = ShortcutBindingFormatter.Format(normalized);
         if (ReservedBindings.Contains(normalizedBinding))
         {
-            errors.Add($"'{normalizedBinding}' is reserved by Windows and cannot be used.");
+            errors.Add(text.Format("Shortcuts.Validation.ReservedByWindows", normalizedBinding));
         }
 
         foreach (var existing in existingBindings ?? [])
@@ -83,7 +86,7 @@ public static class ShortcutValidation
 
             if (ShortcutBindingFormatter.Format(normalizedExisting).Equals(normalizedBinding, StringComparison.Ordinal))
             {
-                errors.Add($"'{normalizedBinding}' is already used by '{existing.OwnerName}'.");
+                errors.Add(text.Format("Shortcuts.Validation.BindingAlreadyUsed", normalizedBinding, existing.OwnerName));
                 break;
             }
         }
@@ -93,33 +96,34 @@ public static class ShortcutValidation
             : ShortcutValidationResult.Invalid(errors);
     }
 
-    public static ShortcutValidationResult ValidateAction(ShortcutAction? action)
+    public static ShortcutValidationResult ValidateAction(ShortcutAction? action, ITextLocalizer? text = null)
     {
+        text ??= DefaultEnglishTextLocalizer.Instance;
         if (action is null)
         {
-            return ShortcutValidationResult.Invalid(["Action is required."]);
+            return ShortcutValidationResult.Invalid([text.Get("Shortcuts.Validation.ActionRequired")]);
         }
 
         var errors = new List<string>();
 
         if (string.IsNullOrWhiteSpace(action.Id))
         {
-            errors.Add("Action ID is required.");
+            errors.Add(text.Get("Shortcuts.Validation.ActionIdRequired"));
         }
 
         if (string.IsNullOrWhiteSpace(action.Name))
         {
-            errors.Add("Action name is required.");
+            errors.Add(text.Get("Shortcuts.Validation.ActionNameRequired"));
         }
 
         if (string.IsNullOrWhiteSpace(action.TargetItem))
         {
-            errors.Add("Target item is required.");
+            errors.Add(text.Get("Shortcuts.Validation.TargetItemRequired"));
         }
 
         if (!Enum.IsDefined(action.CommandType))
         {
-            errors.Add("Command type is invalid.");
+            errors.Add(text.Get("Shortcuts.Validation.CommandTypeInvalid"));
         }
 
         switch (action.CommandType)
@@ -127,21 +131,21 @@ public static class ShortcutValidation
             case ShortcutCommandType.OnOff:
                 if (!IsOneOf(action.CommandValue, "ON", "OFF"))
                 {
-                    errors.Add("OnOff action requires command value ON or OFF.");
+                    errors.Add(text.Get("Shortcuts.Validation.OnOffValueRequired"));
                 }
 
                 break;
             case ShortcutCommandType.OpenClose:
                 if (!IsOneOf(action.CommandValue, "OPEN", "CLOSE"))
                 {
-                    errors.Add("OpenClose action requires command value OPEN or CLOSE.");
+                    errors.Add(text.Get("Shortcuts.Validation.OpenCloseValueRequired"));
                 }
 
                 break;
             case ShortcutCommandType.SendCommand:
                 if (string.IsNullOrWhiteSpace(action.CommandValue))
                 {
-                    errors.Add("SendCommand action requires a command value.");
+                    errors.Add(text.Get("Shortcuts.Validation.SendCommandValueRequired"));
                 }
 
                 break;
@@ -149,12 +153,12 @@ public static class ShortcutValidation
 
         if (action.GlobalShortcut is not null && !ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out _))
         {
-            errors.Add("Global shortcut is invalid.");
+            errors.Add(text.Get("Shortcuts.Validation.GlobalShortcutInvalid"));
         }
 
         if (!action.ShowInCommandMenu && action.GlobalShortcut is null)
         {
-            errors.Add("Action must be shown in command menu, have a global shortcut, or both.");
+            errors.Add(text.Get("Shortcuts.Validation.ActionAvailabilityRequired"));
         }
 
         return errors.Count == 0

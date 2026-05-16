@@ -1,5 +1,6 @@
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
+using OpenHab.App.Localization;
 using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Events;
@@ -23,6 +24,7 @@ public sealed class SitemapRuntimeController
     private readonly SitemapRenderController renderController;
     private readonly Func<TransportKind, Uri, IOpenHabClient> clientFactory;
     private readonly IOpenHabEventStreamClient? sitemapEventStreamClient;
+    private readonly ITextLocalizer text;
     private NormalizedSitemapPage? currentPage;
     private readonly Stack<NormalizedSitemapPage> backStack = new();
     private Dictionary<string, int>? itemIndexMap;
@@ -61,7 +63,8 @@ public sealed class SitemapRuntimeController
         AppSettingsController settingsController,
         SitemapRenderController renderController,
         Func<TransportKind, Uri, IOpenHabClient> clientFactory,
-        IOpenHabEventStreamClient? sitemapEventStreamClient = null)
+        IOpenHabEventStreamClient? sitemapEventStreamClient = null,
+        ITextLocalizer? text = null)
     {
         ArgumentNullException.ThrowIfNull(settingsController);
         ArgumentNullException.ThrowIfNull(renderController);
@@ -71,6 +74,7 @@ public sealed class SitemapRuntimeController
         this.renderController = renderController;
         this.clientFactory = clientFactory;
         this.sitemapEventStreamClient = sitemapEventStreamClient;
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
     }
 
     public SitemapRuntimeSnapshot Current { get; private set; } = SitemapRuntimeSnapshot.Initial;
@@ -200,13 +204,13 @@ public sealed class SitemapRuntimeController
             $"Refresh#{refreshId} start reason={reason} inProgress={inProgress} " +
             $"activeTransport={Current.ActiveTransport?.ToString() ?? NullDiagnosticText} currentPage={previousPageId ?? NullDiagnosticText}");
 
-        Current = Current with { IsBusy = true, StatusText = "Loading...", ChangedRowIndices = [] };
+        Current = Current with { IsBusy = true, StatusText = text.Get("Runtime.Status.Loading"), ChangedRowIndices = [] };
         var settings = settingsController.Current;
 
         if (string.IsNullOrWhiteSpace(settings.SitemapName))
         {
             DiagnosticLogger.Warn($"Refresh#{refreshId} skipped — no sitemap selected");
-            SetBannerStatus("No sitemap selected");
+            SetBannerStatus(text.Get("Runtime.Sitemap.NoSitemapSelected"));
             var remaining = Interlocked.Decrement(ref _refreshInProgress);
             DiagnosticLogger.Info(
                 $"Refresh#{refreshId} done (no sitemap) reason={reason} remainingInProgress={remaining}");
@@ -228,7 +232,9 @@ public sealed class SitemapRuntimeController
                 ActiveTransport = primary.Kind,
                 ConnectionState = ConnectionState.Online,
                 Breadcrumbs = BuildBreadcrumbTrail(),
-                StatusText = $"Connected via {primary.Kind.ToString().ToLowerInvariant()}.",
+                StatusText = primary.Kind == TransportKind.Cloud
+                    ? text.Get("Runtime.Connection.ConnectedViaCloudSimple")
+                    : text.Get("Runtime.Connection.ConnectedViaLocalSimple"),
                 IsBusy = false,
                 HasError = false,
                 ChangedRowIndices = changedRowIndices,
@@ -263,7 +269,7 @@ public sealed class SitemapRuntimeController
                     ActiveTransport = fallback.Kind,
                     ConnectionState = ConnectionState.Online,
                     Breadcrumbs = BuildBreadcrumbTrail(),
-                    StatusText = "Connected via cloud (local failed).",
+                    StatusText = text.Get("Runtime.Connection.ConnectedViaCloudLocalFailed"),
                     IsBusy = false,
                     HasError = false,
                     ChangedRowIndices = changedRowIndices,
@@ -286,7 +292,7 @@ public sealed class SitemapRuntimeController
                 {
                     ConnectionState = ConnectionState.Offline,
                     StatusText =
-                        $"{SafeDiagnosticText.ForUserStatus(firstError, "Connection failed.")} {SafeDiagnosticText.ForUserStatus(fallbackError, "Fallback failed.")}",
+                        $"{SafeDiagnosticText.ForUserStatus(firstError, text.Get("Runtime.Connection.Failed"))} {SafeDiagnosticText.ForUserStatus(fallbackError, text.Get("Runtime.Connection.FallbackFailed"))}",
                     IsBusy = false,
                     HasError = true,
                     ChangedRowIndices = []
@@ -299,7 +305,7 @@ public sealed class SitemapRuntimeController
             Current = Current with
             {
                 ConnectionState = ConnectionState.Offline,
-                StatusText = SafeDiagnosticText.ForUserStatus(error, "Connection failed."),
+                StatusText = SafeDiagnosticText.ForUserStatus(error, text.Get("Runtime.Connection.Failed")),
                 IsBusy = false,
                 HasError = true,
                 ChangedRowIndices = []
@@ -866,7 +872,7 @@ public sealed class SitemapRuntimeController
         Current = Current with
         {
             ConnectionState = ConnectionState.Degraded,
-            StatusText = "Live updates unavailable. Refresh manually.",
+            StatusText = text.Get("Runtime.LiveUpdates.UnavailableRefreshManually"),
             ChangedRowIndices = []
         };
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
@@ -896,7 +902,7 @@ public sealed class SitemapRuntimeController
             StatusText = state switch
             {
                 "connected" => Current.StatusText,
-                "disconnected" => "Live updates unavailable. Refresh manually.",
+                "disconnected" => text.Get("Runtime.LiveUpdates.UnavailableRefreshManually"),
                 "reconnecting" => "Reconnecting to live updates...",
                 _ => Current.StatusText
             },

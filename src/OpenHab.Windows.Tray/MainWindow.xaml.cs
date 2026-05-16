@@ -251,7 +251,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShellConnectionText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
+            ShellConnectionText.Text = SafeDiagnosticText.ForUserStatus(ex, text.Get("Runtime.Error"));
             return TraySurfaceRefreshOutcome.Failed;
         }
         finally
@@ -436,7 +436,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLogger.Warn($"Main UI navigation failed: {ex.GetType().Name}");
-            ShellConnectionText.Text = "Error: Main UI could not be loaded.";
+            ShellConnectionText.Text = text.Get("Runtime.MainUi.LoadError");
         }
         finally
         {
@@ -1670,9 +1670,9 @@ public sealed partial class MainWindow : Window
 
         ShellConnectionText.Text = snapshot.ActiveTransport switch
         {
-            TransportKind.Cloud => $"Connected via cloud ({snapshot.ConnectionState})",
-            TransportKind.Local => $"Connected via local ({snapshot.ConnectionState})",
-            _ => $"Connection: {snapshot.ConnectionState}"
+            TransportKind.Cloud => text.Format("Runtime.Connection.ConnectedViaCloud", snapshot.ConnectionState),
+            TransportKind.Local => text.Format("Runtime.Connection.ConnectedViaLocal", snapshot.ConnectionState),
+            _ => text.Format("Runtime.Connection.State", snapshot.ConnectionState)
         };
     }
 

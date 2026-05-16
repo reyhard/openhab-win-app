@@ -147,7 +147,8 @@ public partial class App : Application
                     basicUserName: auth.BasicUserName,
                     basicPassword: auth.BasicPassword);
             },
-            sitemapEventStreamClient: CreateEventStreamClient(settingsController, httpClient));
+            sitemapEventStreamClient: CreateEventStreamClient(settingsController, httpClient),
+            text: textLocalizer);
         runtimeController.SnapshotChanged += OnRuntimeSnapshotChanged;
         windowsSessionInfoReader = new WindowsSessionInfoReader();
         var deviceStateSource = new WindowsDeviceStateSnapshotSource(
