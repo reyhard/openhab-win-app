@@ -38,7 +38,7 @@ public sealed class AppLanguageRuntimeTests
     {
         var appliedTags = new List<string>();
 
-        var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.System, appliedTags.Add);
+        var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.System, appliedTags.Add, _ => { });
 
         Assert.Equal(AppLanguage.System, appliedLanguage);
         Assert.Empty(appliedTags);
@@ -49,7 +49,7 @@ public sealed class AppLanguageRuntimeTests
     {
         var appliedTags = new List<string>();
 
-        var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.Polish, appliedTags.Add);
+        var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.Polish, appliedTags.Add, _ => { });
 
         Assert.Equal(AppLanguage.Polish, appliedLanguage);
         Assert.Collection(appliedTags, tag => Assert.Equal("pl-PL", tag));
@@ -60,7 +60,8 @@ public sealed class AppLanguageRuntimeTests
     {
         var appliedLanguage = AppLanguageRuntime.ApplyLanguage(
             AppLanguage.Polish,
-            _ => throw new COMException("Language override is unavailable."));
+            _ => throw new COMException("Language override is unavailable."),
+            _ => { });
 
         Assert.Equal(AppLanguage.System, appliedLanguage);
     }

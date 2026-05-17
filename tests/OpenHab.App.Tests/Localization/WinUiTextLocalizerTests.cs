@@ -37,4 +37,24 @@ public sealed class WinUiTextLocalizerTests
 
         Assert.Equal("Wygląd", text);
     }
+
+    [Fact]
+    public void GetTriesSlashResourceNameWhenDottedLookupThrows()
+    {
+        var localizer = new WinUiTextLocalizer(key =>
+        {
+            if (string.Equals(key, "Settings.Appearance.Title", StringComparison.Ordinal))
+            {
+                throw new COMException("Dotted resource name unavailable.");
+            }
+
+            return string.Equals(key, "Settings/Appearance/Title", StringComparison.Ordinal)
+                ? "Wygląd"
+                : null;
+        });
+
+        var text = localizer.Get("Settings.Appearance.Title");
+
+        Assert.Equal("Wygląd", text);
+    }
 }

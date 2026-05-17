@@ -122,7 +122,7 @@ public partial class App : Application
 
         settingsController = new AppSettingsController(credentialStore);
         appliedAppLanguage = AppLanguageRuntime.ApplyLanguage(settingsController.Current.AppLanguage);
-        textLocalizer = new WinUiTextLocalizer();
+        textLocalizer = new WinUiTextLocalizer(AppLanguageRuntime.ToLanguageTag(appliedAppLanguage));
         notificationStore = new NotificationStore();
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
