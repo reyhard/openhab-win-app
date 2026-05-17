@@ -54,6 +54,7 @@ public sealed partial class MainWindow : Window
     private readonly Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory;
     private readonly Func<TransportKind, MainUiAuthContext> mainUiAuthResolver;
     private readonly ITextLocalizer text;
+    private readonly AppLanguage appliedAppLanguage;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
@@ -133,6 +134,7 @@ public sealed partial class MainWindow : Window
         Func<bool>? shouldAllowClose,
         Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory,
         Func<TransportKind, MainUiAuthContext>? mainUiAuthResolver = null,
+        AppLanguage appliedAppLanguage = AppLanguage.System,
         ITextLocalizer? text = null)
     {
         this.settingsController = settingsController;
@@ -142,6 +144,7 @@ public sealed partial class MainWindow : Window
         this.shouldAllowClose = shouldAllowClose ?? (() => false);
         this.openHabClientFactory = openHabClientFactory;
         this.mainUiAuthResolver = mainUiAuthResolver ?? (_ => MainUiAuthContext.None);
+        this.appliedAppLanguage = appliedAppLanguage;
         this.text = text ?? DefaultEnglishTextLocalizer.Instance;
         sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
         sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
@@ -311,7 +314,12 @@ public sealed partial class MainWindow : Window
 
     private void ShowSettingsPage()
     {
-        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, SetShellStatusText, text);
+        settingsPage ??= new Settings.SettingsPageControl(
+            settingsController,
+            RefreshRuntimeAsync,
+            SetShellStatusText,
+            appliedAppLanguage,
+            text);
         settingsPage.PointerPressed -= SettingsPage_PointerPressed;
         settingsPage.PointerPressed += SettingsPage_PointerPressed;
         settingsPage.ShowRoot();

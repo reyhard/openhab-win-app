@@ -172,6 +172,16 @@ public sealed class AppSettingsController
         UpdateSettings(settings => settings with { AppColorTheme = theme });
     }
 
+    public void SetAppLanguage(AppLanguage language)
+    {
+        if (!Enum.IsDefined(language))
+        {
+            throw new ArgumentOutOfRangeException(nameof(language));
+        }
+
+        UpdateSettings(settings => settings with { AppLanguage = language });
+    }
+
     public void SetUseWindows11Icons(bool use)
     {
         UpdateSettings(settings => settings with { UseWindows11Icons = use });
@@ -544,9 +554,14 @@ public sealed class AppSettingsController
             appColorTheme = AppSettings.Default.AppColorTheme;
         }
 
+        var appLanguage = Enum.IsDefined(settings.AppLanguage)
+            ? settings.AppLanguage
+            : AppSettings.Default.AppLanguage;
+
         return settings with
         {
             AppColorTheme = appColorTheme,
+            AppLanguage = appLanguage,
             FollowSystemTheme = null,
             LocalEndpoint = NormalizeLoadedEndpoint(settings.LocalEndpoint, AppSettings.Default.LocalEndpoint),
             CloudEndpoint = NormalizeLoadedEndpoint(settings.CloudEndpoint, AppSettings.Default.CloudEndpoint),

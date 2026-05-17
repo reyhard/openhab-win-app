@@ -18,6 +18,7 @@ using OpenHab.Core;
 using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Windows.Tray.Localization;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Shortcuts;
 using OpenHab.Windows.Tray.Startup;
@@ -36,6 +37,11 @@ public sealed partial class SettingsPageControl : UserControl
         public override string ToString() => Label;
     }
 
+    private sealed record AppLanguageOption(string Label, AppLanguage Language)
+    {
+        public override string ToString() => Label;
+    }
+
     private static readonly AppColorThemeOption[] AppColorThemeOptions =
     [
         new("Dark", AppColorTheme.Dark),
@@ -47,6 +53,7 @@ public sealed partial class SettingsPageControl : UserControl
     private readonly Func<Task> refreshRuntimeAsync;
     private readonly Action<string> setStatusText;
     private readonly ITextLocalizer text;
+    private readonly AppLanguage appliedAppLanguage;
     private SettingsPageKind currentSettingsPage = SettingsPageKind.Root;
     private bool isSettingsPageTransitionRunning;
     private bool suppressTokenEditTracking;
@@ -64,6 +71,8 @@ public sealed partial class SettingsPageControl : UserControl
     private TextBox? CloudUserNameText;
     private PasswordBox? CloudPasswordBox;
     private ComboBox? AppColorThemeCombo;
+    private ComboBox? AppLanguageCombo;
+    private InfoBar? AppLanguageRestartInfoBar;
     private ToggleSwitch? UseWin11IconsToggle;
     private ToggleSwitch? LaunchAtStartupToggle;
     private NumberBox? FlyoutWidthBox;
@@ -98,11 +107,13 @@ public sealed partial class SettingsPageControl : UserControl
         AppSettingsController settingsController,
         Func<Task> refreshRuntimeAsync,
         Action<string> setStatusText,
+        AppLanguage appliedAppLanguage = AppLanguage.System,
         ITextLocalizer? text = null)
     {
         this.settingsController = settingsController;
         this.refreshRuntimeAsync = refreshRuntimeAsync;
         this.setStatusText = setStatusText;
+        this.appliedAppLanguage = appliedAppLanguage;
         this.text = text ?? DefaultEnglishTextLocalizer.Instance;
         InitializeComponent();
         InitializeSettingsControls();
@@ -490,6 +501,29 @@ public sealed partial class SettingsPageControl : UserControl
             "Choose the main window and flyout color mode",
             AppColorThemeCombo);
 
+        AppLanguageCombo = new ComboBox
+        {
+            Width = 220,
+            ItemsSource = CreateAppLanguageOptions()
+        };
+        AppLanguageCombo.SelectionChanged += AppLanguageCombo_SelectionChanged;
+        var languageRow = CreateSettingsControlRow(
+            "\uE774",
+            text.Get("Settings.Appearance.Language.Title"),
+            text.Get("Settings.Appearance.Language.Subtitle"),
+            AppLanguageCombo);
+
+        AppLanguageRestartInfoBar = new InfoBar
+        {
+            Severity = InfoBarSeverity.Informational,
+            IsClosable = false,
+            Title = text.Get("Settings.Appearance.Language.RestartTitle"),
+            Message = text.Get("Settings.Appearance.Language.RestartMessage"),
+            IsOpen = false,
+            Visibility = Visibility.Collapsed,
+            Margin = new Thickness(0, 4, 0, 4)
+        };
+
         UseWin11IconsToggle = new ToggleSwitch
         {
             OnContent = string.Empty,
@@ -502,7 +536,7 @@ public sealed partial class SettingsPageControl : UserControl
             "Prefer Fluent-style symbols for sitemap widgets",
             UseWin11IconsToggle);
 
-        SettingsContent.Children.Add(CreateSettingsGroup(skinRow, themeRow, iconStyleRow));
+        SettingsContent.Children.Add(CreateSettingsGroup(skinRow, themeRow, languageRow, AppLanguageRestartInfoBar, iconStyleRow));
     }
 
     private void BuildDeviceInfoSyncSettingsPage()
@@ -613,6 +647,13 @@ public sealed partial class SettingsPageControl : UserControl
 
         return stack;
     }
+
+    private AppLanguageOption[] CreateAppLanguageOptions() =>
+    [
+        new(text.Get("Settings.Appearance.Language.System"), AppLanguage.System),
+        new(text.Get("Settings.Appearance.Language.English"), AppLanguage.English),
+        new(text.Get("Settings.Appearance.Language.Polish"), AppLanguage.Polish)
+    ];
 
     private static Grid CreateSettingsToggleRow(string glyph, string title, string subtitle, ToggleSwitch toggle)
     {
@@ -1296,6 +1337,13 @@ public sealed partial class SettingsPageControl : UserControl
             {
                 AppColorThemeCombo.SelectedItem = AppColorThemeOptions.First(option => option.Theme == settingsController.Current.AppColorTheme);
             }
+            if (AppLanguageCombo is not null)
+            {
+                AppLanguageCombo.SelectedItem = AppLanguageCombo.Items
+                    .OfType<AppLanguageOption>()
+                    .First(option => option.Language == settingsController.Current.AppLanguage);
+            }
+            RefreshAppLanguageRestartNotice();
             if (UseWin11IconsToggle is not null)
             {
                 UseWin11IconsToggle.IsOn = settingsController.Current.UseWindows11Icons;
@@ -1605,6 +1653,31 @@ public sealed partial class SettingsPageControl : UserControl
         {
             settingsController.SetAppColorTheme(option.Theme);
         }
+    }
+
+    private void AppLanguageCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!isRefreshingSettingsBindings
+            && sender is ComboBox combo
+            && combo.SelectedItem is AppLanguageOption option)
+        {
+            settingsController.SetAppLanguage(option.Language);
+            RefreshAppLanguageRestartNotice();
+        }
+    }
+
+    private void RefreshAppLanguageRestartNotice()
+    {
+        if (AppLanguageRestartInfoBar is null)
+        {
+            return;
+        }
+
+        var shouldShow = AppLanguageRuntime.ShouldShowRestartNotice(
+            settingsController.Current.AppLanguage,
+            appliedAppLanguage);
+        AppLanguageRestartInfoBar.IsOpen = shouldShow;
+        AppLanguageRestartInfoBar.Visibility = shouldShow ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UseWin11IconsToggle_Toggled(object sender, RoutedEventArgs e)

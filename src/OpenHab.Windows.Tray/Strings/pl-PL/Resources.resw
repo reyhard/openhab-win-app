@@ -6,270 +6,270 @@
     <comment>Product name. Usually not translated.</comment>
   </data>
   <data name="App.Description" xml:space="preserve">
-    <value>openHAB Windows companion app</value>
+    <value>Aplikacja towarzysząca openHAB dla Windows</value>
   </data>
   <data name="AppDisplayName" xml:space="preserve">
     <value>openHAB</value>
     <comment>Product name. Usually not translated.</comment>
   </data>
   <data name="AppDescription" xml:space="preserve">
-    <value>openHAB Windows companion app</value>
+    <value>Aplikacja towarzysząca openHAB dla Windows</value>
   </data>
   <data name="Common.Cancel" xml:space="preserve">
-    <value>Cancel</value>
+    <value>Anuluj</value>
   </data>
   <data name="Common.Continue" xml:space="preserve">
-    <value>Continue</value>
+    <value>Kontynuuj</value>
   </data>
   <data name="Common.Delete" xml:space="preserve">
-    <value>Delete</value>
+    <value>Usuń</value>
   </data>
   <data name="Common.Save" xml:space="preserve">
-    <value>Save</value>
+    <value>Zapisz</value>
   </data>
   <data name="Common.Clear" xml:space="preserve">
-    <value>Clear</value>
+    <value>Wyczyść</value>
   </data>
   <data name="Common.Reset" xml:space="preserve">
-    <value>Reset</value>
+    <value>Resetuj</value>
   </data>
   <data name="Common.Edit" xml:space="preserve">
-    <value>Edit</value>
+    <value>Edytuj</value>
   </data>
   <data name="MainWindow_SidebarCollapseButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Collapse navigation</value>
+    <value>Zwiń nawigację</value>
   </data>
   <data name="MainWindow_SidebarCollapseButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Collapse navigation</value>
+    <value>Zwiń nawigację</value>
   </data>
   <data name="MainWindow_ToggleSitemapButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Show sitemap</value>
+    <value>Pokaż sitemapę</value>
   </data>
   <data name="MainWindow_ToggleSitemapButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Show sitemap</value>
+    <value>Pokaż sitemapę</value>
   </data>
   <data name="MainWindow_SidebarBrandSubtitle.Text" xml:space="preserve">
-    <value>Windows companion</value>
+    <value>Aplikacja dla Windows</value>
   </data>
   <data name="MainWindow_HomeNavButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Home</value>
+    <value>Strona główna</value>
   </data>
   <data name="MainWindow_HomeNavButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Home</value>
+    <value>Strona główna</value>
   </data>
   <data name="MainWindow_HomeNavText.Text" xml:space="preserve">
-    <value>Home</value>
+    <value>Strona główna</value>
   </data>
   <data name="MainWindow_HomePagesToggleButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Show Main UI pages</value>
+    <value>Pokaż strony Main UI</value>
   </data>
   <data name="MainWindow_HomePagesToggleButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Show Main UI pages</value>
+    <value>Pokaż strony Main UI</value>
   </data>
   <data name="MainWindow_NotificationsNavButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Notifications</value>
+    <value>Powiadomienia</value>
   </data>
   <data name="MainWindow_NotificationsNavButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Notifications</value>
+    <value>Powiadomienia</value>
   </data>
   <data name="MainWindow_NotificationsNavText.Text" xml:space="preserve">
-    <value>Notifications</value>
+    <value>Powiadomienia</value>
   </data>
   <data name="MainWindow_SettingsNavButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Settings</value>
+    <value>Ustawienia</value>
   </data>
   <data name="MainWindow_SettingsNavButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Settings</value>
+    <value>Ustawienia</value>
   </data>
   <data name="MainWindow_SettingsNavText.Text" xml:space="preserve">
-    <value>Settings</value>
+    <value>Ustawienia</value>
   </data>
   <data name="MainWindow_ShellConnectionText.Text" xml:space="preserve">
-    <value>Connecting...</value>
+    <value>Łączenie...</value>
   </data>
   <data name="MainWindow_ShellConnectionSubtitle.Text" xml:space="preserve">
-    <value>to openHAB server</value>
+    <value>z serwerem openHAB</value>
   </data>
   <data name="MainWindow_SitemapHeaderArea.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Choose sitemap</value>
+    <value>Wybierz sitemapę</value>
   </data>
   <data name="MainWindow_SitemapHeaderArea.AutomationProperties.Name" xml:space="preserve">
-    <value>Choose sitemap</value>
+    <value>Wybierz sitemapę</value>
   </data>
   <data name="MainWindow_SitemapTitleText.Text" xml:space="preserve">
-    <value>Sitemap</value>
+    <value>Sitemapa</value>
   </data>
   <data name="MainWindow_SearchSitemapButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Search sitemap</value>
+    <value>Przeszukaj sitemapę</value>
   </data>
   <data name="MainWindow_SearchSitemapButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Search sitemap</value>
+    <value>Przeszukaj sitemapę</value>
   </data>
   <data name="MainWindow_RefreshSitemapButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Refresh sitemap</value>
+    <value>Odśwież sitemapę</value>
   </data>
   <data name="MainWindow_RefreshSitemapButton.AutomationProperties.Name" xml:space="preserve">
-    <value>Refresh sitemap</value>
+    <value>Odśwież sitemapę</value>
   </data>
   <data name="MainWindow_SitemapSearchBox.PlaceholderText" xml:space="preserve">
-    <value>Search current section...</value>
+    <value>Szukaj w bieżącej sekcji...</value>
   </data>
   <data name="Flyout_SearchButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Search sitemap</value>
+    <value>Przeszukaj sitemapę</value>
   </data>
   <data name="Flyout_MinimizeButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Minimize flyout</value>
+    <value>Zminimalizuj panel</value>
   </data>
   <data name="Flyout_SitemapSearchBox.PlaceholderText" xml:space="preserve">
-    <value>Search current section...</value>
+    <value>Szukaj w bieżącej sekcji...</value>
   </data>
   <data name="Flyout_RefreshButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Refresh</value>
+    <value>Odśwież</value>
   </data>
   <data name="Flyout_NotificationsButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Open notifications</value>
+    <value>Otwórz powiadomienia</value>
   </data>
   <data name="Flyout_OpenMainWindowButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Open main window</value>
+    <value>Otwórz główne okno</value>
   </data>
   <data name="Flyout_SettingsButton.ToolTipService.ToolTip" xml:space="preserve">
-    <value>Settings</value>
+    <value>Ustawienia</value>
   </data>
   <data name="SettingsPage_RootButton.Content" xml:space="preserve">
-    <value>Settings</value>
+    <value>Ustawienia</value>
   </data>
   <data name="SettingsPage_TitleText.Text" xml:space="preserve">
-    <value>Settings</value>
+    <value>Ustawienia</value>
   </data>
   <data name="NotificationsPage_SearchBox.PlaceholderText" xml:space="preserve">
-    <value>Search notifications</value>
+    <value>Szukaj powiadomień</value>
   </data>
   <data name="NotificationsPage_FilterVisible.Content" xml:space="preserve">
-    <value>Visible</value>
+    <value>Widoczne</value>
   </data>
   <data name="NotificationsPage_FilterUnread.Content" xml:space="preserve">
-    <value>Unread</value>
+    <value>Nieprzeczytane</value>
   </data>
   <data name="NotificationsPage_FilterRead.Content" xml:space="preserve">
-    <value>Read</value>
+    <value>Przeczytane</value>
   </data>
   <data name="NotificationsPage_FilterHidden.Content" xml:space="preserve">
-    <value>Hidden</value>
+    <value>Ukryte</value>
   </data>
   <data name="NotificationsPage_FilterAll.Content" xml:space="preserve">
-    <value>All</value>
+    <value>Wszystkie</value>
   </data>
   <data name="NotificationsPage_SortNewest.Content" xml:space="preserve">
-    <value>Newest</value>
+    <value>Najnowsze</value>
   </data>
   <data name="NotificationsPage_SortOldest.Content" xml:space="preserve">
-    <value>Oldest</value>
+    <value>Najstarsze</value>
   </data>
   <data name="NotificationsPage_SortName.Content" xml:space="preserve">
-    <value>Name</value>
+    <value>Nazwa</value>
   </data>
   <data name="NotificationsPage_MarkAllReadButton.Content" xml:space="preserve">
-    <value>Mark all read</value>
+    <value>Oznacz wszystkie jako przeczytane</value>
   </data>
   <data name="NotificationsPage_LocalOnlyNote.Text" xml:space="preserve">
-    <value>New notifications unavailable in Local-Only mode. Switch to Automatic or Cloud to receive alerts.</value>
+    <value>Nowe powiadomienia są niedostępne w trybie tylko lokalnym. Przełącz na automatyczny lub chmurę, aby odbierać alerty.</value>
   </data>
   <data name="NotificationsPage_EmptyText.Text" xml:space="preserve">
-    <value>No notifications</value>
+    <value>Brak powiadomień</value>
   </data>
   <data name="Notifications.DefaultTitle" xml:space="preserve">
     <value>openHAB</value>
     <comment>Fallback notification title. Usually not translated.</comment>
   </data>
   <data name="Notifications.Empty.NoMatches" xml:space="preserve">
-    <value>No matching notifications</value>
+    <value>Brak pasujących powiadomień</value>
   </data>
   <data name="Notifications.Empty.NoUnread" xml:space="preserve">
-    <value>No unread notifications</value>
+    <value>Brak nieprzeczytanych powiadomień</value>
   </data>
   <data name="Notifications.Empty.NoRead" xml:space="preserve">
-    <value>No read notifications</value>
+    <value>Brak przeczytanych powiadomień</value>
   </data>
   <data name="Notifications.Empty.NoHidden" xml:space="preserve">
-    <value>No hidden notifications</value>
+    <value>Brak ukrytych powiadomień</value>
   </data>
   <data name="Notifications.Empty.NoNotifications" xml:space="preserve">
-    <value>No notifications</value>
+    <value>Brak powiadomień</value>
   </data>
   <data name="Notifications.MarkUnread" xml:space="preserve">
-    <value>Mark unread</value>
+    <value>Oznacz jako nieprzeczytane</value>
   </data>
   <data name="Notifications.MarkRead" xml:space="preserve">
-    <value>Mark read</value>
+    <value>Oznacz jako przeczytane</value>
   </data>
   <data name="Notifications.Unhide" xml:space="preserve">
-    <value>Unhide</value>
+    <value>Pokaż</value>
   </data>
   <data name="Notifications.Hide" xml:space="preserve">
-    <value>Hide</value>
+    <value>Ukryj</value>
   </data>
   <data name="Notifications.Elapsed.JustNow" xml:space="preserve">
-    <value>Just now</value>
+    <value>Przed chwilą</value>
   </data>
   <data name="Notifications.Elapsed.MinutesAgo" xml:space="preserve">
-    <value>{0}m ago</value>
+    <value>{0} min temu</value>
     <comment>{0}: number of elapsed minutes. Keep short for narrow notification rows.</comment>
   </data>
   <data name="Notifications.Elapsed.HoursAgo" xml:space="preserve">
-    <value>{0}h ago</value>
+    <value>{0} godz. temu</value>
     <comment>{0}: number of elapsed hours. Keep short for narrow notification rows.</comment>
   </data>
   <data name="Notifications.Elapsed.DaysAgo" xml:space="preserve">
-    <value>{0}d ago</value>
+    <value>{0} dni temu</value>
     <comment>{0}: number of elapsed days. Keep short for narrow notification rows.</comment>
   </data>
   <data name="Tray.OpenFlyout" xml:space="preserve">
-    <value>Open flyout</value>
+    <value>Otwórz panel</value>
   </data>
   <data name="Tray.OpenMainWindow" xml:space="preserve">
-    <value>Open main window</value>
+    <value>Otwórz główne okno</value>
   </data>
   <data name="Tray.Exit" xml:space="preserve">
-    <value>Exit</value>
+    <value>Zamknij</value>
   </data>
   <data name="Settings.Title" xml:space="preserve">
-    <value>Settings</value>
+    <value>Ustawienia</value>
   </data>
   <data name="Settings.Root.Subtitle" xml:space="preserve">
-    <value>Choose a category</value>
+    <value>Wybierz kategorię</value>
   </data>
   <data name="Settings.Connection.Title" xml:space="preserve">
-    <value>Connection</value>
+    <value>Połączenie</value>
   </data>
   <data name="Settings.Connection.Subtitle" xml:space="preserve">
-    <value>Endpoints and credentials</value>
+    <value>Punkty końcowe i dane logowania</value>
   </data>
   <data name="Settings.General.Title" xml:space="preserve">
-    <value>General</value>
+    <value>Ogólne</value>
   </data>
   <data name="Settings.General.Subtitle" xml:space="preserve">
-    <value>Startup, flyout width, notifications</value>
+    <value>Uruchamianie, szerokość panelu, powiadomienia</value>
   </data>
   <data name="Settings.General.PageSubtitle" xml:space="preserve">
-    <value>Startup and runtime behavior</value>
+    <value>Uruchamianie i działanie aplikacji</value>
   </data>
   <data name="Settings.Appearance.Title" xml:space="preserve">
-    <value>Appearance</value>
+    <value>Wygląd</value>
   </data>
   <data name="Settings.Appearance.Subtitle" xml:space="preserve">
-    <value>Skin, theme, icon style</value>
+    <value>Skórka, motyw, styl ikon</value>
   </data>
   <data name="Settings.Appearance.PageSubtitle" xml:space="preserve">
-    <value>Visual options</value>
+    <value>Opcje wizualne</value>
   </data>
   <data name="Settings.Appearance.Language.Title" xml:space="preserve">
-    <value>Language</value>
+    <value>Język</value>
   </data>
   <data name="Settings.Appearance.Language.Subtitle" xml:space="preserve">
-    <value>Choose the app language</value>
+    <value>Wybierz język aplikacji</value>
   </data>
   <data name="Settings.Appearance.Language.System" xml:space="preserve">
-    <value>System language</value>
+    <value>Język systemu</value>
   </data>
   <data name="Settings.Appearance.Language.English" xml:space="preserve">
     <value>English</value>
@@ -278,200 +278,200 @@
     <value>Polski</value>
   </data>
   <data name="Settings.Appearance.Language.RestartTitle" xml:space="preserve">
-    <value>Restart required</value>
+    <value>Wymagane ponowne uruchomienie</value>
   </data>
   <data name="Settings.Appearance.Language.RestartMessage" xml:space="preserve">
-    <value>Restart openHAB to apply the selected language.</value>
+    <value>Uruchom openHAB ponownie, aby zastosować wybrany język.</value>
   </data>
   <data name="Settings.DeviceInfoSync.Title" xml:space="preserve">
-    <value>Device Info Sync</value>
+    <value>Synchronizacja informacji o urządzeniu</value>
   </data>
   <data name="Settings.DeviceInfoSync.Subtitle" xml:space="preserve">
-    <value>Configure device metadata sync</value>
+    <value>Skonfiguruj synchronizację metadanych urządzenia</value>
   </data>
   <data name="Settings.Shortcuts.Title" xml:space="preserve">
-    <value>Shortcuts</value>
+    <value>Skróty</value>
   </data>
   <data name="Settings.Shortcuts.Subtitle" xml:space="preserve">
-    <value>Command menu and global shortcuts</value>
+    <value>Menu poleceń i skróty globalne</value>
   </data>
   <data name="Settings.Shortcuts.PageSubtitle" xml:space="preserve">
-    <value>Configure global shortcuts and command menu actions.</value>
+    <value>Skonfiguruj skróty globalne i akcje menu poleceń.</value>
   </data>
   <data name="Settings.About.Title" xml:space="preserve">
-    <value>About</value>
+    <value>O aplikacji</value>
   </data>
   <data name="Settings.About.Subtitle" xml:space="preserve">
-    <value>Logs and version</value>
+    <value>Logi i wersja</value>
   </data>
   <data name="Runtime.Status.Loading" xml:space="preserve">
-    <value>Loading...</value>
+    <value>Ładowanie...</value>
   </data>
   <data name="Runtime.Sitemap.NoSitemapSelected" xml:space="preserve">
-    <value>No sitemap selected</value>
+    <value>Nie wybrano sitemapy</value>
   </data>
   <data name="Runtime.Connection.Failed" xml:space="preserve">
-    <value>Connection failed.</value>
+    <value>Połączenie nieudane.</value>
   </data>
   <data name="Runtime.Connection.FallbackFailed" xml:space="preserve">
-    <value>Fallback failed.</value>
+    <value>Połączenie zapasowe nieudane.</value>
   </data>
   <data name="Runtime.Connection.ConnectedViaCloudLocalFailed" xml:space="preserve">
-    <value>Connected via cloud (local failed).</value>
+    <value>Połączono przez chmurę (lokalne nieudane).</value>
   </data>
   <data name="Runtime.Connection.ConnectedViaCloudSimple" xml:space="preserve">
-    <value>Connected via cloud.</value>
+    <value>Połączono przez chmurę.</value>
   </data>
   <data name="Runtime.Connection.ConnectedViaLocalSimple" xml:space="preserve">
-    <value>Connected via local.</value>
+    <value>Połączono lokalnie.</value>
   </data>
   <data name="Runtime.Connection.ConnectedViaCloud" xml:space="preserve">
-    <value>Connected via cloud ({0})</value>
+    <value>Połączono przez chmurę ({0})</value>
     <comment>{0}: connection state.</comment>
   </data>
   <data name="Runtime.Connection.ConnectedViaLocal" xml:space="preserve">
-    <value>Connected via local ({0})</value>
+    <value>Połączono lokalnie ({0})</value>
     <comment>{0}: connection state.</comment>
   </data>
   <data name="Runtime.Connection.State" xml:space="preserve">
-    <value>Connection: {0}</value>
+    <value>Połączenie: {0}</value>
     <comment>{0}: connection state.</comment>
   </data>
   <data name="Runtime.LiveUpdates.UnavailableRefreshManually" xml:space="preserve">
-    <value>Live updates unavailable. Refresh manually.</value>
+    <value>Aktualizacje na żywo są niedostępne. Odśwież ręcznie.</value>
   </data>
   <data name="Runtime.MainUi.LoadError" xml:space="preserve">
-    <value>Error: Main UI could not be loaded.</value>
+    <value>Błąd: nie udało się załadować Main UI.</value>
   </data>
   <data name="Runtime.Error" xml:space="preserve">
-    <value>Error.</value>
+    <value>Błąd.</value>
   </data>
   <data name="Sitemap.Search.ResultsTitle" xml:space="preserve">
-    <value>Search results</value>
+    <value>Wyniki wyszukiwania</value>
   </data>
   <data name="Sitemap.Search.SearchingScope" xml:space="preserve">
-    <value>Searching current section and child pages</value>
+    <value>Przeszukiwanie bieżącej sekcji i stron podrzędnych</value>
   </data>
   <data name="Sitemap.Search.ResultCountInScope" xml:space="preserve">
-    <value>{0} results in current section and child pages</value>
+    <value>{0} wyników w bieżącej sekcji i stronach podrzędnych</value>
     <comment>{0}: number of search results.</comment>
   </data>
   <data name="Sitemap.Search.EmptyLabel" xml:space="preserve">
-    <value>No matching sitemap elements</value>
+    <value>Brak pasujących elementów sitemapy</value>
   </data>
   <data name="Sitemap.Action.Run" xml:space="preserve">
-    <value>Run</value>
+    <value>Uruchom</value>
   </data>
   <data name="Sitemap.WebView.NoUrlConfigured" xml:space="preserve">
-    <value>No URL configured</value>
+    <value>Nie skonfigurowano URL</value>
   </data>
   <data name="Sitemap.WebView.OpenInBrowser" xml:space="preserve">
-    <value>Open in browser</value>
+    <value>Otwórz w przeglądarce</value>
   </data>
   <data name="Sitemap.Chart.RequiresItem" xml:space="preserve">
-    <value>Chart requires an item</value>
+    <value>Wykres wymaga elementu</value>
   </data>
   <data name="Shortcuts.Validation.ShortcutRequired" xml:space="preserve">
-    <value>Shortcut is required.</value>
+    <value>Skrót jest wymagany.</value>
   </data>
   <data name="Shortcuts.Validation.ModifierRequired" xml:space="preserve">
-    <value>Shortcut must include at least one modifier.</value>
+    <value>Skrót musi zawierać co najmniej jeden modyfikator.</value>
   </data>
   <data name="Shortcuts.Validation.KeyRequired" xml:space="preserve">
-    <value>Shortcut must include a key.</value>
+    <value>Skrót musi zawierać klawisz.</value>
   </data>
   <data name="Shortcuts.Validation.SingleKeyBlocked" xml:space="preserve">
-    <value>'{0}' by itself cannot be used as a shortcut.</value>
+    <value>Nie można użyć samego klawisza „{0}” jako skrótu.</value>
     <comment>{0}: shortcut key name.</comment>
   </data>
   <data name="Shortcuts.Validation.KeyInvalid" xml:space="preserve">
-    <value>Shortcut key is invalid.</value>
+    <value>Klawisz skrótu jest nieprawidłowy.</value>
   </data>
   <data name="Shortcuts.Validation.ReservedByWindows" xml:space="preserve">
-    <value>'{0}' is reserved by Windows and cannot be used.</value>
+    <value>„{0}” jest zarezerwowane przez Windows i nie można tego użyć.</value>
     <comment>{0}: shortcut text, for example Win + V.</comment>
   </data>
   <data name="Shortcuts.Validation.BindingAlreadyUsed" xml:space="preserve">
-    <value>'{0}' is already used by '{1}'.</value>
+    <value>„{0}” jest już używane przez „{1}”.</value>
     <comment>{0}: shortcut text. {1}: owner of the existing shortcut.</comment>
   </data>
   <data name="Shortcuts.Validation.ActionRequired" xml:space="preserve">
-    <value>Action is required.</value>
+    <value>Akcja jest wymagana.</value>
   </data>
   <data name="Shortcuts.Validation.ActionIdRequired" xml:space="preserve">
-    <value>Action ID is required.</value>
+    <value>ID akcji jest wymagane.</value>
   </data>
   <data name="Shortcuts.Validation.ActionNameRequired" xml:space="preserve">
-    <value>Action name is required.</value>
+    <value>Nazwa akcji jest wymagana.</value>
   </data>
   <data name="Shortcuts.Validation.TargetItemRequired" xml:space="preserve">
-    <value>Target item is required.</value>
+    <value>Element docelowy jest wymagany.</value>
   </data>
   <data name="Shortcuts.Validation.CommandTypeInvalid" xml:space="preserve">
-    <value>Command type is invalid.</value>
+    <value>Typ polecenia jest nieprawidłowy.</value>
   </data>
   <data name="Shortcuts.Validation.OnOffValueRequired" xml:space="preserve">
-    <value>OnOff action requires command value ON or OFF.</value>
+    <value>Akcja OnOff wymaga wartości polecenia ON albo OFF.</value>
   </data>
   <data name="Shortcuts.Validation.OpenCloseValueRequired" xml:space="preserve">
-    <value>OpenClose action requires command value OPEN or CLOSE.</value>
+    <value>Akcja OpenClose wymaga wartości polecenia OPEN albo CLOSE.</value>
   </data>
   <data name="Shortcuts.Validation.SendCommandValueRequired" xml:space="preserve">
-    <value>SendCommand action requires a command value.</value>
+    <value>Akcja SendCommand wymaga wartości polecenia.</value>
   </data>
   <data name="Shortcuts.Validation.GlobalShortcutInvalid" xml:space="preserve">
-    <value>Global shortcut is invalid.</value>
+    <value>Skrót globalny jest nieprawidłowy.</value>
   </data>
   <data name="Shortcuts.Validation.ActionAvailabilityRequired" xml:space="preserve">
-    <value>Action must be shown in command menu, have a global shortcut, or both.</value>
+    <value>Akcja musi być widoczna w menu poleceń, mieć skrót globalny albo oba ustawienia.</value>
   </data>
   <data name="Shortcuts.Validation.CommandValueRequired" xml:space="preserve">
-    <value>Command value is required for this action type.</value>
+    <value>Wartość polecenia jest wymagana dla tego typu akcji.</value>
   </data>
   <data name="Shortcuts.CommandMenu.OwnerName" xml:space="preserve">
-    <value>openHAB Command Menu</value>
+    <value>Menu poleceń openHAB</value>
   </data>
   <data name="Shortcuts.ActionOwner" xml:space="preserve">
-    <value>Action: {0}</value>
+    <value>Akcja: {0}</value>
     <comment>{0}: action name.</comment>
   </data>
   <data name="Shortcuts.UnnamedAction" xml:space="preserve">
-    <value>Unnamed action</value>
+    <value>Akcja bez nazwy</value>
   </data>
   <data name="ShortcutRecorder.Dialog.Title" xml:space="preserve">
-    <value>Activation shortcut</value>
+    <value>Skrót aktywacji</value>
   </data>
   <data name="ShortcutRecorder.EditShortcut" xml:space="preserve">
-    <value>Edit shortcut</value>
+    <value>Edytuj skrót</value>
   </data>
   <data name="ShortcutRecorder.ClearShortcut" xml:space="preserve">
-    <value>Clear shortcut</value>
+    <value>Wyczyść skrót</value>
   </data>
   <data name="ShortcutRecorder.PressModifierAndKey" xml:space="preserve">
-    <value>Press a modifier and key.</value>
+    <value>Naciśnij modyfikator i klawisz.</value>
   </data>
   <data name="ShortcutRecorder.RequiresModifier" xml:space="preserve">
-    <value>Shortcut must start with Windows, Ctrl, Alt, or Shift.</value>
+    <value>Skrót musi zaczynać się od Windows, Ctrl, Alt albo Shift.</value>
   </data>
   <data name="ShortcutRecorder.ResetToCurrent" xml:space="preserve">
-    <value>Reset to current shortcut.</value>
+    <value>Resetuj do bieżącego skrótu.</value>
   </data>
   <data name="ShortcutRecorder.ShortcutCleared" xml:space="preserve">
-    <value>Shortcut cleared.</value>
+    <value>Skrót wyczyszczony.</value>
   </data>
   <data name="ShortcutRecorder.ShortcutRequiredForControl" xml:space="preserve">
-    <value>Shortcut is required for this control.</value>
+    <value>Skrót jest wymagany dla tej kontrolki.</value>
   </data>
   <data name="ShortcutRecorder.ShortcutRequired" xml:space="preserve">
-    <value>Shortcut is required.</value>
+    <value>Skrót jest wymagany.</value>
   </data>
   <data name="ShortcutRecorder.UnsupportedKey" xml:space="preserve">
-    <value>Unsupported key.</value>
+    <value>Nieobsługiwany klawisz.</value>
   </data>
   <data name="ShortcutRecorder.UseAtLeastOneModifier" xml:space="preserve">
-    <value>Use at least one modifier key.</value>
+    <value>Użyj co najmniej jednego klawisza modyfikującego.</value>
   </data>
   <data name="ShortcutInteractive.CommandSendFailed" xml:space="preserve">
-    <value>Command could not be sent.</value>
+    <value>Nie udało się wysłać polecenia.</value>
   </data>
 </root>

@@ -46,9 +46,10 @@ public partial class App : Application
     private MainWindow? mainWindow;
     private FlyoutWindow? flyoutWindow;
     private TrayIconService? trayIcon;
-    private readonly ITextLocalizer textLocalizer = new WinUiTextLocalizer();
+    private ITextLocalizer textLocalizer = DefaultEnglishTextLocalizer.Instance;
     private TrayShellController? shellController;
     private AppSettingsController? settingsController;
+    private AppLanguage appliedAppLanguage = AppLanguage.System;
     private DispatcherQueue? uiDispatcherQueue;
     private HttpClient? httpClient;
     private NotificationMediaResolver? notificationMediaResolver;
@@ -120,6 +121,9 @@ public partial class App : Application
         }
 
         settingsController = new AppSettingsController(credentialStore);
+        appliedAppLanguage = settingsController.Current.AppLanguage;
+        AppLanguageRuntime.ApplyLanguage(appliedAppLanguage);
+        textLocalizer = new WinUiTextLocalizer();
         notificationStore = new NotificationStore();
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
@@ -265,6 +269,7 @@ public partial class App : Application
                 var auth = ResolveRuntimeAuthSync(settings, transportKind);
                 return new MainUi.MainUiAuthContext(auth.ApiToken, auth.BasicUserName, auth.BasicPassword);
             },
+            appliedAppLanguage: appliedAppLanguage,
             text: textLocalizer);
 
         PopulateWindowSitemaps(window);

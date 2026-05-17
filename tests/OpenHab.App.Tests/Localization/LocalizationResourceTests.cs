@@ -25,8 +25,7 @@ public sealed partial class LocalizationResourceTests
     public void TranslatedResourcesPreserveEnglishPlaceholders()
     {
         var english = ReadResources(EnglishResourcesPath);
-        foreach (var translatedPath in Directory.EnumerateFiles(StringsRootPath, "Resources.resw", SearchOption.AllDirectories)
-                     .Where(path => !string.Equals(path, EnglishResourcesPath, StringComparison.OrdinalIgnoreCase)))
+        foreach (var translatedPath in TranslatedResourcePaths())
         {
             var translated = ReadResources(translatedPath);
             foreach (var (key, englishValue) in english)
@@ -38,6 +37,18 @@ public sealed partial class LocalizationResourceTests
 
                 Assert.Equal(Placeholders(englishValue), Placeholders(translatedValue));
             }
+        }
+    }
+
+    [Fact]
+    public void PolishResourcesContainEveryEnglishKey()
+    {
+        var englishKeys = ReadResources(EnglishResourcesPath).Keys.ToArray();
+        var polish = ReadResources(Path.Combine(StringsRootPath, "pl-PL", "Resources.resw"));
+
+        foreach (var englishKey in englishKeys)
+        {
+            Assert.Contains(englishKey, polish.Keys);
         }
     }
 
@@ -64,6 +75,11 @@ public sealed partial class LocalizationResourceTests
     }
 
     private static string EnglishResourcesPath => Path.Combine(StringsRootPath, "en-US", "Resources.resw");
+
+    private static string[] TranslatedResourcePaths() =>
+        Directory.EnumerateFiles(StringsRootPath, "Resources.resw", SearchOption.AllDirectories)
+            .Where(path => !string.Equals(path, EnglishResourcesPath, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
 
     private static string StringsRootPath => Path.Combine(RepositoryRootPath, "src", "OpenHab.Windows.Tray", "Strings");
 
