@@ -19,6 +19,17 @@ public sealed partial class LocalizationResourceTests
         Assert.Contains("MainWindow_SidebarCollapseButton.ToolTipService.ToolTip", names);
         Assert.Contains("Notifications.Empty.NoNotifications", names);
         Assert.Contains("Notifications.Elapsed.MinutesAgo", names);
+        Assert.Contains("Settings.Appearance.Skin.Title", names);
+        Assert.Contains("Settings.Appearance.Skin.Subtitle", names);
+        Assert.Contains("Settings.Appearance.Skin.Basic", names);
+        Assert.Contains("Settings.Appearance.Skin.Windows11", names);
+        Assert.Contains("Settings.Appearance.Theme.Title", names);
+        Assert.Contains("Settings.Appearance.Theme.Subtitle", names);
+        Assert.Contains("Settings.Appearance.Theme.Dark", names);
+        Assert.Contains("Settings.Appearance.Theme.Bright", names);
+        Assert.Contains("Settings.Appearance.Theme.FollowSystem", names);
+        Assert.Contains("Settings.Appearance.IconStyle.Title", names);
+        Assert.Contains("Settings.Appearance.IconStyle.Subtitle", names);
     }
 
     [Fact]
@@ -72,6 +83,26 @@ public sealed partial class LocalizationResourceTests
         {
             Assert.Contains(resourceNames, name => name.StartsWith(resourceId + ".", StringComparison.Ordinal));
         }
+    }
+
+    [Fact]
+    public void AppearanceSettingsUseLocalizedLabelsAndDoNotWrapRestartNoticeInCard()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRootPath,
+            "src",
+            "OpenHab.Windows.Tray",
+            "Settings",
+            "SettingsPageControl.xaml.cs"));
+
+        Assert.DoesNotContain("\"Skin\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Choose the sitemap rendering style\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"App color theme\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Choose the main window and flyout color mode\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Use Windows 11 style icons\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Prefer Fluent-style symbols for sitemap widgets\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CreateSettingsGroup(skinRow, themeRow, languageRow, AppLanguageRestartInfoBar, iconStyleRow)", source, StringComparison.Ordinal);
+        Assert.Contains("SettingsContent.Children.Add(AppLanguageRestartInfoBar)", source, StringComparison.Ordinal);
     }
 
     private static string EnglishResourcesPath => Path.Combine(StringsRootPath, "en-US", "Resources.resw");

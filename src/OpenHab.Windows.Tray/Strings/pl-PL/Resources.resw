@@ -262,6 +262,33 @@
   <data name="Settings.Appearance.PageSubtitle" xml:space="preserve">
     <value>Opcje wizualne</value>
   </data>
+  <data name="Settings.Appearance.Skin.Title" xml:space="preserve">
+    <value>Skórka</value>
+  </data>
+  <data name="Settings.Appearance.Skin.Subtitle" xml:space="preserve">
+    <value>Wybierz styl renderowania mapy strony</value>
+  </data>
+  <data name="Settings.Appearance.Skin.Basic" xml:space="preserve">
+    <value>Podstawowa</value>
+  </data>
+  <data name="Settings.Appearance.Skin.Windows11" xml:space="preserve">
+    <value>Windows 11</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Title" xml:space="preserve">
+    <value>Motyw kolorystyczny aplikacji</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Subtitle" xml:space="preserve">
+    <value>Wybierz tryb kolorów okna głównego i panelu</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Dark" xml:space="preserve">
+    <value>Ciemny</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Bright" xml:space="preserve">
+    <value>Jasny</value>
+  </data>
+  <data name="Settings.Appearance.Theme.FollowSystem" xml:space="preserve">
+    <value>Zgodnie z ustawieniami systemu</value>
+  </data>
   <data name="Settings.Appearance.Language.Title" xml:space="preserve">
     <value>Język</value>
   </data>
@@ -282,6 +309,12 @@
   </data>
   <data name="Settings.Appearance.Language.RestartMessage" xml:space="preserve">
     <value>Uruchom openHAB ponownie, aby zastosować wybrany język.</value>
+  </data>
+  <data name="Settings.Appearance.IconStyle.Title" xml:space="preserve">
+    <value>Używaj ikon w stylu Windows 11</value>
+  </data>
+  <data name="Settings.Appearance.IconStyle.Subtitle" xml:space="preserve">
+    <value>Preferuj symbole w stylu Fluent dla widgetów mapy strony</value>
   </data>
   <data name="Settings.DeviceInfoSync.Title" xml:space="preserve">
     <value>Synchronizacja informacji o urządzeniu</value>

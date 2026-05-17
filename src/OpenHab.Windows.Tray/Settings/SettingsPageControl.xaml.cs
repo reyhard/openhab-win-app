@@ -37,17 +37,15 @@ public sealed partial class SettingsPageControl : UserControl
         public override string ToString() => Label;
     }
 
-    private sealed record AppLanguageOption(string Label, AppLanguage Language)
+    private sealed record SitemapSkinOption(string Label, SitemapSkinKind Skin)
     {
         public override string ToString() => Label;
     }
 
-    private static readonly AppColorThemeOption[] AppColorThemeOptions =
-    [
-        new("Dark", AppColorTheme.Dark),
-        new("Bright", AppColorTheme.Bright),
-        new("Follow System Settings", AppColorTheme.FollowSystemSettings)
-    ];
+    private sealed record AppLanguageOption(string Label, AppLanguage Language)
+    {
+        public override string ToString() => Label;
+    }
 
     private readonly AppSettingsController settingsController;
     private readonly Func<Task> refreshRuntimeAsync;
@@ -481,24 +479,24 @@ public sealed partial class SettingsPageControl : UserControl
         {
             Width = 220
         };
-        SkinCombo.ItemsSource = Enum.GetValues<SitemapSkinKind>();
+        SkinCombo.ItemsSource = CreateSitemapSkinOptions();
         SkinCombo.SelectionChanged += SkinCombo_SelectionChanged;
         var skinRow = CreateSettingsControlRow(
             "\uE790",
-            "Skin",
-            "Choose the sitemap rendering style",
+            text.Get("Settings.Appearance.Skin.Title"),
+            text.Get("Settings.Appearance.Skin.Subtitle"),
             SkinCombo);
 
         AppColorThemeCombo = new ComboBox
         {
             Width = 220,
-            ItemsSource = AppColorThemeOptions
+            ItemsSource = CreateAppColorThemeOptions()
         };
         AppColorThemeCombo.SelectionChanged += AppColorThemeCombo_SelectionChanged;
         var themeRow = CreateSettingsControlRow(
             "\uE771",
-            "App color theme",
-            "Choose the main window and flyout color mode",
+            text.Get("Settings.Appearance.Theme.Title"),
+            text.Get("Settings.Appearance.Theme.Subtitle"),
             AppColorThemeCombo);
 
         AppLanguageCombo = new ComboBox
@@ -532,11 +530,13 @@ public sealed partial class SettingsPageControl : UserControl
         UseWin11IconsToggle.Toggled += UseWin11IconsToggle_Toggled;
         var iconStyleRow = CreateSettingsToggleRow(
             "\uE8A5",
-            "Use Windows 11 style icons",
-            "Prefer Fluent-style symbols for sitemap widgets",
+            text.Get("Settings.Appearance.IconStyle.Title"),
+            text.Get("Settings.Appearance.IconStyle.Subtitle"),
             UseWin11IconsToggle);
 
-        SettingsContent.Children.Add(CreateSettingsGroup(skinRow, themeRow, languageRow, AppLanguageRestartInfoBar, iconStyleRow));
+        SettingsContent.Children.Add(CreateSettingsGroup(skinRow, themeRow, languageRow));
+        SettingsContent.Children.Add(AppLanguageRestartInfoBar);
+        SettingsContent.Children.Add(CreateSettingsGroup(iconStyleRow));
     }
 
     private void BuildDeviceInfoSyncSettingsPage()
@@ -653,6 +653,19 @@ public sealed partial class SettingsPageControl : UserControl
         new(text.Get("Settings.Appearance.Language.System"), AppLanguage.System),
         new(text.Get("Settings.Appearance.Language.English"), AppLanguage.English),
         new(text.Get("Settings.Appearance.Language.Polish"), AppLanguage.Polish)
+    ];
+
+    private AppColorThemeOption[] CreateAppColorThemeOptions() =>
+    [
+        new(text.Get("Settings.Appearance.Theme.Dark"), AppColorTheme.Dark),
+        new(text.Get("Settings.Appearance.Theme.Bright"), AppColorTheme.Bright),
+        new(text.Get("Settings.Appearance.Theme.FollowSystem"), AppColorTheme.FollowSystemSettings)
+    ];
+
+    private SitemapSkinOption[] CreateSitemapSkinOptions() =>
+    [
+        new(text.Get("Settings.Appearance.Skin.Basic"), SitemapSkinKind.Basic),
+        new(text.Get("Settings.Appearance.Skin.Windows11"), SitemapSkinKind.Windows11)
     ];
 
     private static Grid CreateSettingsToggleRow(string glyph, string title, string subtitle, ToggleSwitch toggle)
@@ -1303,7 +1316,9 @@ public sealed partial class SettingsPageControl : UserControl
         {
             if (SkinCombo is not null)
             {
-                SkinCombo.SelectedItem = settingsController.Current.Skin;
+                SkinCombo.SelectedItem = SkinCombo.Items
+                    .OfType<SitemapSkinOption>()
+                    .First(option => option.Skin == settingsController.Current.Skin);
             }
             if (EndpointModeCombo is not null)
             {
@@ -1335,7 +1350,9 @@ public sealed partial class SettingsPageControl : UserControl
 
             if (AppColorThemeCombo is not null)
             {
-                AppColorThemeCombo.SelectedItem = AppColorThemeOptions.First(option => option.Theme == settingsController.Current.AppColorTheme);
+                AppColorThemeCombo.SelectedItem = AppColorThemeCombo.Items
+                    .OfType<AppColorThemeOption>()
+                    .First(option => option.Theme == settingsController.Current.AppColorTheme);
             }
             if (AppLanguageCombo is not null)
             {
@@ -1440,12 +1457,12 @@ public sealed partial class SettingsPageControl : UserControl
 
     private async void SkinCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isRefreshingSettingsBindings || sender is not ComboBox skinCombo || skinCombo.SelectedItem is not SitemapSkinKind skin)
+        if (isRefreshingSettingsBindings || sender is not ComboBox skinCombo || skinCombo.SelectedItem is not SitemapSkinOption option)
         {
             return;
         }
 
-        settingsController.SetSkin(skin);
+        settingsController.SetSkin(option.Skin);
         await refreshRuntimeAsync();
     }
 

@@ -262,6 +262,33 @@
   <data name="Settings.Appearance.PageSubtitle" xml:space="preserve">
     <value>Visual options</value>
   </data>
+  <data name="Settings.Appearance.Skin.Title" xml:space="preserve">
+    <value>Skin</value>
+  </data>
+  <data name="Settings.Appearance.Skin.Subtitle" xml:space="preserve">
+    <value>Choose the sitemap rendering style</value>
+  </data>
+  <data name="Settings.Appearance.Skin.Basic" xml:space="preserve">
+    <value>Basic</value>
+  </data>
+  <data name="Settings.Appearance.Skin.Windows11" xml:space="preserve">
+    <value>Windows 11</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Title" xml:space="preserve">
+    <value>App color theme</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Subtitle" xml:space="preserve">
+    <value>Choose the main window and flyout color mode</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Dark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="Settings.Appearance.Theme.Bright" xml:space="preserve">
+    <value>Bright</value>
+  </data>
+  <data name="Settings.Appearance.Theme.FollowSystem" xml:space="preserve">
+    <value>Follow System Settings</value>
+  </data>
   <data name="Settings.Appearance.Language.Title" xml:space="preserve">
     <value>Language</value>
   </data>
@@ -282,6 +309,12 @@
   </data>
   <data name="Settings.Appearance.Language.RestartMessage" xml:space="preserve">
     <value>Restart openHAB to apply the selected language.</value>
+  </data>
+  <data name="Settings.Appearance.IconStyle.Title" xml:space="preserve">
+    <value>Use Windows 11 style icons</value>
+  </data>
+  <data name="Settings.Appearance.IconStyle.Subtitle" xml:space="preserve">
+    <value>Prefer Fluent-style symbols for sitemap widgets</value>
   </data>
   <data name="Settings.DeviceInfoSync.Title" xml:space="preserve">
     <value>Device Info Sync</value>

@@ -24,4 +24,17 @@ public sealed class WinUiTextLocalizerTests
 
         Assert.Equal("Connection: Offline", text);
     }
+
+    [Fact]
+    public void GetUsesWinUiSlashResourceNameForDottedKeys()
+    {
+        var localizer = new WinUiTextLocalizer(key =>
+            string.Equals(key, "Settings/Appearance/Title", StringComparison.Ordinal)
+                ? "Wygląd"
+                : null);
+
+        var text = localizer.Get("Settings.Appearance.Title");
+
+        Assert.Equal("Wygląd", text);
+    }
 }

@@ -27,6 +27,12 @@ internal sealed class WinUiTextLocalizer : ITextLocalizer
             {
                 return value;
             }
+
+            value = resourceLookup(key.Replace('.', '/'));
+            if (!string.IsNullOrEmpty(value))
+            {
+                return value;
+            }
         }
         catch
         {
