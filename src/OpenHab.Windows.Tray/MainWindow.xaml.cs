@@ -338,13 +338,17 @@ public sealed partial class MainWindow : Window
 
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
-            ShowMainUi();
+            if (!TryShowMainUi(out var host))
+            {
+                return;
+            }
+
             var targetRoute = state.PendingMainUiRoute;
             if (string.IsNullOrWhiteSpace(targetRoute))
             {
                 targetRoute = !string.IsNullOrWhiteSpace(currentMainUiRoute)
                     ? currentMainUiRoute
-                    : MainUiHost.CurrentRoute;
+                    : host.CurrentRoute;
             }
 
             if (!string.IsNullOrWhiteSpace(targetRoute))
@@ -369,14 +373,45 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowMainUi()
+    private bool TryShowMainUi(out MainUiWebViewHost host)
     {
-        var host = MainUiHost;
-        if (!CenterContentHost.Children.Contains(host))
+        try
         {
-            CenterContentHost.Children.Clear();
-            CenterContentHost.Children.Add(host);
+            host = MainUiHost;
+            if (!CenterContentHost.Children.Contains(host))
+            {
+                CenterContentHost.Children.Clear();
+                CenterContentHost.Children.Add(host);
+            }
+
+            return true;
         }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Main UI host creation failed: {ex.GetType().Name}");
+            ShellConnectionText.Text = text.Get("Runtime.MainUi.LoadError");
+            ShowMainUiUnavailable();
+            host = null!;
+            return false;
+        }
+    }
+
+    private void ShowMainUiUnavailable()
+    {
+        CenterContentHost.Children.Clear();
+        CenterContentHost.Children.Add(new Grid
+        {
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = text.Get("Runtime.MainUi.LoadError"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextWrapping = TextWrapping.WrapWholeWords
+                }
+            }
+        });
     }
 
     private MainUiWebViewHost CreateMainUiHost()
