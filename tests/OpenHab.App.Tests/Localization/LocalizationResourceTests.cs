@@ -105,6 +105,48 @@ public sealed partial class LocalizationResourceTests
         Assert.Contains("SettingsContent.Children.Add(AppLanguageRestartInfoBar)", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SettingsSubpagesDoNotKeepUserVisibleEnglishLabelsInCode()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRootPath,
+            "src",
+            "OpenHab.Windows.Tray",
+            "Settings",
+            "SettingsPageControl.xaml.cs"));
+
+        var literals = new[]
+        {
+            "Endpoint mode",
+            "Choose how the app selects local or cloud connectivity",
+            "Local endpoint",
+            "Cloud endpoint",
+            "Launch at startup",
+            "Notification check interval",
+            "Device Info Sync is disabled.",
+            "Device identifier",
+            "openHAB Item mappings",
+            "View logs",
+            "Diagnostic logs",
+            "Built-in shortcuts",
+            "Global shortcut",
+            "Command menu preview",
+            "Voice mode",
+            "Actions and shortcuts",
+            "No actions yet.",
+            "Action name",
+            "Show in command menu",
+            "Command value",
+            "Delete action",
+            "Discard unsaved changes?"
+        };
+
+        foreach (var literal in literals)
+        {
+            Assert.DoesNotContain(literal, source, StringComparison.Ordinal);
+        }
+    }
+
     private static string EnglishResourcesPath => Path.Combine(StringsRootPath, "en-US", "Resources.resw");
 
     private static string[] TranslatedResourcePaths() =>

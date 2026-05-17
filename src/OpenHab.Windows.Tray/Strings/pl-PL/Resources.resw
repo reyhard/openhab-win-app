@@ -24,6 +24,18 @@
   <data name="Common.Delete" xml:space="preserve">
     <value>Usuń</value>
   </data>
+  <data name="Common.Disabled" xml:space="preserve">
+    <value>Wyłączone</value>
+  </data>
+  <data name="Common.Close" xml:space="preserve">
+    <value>Zamknij</value>
+  </data>
+  <data name="Common.Off" xml:space="preserve">
+    <value>Wył.</value>
+  </data>
+  <data name="Common.On" xml:space="preserve">
+    <value>Wł.</value>
+  </data>
   <data name="Common.Save" xml:space="preserve">
     <value>Zapisz</value>
   </data>
@@ -244,6 +256,75 @@
   <data name="Settings.Connection.Subtitle" xml:space="preserve">
     <value>Punkty końcowe i dane logowania</value>
   </data>
+  <data name="Settings.Connection.EndpointMode.Title" xml:space="preserve">
+    <value>Tryb punktu końcowego</value>
+  </data>
+  <data name="Settings.Connection.EndpointMode.Subtitle" xml:space="preserve">
+    <value>Wybierz, jak aplikacja wybiera połączenie lokalne lub chmurowe</value>
+  </data>
+  <data name="Settings.Connection.EndpointMode.Automatic" xml:space="preserve">
+    <value>Automatycznie</value>
+  </data>
+  <data name="Settings.Connection.EndpointMode.LocalOnly" xml:space="preserve">
+    <value>Tylko lokalne</value>
+  </data>
+  <data name="Settings.Connection.EndpointMode.CloudOnly" xml:space="preserve">
+    <value>Tylko chmura</value>
+  </data>
+  <data name="Settings.Connection.LocalEndpoint.Title" xml:space="preserve">
+    <value>Lokalny punkt końcowy</value>
+  </data>
+  <data name="Settings.Connection.LocalEndpoint.Subtitle" xml:space="preserve">
+    <value>Bazowy adres URL serwera openHAB w sieci lokalnej</value>
+  </data>
+  <data name="Settings.Connection.CloudEndpoint.Title" xml:space="preserve">
+    <value>Punkt końcowy chmury</value>
+  </data>
+  <data name="Settings.Connection.CloudEndpoint.Subtitle" xml:space="preserve">
+    <value>Bazowy adres URL usługi myopenHAB Cloud</value>
+  </data>
+  <data name="Settings.Connection.LocalToken.Placeholder" xml:space="preserve">
+    <value>Wpisz token (opcjonalnie)</value>
+  </data>
+  <data name="Settings.Connection.LocalToken.StoredPlaceholder" xml:space="preserve">
+    <value>Zapisany token jest skonfigurowany. Wpisz nowy, aby go zastąpić, albo pozostaw bez zmian.</value>
+  </data>
+  <data name="Settings.Connection.LocalToken.Title" xml:space="preserve">
+    <value>Lokalny token API</value>
+  </data>
+  <data name="Settings.Connection.LocalToken.Subtitle" xml:space="preserve">
+    <value>Opcjonalny token bearer używany z lokalnym punktem końcowym</value>
+  </data>
+  <data name="Settings.Connection.CloudUserName.Placeholder" xml:space="preserve">
+    <value>Wpisz e-mail myopenHAB</value>
+  </data>
+  <data name="Settings.Connection.CloudUserName.Title" xml:space="preserve">
+    <value>E-mail / nazwa użytkownika chmury</value>
+  </data>
+  <data name="Settings.Connection.CloudUserName.Subtitle" xml:space="preserve">
+    <value>Konto używane do logowania w myopenHAB</value>
+  </data>
+  <data name="Settings.Connection.CloudPassword.Placeholder" xml:space="preserve">
+    <value>Wpisz hasło myopenHAB</value>
+  </data>
+  <data name="Settings.Connection.CloudPassword.StoredPlaceholder" xml:space="preserve">
+    <value>Zapisane hasło jest skonfigurowane. Wpisz nowe, aby je zastąpić, albo pozostaw bez zmian.</value>
+  </data>
+  <data name="Settings.Connection.CloudPassword.Title" xml:space="preserve">
+    <value>Hasło chmury</value>
+  </data>
+  <data name="Settings.Connection.CloudPassword.Subtitle" xml:space="preserve">
+    <value>Hasło używane tylko dla skonfigurowanego konta chmurowego</value>
+  </data>
+  <data name="Settings.Connection.TokenSaveFailed" xml:space="preserve">
+    <value>Nie udało się zapisać tokenu.</value>
+  </data>
+  <data name="Settings.Connection.CloudPasswordRequired" xml:space="preserve">
+    <value>Hasło chmury jest wymagane, gdy ustawiono nazwę użytkownika. Istniejące dane logowania nie zostały zmienione.</value>
+  </data>
+  <data name="Settings.Connection.CloudCredentialsSaveFailed" xml:space="preserve">
+    <value>Nie udało się zapisać danych logowania chmury.</value>
+  </data>
   <data name="Settings.General.Title" xml:space="preserve">
     <value>Ogólne</value>
   </data>
@@ -252,6 +333,33 @@
   </data>
   <data name="Settings.General.PageSubtitle" xml:space="preserve">
     <value>Uruchamianie i działanie aplikacji</value>
+  </data>
+  <data name="Settings.General.LaunchAtStartup.Title" xml:space="preserve">
+    <value>Uruchamiaj przy starcie</value>
+  </data>
+  <data name="Settings.General.LaunchAtStartup.Subtitle" xml:space="preserve">
+    <value>Uruchamiaj openHAB automatycznie po zalogowaniu do Windows</value>
+  </data>
+  <data name="Settings.General.FlyoutWidth.Title" xml:space="preserve">
+    <value>Szerokość panelu</value>
+  </data>
+  <data name="Settings.General.FlyoutWidth.Subtitle" xml:space="preserve">
+    <value>Szerokość panelu zasobnika w pikselach</value>
+  </data>
+  <data name="Settings.General.NotificationPoll.Title" xml:space="preserve">
+    <value>Interwał sprawdzania powiadomień</value>
+  </data>
+  <data name="Settings.General.NotificationPoll.Subtitle" xml:space="preserve">
+    <value>Jak często aplikacja sprawdza powiadomienia openHAB, w sekundach</value>
+  </data>
+  <data name="Settings.General.ImportantTags.Title" xml:space="preserve">
+    <value>Ważne tagi powiadomień</value>
+  </data>
+  <data name="Settings.General.ImportantTags.Subtitle" xml:space="preserve">
+    <value>Tagi/poziomy rozdzielone przecinkami, które mają być wysyłane jako ważne powiadomienia</value>
+  </data>
+  <data name="Settings.General.ImportantTags.Placeholder" xml:space="preserve">
+    <value>krytyczne, ostrzeżenie, bezpieczeństwo</value>
   </data>
   <data name="Settings.Appearance.Title" xml:space="preserve">
     <value>Wygląd</value>
@@ -322,6 +430,57 @@
   <data name="Settings.DeviceInfoSync.Subtitle" xml:space="preserve">
     <value>Skonfiguruj synchronizację metadanych urządzenia</value>
   </data>
+  <data name="Settings.DeviceInfoSync.Description" xml:space="preserve">
+    <value>Wysyłaj wybrany stan urządzenia Windows do elementów openHAB</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.DisabledMessage" xml:space="preserve">
+    <value>Synchronizacja informacji o urządzeniu jest wyłączona. Włącz ją, aby skonfigurować identyfikator, interwał i mapowania elementów.</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Identifier.Header" xml:space="preserve">
+    <value>Identyfikator urządzenia</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Interval.Header" xml:space="preserve">
+    <value>Interwał synchronizacji (minuty)</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mappings.Title" xml:space="preserve">
+    <value>Mapowania elementów openHAB</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.BatteryLevel" xml:space="preserve">
+    <value>Poziom baterii</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.ChargingState" xml:space="preserve">
+    <value>Stan ładowania</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.LockedState" xml:space="preserve">
+    <value>Stan blokady</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.SessionState" xml:space="preserve">
+    <value>Stan sesji</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.WifiConnected" xml:space="preserve">
+    <value>Połączono z Wi-Fi</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.WifiName" xml:space="preserve">
+    <value>Nazwa Wi-Fi</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.BluetoothConnected" xml:space="preserve">
+    <value>Połączono z Bluetooth</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.BluetoothDeviceNames" xml:space="preserve">
+    <value>Urządzenia Bluetooth</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.OpenHabConnection" xml:space="preserve">
+    <value>Połączenie openHAB</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.Mapping.FocusState" xml:space="preserve">
+    <value>Skupienie / Nie przeszkadzać</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.ItemSuffixes.Title" xml:space="preserve">
+    <value>Sufiksy elementów</value>
+  </data>
+  <data name="Settings.DeviceInfoSync.ItemSuffixes.Subtitle" xml:space="preserve">
+    <value>Identyfikator urządzenia jest automatycznie dodawany przed każdym sufiksem</value>
+  </data>
   <data name="Settings.Shortcuts.Title" xml:space="preserve">
     <value>Skróty</value>
   </data>
@@ -331,11 +490,224 @@
   <data name="Settings.Shortcuts.PageSubtitle" xml:space="preserve">
     <value>Skonfiguruj skróty globalne i akcje menu poleceń.</value>
   </data>
+  <data name="Settings.Shortcuts.BuiltIn.Title" xml:space="preserve">
+    <value>Wbudowane skróty</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandMenu.EnableAutomationName" xml:space="preserve">
+    <value>Włącz skrót menu poleceń openHAB</value>
+  </data>
+  <data name="Settings.Shortcuts.GlobalShortcut.Title" xml:space="preserve">
+    <value>Skrót globalny</value>
+  </data>
+  <data name="Settings.Shortcuts.GlobalShortcut.Subtitle" xml:space="preserve">
+    <value>Skrót klawiaturowy otwierający menu poleceń z dowolnego miejsca</value>
+  </data>
+  <data name="Settings.Shortcuts.ActivationMode.AutomationName" xml:space="preserve">
+    <value>Tryb aktywacji menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.ActivationMode.Title" xml:space="preserve">
+    <value>Tryb aktywacji</value>
+  </data>
+  <data name="Settings.Shortcuts.ActivationMode.Subtitle" xml:space="preserve">
+    <value>Wybierz, czy menu poleceń ma się przełączać, czy pozostawać otwarte podczas przytrzymania</value>
+  </data>
+  <data name="Settings.Shortcuts.ActivationMode.Toggle" xml:space="preserve">
+    <value>Przełączanie</value>
+  </data>
+  <data name="Settings.Shortcuts.ActivationMode.Hold" xml:space="preserve">
+    <value>Przytrzymanie</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandMenuPreview.Title" xml:space="preserve">
+    <value>Podgląd menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandMenuPreview.Subtitle" xml:space="preserve">
+    <value>Akcje aktualnie widoczne w radialnym menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandMenu.Title" xml:space="preserve">
+    <value>Menu poleceń openHAB</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandMenu.Subtitle" xml:space="preserve">
+    <value>Wbudowany globalny skrót do otwierania menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.Title" xml:space="preserve">
+    <value>Tryb głosowy</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.Subtitle" xml:space="preserve">
+    <value>Wkrótce. Skrót głosowy nie jest jeszcze przypisany ani dostępny.</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.ExpanderTitle" xml:space="preserve">
+    <value>Tryb głosowy</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.ExpanderSubtitle" xml:space="preserve">
+    <value>Planowany skrót głosowy, wkrótce</value>
+  </data>
+  <data name="Settings.Shortcuts.Shortcut.Title" xml:space="preserve">
+    <value>Skrót</value>
+  </data>
+  <data name="Settings.Shortcuts.Shortcut.Unassigned" xml:space="preserve">
+    <value>Nieprzypisany</value>
+  </data>
+  <data name="Settings.Shortcuts.Preview.NoActions" xml:space="preserve">
+    <value>Brak akcji</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Title" xml:space="preserve">
+    <value>Akcje i skróty</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Add" xml:space="preserve">
+    <value>Dodaj akcję</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Edit" xml:space="preserve">
+    <value>Edytuj akcję</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Delete" xml:space="preserve">
+    <value>Usuń akcję</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Icon" xml:space="preserve">
+    <value>Ikona</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.ActionName" xml:space="preserve">
+    <value>Nazwa akcji</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Availability" xml:space="preserve">
+    <value>Dostępność</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Shortcut" xml:space="preserve">
+    <value>Skrót</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.TargetItem" xml:space="preserve">
+    <value>Element docelowy</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.ActionType" xml:space="preserve">
+    <value>Typ akcji</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.CommandValue" xml:space="preserve">
+    <value>Wartość polecenia</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Actions" xml:space="preserve">
+    <value>Akcje</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Empty" xml:space="preserve">
+    <value>Nie ma jeszcze akcji.
+Dodaj akcje, aby były dostępne w menu poleceń.</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.MoveUp" xml:space="preserve">
+    <value>Przenieś akcję w górę</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.MoveDown" xml:space="preserve">
+    <value>Przenieś akcję w dół</value>
+  </data>
+  <data name="Settings.Shortcuts.Actions.Unnamed" xml:space="preserve">
+    <value>Nienazwana akcja</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.ActionName.Title" xml:space="preserve">
+    <value>Nazwa akcji</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.ActionName.Subtitle" xml:space="preserve">
+    <value>Nazwa wyświetlana w ustawieniach i menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.Icon.Subtitle" xml:space="preserve">
+    <value>Wybierz ikonę z katalogu ikon skrótów</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.ShowInMenu.Title" xml:space="preserve">
+    <value>Pokaż w menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.ShowInMenu.Subtitle" xml:space="preserve">
+    <value>Określa, czy ta akcja pojawi się w menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.GlobalShortcut.Subtitle" xml:space="preserve">
+    <value>Opcjonalny skrót. Pozostaw nieprzypisany, jeśli nie jest potrzebny</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.TargetItem.Subtitle" xml:space="preserve">
+    <value>Na razie wpisz nazwę elementu openHAB ręcznie</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.ActionType.Subtitle" xml:space="preserve">
+    <value>Wybierz zachowanie polecenia</value>
+  </data>
+  <data name="Settings.Shortcuts.Editor.CommandValue.Subtitle" xml:space="preserve">
+    <value>Wymagane dla SendCommand i ograniczone dla OnOff/OpenClose</value>
+  </data>
+  <data name="Settings.Shortcuts.Availability.ShortcutAndCommandMenu" xml:space="preserve">
+    <value>Skrót + menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.Availability.CommandMenuOnly" xml:space="preserve">
+    <value>Tylko menu poleceń</value>
+  </data>
+  <data name="Settings.Shortcuts.Availability.ShortcutOnly" xml:space="preserve">
+    <value>Tylko skrót</value>
+  </data>
+  <data name="Settings.Shortcuts.Availability.Unavailable" xml:space="preserve">
+    <value>Niedostępne</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.Toggle" xml:space="preserve">
+    <value>Przełącz</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.OnOff" xml:space="preserve">
+    <value>Wł. / wył.</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.OpenClose" xml:space="preserve">
+    <value>Otwórz / zamknij</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.OpenSlider" xml:space="preserve">
+    <value>Otwórz suwak</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.OpenColorPicker" xml:space="preserve">
+    <value>Otwórz wybór koloru</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.SendCommand" xml:space="preserve">
+    <value>Wyślij polecenie</value>
+  </data>
+  <data name="Settings.Shortcuts.DeleteDialog.Title" xml:space="preserve">
+    <value>Usuń akcję</value>
+  </data>
+  <data name="Settings.Shortcuts.DeleteDialog.Message" xml:space="preserve">
+    <value>Usunąć akcję „{0}”?</value>
+    <comment>{0}: action name.</comment>
+  </data>
+  <data name="Settings.Shortcuts.DiscardDialog.Title" xml:space="preserve">
+    <value>Odrzucić niezapisane zmiany?</value>
+  </data>
+  <data name="Settings.Shortcuts.DiscardDialog.Message" xml:space="preserve">
+    <value>Masz niezapisane zmiany w edytorze akcji.</value>
+  </data>
+  <data name="Settings.Shortcuts.CurrentActionOwner" xml:space="preserve">
+    <value>Bieżąca akcja: {0}</value>
+    <comment>{0}: action id.</comment>
+  </data>
   <data name="Settings.About.Title" xml:space="preserve">
     <value>O aplikacji</value>
   </data>
   <data name="Settings.About.Subtitle" xml:space="preserve">
     <value>Logi i wersja</value>
+  </data>
+  <data name="Settings.About.ViewLogs" xml:space="preserve">
+    <value>Pokaż logi</value>
+  </data>
+  <data name="Settings.About.SettingsFolder" xml:space="preserve">
+    <value>Folder ustawień</value>
+  </data>
+  <data name="Settings.About.DiagnosticLogs.Title" xml:space="preserve">
+    <value>Logi diagnostyczne</value>
+  </data>
+  <data name="Settings.About.DiagnosticLogs.Subtitle" xml:space="preserve">
+    <value>Otwórz lokalny plik logu diagnostycznego lub folder ustawień</value>
+  </data>
+  <data name="Settings.About.VerboseDiagnostics.Title" xml:space="preserve">
+    <value>Szczegółowa diagnostyka</value>
+  </data>
+  <data name="Settings.About.VerboseDiagnostics.Subtitle" xml:space="preserve">
+    <value>Zapisuj dodatkowe, bezpieczne szczegóły diagnostyczne do rozwiązywania problemów</value>
+  </data>
+  <data name="Settings.About.VerboseDiagnostics.EnabledStatus" xml:space="preserve">
+    <value>Szczegółowa diagnostyka włączona.</value>
+  </data>
+  <data name="Settings.About.VerboseDiagnostics.DisabledStatus" xml:space="preserve">
+    <value>Szczegółowa diagnostyka wyłączona.</value>
+  </data>
+  <data name="Settings.About.OpenLogsFailed" xml:space="preserve">
+    <value>Nie udało się otworzyć logów.</value>
+  </data>
+  <data name="Settings.About.OpenSettingsFolderFailed" xml:space="preserve">
+    <value>Nie udało się otworzyć folderu ustawień.</value>
   </data>
   <data name="Runtime.Status.Loading" xml:space="preserve">
     <value>Ładowanie...</value>

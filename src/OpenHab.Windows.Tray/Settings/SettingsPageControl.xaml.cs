@@ -27,7 +27,6 @@ namespace OpenHab.Windows.Tray.Settings;
 
 public sealed partial class SettingsPageControl : UserControl
 {
-    private const string DeviceInfoSyncTitle = "Device Info Sync";
     private const string CustomShortcutIconId = "custom";
     private const string CardStrokeBrushResourceKey = "CardStrokeColorDefaultBrush";
     private const string LocalTransportTag = "Local";
@@ -38,6 +37,21 @@ public sealed partial class SettingsPageControl : UserControl
     }
 
     private sealed record SitemapSkinOption(string Label, SitemapSkinKind Skin)
+    {
+        public override string ToString() => Label;
+    }
+
+    private sealed record EndpointModeOption(string Label, EndpointMode Mode)
+    {
+        public override string ToString() => Label;
+    }
+
+    private sealed record RadialActivationModeOption(string Label, RadialActivationMode Mode)
+    {
+        public override string ToString() => Label;
+    }
+
+    private sealed record ShortcutCommandTypeOption(string Label, ShortcutCommandType CommandType)
     {
         public override string ToString() => Label;
     }
@@ -334,12 +348,12 @@ public sealed partial class SettingsPageControl : UserControl
         {
             Width = 220
         };
-        EndpointModeCombo.ItemsSource = Enum.GetValues<EndpointMode>();
+        EndpointModeCombo.ItemsSource = CreateEndpointModeOptions();
         EndpointModeCombo.SelectionChanged += EndpointModeCombo_SelectionChanged;
         var endpointModeRow = CreateSettingsControlRow(
             "\uE713",
-            "Endpoint mode",
-            "Choose how the app selects local or cloud connectivity",
+            text.Get("Settings.Connection.EndpointMode.Title"),
+            text.Get("Settings.Connection.EndpointMode.Subtitle"),
             EndpointModeCombo);
 
         LocalEndpointText = new TextBox
@@ -349,8 +363,8 @@ public sealed partial class SettingsPageControl : UserControl
         LocalEndpointText.LostFocus += EndpointText_LostFocus;
         var localEndpointRow = CreateSettingsControlRow(
             "\uE839",
-            "Local endpoint",
-            "Base URL for your openHAB server on the local network",
+            text.Get("Settings.Connection.LocalEndpoint.Title"),
+            text.Get("Settings.Connection.LocalEndpoint.Subtitle"),
             LocalEndpointText);
 
         CloudEndpointText = new TextBox
@@ -360,13 +374,13 @@ public sealed partial class SettingsPageControl : UserControl
         CloudEndpointText.LostFocus += EndpointText_LostFocus;
         var cloudEndpointRow = CreateSettingsControlRow(
             "\uE753",
-            "Cloud endpoint",
-            "Base URL for the myopenHAB cloud service",
+            text.Get("Settings.Connection.CloudEndpoint.Title"),
+            text.Get("Settings.Connection.CloudEndpoint.Subtitle"),
             CloudEndpointText);
 
         LocalTokenBox = new PasswordBox
         {
-            PlaceholderText = "Enter token (optional)",
+            PlaceholderText = text.Get("Settings.Connection.LocalToken.Placeholder"),
             Tag = LocalTransportTag,
             Width = 520
         };
@@ -375,34 +389,34 @@ public sealed partial class SettingsPageControl : UserControl
         LocalTokenBox.LostFocus += TokenBox_LostFocus;
         var localTokenRow = CreateSettingsControlRow(
             "\uE72E",
-            "Local API token",
-            "Optional bearer token used with the local endpoint",
+            text.Get("Settings.Connection.LocalToken.Title"),
+            text.Get("Settings.Connection.LocalToken.Subtitle"),
             LocalTokenBox);
 
         CloudUserNameText = new TextBox
         {
-            PlaceholderText = "Enter myopenHAB email",
+            PlaceholderText = text.Get("Settings.Connection.CloudUserName.Placeholder"),
             Width = 520
         };
         CloudUserNameText.TextChanged += CloudUserNameText_TextChanged;
         CloudUserNameText.LostFocus += CloudCredentials_LostFocus;
         var cloudUserNameRow = CreateSettingsControlRow(
             "\uE77B",
-            "Cloud email / username",
-            "Account used to sign in to myopenHAB",
+            text.Get("Settings.Connection.CloudUserName.Title"),
+            text.Get("Settings.Connection.CloudUserName.Subtitle"),
             CloudUserNameText);
 
         CloudPasswordBox = new PasswordBox
         {
-            PlaceholderText = "Enter myopenHAB password",
+            PlaceholderText = text.Get("Settings.Connection.CloudPassword.Placeholder"),
             Width = 520
         };
         CloudPasswordBox.PasswordChanged += CloudPasswordBox_PasswordChanged;
         CloudPasswordBox.LostFocus += CloudCredentials_LostFocus;
         var cloudPasswordRow = CreateSettingsControlRow(
             "\uE72E",
-            "Cloud password",
-            "Password used only for the configured cloud account",
+            text.Get("Settings.Connection.CloudPassword.Title"),
+            text.Get("Settings.Connection.CloudPassword.Subtitle"),
             CloudPasswordBox);
 
         SettingsContent.Children.Add(CreateSettingsGroup(
@@ -424,8 +438,8 @@ public sealed partial class SettingsPageControl : UserControl
         LaunchAtStartupToggle.Toggled += LaunchAtStartupToggle_Toggled;
         var launchRow = CreateSettingsToggleRow(
             "\uE7C1",
-            "Launch at startup",
-            "Start openHAB automatically when you sign in to Windows",
+            text.Get("Settings.General.LaunchAtStartup.Title"),
+            text.Get("Settings.General.LaunchAtStartup.Subtitle"),
             LaunchAtStartupToggle);
 
         FlyoutWidthBox = new NumberBox
@@ -439,8 +453,8 @@ public sealed partial class SettingsPageControl : UserControl
         FlyoutWidthBox.ValueChanged += FlyoutWidthBox_ValueChanged;
         var flyoutWidthRow = CreateSettingsControlRow(
             "\uE7F4",
-            "Flyout width",
-            "Width of the tray flyout in pixels",
+            text.Get("Settings.General.FlyoutWidth.Title"),
+            text.Get("Settings.General.FlyoutWidth.Subtitle"),
             FlyoutWidthBox);
 
         NotificationPollBox = new NumberBox
@@ -454,20 +468,20 @@ public sealed partial class SettingsPageControl : UserControl
         NotificationPollBox.ValueChanged += NotificationPollBox_ValueChanged;
         var notificationPollRow = CreateSettingsControlRow(
             "\uE7F4",
-            "Notification check interval",
-            "How often the app checks for openHAB notifications, in seconds",
+            text.Get("Settings.General.NotificationPoll.Title"),
+            text.Get("Settings.General.NotificationPoll.Subtitle"),
             NotificationPollBox);
 
         ImportantNotificationTagsText = new TextBox
         {
-            PlaceholderText = "critical, warning, security",
+            PlaceholderText = text.Get("Settings.General.ImportantTags.Placeholder"),
             Width = 320
         };
         ImportantNotificationTagsText.LostFocus += ImportantNotificationTagsText_LostFocus;
         var importantTagsRow = CreateSettingsControlRow(
             "\uE7BA",
-            "Important notification tags",
-            "Comma-separated tags/severities that should be sent as important notifications",
+            text.Get("Settings.General.ImportantTags.Title"),
+            text.Get("Settings.General.ImportantTags.Subtitle"),
             ImportantNotificationTagsText);
 
         SettingsContent.Children.Add(CreateSettingsGroup(launchRow, flyoutWidthRow, notificationPollRow, importantTagsRow));
@@ -560,14 +574,14 @@ public sealed partial class SettingsPageControl : UserControl
         {
             DeviceInfoSyncDisabledText = new TextBlock
             {
-                Text = "Device Info Sync is disabled. Turn it on to configure identifier, interval, and item mappings.",
+                Text = text.Get("Settings.DeviceInfoSync.DisabledMessage"),
                 TextWrapping = TextWrapping.Wrap,
                 Opacity = 0.72
             };
             syncContent.Children.Add(DeviceInfoSyncDisabledText);
             SettingsContent.Children.Add(CreateSettingsExpander(
-                DeviceInfoSyncTitle,
-                "Send selected Windows device state to openHAB Items",
+                text.Get("Settings.DeviceInfoSync.Title"),
+                text.Get("Settings.DeviceInfoSync.Description"),
                 CreateExpanderRows(syncContent),
                 enabledAction));
             return;
@@ -575,14 +589,14 @@ public sealed partial class SettingsPageControl : UserControl
 
         DeviceInfoSyncIdentifierText = new TextBox
         {
-            Header = "Device identifier"
+            Header = text.Get("Settings.DeviceInfoSync.Identifier.Header")
         };
         DeviceInfoSyncIdentifierText.LostFocus += DeviceInfoSyncField_LostFocus;
         syncContent.Children.Add(DeviceInfoSyncIdentifierText);
 
         DeviceInfoSyncIntervalBox = new NumberBox
         {
-            Header = "Sync interval (minutes)",
+            Header = text.Get("Settings.DeviceInfoSync.Interval.Header"),
             Minimum = DeviceInfoSyncSettings.MinSyncIntervalMinutes,
             Maximum = DeviceInfoSyncSettings.MaxSyncIntervalMinutes,
             SmallChange = 1,
@@ -592,30 +606,30 @@ public sealed partial class SettingsPageControl : UserControl
         syncContent.Children.Add(DeviceInfoSyncIntervalBox);
 
         SettingsContent.Children.Add(CreateSettingsExpander(
-            DeviceInfoSyncTitle,
-            "Send selected Windows device state to openHAB Items",
+            text.Get("Settings.DeviceInfoSync.Title"),
+            text.Get("Settings.DeviceInfoSync.Description"),
             CreateExpanderRows(syncContent),
             enabledAction));
 
-        AddSettingsSectionTitle("openHAB Item mappings");
+        AddSettingsSectionTitle(text.Get("Settings.DeviceInfoSync.Mappings.Title"));
         var mappingContent = new StackPanel
         {
             Spacing = 8,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "BatteryLevelItem", "Battery level", "BatteryLevel");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "ChargingStateItem", "Charging state", "ChargingState");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "LockedStateItem", "Locked state", "LockedState");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "SessionStateItem", "Session state", "SessionState");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiConnectedItem", "Wi-Fi connected", "WifiConnected");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiNameItem", "Wi-Fi name", "WifiName");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "BluetoothConnectedItem", "Bluetooth connected", "BluetoothConnected");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "BluetoothDeviceNamesItem", "Bluetooth devices", "BluetoothDeviceNames");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "OpenHabConnectionItem", "openHAB connection", "OpenHabConnection");
-        AddDeviceInfoSyncMappingTextBox(mappingContent, "FocusStateItem", "Focus / DND", "FocusState");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "BatteryLevelItem", text.Get("Settings.DeviceInfoSync.Mapping.BatteryLevel"), "BatteryLevel");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "ChargingStateItem", text.Get("Settings.DeviceInfoSync.Mapping.ChargingState"), "ChargingState");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "LockedStateItem", text.Get("Settings.DeviceInfoSync.Mapping.LockedState"), "LockedState");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "SessionStateItem", text.Get("Settings.DeviceInfoSync.Mapping.SessionState"), "SessionState");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiConnectedItem", text.Get("Settings.DeviceInfoSync.Mapping.WifiConnected"), "WifiConnected");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "WifiNameItem", text.Get("Settings.DeviceInfoSync.Mapping.WifiName"), "WifiName");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "BluetoothConnectedItem", text.Get("Settings.DeviceInfoSync.Mapping.BluetoothConnected"), "BluetoothConnected");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "BluetoothDeviceNamesItem", text.Get("Settings.DeviceInfoSync.Mapping.BluetoothDeviceNames"), "BluetoothDeviceNames");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "OpenHabConnectionItem", text.Get("Settings.DeviceInfoSync.Mapping.OpenHabConnection"), "OpenHabConnection");
+        AddDeviceInfoSyncMappingTextBox(mappingContent, "FocusStateItem", text.Get("Settings.DeviceInfoSync.Mapping.FocusState"), "FocusState");
         SettingsContent.Children.Add(CreateSettingsExpander(
-            "Item suffixes",
-            "The device identifier is added automatically before each suffix",
+            text.Get("Settings.DeviceInfoSync.ItemSuffixes.Title"),
+            text.Get("Settings.DeviceInfoSync.ItemSuffixes.Subtitle"),
             CreateExpanderRows(mappingContent)));
     }
 
@@ -668,7 +682,30 @@ public sealed partial class SettingsPageControl : UserControl
         new(text.Get("Settings.Appearance.Skin.Windows11"), SitemapSkinKind.Windows11)
     ];
 
-    private static Grid CreateSettingsToggleRow(string glyph, string title, string subtitle, ToggleSwitch toggle)
+    private EndpointModeOption[] CreateEndpointModeOptions() =>
+    [
+        new(text.Get("Settings.Connection.EndpointMode.Automatic"), EndpointMode.Automatic),
+        new(text.Get("Settings.Connection.EndpointMode.LocalOnly"), EndpointMode.LocalOnly),
+        new(text.Get("Settings.Connection.EndpointMode.CloudOnly"), EndpointMode.CloudOnly)
+    ];
+
+    private RadialActivationModeOption[] CreateRadialActivationModeOptions() =>
+    [
+        new(text.Get("Settings.Shortcuts.ActivationMode.Toggle"), RadialActivationMode.Toggle),
+        new(text.Get("Settings.Shortcuts.ActivationMode.Hold"), RadialActivationMode.Hold)
+    ];
+
+    private ShortcutCommandTypeOption[] CreateShortcutCommandTypeOptions() =>
+    [
+        new(text.Get("Settings.Shortcuts.CommandType.Toggle"), ShortcutCommandType.Toggle),
+        new(text.Get("Settings.Shortcuts.CommandType.OnOff"), ShortcutCommandType.OnOff),
+        new(text.Get("Settings.Shortcuts.CommandType.OpenClose"), ShortcutCommandType.OpenClose),
+        new(text.Get("Settings.Shortcuts.CommandType.OpenSlider"), ShortcutCommandType.OpenSlider),
+        new(text.Get("Settings.Shortcuts.CommandType.OpenColorPicker"), ShortcutCommandType.OpenColorPicker),
+        new(text.Get("Settings.Shortcuts.CommandType.SendCommand"), ShortcutCommandType.SendCommand)
+    ];
+
+    private Grid CreateSettingsToggleRow(string glyph, string title, string subtitle, ToggleSwitch toggle)
     {
         return CreateSettingsControlRow(glyph, title, subtitle, CreateSettingsToggleAction(toggle));
     }
@@ -755,7 +792,7 @@ public sealed partial class SettingsPageControl : UserControl
         return row;
     }
 
-    private static FrameworkElement CreateCommandMenuPreview(IEnumerable<ShortcutAction> actions)
+    private FrameworkElement CreateCommandMenuPreview(IEnumerable<ShortcutAction> actions)
     {
         var visibleActions = actions
             .Where(static action => action.ShowInCommandMenu && ShortcutValidation.ValidateAction(action).IsValid)
@@ -766,7 +803,7 @@ public sealed partial class SettingsPageControl : UserControl
         {
             return new TextBlock
             {
-                Text = "No actions",
+                Text = text.Get("Settings.Shortcuts.Preview.NoActions"),
                 Opacity = 0.7,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -778,7 +815,7 @@ public sealed partial class SettingsPageControl : UserControl
             Height = 132,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var center = CreatePreviewNode("\uE711", "Close", 50, true);
+        var center = CreatePreviewNode("\uE711", text.Get("Common.Close"), 50, true);
         Canvas.SetLeft(center, 85);
         Canvas.SetTop(center, 41);
         preview.Children.Add(center);
@@ -823,15 +860,15 @@ public sealed partial class SettingsPageControl : UserControl
         return node;
     }
 
-    private static StackPanel CreateSettingsToggleAction(ToggleSwitch toggle)
+    private StackPanel CreateSettingsToggleAction(ToggleSwitch toggle)
     {
         var stateText = new TextBlock
         {
-            Text = toggle.IsOn ? "On" : "Off",
+            Text = toggle.IsOn ? text.Get("Common.On") : text.Get("Common.Off"),
             VerticalAlignment = VerticalAlignment.Center,
             MinWidth = 24
         };
-        toggle.Toggled += (_, _) => stateText.Text = toggle.IsOn ? "On" : "Off";
+        toggle.Toggled += (_, _) => stateText.Text = toggle.IsOn ? text.Get("Common.On") : text.Get("Common.Off");
         toggle.VerticalAlignment = VerticalAlignment.Center;
 
         var actionPanel = new StackPanel
@@ -849,13 +886,13 @@ public sealed partial class SettingsPageControl : UserControl
     {
         ViewLogsButton = new Button
         {
-            Content = "View logs",
+            Content = text.Get("Settings.About.ViewLogs"),
             MinWidth = 120
         };
         ViewLogsButton.Click += ViewLogsButton_Click;
         ViewSettingsFolderButton = new Button
         {
-            Content = "Settings folder",
+            Content = text.Get("Settings.About.SettingsFolder"),
             MinWidth = 140
         };
         ViewSettingsFolderButton.Click += ViewSettingsFolderButton_Click;
@@ -868,8 +905,8 @@ public sealed partial class SettingsPageControl : UserControl
         diagnosticsActions.Children.Add(ViewSettingsFolderButton);
         var logsRow = CreateSettingsControlRow(
             "\uE8A5",
-            "Diagnostic logs",
-            "Open the local diagnostics log file or settings folder",
+            text.Get("Settings.About.DiagnosticLogs.Title"),
+            text.Get("Settings.About.DiagnosticLogs.Subtitle"),
             diagnosticsActions);
 
         VerboseDiagnosticsToggle = new ToggleSwitch
@@ -880,8 +917,8 @@ public sealed partial class SettingsPageControl : UserControl
         VerboseDiagnosticsToggle.Toggled += VerboseDiagnosticsToggle_Toggled;
         var verboseDiagnosticsRow = CreateSettingsToggleRow(
             "\uE9D9",
-            "Verbose diagnostics",
-            "Log additional safe diagnostic flow details for troubleshooting",
+            text.Get("Settings.About.VerboseDiagnostics.Title"),
+            text.Get("Settings.About.VerboseDiagnostics.Subtitle"),
             VerboseDiagnosticsToggle);
         SettingsContent.Children.Add(CreateSettingsGroup(logsRow, verboseDiagnosticsRow));
 
@@ -898,7 +935,7 @@ public sealed partial class SettingsPageControl : UserControl
     {
         var settings = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
 
-        AddSettingsSectionTitle("Built-in shortcuts");
+        AddSettingsSectionTitle(text.Get("Settings.Shortcuts.BuiltIn.Title"));
 
         CommandMenuEnabledToggle = new ToggleSwitch
         {
@@ -906,26 +943,28 @@ public sealed partial class SettingsPageControl : UserControl
             OffContent = string.Empty,
             IsOn = settings.CommandMenu.Enabled
         };
-        AutomationProperties.SetName(CommandMenuEnabledToggle, "Enable openHAB command menu shortcut");
+        AutomationProperties.SetName(CommandMenuEnabledToggle, text.Get("Settings.Shortcuts.CommandMenu.EnableAutomationName"));
         CommandMenuEnabledToggle.Toggled += CommandMenuEnabledToggle_Toggled;
         var globalShortcutRow = CreateSettingsControlRow(
             "\uE765",
-            "Global shortcut",
-            "Keyboard shortcut for opening command menu from anywhere",
+            text.Get("Settings.Shortcuts.GlobalShortcut.Title"),
+            text.Get("Settings.Shortcuts.GlobalShortcut.Subtitle"),
             CreateCommandMenuShortcutRecorder(settings.CommandMenu.Binding));
 
         CommandMenuActivationModeCombo = new ComboBox
         {
             Width = 220,
-            ItemsSource = Enum.GetValues<RadialActivationMode>(),
-            SelectedItem = settings.CommandMenu.RadialActivationMode
+            ItemsSource = CreateRadialActivationModeOptions()
         };
-        AutomationProperties.SetName(CommandMenuActivationModeCombo, "Command menu activation mode");
+        CommandMenuActivationModeCombo.SelectedItem = CommandMenuActivationModeCombo.Items
+            .OfType<RadialActivationModeOption>()
+            .First(option => option.Mode == settings.CommandMenu.RadialActivationMode);
+        AutomationProperties.SetName(CommandMenuActivationModeCombo, text.Get("Settings.Shortcuts.ActivationMode.AutomationName"));
         CommandMenuActivationModeCombo.SelectionChanged += CommandMenuActivationModeCombo_SelectionChanged;
         var activationModeRow = CreateSettingsControlRow(
             "\uE7C1",
-            "Activation mode",
-            "Choose whether the command menu toggles or stays open while held",
+            text.Get("Settings.Shortcuts.ActivationMode.Title"),
+            text.Get("Settings.Shortcuts.ActivationMode.Subtitle"),
             CommandMenuActivationModeCombo);
         CommandMenuPreviewContent = new ContentControl
         {
@@ -933,31 +972,31 @@ public sealed partial class SettingsPageControl : UserControl
         };
         var previewRow = CreateSettingsControlRow(
             "\uE8FD",
-            "Command menu preview",
-            "Actions currently visible in the radial command menu",
+            text.Get("Settings.Shortcuts.CommandMenuPreview.Title"),
+            text.Get("Settings.Shortcuts.CommandMenuPreview.Subtitle"),
             CommandMenuPreviewContent);
 
         SettingsContent.Children.Add(CreateSettingsExpander(
-            "openHAB Command Menu",
-            "Built-in global shortcut for opening the command menu",
+            text.Get("Settings.Shortcuts.CommandMenu.Title"),
+            text.Get("Settings.Shortcuts.CommandMenu.Subtitle"),
             CreateExpanderRows(globalShortcutRow, activationModeRow, previewRow),
             CreateSettingsToggleAction(CommandMenuEnabledToggle)));
 
         var voiceModeStateRow = CreateSettingsControlRow(
             "\uE720",
-            "Voice mode",
-            "Coming soon. Voice shortcut is currently unassigned and unavailable.",
+            text.Get("Settings.Shortcuts.VoiceMode.Title"),
+            text.Get("Settings.Shortcuts.VoiceMode.Subtitle"),
             new TextBlock
             {
-                Text = "Disabled",
+                Text = text.Get("Common.Disabled"),
                 Opacity = 0.7,
                 VerticalAlignment = VerticalAlignment.Center
             });
 
         var voiceModeShortcutRow = CreateSettingsControlRow(
             "\uE765",
-            "Shortcut",
-            "No shortcut assigned yet",
+            text.Get("Settings.Shortcuts.Shortcut.Title"),
+            text.Get("Settings.Shortcuts.Shortcut.Unassigned"),
             ShortcutSettingsControls.CreateShortcutChips(null));
 
         var voiceModeContent = CreateExpanderRows(voiceModeStateRow, voiceModeShortcutRow);
@@ -966,12 +1005,12 @@ public sealed partial class SettingsPageControl : UserControl
             card.Opacity = 0.72;
         }
         SettingsContent.Children.Add(CreateSettingsExpander(
-            "Voice Mode",
-            "Planned voice shortcut, coming soon",
+            text.Get("Settings.Shortcuts.VoiceMode.ExpanderTitle"),
+            text.Get("Settings.Shortcuts.VoiceMode.ExpanderSubtitle"),
             voiceModeContent,
             new TextBlock
             {
-                Text = "Disabled",
+                Text = text.Get("Common.Disabled"),
                 Opacity = 0.7,
                 VerticalAlignment = VerticalAlignment.Center
             },
@@ -991,14 +1030,14 @@ public sealed partial class SettingsPageControl : UserControl
         actionsHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         actionsHeader.Children.Add(new TextBlock
         {
-            Text = "Actions and shortcuts",
+            Text = text.Get("Settings.Shortcuts.Actions.Title"),
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             Margin = new Thickness(0, 8, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
         });
         var addActionButton = new Button
         {
-            Content = "Add action",
+            Content = text.Get("Settings.Shortcuts.Actions.Add"),
             HorizontalAlignment = HorizontalAlignment.Right
         };
         addActionButton.Click += AddShortcutActionButton_Click;
@@ -1025,14 +1064,14 @@ public sealed partial class SettingsPageControl : UserControl
         actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
         actionHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
 
-        AddActionTableHeaderCell(actionHeader, "Icon", 0);
-        AddActionTableHeaderCell(actionHeader, "Action name", 1);
-        AddActionTableHeaderCell(actionHeader, "Availability", 2);
-        AddActionTableHeaderCell(actionHeader, "Shortcut", 3);
-        AddActionTableHeaderCell(actionHeader, "Target item", 4);
-        AddActionTableHeaderCell(actionHeader, "Action type", 5);
-        AddActionTableHeaderCell(actionHeader, "Command value", 6);
-        AddActionTableHeaderCell(actionHeader, "Actions", 7);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.Icon"), 0);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.ActionName"), 1);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.Availability"), 2);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.Shortcut"), 3);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.TargetItem"), 4);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.ActionType"), 5);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.CommandValue"), 6);
+        AddActionTableHeaderCell(actionHeader, text.Get("Settings.Shortcuts.Actions.Actions"), 7);
         actionsCardStack.Children.Add(actionHeader);
 
         if (settings.Actions.Length == 0)
@@ -1044,7 +1083,7 @@ public sealed partial class SettingsPageControl : UserControl
                 Padding = new Thickness(12, 12, 12, 12),
                 Child = new TextBlock
                 {
-                    Text = "No actions yet." + Environment.NewLine + "Add actions to make them available in the command menu.",
+                    Text = text.Get("Settings.Shortcuts.Actions.Empty"),
                     Opacity = 0.72,
                     TextWrapping = TextWrapping.Wrap
                 }
@@ -1080,7 +1119,9 @@ public sealed partial class SettingsPageControl : UserControl
             return;
         }
 
-        AddSettingsSectionTitle(creatingShortcutAction ? "Add action" : "Edit action");
+        AddSettingsSectionTitle(creatingShortcutAction
+            ? text.Get("Settings.Shortcuts.Actions.Add")
+            : text.Get("Settings.Shortcuts.Actions.Edit"));
         ShortcutActionNameText = new TextBox
         {
             Text = draftAction.Name,
@@ -1088,8 +1129,8 @@ public sealed partial class SettingsPageControl : UserControl
         };
         var nameRow = CreateSettingsControlRow(
             "\uE8D2",
-            "Action name",
-            "Display name used in settings and command menu",
+            text.Get("Settings.Shortcuts.Editor.ActionName.Title"),
+            text.Get("Settings.Shortcuts.Editor.ActionName.Subtitle"),
             ShortcutActionNameText,
             stretchControl: true);
 
@@ -1112,7 +1153,11 @@ public sealed partial class SettingsPageControl : UserControl
             ?? ShortcutActionIconCombo.Items
                 .OfType<ComboBoxItem>()
                 .FirstOrDefault(item => item.Tag is ShortcutIconDefinition icon && string.Equals(icon.Id, CustomShortcutIconId, StringComparison.Ordinal));
-        var iconRow = CreateSettingsControlRow("\uE8D4", "Icon", "Select an icon from the shortcut icon catalog", ShortcutActionIconCombo);
+        var iconRow = CreateSettingsControlRow(
+            "\uE8D4",
+            text.Get("Settings.Shortcuts.Actions.Icon"),
+            text.Get("Settings.Shortcuts.Editor.Icon.Subtitle"),
+            ShortcutActionIconCombo);
 
         ShortcutActionShowInCommandMenuToggle = new ToggleSwitch
         {
@@ -1120,7 +1165,11 @@ public sealed partial class SettingsPageControl : UserControl
             OnContent = string.Empty,
             OffContent = string.Empty
         };
-        var showInMenuRow = CreateSettingsControlRow("\uE8FD", "Show in command menu", "Controls whether this action appears in the command menu", CreateSettingsToggleAction(ShortcutActionShowInCommandMenuToggle));
+        var showInMenuRow = CreateSettingsControlRow(
+            "\uE8FD",
+            text.Get("Settings.Shortcuts.Editor.ShowInMenu.Title"),
+            text.Get("Settings.Shortcuts.Editor.ShowInMenu.Subtitle"),
+            CreateSettingsToggleAction(ShortcutActionShowInCommandMenuToggle));
 
         ShortcutActionGlobalShortcutRecorder = new ShortcutRecorderControl
         {
@@ -1128,7 +1177,11 @@ public sealed partial class SettingsPageControl : UserControl
             AllowClear = true,
             Error = null
         };
-        var globalShortcutEditorRow = CreateSettingsControlRow("\uE765", "Global shortcut", "Optional shortcut. Leave unassigned if not needed", ShortcutActionGlobalShortcutRecorder);
+        var globalShortcutEditorRow = CreateSettingsControlRow(
+            "\uE765",
+            text.Get("Settings.Shortcuts.GlobalShortcut.Title"),
+            text.Get("Settings.Shortcuts.Editor.GlobalShortcut.Subtitle"),
+            ShortcutActionGlobalShortcutRecorder);
 
         ShortcutActionTargetItemText = new TextBox
         {
@@ -1137,18 +1190,24 @@ public sealed partial class SettingsPageControl : UserControl
         };
         var targetItemRow = CreateSettingsControlRow(
             "\uE7F4",
-            "Target item",
-            "Enter openHAB item name manually for now",
+            text.Get("Settings.Shortcuts.Actions.TargetItem"),
+            text.Get("Settings.Shortcuts.Editor.TargetItem.Subtitle"),
             ShortcutActionTargetItemText,
             stretchControl: true);
 
         ShortcutActionTypeCombo = new ComboBox
         {
             Width = 280,
-            ItemsSource = Enum.GetValues<ShortcutCommandType>(),
-            SelectedItem = draftAction.CommandType
+            ItemsSource = CreateShortcutCommandTypeOptions()
         };
-        var typeRow = CreateSettingsControlRow("\uE8EF", "Action type", "Choose command behavior", ShortcutActionTypeCombo);
+        ShortcutActionTypeCombo.SelectedItem = ShortcutActionTypeCombo.Items
+            .OfType<ShortcutCommandTypeOption>()
+            .First(option => option.CommandType == draftAction.CommandType);
+        var typeRow = CreateSettingsControlRow(
+            "\uE8EF",
+            text.Get("Settings.Shortcuts.Actions.ActionType"),
+            text.Get("Settings.Shortcuts.Editor.ActionType.Subtitle"),
+            ShortcutActionTypeCombo);
 
         ShortcutActionValueText = new TextBox
         {
@@ -1157,8 +1216,8 @@ public sealed partial class SettingsPageControl : UserControl
         };
         var commandValueRow = CreateSettingsControlRow(
             "\uE756",
-            "Command value",
-            "Required for SendCommand, and constrained for OnOff/OpenClose",
+            text.Get("Settings.Shortcuts.Actions.CommandValue"),
+            text.Get("Settings.Shortcuts.Editor.CommandValue.Subtitle"),
             ShortcutActionValueText,
             stretchControl: true);
 
@@ -1168,9 +1227,9 @@ public sealed partial class SettingsPageControl : UserControl
             Spacing = 8,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var saveButton = new Button { Content = "Save" };
+        var saveButton = new Button { Content = text.Get("Common.Save") };
         saveButton.Click += SaveShortcutActionButton_Click;
-        var cancelButton = new Button { Content = "Cancel" };
+        var cancelButton = new Button { Content = text.Get("Common.Cancel") };
         cancelButton.Click += CancelShortcutActionButton_Click;
         actionButtons.Children.Add(saveButton);
         actionButtons.Children.Add(cancelButton);
@@ -1322,7 +1381,9 @@ public sealed partial class SettingsPageControl : UserControl
             }
             if (EndpointModeCombo is not null)
             {
-                EndpointModeCombo.SelectedItem = settingsController.Current.EndpointMode;
+                EndpointModeCombo.SelectedItem = EndpointModeCombo.Items
+                    .OfType<EndpointModeOption>()
+                    .First(option => option.Mode == settingsController.Current.EndpointMode);
             }
             if (LocalEndpointText is not null)
             {
@@ -1400,7 +1461,9 @@ public sealed partial class SettingsPageControl : UserControl
             }
             if (CommandMenuActivationModeCombo is not null)
             {
-                CommandMenuActivationModeCombo.SelectedItem = shortcuts.CommandMenu.RadialActivationMode;
+                CommandMenuActivationModeCombo.SelectedItem = CommandMenuActivationModeCombo.Items
+                    .OfType<RadialActivationModeOption>()
+                    .First(option => option.Mode == shortcuts.CommandMenu.RadialActivationMode);
             }
             if (VerboseDiagnosticsToggle is not null)
             {
@@ -1429,14 +1492,14 @@ public sealed partial class SettingsPageControl : UserControl
             if (LocalTokenBox is not null)
             {
                 LocalTokenBox.PlaceholderText = settingsController.Current.HasLocalToken
-                    ? "Stored token configured. Type to replace, or leave unchanged."
-                    : "Enter token (optional)";
+                    ? text.Get("Settings.Connection.LocalToken.StoredPlaceholder")
+                    : text.Get("Settings.Connection.LocalToken.Placeholder");
             }
             if (CloudPasswordBox is not null)
             {
                 CloudPasswordBox.PlaceholderText = settingsController.Current.HasCloudCredentials
-                    ? "Stored password configured. Type to replace, or leave unchanged."
-                    : "Enter myopenHAB password";
+                    ? text.Get("Settings.Connection.CloudPassword.StoredPlaceholder")
+                    : text.Get("Settings.Connection.CloudPassword.Placeholder");
             }
             if (VersionText is not null)
             {
@@ -1468,12 +1531,12 @@ public sealed partial class SettingsPageControl : UserControl
 
     private async void EndpointModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isRefreshingSettingsBindings || sender is not ComboBox endpointModeCombo || endpointModeCombo.SelectedItem is not EndpointMode endpointMode)
+        if (isRefreshingSettingsBindings || sender is not ComboBox endpointModeCombo || endpointModeCombo.SelectedItem is not EndpointModeOption option)
         {
             return;
         }
 
-        settingsController.SetEndpointMode(endpointMode);
+        settingsController.SetEndpointMode(option.Mode);
         await refreshRuntimeAsync();
     }
 
@@ -1531,7 +1594,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
         catch (Exception ex)
         {
-            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Failed to save token."));
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, text.Get("Settings.Connection.TokenSaveFailed")));
             RefreshSettingsBindings();
         }
     }
@@ -1636,7 +1699,7 @@ public sealed partial class SettingsPageControl : UserControl
 
             if (string.IsNullOrWhiteSpace(password))
             {
-                setStatusText("Cloud password is required when username is set. Existing credentials were not changed.");
+                setStatusText(text.Get("Settings.Connection.CloudPasswordRequired"));
                 RefreshSettingsBindings();
                 return;
             }
@@ -1646,7 +1709,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
         catch (Exception ex)
         {
-            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Failed to save cloud credentials."));
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, text.Get("Settings.Connection.CloudCredentialsSaveFailed")));
             RefreshSettingsBindings();
         }
     }
@@ -1726,8 +1789,8 @@ public sealed partial class SettingsPageControl : UserControl
 
         settingsController.SetVerboseDiagnostics(toggle.IsOn);
         setStatusText(toggle.IsOn
-            ? "Verbose diagnostics enabled."
-            : "Verbose diagnostics disabled.");
+            ? text.Get("Settings.About.VerboseDiagnostics.EnabledStatus")
+            : text.Get("Settings.About.VerboseDiagnostics.DisabledStatus"));
     }
 
     private void FlyoutWidthBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
@@ -1806,7 +1869,7 @@ public sealed partial class SettingsPageControl : UserControl
 
     private void CommandMenuActivationModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isRefreshingSettingsBindings || sender is not ComboBox combo || combo.SelectedItem is not RadialActivationMode mode)
+        if (isRefreshingSettingsBindings || sender is not ComboBox combo || combo.SelectedItem is not RadialActivationModeOption option)
         {
             return;
         }
@@ -1816,7 +1879,7 @@ public sealed partial class SettingsPageControl : UserControl
         {
             CommandMenu = shortcuts.CommandMenu with
             {
-                RadialActivationMode = mode
+                RadialActivationMode = option.Mode
             }
         });
     }
@@ -1898,9 +1961,9 @@ public sealed partial class SettingsPageControl : UserControl
         AddActionTableElement(row, CreateShortcutIconPresenter(action.IconId, includeId: true), 0);
         AddActionTableCell(row, action.Name, 1);
         AddActionTableCell(row, DescribeActionAvailability(action), 2);
-        AddActionTableCell(row, ShortcutBindingFormatter.Format(action.GlobalShortcut), 3);
+        AddActionTableCell(row, FormatShortcutBinding(action.GlobalShortcut), 3);
         AddActionTableCell(row, action.TargetItem, 4);
-        AddActionTableCell(row, action.CommandType.ToString(), 5);
+        AddActionTableCell(row, DescribeShortcutCommandType(action.CommandType), 5);
         AddActionTableCell(row, action.CommandValue ?? "-", 6);
 
         var actionsPanel = new StackPanel
@@ -1909,15 +1972,15 @@ public sealed partial class SettingsPageControl : UserControl
             Spacing = 4
         };
 
-        var moveUpButton = CreateActionIconButton("\uE70E", "Move action up", action.Id);
+        var moveUpButton = CreateActionIconButton("\uE70E", text.Get("Settings.Shortcuts.Actions.MoveUp"), action.Id);
         moveUpButton.IsEnabled = index > 0;
         moveUpButton.Click += MoveShortcutActionUpButton_Click;
-        var moveDownButton = CreateActionIconButton("\uE70D", "Move action down", action.Id);
+        var moveDownButton = CreateActionIconButton("\uE70D", text.Get("Settings.Shortcuts.Actions.MoveDown"), action.Id);
         moveDownButton.IsEnabled = index < actionCount - 1;
         moveDownButton.Click += MoveShortcutActionDownButton_Click;
-        var editButton = CreateActionIconButton("\uE70F", "Edit action", action.Id);
+        var editButton = CreateActionIconButton("\uE70F", text.Get("Settings.Shortcuts.Actions.Edit"), action.Id);
         editButton.Click += EditShortcutActionButton_Click;
-        var deleteButton = CreateActionIconButton("\uE74D", "Delete action", action.Id);
+        var deleteButton = CreateActionIconButton("\uE74D", text.Get("Settings.Shortcuts.Actions.Delete"), action.Id);
         deleteButton.Click += DeleteShortcutActionButton_Click;
         actionsPanel.Children.Add(moveUpButton);
         actionsPanel.Children.Add(moveDownButton);
@@ -2007,20 +2070,42 @@ public sealed partial class SettingsPageControl : UserControl
         };
     }
 
-    private static string DescribeActionAvailability(ShortcutAction action)
+    private string DescribeActionAvailability(ShortcutAction action)
     {
         var hasShortcut = action.GlobalShortcut is not null;
         if (action.ShowInCommandMenu && hasShortcut)
         {
-            return "Shortcut + Command menu";
+            return text.Get("Settings.Shortcuts.Availability.ShortcutAndCommandMenu");
         }
 
         if (action.ShowInCommandMenu)
         {
-            return "Command menu only";
+            return text.Get("Settings.Shortcuts.Availability.CommandMenuOnly");
         }
 
-        return hasShortcut ? "Shortcut only" : "Unavailable";
+        return hasShortcut
+            ? text.Get("Settings.Shortcuts.Availability.ShortcutOnly")
+            : text.Get("Settings.Shortcuts.Availability.Unavailable");
+    }
+
+    private string DescribeShortcutCommandType(ShortcutCommandType commandType) =>
+        commandType switch
+        {
+            ShortcutCommandType.Toggle => text.Get("Settings.Shortcuts.CommandType.Toggle"),
+            ShortcutCommandType.OnOff => text.Get("Settings.Shortcuts.CommandType.OnOff"),
+            ShortcutCommandType.OpenClose => text.Get("Settings.Shortcuts.CommandType.OpenClose"),
+            ShortcutCommandType.OpenSlider => text.Get("Settings.Shortcuts.CommandType.OpenSlider"),
+            ShortcutCommandType.OpenColorPicker => text.Get("Settings.Shortcuts.CommandType.OpenColorPicker"),
+            ShortcutCommandType.SendCommand => text.Get("Settings.Shortcuts.CommandType.SendCommand"),
+            _ => commandType.ToString()
+        };
+
+    private string FormatShortcutBinding(ShortcutBinding? binding)
+    {
+        var formatted = ShortcutBindingFormatter.Format(binding);
+        return string.Equals(formatted, "Unassigned", StringComparison.Ordinal)
+            ? text.Get("Settings.Shortcuts.Shortcut.Unassigned")
+            : formatted;
     }
 
     private ShortcutAction? ResolveShortcutActionDraft(IEnumerable<ShortcutAction> actions)
@@ -2134,15 +2219,15 @@ public sealed partial class SettingsPageControl : UserControl
             return;
         }
 
-        var actionName = string.IsNullOrWhiteSpace(action.Name) ? "Unnamed action" : action.Name.Trim();
+        var actionName = string.IsNullOrWhiteSpace(action.Name) ? text.Get("Settings.Shortcuts.Actions.Unnamed") : action.Name.Trim();
 
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Delete action",
-            Content = $"Delete action '{actionName}'?",
-            PrimaryButtonText = "Delete",
-            CloseButtonText = "Cancel",
+            Title = text.Get("Settings.Shortcuts.DeleteDialog.Title"),
+            Content = text.Format("Settings.Shortcuts.DeleteDialog.Message", actionName),
+            PrimaryButtonText = text.Get("Common.Delete"),
+            CloseButtonText = text.Get("Common.Cancel"),
             DefaultButton = ContentDialogButton.Close
         };
 
@@ -2182,7 +2267,9 @@ public sealed partial class SettingsPageControl : UserControl
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
         var selectedType = ShortcutActionTypeCombo?.SelectedItem is ShortcutCommandType commandType
             ? commandType
-            : ShortcutCommandType.Toggle;
+            : ShortcutActionTypeCombo?.SelectedItem is ShortcutCommandTypeOption option
+                ? option.CommandType
+                : ShortcutCommandType.Toggle;
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
         var actionId = creatingShortcutAction
@@ -2218,7 +2305,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         var bindingValidation = ShortcutValidation.ValidateBinding(
             updated.GlobalShortcut,
-            $"Current action:{updated.Id}",
+            text.Format("Settings.Shortcuts.CurrentActionOwner", updated.Id),
             existingBindings,
             allowUnassigned: true,
             text);
@@ -2282,10 +2369,10 @@ public sealed partial class SettingsPageControl : UserControl
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Discard unsaved changes?",
-            Content = "You have unsaved changes in the action editor.",
-            PrimaryButtonText = "Continue",
-            CloseButtonText = "Cancel",
+            Title = text.Get("Settings.Shortcuts.DiscardDialog.Title"),
+            Content = text.Get("Settings.Shortcuts.DiscardDialog.Message"),
+            PrimaryButtonText = text.Get("Common.Continue"),
+            CloseButtonText = text.Get("Common.Cancel"),
             DefaultButton = ContentDialogButton.Close
         };
 
@@ -2309,7 +2396,9 @@ public sealed partial class SettingsPageControl : UserControl
             : editingShortcutActionId ?? string.Empty;
         var selectedType = ShortcutActionTypeCombo.SelectedItem is ShortcutCommandType commandType
             ? commandType
-            : ShortcutCommandType.Toggle;
+            : ShortcutActionTypeCombo.SelectedItem is ShortcutCommandTypeOption option
+                ? option.CommandType
+                : ShortcutCommandType.Toggle;
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
         return new ShortcutAction(
@@ -2481,7 +2570,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
         catch (Exception ex)
         {
-            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Could not open logs."));
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, text.Get("Settings.About.OpenLogsFailed")));
         }
     }
 
@@ -2495,7 +2584,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
         catch (Exception ex)
         {
-            setStatusText(SafeDiagnosticText.ForUserStatus(ex, "Could not open settings folder."));
+            setStatusText(SafeDiagnosticText.ForUserStatus(ex, text.Get("Settings.About.OpenSettingsFolderFailed")));
         }
     }
 }
