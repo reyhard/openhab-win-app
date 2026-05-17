@@ -50,7 +50,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj">
-      <AdditionalProperties>WindowsPackageType=MSIX;RuntimeIdentifier=win-x64;Platform=x64;PlatformTarget=x64</AdditionalProperties>
+      <AdditionalProperties>WindowsPackageType=MSIX;RuntimeIdentifier=win-x64;Platform=x64;PlatformTarget=x64;BaseOutputPath=$(MSBuildProjectDirectory)\obj\referenced-projects\OpenHab.Windows.Tray\bin\;BaseIntermediateOutputPath=$(MSBuildProjectDirectory)\obj\referenced-projects\OpenHab.Windows.Tray\obj\</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\DesktopBridge\Microsoft.DesktopBridge.targets" />
