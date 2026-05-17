@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType Condition="'$(WindowsPackageType)' == ''">None</WindowsPackageType>
+    <WindowsAppSdkBootstrapInitialize Condition="'$(WindowsPackageType)' == 'None'">true</WindowsAppSdkBootstrapInitialize>
     <WindowsAppSdkBootstrapInitialize Condition="'$(WindowsPackageType)' != 'None'">false</WindowsAppSdkBootstrapInitialize>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
