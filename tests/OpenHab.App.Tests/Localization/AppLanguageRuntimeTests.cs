@@ -1,5 +1,6 @@
 using OpenHab.App.Settings;
 using OpenHab.Windows.Tray.Localization;
+using System.Runtime.InteropServices;
 
 namespace OpenHab.App.Tests.Localization;
 
@@ -30,5 +31,37 @@ public sealed class AppLanguageRuntimeTests
         bool expected)
     {
         Assert.Equal(expected, AppLanguageRuntime.ShouldShowRestartNotice(savedLanguage, appliedLanguage));
+    }
+
+    [Fact]
+    public void ApplyLanguageDoesNotTouchWinRtOverrideForSystemLanguage()
+    {
+        var appliedTags = new List<string>();
+
+        var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.System, appliedTags.Add);
+
+        Assert.Equal(AppLanguage.System, appliedLanguage);
+        Assert.Empty(appliedTags);
+    }
+
+    [Fact]
+    public void ApplyLanguageAppliesExplicitLanguageTag()
+    {
+        var appliedTags = new List<string>();
+
+        var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.Polish, appliedTags.Add);
+
+        Assert.Equal(AppLanguage.Polish, appliedLanguage);
+        Assert.Collection(appliedTags, tag => Assert.Equal("pl-PL", tag));
+    }
+
+    [Fact]
+    public void ApplyLanguageFallsBackToSystemWhenOverrideFails()
+    {
+        var appliedLanguage = AppLanguageRuntime.ApplyLanguage(
+            AppLanguage.Polish,
+            _ => throw new COMException("Language override is unavailable."));
+
+        Assert.Equal(AppLanguage.System, appliedLanguage);
     }
 }

@@ -121,8 +121,7 @@ public partial class App : Application
         }
 
         settingsController = new AppSettingsController(credentialStore);
-        appliedAppLanguage = settingsController.Current.AppLanguage;
-        AppLanguageRuntime.ApplyLanguage(appliedAppLanguage);
+        appliedAppLanguage = AppLanguageRuntime.ApplyLanguage(settingsController.Current.AppLanguage);
         textLocalizer = new WinUiTextLocalizer();
         notificationStore = new NotificationStore();
         var renderController = new SitemapRenderController(settingsController);
