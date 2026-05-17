@@ -1,9 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
 using Windows.System.Power;
 
 namespace OpenHab.Windows.Tray.DeviceInfo;
 
+[ExcludeFromCodeCoverage(Justification = "Windows device-state reader for live OS battery state.")]
 internal sealed record WindowsBatteryInfo(int? BatteryLevelPercent, bool? IsCharging);
 
+[ExcludeFromCodeCoverage(Justification = "Windows device-state reader for live OS battery state.")]
 internal static class WindowsBatteryInfoReader
 {
     public static WindowsBatteryInfo Read()

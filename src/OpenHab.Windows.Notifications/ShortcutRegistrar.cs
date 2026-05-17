@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using OpenHab.Core;
 
@@ -8,6 +9,7 @@ namespace OpenHab.Windows.Notifications;
 /// <see cref="ToastService"/> can use <c>AppNotificationManager</c>
 /// in an unpackaged (non-MSIX) deployment.
 /// </summary>
+[ExcludeFromCodeCoverage(Justification = "Windows notification registration integration.")]
 public static class ShortcutRegistrar
 {
     private const string AppUserModelId = "OpenHab.OpenHabWinApp";

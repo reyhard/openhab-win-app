@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -12,6 +13,7 @@ using Windows.UI;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
+[ExcludeFromCodeCoverage(Justification = "WinUI command popup host glue.")]
 public sealed partial class ShortcutInteractiveCommandWindow : Window
 {
     private const int SliderWidth = 300;

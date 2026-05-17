@@ -1,5 +1,8 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace OpenHab.Windows.Tray.DeviceInfo;
 
+[ExcludeFromCodeCoverage(Justification = "Windows device-state reader for live OS session state.")]
 internal sealed class WindowsSessionInfoReader
 {
     private volatile string sessionState = "active";

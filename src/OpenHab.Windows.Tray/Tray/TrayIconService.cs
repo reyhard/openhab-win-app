@@ -1,10 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using Microsoft.UI.Xaml.Controls;
 using OpenHab.Windows.Notifications;
-using System.Threading;
 using WinUIEx;
 
 namespace OpenHab.Windows.Tray.Tray;
 
+[ExcludeFromCodeCoverage(Justification = "NotifyIcon shell integration.")]
 public sealed partial class TrayIconService : IDisposable
 {
     private readonly TrayIcon trayIcon;
@@ -63,6 +65,7 @@ public sealed partial class TrayIconService : IDisposable
 /// <summary>
 /// Minimal ICommand implementation for MenuFlyout items.
 /// </summary>
+[ExcludeFromCodeCoverage(Justification = "NotifyIcon shell menu command glue.")]
 internal sealed partial class RelayCommand : System.Windows.Input.ICommand
 {
     private readonly Action execute;

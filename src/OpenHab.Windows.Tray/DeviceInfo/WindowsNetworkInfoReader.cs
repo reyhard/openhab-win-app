@@ -1,9 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
 using Windows.Networking.Connectivity;
 
 namespace OpenHab.Windows.Tray.DeviceInfo;
 
+[ExcludeFromCodeCoverage(Justification = "Windows device-state reader for live OS network state.")]
 internal sealed record WindowsNetworkInfo(bool? IsWifiConnected, string? WifiName);
 
+[ExcludeFromCodeCoverage(Justification = "Windows device-state reader for live OS network state.")]
 internal static class WindowsNetworkInfoReader
 {
     public static WindowsNetworkInfo Read()

@@ -1,9 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using OpenHab.App.Settings;
 using OpenHab.App.Tray;
 
 namespace OpenHab.Windows.Tray;
 
+[ExcludeFromCodeCoverage(Justification = "Win32/DWM composition wrapper.")]
 internal static class DwmWindowDecorations
 {
     internal static FlyoutTheme ResolveFlyoutTheme(AppColorTheme appColorTheme, bool isSystemDark)

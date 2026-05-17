@@ -815,7 +815,16 @@ public sealed partial class MainWindow : Window
 
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Escape && HasVisibleSearchChrome)
+        var searchAction = SitemapSearchKeyboardPlanner.Plan(
+            e.Key switch
+            {
+                VirtualKey.Escape => SitemapKeyboardInput.Escape,
+                VirtualKey.GoBack => SitemapKeyboardInput.GoBack,
+                _ => SitemapKeyboardInput.Other
+            },
+            new SitemapSearchKeyboardState(HasVisibleSearchChrome, isRefreshing));
+
+        if (searchAction == SitemapSearchKeyboardAction.CloseSearch)
         {
             CloseSearchChrome();
             e.Handled = true;
@@ -824,13 +833,6 @@ public sealed partial class MainWindow : Window
 
         if (e.Key != VirtualKey.GoBack)
         {
-            return;
-        }
-
-        if (HasVisibleSearchChrome && !isRefreshing)
-        {
-            CloseSearchChrome();
-            e.Handled = true;
             return;
         }
 

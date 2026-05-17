@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using Windows.Security.Credentials;
 
 namespace OpenHab.Core.Auth;
 
+[ExcludeFromCodeCoverage(Justification = "Windows Credential Manager wrapper around OS APIs.")]
 public sealed class WindowsCredentialStore : ICredentialStore
 {
     public Task StoreAsync(string resource, string key, string secret, CancellationToken cancellationToken)

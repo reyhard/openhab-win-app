@@ -1,12 +1,14 @@
-using CommunityToolkit.WinUI.Notifications;
-using OpenHab.Core;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using System.Threading;
+using CommunityToolkit.WinUI.Notifications;
+using OpenHab.Core;
 using Windows.ApplicationModel;
 using Windows.UI.Notifications;
 
 namespace OpenHab.Windows.Notifications;
 
+[ExcludeFromCodeCoverage(Justification = "Windows toast API integration.")]
 public static class ToastService
 {
     private static bool isAvailable;

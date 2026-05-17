@@ -1,16 +1,18 @@
-using Microsoft.UI.Windowing;
-using OpenHab.App.Shortcuts;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
+using Microsoft.UI.Windowing;
+using OpenHab.App.Shortcuts;
 using Windows.Graphics;
 using Windows.System;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
+[ExcludeFromCodeCoverage(Justification = "WinUI command popup host glue.")]
 public sealed class RadialCommandMenuWindow
 {
     private const int WindowSize = 440;

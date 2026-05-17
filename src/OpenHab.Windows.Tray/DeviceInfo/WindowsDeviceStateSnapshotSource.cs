@@ -1,9 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
 using OpenHab.App.DeviceInfo;
 using OpenHab.App.Runtime;
 using OpenHab.Core.DeviceState;
 
 namespace OpenHab.Windows.Tray.DeviceInfo;
 
+[ExcludeFromCodeCoverage(Justification = "Composition of Windows device-state readers.")]
 internal sealed class WindowsDeviceStateSnapshotSource(
     SitemapRuntimeController runtimeController,
     WindowsFocusInfoReader focusReader,

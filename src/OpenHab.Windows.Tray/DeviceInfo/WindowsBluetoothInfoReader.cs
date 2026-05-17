@@ -1,11 +1,14 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Enumeration;
 
 namespace OpenHab.Windows.Tray.DeviceInfo;
 
+[ExcludeFromCodeCoverage(Justification = "Windows device-state reader for live OS Bluetooth state.")]
 internal sealed record WindowsBluetoothInfo(bool? IsBluetoothConnected, string? ConnectedDeviceNames);
 
+[ExcludeFromCodeCoverage(Justification = "Windows device-state reader for live OS Bluetooth state.")]
 internal static class WindowsBluetoothInfoReader
 {
     public static async Task<WindowsBluetoothInfo> ReadAsync(CancellationToken cancellationToken)

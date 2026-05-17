@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -7,13 +8,16 @@ using WinRT.Interop;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
+[ExcludeFromCodeCoverage(Justification = "Win32 global hotkey registration result glue.")]
 internal sealed record HotkeyRegistrationFailure(string Owner, string Message);
 
+[ExcludeFromCodeCoverage(Justification = "Win32 global hotkey registration result glue.")]
 internal sealed record HotkeyRefreshResult(ImmutableArray<HotkeyRegistrationFailure> Failures)
 {
     public bool Succeeded => Failures.IsDefaultOrEmpty;
 }
 
+[ExcludeFromCodeCoverage(Justification = "Win32 global hotkey registration wrapper.")]
 internal sealed partial class GlobalHotkeyService : IDisposable
 {
     private const int FirstHotkeyId = 0x4F00;

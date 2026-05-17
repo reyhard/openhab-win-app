@@ -29,10 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OpenHab.App\OpenHab.App.csproj" />
-    <ProjectReference Include="..\OpenHab.Core\OpenHab.Core.csproj" />
-    <ProjectReference Include="..\OpenHab.Windows.Notifications\OpenHab.Windows.Notifications.csproj" />
-    <ProjectReference Include="..\OpenHab.Rendering\OpenHab.Rendering.csproj" />
+    <ProjectReference Include="..\OpenHab.App\OpenHab.App.csproj" GlobalPropertiesToRemove="BaseOutputPath;BaseIntermediateOutputPath" />
+    <ProjectReference Include="..\OpenHab.Core\OpenHab.Core.csproj" GlobalPropertiesToRemove="BaseOutputPath;BaseIntermediateOutputPath" />
+    <ProjectReference Include="..\OpenHab.Windows.Notifications\OpenHab.Windows.Notifications.csproj" GlobalPropertiesToRemove="BaseOutputPath;BaseIntermediateOutputPath" />
+    <ProjectReference Include="..\OpenHab.Rendering\OpenHab.Rendering.csproj" GlobalPropertiesToRemove="BaseOutputPath;BaseIntermediateOutputPath" />
   </ItemGroup>
 
   <ItemGroup>

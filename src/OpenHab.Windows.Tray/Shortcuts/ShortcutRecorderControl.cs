@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -16,6 +17,7 @@ using Windows.UI.Core;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
+[ExcludeFromCodeCoverage(Justification = "WinUI keyboard capture glue.")]
 internal sealed partial class ShortcutRecorderControl : UserControl
 {
     private static readonly VirtualKey[] PollableShortcutKeys =

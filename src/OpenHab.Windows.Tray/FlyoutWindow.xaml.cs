@@ -1004,14 +1004,16 @@ public sealed partial class FlyoutWindow : Window
 
     private void MainContent_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Escape && HasVisibleSearchChrome)
-        {
-            e.Handled = true;
-            CloseSearchChrome();
-            return;
-        }
+        var searchAction = SitemapSearchKeyboardPlanner.Plan(
+            e.Key switch
+            {
+                VirtualKey.Escape => SitemapKeyboardInput.Escape,
+                VirtualKey.GoBack => SitemapKeyboardInput.GoBack,
+                _ => SitemapKeyboardInput.Other
+            },
+            new SitemapSearchKeyboardState(HasVisibleSearchChrome, isRefreshing));
 
-        if (e.Key == VirtualKey.GoBack && HasVisibleSearchChrome && !isRefreshing)
+        if (searchAction == SitemapSearchKeyboardAction.CloseSearch)
         {
             e.Handled = true;
             CloseSearchChrome();

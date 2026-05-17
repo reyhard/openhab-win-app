@@ -1,8 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
-using System.Reflection;
 using System.Text;
-using System.Text.RegularExpressions;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -15,10 +13,6 @@ internal static class OpenHabIconImageSourceLoader
 {
     private static readonly HttpClient IconHttpClient = new();
     private static readonly ConcurrentDictionary<string, IconPayload> IconPayloadCache = new(StringComparer.Ordinal);
-    private static readonly Regex SvgOpenTagRegex = new(
-        "<svg\\b",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled,
-        TimeSpan.FromMilliseconds(100));
 
     private sealed record IconPayload(byte[] Bytes, string? MediaType);
 
@@ -108,9 +102,9 @@ internal static class OpenHabIconImageSourceLoader
         double rasterizePixelWidth = 0,
         double rasterizePixelHeight = 0)
     {
-        if (LooksLikeSvg(mediaType, bytes))
+        if (OpenHabIconSvgPolicy.LooksLikeSvg(mediaType, bytes))
         {
-            var tintedBytes = TryApplySvgColorTint(bytes, iconColor) ?? bytes;
+            var tintedBytes = OpenHabIconSvgPolicy.TryApplySvgColorTint(bytes, iconColor) ?? bytes;
             var svg = await CreateSvgFromBytesAsync(tintedBytes, rasterizePixelWidth, rasterizePixelHeight);
             if (svg is not null)
             {
@@ -157,102 +151,6 @@ internal static class OpenHabIconImageSourceLoader
             FromCache: false);
     }
 
-    private static byte[]? TryApplySvgColorTint(byte[] svgBytes, string? iconColor)
-    {
-        if (string.IsNullOrWhiteSpace(iconColor))
-        {
-            return null;
-        }
-
-        if (!TryNormalizeColorToHex(iconColor, out var hexColor))
-        {
-            return null;
-        }
-
-        try
-        {
-            var svgText = Encoding.UTF8.GetString(svgBytes);
-            if (string.IsNullOrWhiteSpace(svgText) || svgText.IndexOf("<svg", StringComparison.OrdinalIgnoreCase) < 0)
-            {
-                return null;
-            }
-
-            var match = SvgOpenTagRegex.Match(svgText);
-            if (!match.Success)
-            {
-                return null;
-            }
-
-            var replacement = $"<svg style=\"color:{hexColor};\"";
-            var tinted = svgText[..match.Index] + replacement + svgText[(match.Index + match.Length)..];
-            return Encoding.UTF8.GetBytes(tinted);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool TryNormalizeColorToHex(string color, out string hex)
-    {
-        hex = string.Empty;
-        if (!TryParseColor(color, out var parsed))
-        {
-            return false;
-        }
-
-        hex = $"#{parsed.R:X2}{parsed.G:X2}{parsed.B:X2}";
-        return true;
-    }
-
-    private static bool TryParseColor(string? color, out global::Windows.UI.Color parsed)
-    {
-        parsed = default;
-        if (string.IsNullOrWhiteSpace(color))
-        {
-            return false;
-        }
-
-        var input = color.Trim();
-        if (input.StartsWith('#'))
-        {
-            var hex = input[1..];
-            if (hex.Length == 3)
-            {
-                hex = string.Concat(hex.Select(c => $"{c}{c}"));
-            }
-
-            if (hex.Length == 6 && uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var rgb))
-            {
-                parsed = CreateColor(
-                    255,
-                    (byte)((rgb >> 16) & 0xFF),
-                    (byte)((rgb >> 8) & 0xFF),
-                    (byte)(rgb & 0xFF));
-                return true;
-            }
-
-            if (hex.Length == 8 && uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var argb))
-            {
-                parsed = CreateColor(
-                    (byte)((argb >> 24) & 0xFF),
-                    (byte)((argb >> 16) & 0xFF),
-                    (byte)((argb >> 8) & 0xFF),
-                    (byte)(argb & 0xFF));
-                return true;
-            }
-        }
-
-        var property = typeof(Microsoft.UI.Colors).GetProperty(input, BindingFlags.Public | BindingFlags.Static | BindingFlags.IgnoreCase);
-        if (property?.PropertyType == typeof(global::Windows.UI.Color))
-        {
-            parsed = (global::Windows.UI.Color)property.GetValue(null)!;
-            return true;
-        }
-
-        return false;
-    }
-
     private static async Task<SvgImageSource?> CreateSvgFromBytesAsync(
         byte[] bytes,
         double rasterizePixelWidth = 0,
@@ -283,25 +181,6 @@ internal static class OpenHabIconImageSourceLoader
         return status == SvgImageSourceLoadStatus.Success ? svg : null;
     }
 
-    private static bool LooksLikeSvg(string? mediaType, byte[] bytes)
-    {
-        if (!string.IsNullOrWhiteSpace(mediaType) &&
-            mediaType.Contains("svg", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var sampleLength = Math.Min(bytes.Length, 256);
-        if (sampleLength == 0)
-        {
-            return false;
-        }
-
-        var sample = Encoding.UTF8.GetString(bytes, 0, sampleLength).TrimStart('\uFEFF', '\t', '\r', '\n', ' ');
-        return sample.StartsWith("<svg", StringComparison.OrdinalIgnoreCase) ||
-               sample.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static async Task<BitmapImage> CreateBitmapFromBytesAsync(byte[] bytes)
     {
         var bitmap = new BitmapImage();
@@ -317,11 +196,6 @@ internal static class OpenHabIconImageSourceLoader
         stream.Seek(0);
         await bitmap.SetSourceAsync(stream);
         return bitmap;
-    }
-
-    private static global::Windows.UI.Color CreateColor(byte a, byte r, byte g, byte b)
-    {
-        return global::Windows.UI.Color.FromArgb(a, r, g, b);
     }
 
     private static void ApplyAuthHeaders(HttpRequestMessage request, SitemapControlFactory.IconAuthContext authContext)

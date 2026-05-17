@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
 namespace OpenHab.Windows.Tray.Shortcuts;
 
+[ExcludeFromCodeCoverage(Justification = "Win32 message-only window for global hotkey callbacks.")]
 internal sealed partial class HotkeyMessageWindow : IDisposable
 {
     private const string WindowClassName = "OpenHabHotkeyMessageWindow";

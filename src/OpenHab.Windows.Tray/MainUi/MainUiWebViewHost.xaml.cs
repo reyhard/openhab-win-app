@@ -1,13 +1,15 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
 using OpenHab.App.MainUi;
 using OpenHab.Core;
-using System.Text;
 
 namespace OpenHab.Windows.Tray.MainUi;
 
+[ExcludeFromCodeCoverage(Justification = "WinUI/WebView host glue.")]
 public sealed partial class MainUiWebViewHost : UserControl
 {
     private Uri? currentEndpoint;

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Win32;
 using OpenHab.Core;
 using Windows.ApplicationModel;
@@ -10,6 +11,7 @@ namespace OpenHab.Windows.Tray.Startup;
 /// which requires a <c>windows.startupTask</c> extension in Package.appxmanifest.
 /// In unpackaged mode, falls back to the <c>HKCU\...\Run</c> registry key.
 /// </summary>
+[ExcludeFromCodeCoverage(Justification = "Windows startup registry and StartupTask integration.")]
 public static class StartupManager
 {
     private const string StartupTaskId = "openHABStartup";

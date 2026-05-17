@@ -1,8 +1,10 @@
-using Microsoft.UI.Composition;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using Microsoft.UI.Composition;
 
 namespace OpenHab.Windows.Tray.Rendering;
 
+[ExcludeFromCodeCoverage(Justification = "WinUI composition animation wrapper.")]
 internal static class CompositionAnimationHelper
 {
     /// <summary>
@@ -107,16 +109,4 @@ internal static class CompositionAnimationHelper
         if (configuredFlyoutMs <= 0) return TimeSpan.Zero;
         return TimeSpan.FromMilliseconds(Math.Max(100, (int)(configuredFlyoutMs * 0.6)));
     }
-}
-
-/// <summary>
-/// Direction of a sitemap page transition used to pick the slide axis.
-/// </summary>
-internal enum NavigationDirection
-{
-    /// <summary>Navigating deeper (child page). Content slides left.</summary>
-    Forward,
-
-    /// <summary>Navigating shallower (parent page). Content slides right.</summary>
-    Back
 }

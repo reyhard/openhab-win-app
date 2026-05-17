@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -5,6 +6,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 
 namespace OpenHab.Windows.Tray.Rendering;
 
+[ExcludeFromCodeCoverage(Justification = "WinUI page transition animation wrapper.")]
 internal static class SitemapPageTransitionAnimator
 {
     public static int ResolveDurationMs(int configuredFlyoutMs)
