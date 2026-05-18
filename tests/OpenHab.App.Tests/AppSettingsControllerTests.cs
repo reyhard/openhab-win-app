@@ -730,6 +730,46 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void DefaultsUseSystemAppLanguage()
+    {
+        var controller = CreateController();
+
+        Assert.Equal(AppLanguage.System, controller.Current.AppLanguage);
+    }
+
+    [Fact]
+    public async Task AppLanguageRoundTripsThroughJson()
+    {
+        var controller = CreateController();
+
+        controller.SetAppLanguage(AppLanguage.Polish);
+        await controller.FlushAsync();
+
+        var reloaded = CreateController();
+        Assert.Equal(AppLanguage.Polish, reloaded.Current.AppLanguage);
+    }
+
+    [Fact]
+    public void SetAppLanguageRejectsInvalidValues()
+    {
+        var controller = CreateController();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => controller.SetAppLanguage((AppLanguage)999));
+    }
+
+    [Fact]
+    public void SettingsChangedFiresWhenAppLanguageChanges()
+    {
+        var controller = CreateController();
+        var changedCount = 0;
+        controller.SettingsChanged += (_, _) => changedCount++;
+
+        controller.SetAppLanguage(AppLanguage.English);
+
+        Assert.Equal(1, changedCount);
+    }
+
+    [Fact]
     public async Task AppColorThemePersistsWithoutLegacyFollowSystemThemeFlag()
     {
         var controller = CreateController();

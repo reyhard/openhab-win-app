@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Media.Animation;
+using OpenHab.App.Localization;
 using OpenHab.Core;
 using OpenHab.Core.Diagnostics;
 using OpenHab.Core.Profiles;
@@ -25,6 +26,8 @@ namespace OpenHab.Windows.Tray.Rendering;
 
 public static partial class SitemapControlFactory
 {
+    public static ITextLocalizer TextLocalizer { get; set; } = DefaultEnglishTextLocalizer.Instance;
+
     private const double ValueLaneWidth = 96;
     private const double ControlLaneWidth = 56;
     private const double NavigateChevronLaneWidth = 20;
@@ -1987,7 +1990,7 @@ public static partial class SitemapControlFactory
             ?? row.State;
         var button = new Button
         {
-            Content = "Run",
+            Content = TextLocalizer.Get("Sitemap.Action.Run"),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             IsEnabled = !string.IsNullOrWhiteSpace(command) && sendCommand is not null
@@ -2206,7 +2209,7 @@ public static partial class SitemapControlFactory
         {
             container.Children.Add(new TextBlock
             {
-                Text = "No URL configured",
+                Text = TextLocalizer.Get("Sitemap.WebView.NoUrlConfigured"),
                 Opacity = 0.4,
                 FontStyle = global::Windows.UI.Text.FontStyle.Italic
             });
@@ -2228,7 +2231,7 @@ public static partial class SitemapControlFactory
         var fallbackPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         var openButton = new Button
         {
-            Content = "Open in browser",
+            Content = TextLocalizer.Get("Sitemap.WebView.OpenInBrowser"),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             MinHeight = 36
         };
@@ -2336,7 +2339,7 @@ public static partial class SitemapControlFactory
         {
             container.Children.Add(new TextBlock
             {
-                Text = "Chart requires an item",
+                Text = TextLocalizer.Get("Sitemap.Chart.RequiresItem"),
                 Opacity = 0.4,
                 FontStyle = global::Windows.UI.Text.FontStyle.Italic
             });

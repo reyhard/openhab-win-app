@@ -14,6 +14,7 @@ using Windows.Graphics;
 using Windows.System;
 using Windows.UI;
 using Windows.UI.ViewManagement;
+using OpenHab.App.Localization;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Shell;
@@ -25,6 +26,7 @@ using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Windows.Tray.MainUi;
+using OpenHab.Windows.Tray.Localization;
 using OpenHab.Windows.Tray.Rendering;
 using OpenHab.Windows.Tray.Rendering.SitemapSurface;
 namespace OpenHab.Windows.Tray;
@@ -51,6 +53,8 @@ public sealed partial class MainWindow : Window
     private readonly Func<bool> shouldAllowClose;
     private readonly Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory;
     private readonly Func<TransportKind, MainUiAuthContext> mainUiAuthResolver;
+    private readonly ITextLocalizer text;
+    private readonly AppLanguage appliedAppLanguage;
     private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
@@ -129,7 +133,9 @@ public sealed partial class MainWindow : Window
         Action requestHideToTray,
         Func<bool>? shouldAllowClose,
         Func<TransportKind, Uri, IOpenHabClient> openHabClientFactory,
-        Func<TransportKind, MainUiAuthContext>? mainUiAuthResolver = null)
+        Func<TransportKind, MainUiAuthContext>? mainUiAuthResolver = null,
+        AppLanguage appliedAppLanguage = AppLanguage.System,
+        ITextLocalizer? text = null)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
@@ -138,6 +144,8 @@ public sealed partial class MainWindow : Window
         this.shouldAllowClose = shouldAllowClose ?? (() => false);
         this.openHabClientFactory = openHabClientFactory;
         this.mainUiAuthResolver = mainUiAuthResolver ?? (_ => MainUiAuthContext.None);
+        this.appliedAppLanguage = appliedAppLanguage;
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
         sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
         sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
             settingsController,
@@ -246,7 +254,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShellConnectionText.Text = SafeDiagnosticText.ForUserStatus(ex, "Error.");
+            ShellConnectionText.Text = SafeDiagnosticText.ForUserStatus(ex, text.Get("Runtime.Error"));
             return TraySurfaceRefreshOutcome.Failed;
         }
         finally
@@ -299,14 +307,19 @@ public sealed partial class MainWindow : Window
 
     private void ShowNotificationsPage()
     {
-        notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore);
+        notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore, text);
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(notificationsPage);
     }
 
     private void ShowSettingsPage()
     {
-        settingsPage ??= new Settings.SettingsPageControl(settingsController, RefreshRuntimeAsync, SetShellStatusText);
+        settingsPage ??= new Settings.SettingsPageControl(
+            settingsController,
+            RefreshRuntimeAsync,
+            SetShellStatusText,
+            appliedAppLanguage,
+            text);
         settingsPage.PointerPressed -= SettingsPage_PointerPressed;
         settingsPage.PointerPressed += SettingsPage_PointerPressed;
         settingsPage.ShowRoot();
@@ -333,13 +346,17 @@ public sealed partial class MainWindow : Window
 
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
-            ShowMainUi();
+            if (!TryShowMainUi(out var host))
+            {
+                return;
+            }
+
             var targetRoute = state.PendingMainUiRoute;
             if (string.IsNullOrWhiteSpace(targetRoute))
             {
                 targetRoute = !string.IsNullOrWhiteSpace(currentMainUiRoute)
                     ? currentMainUiRoute
-                    : MainUiHost.CurrentRoute;
+                    : host.CurrentRoute;
             }
 
             if (!string.IsNullOrWhiteSpace(targetRoute))
@@ -364,14 +381,45 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ShowMainUi()
+    private bool TryShowMainUi(out MainUiWebViewHost host)
     {
-        var host = MainUiHost;
-        if (!CenterContentHost.Children.Contains(host))
+        try
         {
-            CenterContentHost.Children.Clear();
-            CenterContentHost.Children.Add(host);
+            host = MainUiHost;
+            if (!CenterContentHost.Children.Contains(host))
+            {
+                CenterContentHost.Children.Clear();
+                CenterContentHost.Children.Add(host);
+            }
+
+            return true;
         }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Main UI host creation failed: {ex.GetType().Name}");
+            ShellConnectionText.Text = text.Get("Runtime.MainUi.LoadError");
+            ShowMainUiUnavailable();
+            host = null!;
+            return false;
+        }
+    }
+
+    private void ShowMainUiUnavailable()
+    {
+        CenterContentHost.Children.Clear();
+        CenterContentHost.Children.Add(new Grid
+        {
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = text.Get("Runtime.MainUi.LoadError"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextWrapping = TextWrapping.WrapWholeWords
+                }
+            }
+        });
     }
 
     private MainUiWebViewHost CreateMainUiHost()
@@ -431,7 +479,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             DiagnosticLogger.Warn($"Main UI navigation failed: {ex.GetType().Name}");
-            ShellConnectionText.Text = "Error: Main UI could not be loaded.";
+            ShellConnectionText.Text = text.Get("Runtime.MainUi.LoadError");
         }
         finally
         {
@@ -1710,9 +1758,9 @@ public sealed partial class MainWindow : Window
 
         ShellConnectionText.Text = snapshot.ActiveTransport switch
         {
-            TransportKind.Cloud => $"Connected via cloud ({snapshot.ConnectionState})",
-            TransportKind.Local => $"Connected via local ({snapshot.ConnectionState})",
-            _ => $"Connection: {snapshot.ConnectionState}"
+            TransportKind.Cloud => text.Format("Runtime.Connection.ConnectedViaCloud", snapshot.ConnectionState),
+            TransportKind.Local => text.Format("Runtime.Connection.ConnectedViaLocal", snapshot.ConnectionState),
+            _ => text.Format("Runtime.Connection.State", snapshot.ConnectionState)
         };
     }
 

@@ -28,6 +28,13 @@ public enum AppColorTheme
     FollowSystemSettings
 }
 
+public enum AppLanguage
+{
+    System,
+    English,
+    Polish
+}
+
 public sealed record AppSettings(
     SitemapSkinKind Skin,
     EndpointMode EndpointMode,
@@ -35,6 +42,7 @@ public sealed record AppSettings(
     Uri CloudEndpoint,
     string SitemapName,
     AppColorTheme AppColorTheme = AppColorTheme.FollowSystemSettings,
+    AppLanguage AppLanguage = AppLanguage.System,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     bool? FollowSystemTheme = null,
     bool UseWindows11Icons = false,

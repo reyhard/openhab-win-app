@@ -20,32 +20,32 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="NotificationSearchBox" PlaceholderText="Search notifications" MinWidth="220" TextChanged="NotificationSearchBox_TextChanged" />
+                <TextBox x:Name="NotificationSearchBox" x:Uid="NotificationsPage_SearchBox" PlaceholderText="Search notifications" MinWidth="220" TextChanged="NotificationSearchBox_TextChanged" />
                 <ComboBox Grid.Column="1" x:Name="NotificationFilterBox" MinWidth="120" Width="120" SelectedIndex="0" SelectionChanged="NotificationFilterBox_SelectionChanged">
-                    <ComboBoxItem Content="Visible" Tag="Visible" />
-                    <ComboBoxItem Content="Unread" Tag="Unread" />
-                    <ComboBoxItem Content="Read" Tag="Read" />
-                    <ComboBoxItem Content="Hidden" Tag="Hidden" />
-                    <ComboBoxItem Content="All" Tag="All" />
+                    <ComboBoxItem x:Uid="NotificationsPage_FilterVisible" Content="Visible" Tag="Visible" />
+                    <ComboBoxItem x:Uid="NotificationsPage_FilterUnread" Content="Unread" Tag="Unread" />
+                    <ComboBoxItem x:Uid="NotificationsPage_FilterRead" Content="Read" Tag="Read" />
+                    <ComboBoxItem x:Uid="NotificationsPage_FilterHidden" Content="Hidden" Tag="Hidden" />
+                    <ComboBoxItem x:Uid="NotificationsPage_FilterAll" Content="All" Tag="All" />
                 </ComboBox>
                 <ComboBox Grid.Column="2" x:Name="NotificationSortBox" MinWidth="110" Width="110" SelectedIndex="0" SelectionChanged="NotificationSortBox_SelectionChanged">
-                    <ComboBoxItem Content="Newest" Tag="DateDescending" />
-                    <ComboBoxItem Content="Oldest" Tag="DateAscending" />
-                    <ComboBoxItem Content="Name" Tag="Name" />
+                    <ComboBoxItem x:Uid="NotificationsPage_SortNewest" Content="Newest" Tag="DateDescending" />
+                    <ComboBoxItem x:Uid="NotificationsPage_SortOldest" Content="Oldest" Tag="DateAscending" />
+                    <ComboBoxItem x:Uid="NotificationsPage_SortName" Content="Name" Tag="Name" />
                 </ComboBox>
                 <Border Grid.Column="3" x:Name="UnreadBadge" Background="{ThemeResource AccentFillColorDefaultBrush}" CornerRadius="10" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center" Visibility="Collapsed">
                     <TextBlock x:Name="UnreadCountText" FontSize="11" />
                 </Border>
-                <Button Grid.Column="4" x:Name="MarkAllReadButton" Content="Mark all read" Click="MarkAllReadButton_Click" />
+                <Button Grid.Column="4" x:Name="MarkAllReadButton" x:Uid="NotificationsPage_MarkAllReadButton" Content="Mark all read" Click="MarkAllReadButton_Click" />
             </Grid>
-            <TextBlock x:Name="LocalOnlyNote" Grid.Row="1" Text="New notifications unavailable in Local-Only mode. Switch to Automatic or Cloud to receive alerts." Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,8,0,0" />
+            <TextBlock x:Name="LocalOnlyNote" x:Uid="NotificationsPage_LocalOnlyNote" Grid.Row="1" Text="New notifications unavailable in Local-Only mode. Switch to Automatic or Cloud to receive alerts." Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,8,0,0" />
             <Grid Grid.Row="2">
                 <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto"
                               Margin="0,0,10,0">
                     <StackPanel x:Name="NotificationRows" Spacing="6" Padding="0,0,2,0" />
                 </ScrollViewer>
-                <TextBlock x:Name="EmptyNotificationsText" Text="No notifications" Opacity="0.5" HorizontalAlignment="Center" Margin="0,40,0,0" Visibility="Collapsed" />
+                <TextBlock x:Name="EmptyNotificationsText" x:Uid="NotificationsPage_EmptyText" Text="No notifications" Opacity="0.5" HorizontalAlignment="Center" Margin="0,40,0,0" Visibility="Collapsed" />
             </Grid>
         </Grid>
     </Border>

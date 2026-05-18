@@ -1,0 +1,8 @@
+commit_message: >
+  New translations %original_file_name% (%language%)
+
+  Signed-off-by: openHAB Bot <bot@openhab.org>
+append_commit_message: false
+files:
+  - source: /src/OpenHab.Windows.Tray/Strings/en-US/Resources.resw
+    translation: /src/OpenHab.Windows.Tray/Strings/%locale%/%original_file_name%

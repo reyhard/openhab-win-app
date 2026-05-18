@@ -1,4 +1,5 @@
 using System.Globalization;
+using OpenHab.App.Localization;
 using OpenHab.Core.Diagnostics;
 using OpenHab.App.Sitemaps;
 using OpenHab.Rendering.Descriptors;
@@ -10,19 +11,19 @@ namespace OpenHab.App.Runtime;
 public static class SitemapSearchDescriptorBuilder
 {
     private const string SearchPageId = "__search__";
-    private const string SearchTitle = "Search results";
-    private const string EmptyLabel = "No matching sitemap elements";
 
     public static SitemapSearchBuildResult Build(
         NormalizedSitemapPage currentPage,
         SitemapRenderDescriptor normalDescriptor,
         string? query,
-        SitemapRenderController renderController)
+        SitemapRenderController renderController,
+        ITextLocalizer? text = null)
     {
         using var scope = OpenHabProfiling.StartScope("SitemapSearchDescriptorBuilder.Build");
         ArgumentNullException.ThrowIfNull(currentPage);
         ArgumentNullException.ThrowIfNull(normalDescriptor);
         ArgumentNullException.ThrowIfNull(renderController);
+        text ??= DefaultEnglishTextLocalizer.Instance;
 
         var trimmedQuery = (query ?? string.Empty).Trim();
         scope?.SetTag("query.length", trimmedQuery.Length);
@@ -43,8 +44,8 @@ public static class SitemapSearchDescriptorBuilder
 
         rows.Add(CreateHeaderRow(
             BuildHeaderKey(currentPage.Id),
-            SearchTitle,
-            "Searching current section and child pages"));
+            text.Get("Sitemap.Search.ResultsTitle"),
+            text.Get("Sitemap.Search.SearchingScope")));
 
         var index = 0;
         while (index < currentPage.Widgets.Count)
@@ -93,10 +94,10 @@ public static class SitemapSearchDescriptorBuilder
         {
             rows[0] = CreateHeaderRow(
                 BuildHeaderKey(currentPage.Id),
-                SearchTitle,
-                "0 results in current section and child pages");
+                text.Get("Sitemap.Search.ResultsTitle"),
+                text.Format("Sitemap.Search.ResultCountInScope", 0));
             rows.Add(new SitemapRowDescriptor(
-                EmptyLabel,
+                text.Get("Sitemap.Search.EmptyLabel"),
                 null,
                 RenderControlKind.Text,
                 RenderActionKind.None,
@@ -108,11 +109,11 @@ public static class SitemapSearchDescriptorBuilder
         {
             rows[0] = CreateHeaderRow(
                 BuildHeaderKey(currentPage.Id),
-                SearchTitle,
-                string.Create(CultureInfo.InvariantCulture, $"{resultCount} results in current section and child pages"));
+                text.Get("Sitemap.Search.ResultsTitle"),
+                text.Format("Sitemap.Search.ResultCountInScope", resultCount));
         }
 
-        var descriptor = new SitemapRenderDescriptor(normalDescriptor.Skin, SearchPageId, SearchTitle, rows);
+        var descriptor = new SitemapRenderDescriptor(normalDescriptor.Skin, SearchPageId, text.Get("Sitemap.Search.ResultsTitle"), rows);
         return new SitemapSearchBuildResult(descriptor, true, trimmedQuery, resultCount, sources);
     }
 

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using Microsoft.UI.Xaml.Controls;
+using OpenHab.App.Localization;
 using OpenHab.Windows.Notifications;
 using WinUIEx;
 
@@ -10,13 +11,15 @@ namespace OpenHab.Windows.Tray.Tray;
 public sealed partial class TrayIconService : IDisposable
 {
     private readonly TrayIcon trayIcon;
+    private readonly ITextLocalizer text;
     private int isDisposed;
 
-    public TrayIconService(Action toggleFlyout, Action openMainWindow, Action exitApplication)
+    public TrayIconService(Action toggleFlyout, Action openMainWindow, Action exitApplication, ITextLocalizer? text = null)
     {
         ArgumentNullException.ThrowIfNull(toggleFlyout);
         ArgumentNullException.ThrowIfNull(openMainWindow);
         ArgumentNullException.ThrowIfNull(exitApplication);
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
 
         // WinUIEx TrayIcon requires an .ico file (GDI LoadImage) and a unique uint ID.
         // The .ico is generated from Assets/openhab-icon.svg and copied to output.
@@ -30,10 +33,10 @@ public sealed partial class TrayIconService : IDisposable
             {
                 Items =
                 {
-                    new MenuFlyoutItem { Text = "Open flyout", Command = new RelayCommand(toggleFlyout) },
-                    new MenuFlyoutItem { Text = "Open main window", Command = new RelayCommand(openMainWindow) },
+                    new MenuFlyoutItem { Text = this.text.Get("Tray.OpenFlyout"), Command = new RelayCommand(toggleFlyout) },
+                    new MenuFlyoutItem { Text = this.text.Get("Tray.OpenMainWindow"), Command = new RelayCommand(openMainWindow) },
                     new MenuFlyoutSeparator(),
-                    new MenuFlyoutItem { Text = "Exit", Command = new RelayCommand(exitApplication) }
+                    new MenuFlyoutItem { Text = this.text.Get("Tray.Exit"), Command = new RelayCommand(exitApplication) }
                 }
             };
         };

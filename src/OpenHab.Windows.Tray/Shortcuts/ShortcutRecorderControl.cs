@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using OpenHab.App.Localization;
 using OpenHab.App.Shortcuts;
 using Windows.System;
 using Windows.UI.Core;
@@ -20,6 +21,8 @@ namespace OpenHab.Windows.Tray.Shortcuts;
 [ExcludeFromCodeCoverage(Justification = "WinUI keyboard capture glue.")]
 internal sealed partial class ShortcutRecorderControl : UserControl
 {
+    public static ITextLocalizer TextLocalizer { get; set; } = DefaultEnglishTextLocalizer.Instance;
+
     private static readonly VirtualKey[] PollableShortcutKeys =
     [
         VirtualKey.A,
@@ -155,7 +158,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
 
         editButton = new Button
         {
-            Content = "Edit",
+            Content = TextLocalizer.Get("Common.Edit"),
             MinWidth = 76,
             UseSystemFocusVisuals = true
         };
@@ -163,7 +166,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
 
         clearButton = new Button
         {
-            Content = "Clear",
+            Content = TextLocalizer.Get("Common.Clear"),
             MinWidth = 76,
             UseSystemFocusVisuals = true
         };
@@ -244,7 +247,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
         };
         var dialogStatus = new TextBlock
         {
-            Text = "Press a modifier and key.",
+            Text = TextLocalizer.Get("ShortcutRecorder.PressModifierAndKey"),
             TextAlignment = TextAlignment.Center,
             Opacity = 0.75,
             TextWrapping = TextWrapping.Wrap
@@ -268,12 +271,12 @@ internal sealed partial class ShortcutRecorderControl : UserControl
 
         var resetButton = new Button
         {
-            Content = "Reset",
+            Content = TextLocalizer.Get("Common.Reset"),
             MinWidth = 86
         };
         var clearDialogButton = new Button
         {
-            Content = "Clear",
+            Content = TextLocalizer.Get("Common.Clear"),
             MinWidth = 86
         };
 
@@ -299,7 +302,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
             {
                 new TextBlock
                 {
-                    Text = "Shortcut must start with Windows, Ctrl, Alt, or Shift.",
+                    Text = TextLocalizer.Get("ShortcutRecorder.RequiresModifier"),
                     TextWrapping = TextWrapping.Wrap
                 },
                 captureSurface,
@@ -313,10 +316,10 @@ internal sealed partial class ShortcutRecorderControl : UserControl
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
-            Title = "Activation shortcut",
+            Title = TextLocalizer.Get("ShortcutRecorder.Dialog.Title"),
             Content = content,
-            PrimaryButtonText = "Save",
-            CloseButtonText = "Cancel",
+            PrimaryButtonText = TextLocalizer.Get("Common.Save"),
+            CloseButtonText = TextLocalizer.Get("Common.Cancel"),
             DefaultButton = ContentDialogButton.Primary
         };
         var pollingTimer = new DispatcherTimer
@@ -336,7 +339,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
             }
             else
             {
-                previewPanel.Children.Add(CreatePreviewChip("Press shortcut"));
+                previewPanel.Children.Add(CreatePreviewChip(TextLocalizer.Get("ShortcutRecorder.PressModifierAndKey")));
             }
 
             dialog.IsPrimaryButtonEnabled = capturedBinding is not null || AllowClear;
@@ -353,7 +356,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
             var keyText = ShortcutWindowsMapper.FormatKey(key);
             if (string.IsNullOrWhiteSpace(keyText))
             {
-                SetDialogError("Unsupported key.");
+                SetDialogError(TextLocalizer.Get("ShortcutRecorder.UnsupportedKey"));
                 return;
             }
 
@@ -380,7 +383,7 @@ internal sealed partial class ShortcutRecorderControl : UserControl
             var modifiers = GetActiveModifiers();
             if (modifiers.Count == 0)
             {
-                SetDialogError("Use at least one modifier key.");
+                SetDialogError(TextLocalizer.Get("ShortcutRecorder.UseAtLeastOneModifier"));
                 args.Handled = true;
                 return;
             }
@@ -407,15 +410,15 @@ internal sealed partial class ShortcutRecorderControl : UserControl
         resetButton.Click += (_, _) =>
         {
             capturedBinding = initialBinding;
-            dialogStatus.Text = "Reset to current shortcut.";
+            dialogStatus.Text = TextLocalizer.Get("ShortcutRecorder.ResetToCurrent");
             SetDialogError(null);
             RenderPreview();
         };
         clearDialogButton.Click += (_, _) =>
         {
             capturedBinding = null;
-            dialogStatus.Text = AllowClear ? "Shortcut cleared." : "Shortcut is required for this control.";
-            SetDialogError(AllowClear ? null : "Shortcut is required.");
+            dialogStatus.Text = AllowClear ? TextLocalizer.Get("ShortcutRecorder.ShortcutCleared") : TextLocalizer.Get("ShortcutRecorder.ShortcutRequiredForControl");
+            SetDialogError(AllowClear ? null : TextLocalizer.Get("ShortcutRecorder.ShortcutRequired"));
             RenderPreview();
         };
 
@@ -496,10 +499,10 @@ internal sealed partial class ShortcutRecorderControl : UserControl
 
         editButton.Content = isRecording ? "Press shortcut..." : "Edit";
         editButton.IsEnabled = true;
-        AutomationProperties.SetName(editButton, "Edit shortcut");
+        AutomationProperties.SetName(editButton, TextLocalizer.Get("ShortcutRecorder.EditShortcut"));
         clearButton.Visibility = allowClear ? Visibility.Visible : Visibility.Collapsed;
         clearButton.IsEnabled = !isRecording && binding is not null;
-        AutomationProperties.SetName(clearButton, "Clear shortcut");
+        AutomationProperties.SetName(clearButton, TextLocalizer.Get("ShortcutRecorder.ClearShortcut"));
         errorText.Text = error ?? string.Empty;
         errorText.Visibility = string.IsNullOrWhiteSpace(error) ? Visibility.Collapsed : Visibility.Visible;
     }

@@ -1,4 +1,5 @@
 using OpenHab.App.Runtime;
+using OpenHab.App.Localization;
 using OpenHab.App.Settings;
 using OpenHab.App.Sitemaps;
 using OpenHab.Sitemaps.Models;
@@ -34,6 +35,25 @@ public sealed class SitemapSearchDescriptorBuilderTests
         Assert.Equal(0, result.ResultCount);
         Assert.Equal(normal, result.Descriptor);
         Assert.Empty(result.SourcesByResultKey);
+    }
+
+    [Fact]
+    public void SearchHeaderUsesInjectedLocalizer()
+    {
+        var page = CreateSearchPage();
+        var normal = renderController.BuildCurrentDescriptor(page);
+        var text = new InvariantTextLocalizer(new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Sitemap.Search.ResultsTitle"] = "Localized search",
+            ["Sitemap.Search.ResultCountInScope"] = "{0} localized scope",
+            ["Sitemap.Search.EmptyLabel"] = "Localized empty"
+        });
+
+        var result = SitemapSearchDescriptorBuilder.Build(page, normal, "missing", renderController, text);
+
+        Assert.Equal("Localized search", result.Descriptor.Title);
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Localized search" && row.State == "0 localized scope");
+        Assert.Contains(result.Descriptor.Rows, row => row.Label == "Localized empty");
     }
 
     [Fact]

@@ -50,6 +50,15 @@ Do not commit:
 
 When adding diagnostics, assume server responses, URLs, item names, notification payloads, and exception messages can contain private information.
 
+## Localization
+
+App-owned English UI strings belong in `src/OpenHab.Windows.Tray/Strings/en-US/Resources.resw`.
+Translated `src/OpenHab.Windows.Tray/Strings/<locale>/Resources.resw` files are managed through Crowdin and should not be edited directly in normal pull requests.
+
+Do not translate text supplied by the user's openHAB server, including sitemap labels, item names, endpoint URLs, notification payloads, command values, or diagnostic details. Keep placeholders such as `{0}` intact and explain them with resource comments when adding new source strings.
+
+Until maintainers publish the Crowdin project, source-string changes should update only `Strings/en-US/Resources.resw`. Do not add repository secrets or Crowdin automation workflows without an approved project ID, token ownership model, and bot sign-off identity.
+
 ## Verification
 
 Run the direct test gate for normal logic changes:
