@@ -145,6 +145,11 @@ public sealed class ShortcutActionExecutor
                     ShortcutActionExecutionResult.Failed(
                         ShortcutActionExecutionFailure.SurfaceRequired,
                         "This action requires opening an interactive surface."));
+            case ShortcutCommandType.Voice:
+                return CommandResolution.FromFailure(
+                    ShortcutActionExecutionResult.Failed(
+                        ShortcutActionExecutionFailure.SurfaceRequired,
+                        "Voice actions require voice command activation."));
             default:
                 return CommandResolution.FromFailure(
                     ShortcutActionExecutionResult.Failed(
