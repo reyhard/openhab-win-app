@@ -1065,8 +1065,8 @@ public partial class App : Application
         var actions = settings
             .Actions
             .Where(action =>
-                action.ShowInCommandMenu
-                && IsActionAvailableForCurrentShortcutMode(settings, action)
+                IsActionAvailableForCurrentShortcutMode(settings, action)
+                && action.ShowInCommandMenu
                 && ShortcutValidation.ValidateAction(action).IsValid)
             .ToList();
         menuWindow.ShowActions(actions, ExecuteShortcutActionAsync);
