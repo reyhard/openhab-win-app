@@ -22,7 +22,33 @@ public sealed class VoiceCommandConfirmationWindow : Window
 
     public async Task<bool> WaitForDecisionAsync(CancellationToken cancellationToken)
     {
-        using var registration = cancellationToken.Register(() => decisionSource.TrySetResult(false));
+        using var registration = cancellationToken.Register(() =>
+        {
+            decisionSource.TrySetResult(false);
+            if (isClosing)
+            {
+                return;
+            }
+
+            if (DispatcherQueue is { } dispatcher)
+            {
+                _ = dispatcher.TryEnqueue(() =>
+                {
+                    if (isClosing)
+                    {
+                        return;
+                    }
+
+                    isClosing = true;
+                    Close();
+                });
+                return;
+            }
+
+            isClosing = true;
+            Close();
+        });
+
         Activate();
         return await decisionSource.Task.ConfigureAwait(true);
     }
