@@ -71,11 +71,10 @@ public sealed class ShortcutActionEditorPlannerTests
     [Fact]
     public void UpsertActionReplacesExistingById()
     {
-        var planner = new ShortcutActionEditorPlanner();
         var original = Action("a1", "Old");
         var updated = Action("a1", "New");
 
-        var result = planner.UpsertAction([original, Action("a2", "Second")], updated);
+        var result = ShortcutActionEditorPlanner.UpsertAction([original, Action("a2", "Second")], updated);
 
         Assert.Collection(
             result,
@@ -86,10 +85,9 @@ public sealed class ShortcutActionEditorPlannerTests
     [Fact]
     public void UpsertActionAppendsWhenIdNotFound()
     {
-        var planner = new ShortcutActionEditorPlanner();
         var appended = Action("a3", "Third");
 
-        var result = planner.UpsertAction([Action("a1", "First"), Action("a2", "Second")], appended);
+        var result = ShortcutActionEditorPlanner.UpsertAction([Action("a1", "First"), Action("a2", "Second")], appended);
 
         Assert.Equal(3, result.Length);
         Assert.Equal("a3", result[2].Id);
@@ -98,9 +96,7 @@ public sealed class ShortcutActionEditorPlannerTests
     [Fact]
     public void RemoveActionRemovesMatchingId()
     {
-        var planner = new ShortcutActionEditorPlanner();
-
-        var result = planner.RemoveAction([Action("a1", "First"), Action("a2", "Second")], "a1");
+        var result = ShortcutActionEditorPlanner.RemoveAction([Action("a1", "First"), Action("a2", "Second")], "a1");
 
         Assert.Single(result);
         Assert.Equal("a2", result[0].Id);
@@ -109,17 +105,16 @@ public sealed class ShortcutActionEditorPlannerTests
     [Fact]
     public void MoveActionClampsDestinationInsideList()
     {
-        var planner = new ShortcutActionEditorPlanner();
         var actions = ImmutableArray.Create(Action("a1", "First"), Action("a2", "Second"), Action("a3", "Third"));
 
-        var movedToStart = planner.MoveAction(actions, "a2", -10);
+        var movedToStart = ShortcutActionEditorPlanner.MoveAction(actions, "a2", -10);
         Assert.Collection(
             movedToStart,
             first => Assert.Equal("a2", first.Id),
             second => Assert.Equal("a1", second.Id),
             third => Assert.Equal("a3", third.Id));
 
-        var movedToEnd = planner.MoveAction(actions, "a2", 10);
+        var movedToEnd = ShortcutActionEditorPlanner.MoveAction(actions, "a2", 10);
         Assert.Collection(
             movedToEnd,
             first => Assert.Equal("a1", first.Id),

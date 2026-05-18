@@ -1,5 +1,6 @@
 using OpenHab.App.Settings;
 using OpenHab.Windows.Tray.Localization;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace OpenHab.App.Tests.Localization;
@@ -18,6 +19,12 @@ public sealed class AppLanguageRuntimeTests
     public void ToLanguageTagMapsOverrides(AppLanguage language, string expectedTag)
     {
         Assert.Equal(expectedTag, AppLanguageRuntime.ToLanguageTag(language));
+    }
+
+    [Fact]
+    public void ToLanguageTagMapsUnknownLanguageToSystem()
+    {
+        Assert.Null(AppLanguageRuntime.ToLanguageTag((AppLanguage)999));
     }
 
     [Theory]
@@ -52,17 +59,56 @@ public sealed class AppLanguageRuntimeTests
         var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.Polish, appliedTags.Add, _ => { });
 
         Assert.Equal(AppLanguage.Polish, appliedLanguage);
-        Assert.Collection(appliedTags, tag => Assert.Equal("pl-PL", tag));
+        Assert.Equal("pl-PL", Assert.Single(appliedTags));
     }
 
-    [Fact]
-    public void ApplyLanguageFallsBackToSystemWhenOverrideFails()
+    [Theory]
+    [InlineData(typeof(COMException))]
+    [InlineData(typeof(InvalidOperationException))]
+    [InlineData(typeof(UnauthorizedAccessException))]
+    public void ApplyLanguageFallsBackToSystemWhenOverrideFails(Type exceptionType)
     {
         var appliedLanguage = AppLanguageRuntime.ApplyLanguage(
             AppLanguage.Polish,
-            _ => throw new COMException("Language override is unavailable."),
+            _ => throw CreateException(exceptionType),
             _ => { });
 
         Assert.Equal(AppLanguage.System, appliedLanguage);
+    }
+
+    [Fact]
+    public void ApplyLanguageAppliesDotNetCultureWhenNoTestOverrideIsProvided()
+    {
+        var originalDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
+        var originalDefaultUiCulture = CultureInfo.DefaultThreadCurrentUICulture;
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            var appliedLanguage = AppLanguageRuntime.ApplyLanguage(AppLanguage.English, _ => { });
+
+            Assert.Equal(AppLanguage.English, appliedLanguage);
+            Assert.Equal("en-US", CultureInfo.DefaultThreadCurrentCulture?.Name);
+            Assert.Equal("en-US", CultureInfo.DefaultThreadCurrentUICulture?.Name);
+            Assert.Equal("en-US", CultureInfo.CurrentCulture.Name);
+            Assert.Equal("en-US", CultureInfo.CurrentUICulture.Name);
+        }
+        finally
+        {
+            CultureInfo.DefaultThreadCurrentCulture = originalDefaultCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = originalDefaultUiCulture;
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+        }
+    }
+
+    private static Exception CreateException(Type exceptionType)
+    {
+        if (exceptionType == typeof(COMException))
+        {
+            return new COMException("Language override is unavailable.");
+        }
+
+        return (Exception)Activator.CreateInstance(exceptionType, "Language override is unavailable.")!;
     }
 }

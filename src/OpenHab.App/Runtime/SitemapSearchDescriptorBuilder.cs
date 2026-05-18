@@ -11,6 +11,7 @@ namespace OpenHab.App.Runtime;
 public static class SitemapSearchDescriptorBuilder
 {
     private const string SearchPageId = "__search__";
+    private const string ResultsTitleKey = "Sitemap.Search.ResultsTitle";
 
     public static SitemapSearchBuildResult Build(
         NormalizedSitemapPage currentPage,
@@ -44,7 +45,7 @@ public static class SitemapSearchDescriptorBuilder
 
         rows.Add(CreateHeaderRow(
             BuildHeaderKey(currentPage.Id),
-            text.Get("Sitemap.Search.ResultsTitle"),
+            text.Get(ResultsTitleKey),
             text.Get("Sitemap.Search.SearchingScope")));
 
         var index = 0;
@@ -94,7 +95,7 @@ public static class SitemapSearchDescriptorBuilder
         {
             rows[0] = CreateHeaderRow(
                 BuildHeaderKey(currentPage.Id),
-                text.Get("Sitemap.Search.ResultsTitle"),
+                text.Get(ResultsTitleKey),
                 text.Format("Sitemap.Search.ResultCountInScope", 0));
             rows.Add(new SitemapRowDescriptor(
                 text.Get("Sitemap.Search.EmptyLabel"),
@@ -109,11 +110,11 @@ public static class SitemapSearchDescriptorBuilder
         {
             rows[0] = CreateHeaderRow(
                 BuildHeaderKey(currentPage.Id),
-                text.Get("Sitemap.Search.ResultsTitle"),
+                text.Get(ResultsTitleKey),
                 text.Format("Sitemap.Search.ResultCountInScope", resultCount));
         }
 
-        var descriptor = new SitemapRenderDescriptor(normalDescriptor.Skin, SearchPageId, text.Get("Sitemap.Search.ResultsTitle"), rows);
+        var descriptor = new SitemapRenderDescriptor(normalDescriptor.Skin, SearchPageId, text.Get(ResultsTitleKey), rows);
         return new SitemapSearchBuildResult(descriptor, true, trimmedQuery, resultCount, sources);
     }
 

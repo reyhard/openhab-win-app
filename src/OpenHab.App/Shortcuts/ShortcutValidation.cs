@@ -126,30 +126,7 @@ public static class ShortcutValidation
             errors.Add(text.Get("Shortcuts.Validation.CommandTypeInvalid"));
         }
 
-        switch (action.CommandType)
-        {
-            case ShortcutCommandType.OnOff:
-                if (!IsOneOf(action.CommandValue, "ON", "OFF"))
-                {
-                    errors.Add(text.Get("Shortcuts.Validation.OnOffValueRequired"));
-                }
-
-                break;
-            case ShortcutCommandType.OpenClose:
-                if (!IsOneOf(action.CommandValue, "OPEN", "CLOSE"))
-                {
-                    errors.Add(text.Get("Shortcuts.Validation.OpenCloseValueRequired"));
-                }
-
-                break;
-            case ShortcutCommandType.SendCommand:
-                if (string.IsNullOrWhiteSpace(action.CommandValue))
-                {
-                    errors.Add(text.Get("Shortcuts.Validation.SendCommandValueRequired"));
-                }
-
-                break;
-        }
+        AddCommandValueErrors(action, text, errors);
 
         if (action.GlobalShortcut is not null && !ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out _))
         {
@@ -170,6 +147,25 @@ public static class ShortcutValidation
         key.Equals("Escape", StringComparison.OrdinalIgnoreCase)
         || key.Equals("Enter", StringComparison.OrdinalIgnoreCase)
         || key.Equals("Tab", StringComparison.OrdinalIgnoreCase);
+
+    private static void AddCommandValueErrors(ShortcutAction action, ITextLocalizer text, List<string> errors)
+    {
+        var errorKey = action.CommandType switch
+        {
+            ShortcutCommandType.OnOff when !IsOneOf(action.CommandValue, "ON", "OFF") =>
+                "Shortcuts.Validation.OnOffValueRequired",
+            ShortcutCommandType.OpenClose when !IsOneOf(action.CommandValue, "OPEN", "CLOSE") =>
+                "Shortcuts.Validation.OpenCloseValueRequired",
+            ShortcutCommandType.SendCommand when string.IsNullOrWhiteSpace(action.CommandValue) =>
+                "Shortcuts.Validation.SendCommandValueRequired",
+            _ => null
+        };
+
+        if (errorKey is not null)
+        {
+            errors.Add(text.Get(errorKey));
+        }
+    }
 
     private static bool IsOneOf(string? value, string first, string second)
     {

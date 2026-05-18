@@ -60,3 +60,10 @@ Do not apply `[ExcludeFromCodeCoverage]` to files that mix OS glue with parseabl
 | `src/OpenHab.Windows.Notifications/ShortcutRegistrar.cs` | Windows notification registration | Notification tests and Release build |
 | `src/OpenHab.Windows.Notifications/ToastService.cs` | Windows toast API integration | Notification tests and Release build |
 | `src/OpenHab.Core/Auth/WindowsCredentialStore.cs` | Windows Credential Manager wrapper | Core auth tests for non-Windows abstractions and Release build |
+
+## Partial Attribute Exclusions
+
+| Member | Reason | Verification |
+| --- | --- | --- |
+| `src/OpenHab.Windows.Tray/Localization/AppLanguageRuntime.cs` public `ApplyLanguage(AppLanguage)` | Thin WinRT `ApplicationLanguages.PrimaryLanguageOverride` wrapper | `AppLanguageRuntimeTests` cover the injectable overload, culture application, and fallback exception handling |
+| `src/OpenHab.Windows.Tray/Localization/WinUiTextLocalizer.cs` public constructors and `CreateResourceLookup` | WinUI `ResourceLoader`/`ResourceManager` construction and lookup glue | `WinUiTextLocalizerTests` cover fallback, formatting, dotted key, and slash key behavior through injected lookup |
