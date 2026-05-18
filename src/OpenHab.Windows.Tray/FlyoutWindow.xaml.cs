@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.App.Shortcuts;
 using OpenHab.App.Tray;
 using OpenHab.Core;
 using OpenHab.Core.Api;
@@ -35,6 +36,7 @@ public sealed partial class FlyoutWindow : Window
     private readonly Action requestOpenSettings;
     private readonly Action requestOpenNotifications;
     private readonly Action requestHideFlyout;
+    private readonly Action requestVoiceCommand;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
     private readonly DispatcherRefreshGate notificationRefreshGate;
@@ -52,7 +54,11 @@ public sealed partial class FlyoutWindow : Window
     private bool isUpdatingSearchBox;
     private bool isSearchChromeOpen;
     private bool isSitemapSearchBoxFocused;
+    private bool isVoiceListening;
+    private double voiceAnimationPhase;
+    private double voiceActivityBoost;
     private readonly DispatcherTimer sitemapSearchDebounceTimer = new();
+    private readonly DispatcherTimer voiceListeningAnimationTimer = new();
     private string pendingSitemapSearchQuery = string.Empty;
     private FlyoutEntranceAnimationPlan? pendingEntranceAnimationPlan;
 
@@ -68,7 +74,8 @@ public sealed partial class FlyoutWindow : Window
         Action requestOpenMainWindow,
         Action requestOpenSettings,
         Action requestOpenNotifications,
-        Action requestHideFlyout)
+        Action requestHideFlyout,
+        Action requestVoiceCommand)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
@@ -77,6 +84,7 @@ public sealed partial class FlyoutWindow : Window
         this.requestOpenSettings = requestOpenSettings;
         this.requestOpenNotifications = requestOpenNotifications;
         this.requestHideFlyout = requestHideFlyout;
+        this.requestVoiceCommand = requestVoiceCommand;
         var iconAuthResolver = new SitemapIconAuthResolver(settingsController);
         sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
             settingsController,
@@ -86,8 +94,11 @@ public sealed partial class FlyoutWindow : Window
             sendCommandByRowKey: SendCommandForRowKeyAsync);
         snapshotRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
+        voiceListeningAnimationTimer.Interval = TimeSpan.FromMilliseconds(80);
+        voiceListeningAnimationTimer.Tick += VoiceListeningAnimationTimer_Tick;
 
         InitializeComponent();
+        RefreshVoiceCommandButtonVisibility();
         settingsController.SettingsChanged += OnSettingsChanged;
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
@@ -240,6 +251,46 @@ public sealed partial class FlyoutWindow : Window
         sitemapSurfaceRenderer.ForceFullRebuild();
     }
 
+    public void SetShellStatusText(string text)
+    {
+        StatusText.Text = text;
+        StatusText.Visibility = string.IsNullOrWhiteSpace(text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
+    public void SetVoiceListening(bool isListening)
+    {
+        isVoiceListening = isListening;
+        voiceAnimationPhase = 0d;
+        voiceActivityBoost = isListening ? 1d : 0d;
+
+        if (isListening)
+        {
+            voiceListeningAnimationTimer.Start();
+            UpdateVoiceListeningVisual();
+            return;
+        }
+
+        voiceListeningAnimationTimer.Stop();
+        VoiceCommandPulseRing.Opacity = 0d;
+        VoiceCommandPulseScale.ScaleX = 0.8d;
+        VoiceCommandPulseScale.ScaleY = 0.8d;
+        VoiceCommandIcon.FontSize = 13d;
+        VoiceCommandIcon.Opacity = 1d;
+    }
+
+    public void PulseVoiceActivity()
+    {
+        if (!isVoiceListening)
+        {
+            return;
+        }
+
+        voiceActivityBoost = 1d;
+        UpdateVoiceListeningVisual();
+    }
+
     private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
     {
         if (isRefreshing)
@@ -269,6 +320,14 @@ public sealed partial class FlyoutWindow : Window
     private static void RefreshSettingsBindings()
     {
         // Sitemap selection is now reflected via the title; no ComboBox to update.
+    }
+
+    private void RefreshVoiceCommandButtonVisibility()
+    {
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        VoiceCommandButton.Visibility = shortcuts.VoiceMode.Enabled
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
@@ -547,6 +606,35 @@ public sealed partial class FlyoutWindow : Window
     private void OpenNotificationsButton_Click(object sender, RoutedEventArgs e)
     {
         requestOpenNotifications();
+    }
+
+    private void VoiceCommandButton_Click(object sender, RoutedEventArgs e)
+    {
+        requestVoiceCommand();
+    }
+
+    private void VoiceListeningAnimationTimer_Tick(object? sender, object e)
+    {
+        if (!isVoiceListening)
+        {
+            return;
+        }
+
+        voiceAnimationPhase += 0.22d;
+        voiceActivityBoost = Math.Max(0d, voiceActivityBoost - 0.09d);
+        UpdateVoiceListeningVisual();
+    }
+
+    private void UpdateVoiceListeningVisual()
+    {
+        var wave = (Math.Sin(voiceAnimationPhase) + 1d) / 2d;
+        var intensity = Math.Clamp(0.35d + (wave * 0.35d) + (voiceActivityBoost * 0.3d), 0d, 1d);
+        var scale = 0.84d + (intensity * 0.42d);
+        VoiceCommandPulseRing.Opacity = 0.28d + (intensity * 0.52d);
+        VoiceCommandPulseScale.ScaleX = scale;
+        VoiceCommandPulseScale.ScaleY = scale;
+        VoiceCommandIcon.FontSize = 13d + (voiceActivityBoost * 3d);
+        VoiceCommandIcon.Opacity = 0.72d + (intensity * 0.28d);
     }
 
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
@@ -865,6 +953,7 @@ public sealed partial class FlyoutWindow : Window
         {
             ApplyFlyoutTheme();
             ScheduleNativeDecorationApply();
+            RefreshVoiceCommandButtonVisibility();
             sitemapSurfaceRenderer.ForceFullRebuild();
             RefreshRuntimeBindings();
         });

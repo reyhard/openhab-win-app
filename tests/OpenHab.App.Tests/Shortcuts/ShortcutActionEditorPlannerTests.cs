@@ -103,6 +103,22 @@ public sealed class ShortcutActionEditorPlannerTests
     }
 
     [Fact]
+    public void RemoveActionPreservesProtectedDefaultVoiceAction()
+    {
+        var protectedAction = VoiceShortcutPolicy.CreateDefaultVoiceAction();
+        var otherAction = Action("a2", "Second");
+
+        var result = ShortcutActionEditorPlanner.RemoveAction(
+            [protectedAction, otherAction],
+            VoiceShortcutPolicy.ProtectedDefaultActionId);
+
+        Assert.Collection(
+            result,
+            first => Assert.Equal(protectedAction, first),
+            second => Assert.Equal(otherAction, second));
+    }
+
+    [Fact]
     public void MoveActionClampsDestinationInsideList()
     {
         var actions = ImmutableArray.Create(Action("a1", "First"), Action("a2", "Second"), Action("a3", "Third"));

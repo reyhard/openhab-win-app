@@ -133,7 +133,9 @@ public static class ShortcutValidation
             errors.Add(text.Get("Shortcuts.Validation.GlobalShortcutInvalid"));
         }
 
-        if (!action.ShowInCommandMenu && action.GlobalShortcut is null)
+        if (action.CommandType != ShortcutCommandType.Voice
+            && !action.ShowInCommandMenu
+            && action.GlobalShortcut is null)
         {
             errors.Add(text.Get("Shortcuts.Validation.ActionAvailabilityRequired"));
         }

@@ -160,6 +160,29 @@ public sealed class ShortcutActionExecutorTests
     }
 
     [Fact]
+    public async Task VoiceActionReturnsSurfaceRequiredAndDoesNotSendCommand()
+    {
+        var client = new RecordingShortcutClient();
+        var executor = new ShortcutActionExecutor(() => client, () => ConnectionState.Online);
+        var action = new ShortcutAction(
+            "built-in.voice.default",
+            "Voice command",
+            "microphone",
+            true,
+            null,
+            "VoiceCommand",
+            ShortcutCommandType.Voice,
+            null);
+
+        var result = await executor.ExecuteAsync(action, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(ShortcutActionExecutionFailure.SurfaceRequired, result.Failure);
+        Assert.Equal("Voice actions require voice command activation.", result.Message);
+        Assert.Empty(client.Commands);
+    }
+
+    [Fact]
     public async Task InvalidActionReturnsInvalidAction()
     {
         var client = new RecordingShortcutClient();

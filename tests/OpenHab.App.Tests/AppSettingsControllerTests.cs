@@ -36,6 +36,31 @@ public sealed class AppSettingsControllerTests
         return Assert.IsType<ShortcutSettings>(settings.Shortcuts);
     }
 
+    private static ShortcutAction AssertProtectedVoiceDefault(ShortcutSettings shortcuts)
+    {
+        var action = Assert.Single(shortcuts.Actions);
+        Assert.Equal("built-in.voice.default", action.Id);
+        Assert.Equal("Voice command", action.Name);
+        Assert.Equal("microphone", action.IconId);
+        Assert.Equal(ShortcutCommandType.Voice, action.CommandType);
+        Assert.Equal("VoiceCommand", action.TargetItem);
+        Assert.Null(action.CommandValue);
+        Assert.True(action.ShowInCommandMenu);
+        Assert.Equal("Ctrl + Alt + I", ShortcutBindingFormatter.Format(action.GlobalShortcut));
+        return action;
+    }
+
+    private static ShortcutAction AssertProtectedVoiceActionIdentity(ShortcutSettings shortcuts)
+    {
+        var action = Assert.Single(shortcuts.Actions);
+        Assert.Equal("built-in.voice.default", action.Id);
+        Assert.Equal("microphone", action.IconId);
+        Assert.Equal(ShortcutCommandType.Voice, action.CommandType);
+        Assert.Null(action.CommandValue);
+        Assert.True(action.ShowInCommandMenu);
+        return action;
+    }
+
     [Fact]
     public void DefaultsUseWindows11SkinAndAutomaticEndpointMode()
     {
@@ -68,7 +93,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
         Assert.Equal(RadialActivationMode.Toggle, shortcuts.CommandMenu.RadialActivationMode);
         Assert.False(shortcuts.VoiceMode.Enabled);
-        Assert.Null(shortcuts.VoiceMode.Binding);
+        Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
         Assert.Empty(shortcuts.Actions);
     }
 
@@ -95,23 +120,132 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
-    public void ShortcutSettingsNormalizationForcesVoiceModeDisabledAndUnassigned()
+    public void ShortcutSettingsNormalizationPreservesVoiceModeEnabledState()
     {
         var controller = CreateController();
         var settings = ShortcutSettings.Default with
         {
-            VoiceMode = new BuiltInShortcutSettings(
-                Enabled: true,
-                Binding: new ShortcutBinding([ShortcutModifier.Win], "V"),
-                RadialActivationMode: RadialActivationMode.Hold)
+            VoiceMode = new VoiceModeShortcutSettings(Enabled: true)
         };
 
         controller.SetShortcutSettings(settings);
         var shortcuts = AssertShortcuts(controller.Current);
 
-        Assert.False(shortcuts.VoiceMode.Enabled);
-        Assert.Null(shortcuts.VoiceMode.Binding);
-        Assert.Equal(RadialActivationMode.Toggle, shortcuts.VoiceMode.RadialActivationMode);
+        Assert.True(shortcuts.VoiceMode.Enabled);
+    }
+
+    [Fact]
+    public void VoiceModeEnabledCreatesProtectedDefaultVoiceAction()
+    {
+        var controller = CreateController();
+        controller.SetShortcutSettings(ShortcutSettings.Default with
+        {
+            VoiceMode = new VoiceModeShortcutSettings(Enabled: true)
+        });
+
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.True(shortcuts.VoiceMode.Enabled);
+        Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
+        AssertProtectedVoiceDefault(shortcuts);
+    }
+
+    [Fact]
+    public void ReEnablingVoiceModePreservesProtectedDefaultVoiceActionEdits()
+    {
+        var controller = CreateController();
+        controller.SetShortcutSettings(ShortcutSettings.Default with
+        {
+            VoiceMode = new VoiceModeShortcutSettings(Enabled: true),
+            Actions =
+            [
+                new ShortcutAction(
+                    "built-in.voice.default",
+                    "Kitchen voice",
+                    "microphone",
+                    ShowInCommandMenu: true,
+                    GlobalShortcut: new ShortcutBinding([ShortcutModifier.Ctrl, ShortcutModifier.Alt], "K"),
+                    TargetItem: "KitchenVoiceCommand",
+                    CommandType: ShortcutCommandType.Voice,
+                    CommandValue: "ignored")
+            ]
+        });
+
+        controller.SetShortcutSettings(AssertShortcuts(controller.Current) with
+        {
+            VoiceMode = new VoiceModeShortcutSettings(Enabled: false, RequireConfirmationBeforeSending: true)
+        });
+        controller.SetShortcutSettings(AssertShortcuts(controller.Current) with
+        {
+            VoiceMode = new VoiceModeShortcutSettings(Enabled: true, RequireConfirmationBeforeSending: true)
+        });
+
+        var shortcuts = AssertShortcuts(controller.Current);
+        var action = AssertProtectedVoiceActionIdentity(shortcuts);
+        Assert.Equal("Kitchen voice", action.Name);
+        Assert.Equal("KitchenVoiceCommand", action.TargetItem);
+        Assert.Equal("Ctrl + Alt + K", ShortcutBindingFormatter.Format(action.GlobalShortcut));
+        Assert.True(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
+    }
+
+    [Fact]
+    public void VoiceModeEnabledRepairsProtectedDefaultVoiceActionType()
+    {
+        var controller = CreateController();
+        controller.SetShortcutSettings(ShortcutSettings.Default with
+        {
+            VoiceMode = new VoiceModeShortcutSettings(Enabled: true),
+            Actions =
+            [
+                new ShortcutAction(
+                    "built-in.voice.default",
+                    "Kitchen voice",
+                    "microphone",
+                    ShowInCommandMenu: true,
+                    GlobalShortcut: new ShortcutBinding([ShortcutModifier.Ctrl, ShortcutModifier.Alt], "K"),
+                    TargetItem: "KitchenVoiceCommand",
+                    CommandType: ShortcutCommandType.SendCommand,
+                    CommandValue: "ON")
+            ]
+        });
+
+        var shortcuts = AssertShortcuts(controller.Current);
+        var action = AssertProtectedVoiceActionIdentity(shortcuts);
+        Assert.Equal("Kitchen voice", action.Name);
+        Assert.Equal("KitchenVoiceCommand", action.TargetItem);
+        Assert.Equal("Ctrl + Alt + K", ShortcutBindingFormatter.Format(action.GlobalShortcut));
+    }
+
+    [Fact]
+    public void LegacyVoiceModeObjectLoadsAsEnabledAndCreatesProtectedDefaultVoiceAction()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "Shortcuts": {
+            "CommandMenu": {
+              "Enabled": true,
+              "Binding": { "Modifiers": [ 0 ], "Key": "O" },
+              "RadialActivationMode": 0
+            },
+            "VoiceMode": { "Enabled": true, "Binding": null, "RadialActivationMode": 0 },
+            "Actions": []
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.True(shortcuts.VoiceMode.Enabled);
+        Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
+        AssertProtectedVoiceDefault(shortcuts);
     }
 
     [Fact]
@@ -141,7 +275,7 @@ public sealed class AppSettingsControllerTests
         Assert.True(shortcuts.CommandMenu.Enabled);
         Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
         Assert.False(shortcuts.VoiceMode.Enabled);
-        Assert.Null(shortcuts.VoiceMode.Binding);
+        Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
         Assert.Empty(shortcuts.Actions);
     }
 
@@ -302,6 +436,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal(EndpointMode.CloudOnly, controller.Current.EndpointMode);
         Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
         Assert.False(shortcuts.VoiceMode.Enabled);
+        Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
         var action = Assert.Single(shortcuts.Actions);
         Assert.Equal("heater-toggle", action.Id);
     }

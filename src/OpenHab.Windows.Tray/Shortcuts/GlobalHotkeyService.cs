@@ -92,6 +92,11 @@ internal sealed partial class GlobalHotkeyService : IDisposable
 
         foreach (var action in normalized.Actions)
         {
+            if (action.CommandType == ShortcutCommandType.Voice && !normalized.VoiceMode.Enabled)
+            {
+                continue;
+            }
+
             if (action.GlobalShortcut is null)
             {
                 continue;

@@ -43,6 +43,7 @@ public static class ShortcutIconCatalog
         new("cast", "Cast", MediaGroup),
         new("music", "Music", MediaGroup),
         new("volume", "Volume", MediaGroup),
+        new("microphone", "Microphone", MediaGroup),
         // Scenes and tools
         new("scene", "Scene", ScenesToolsGroup),
         new("movie", "Movie", ScenesToolsGroup),

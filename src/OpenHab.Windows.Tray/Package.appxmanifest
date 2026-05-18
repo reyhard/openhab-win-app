@@ -41,6 +41,7 @@
   </Applications>
 
   <Capabilities>
+    <DeviceCapability Name="microphone" />
     <rescap:Capability Name="runFullTrust" />
   </Capabilities>
 

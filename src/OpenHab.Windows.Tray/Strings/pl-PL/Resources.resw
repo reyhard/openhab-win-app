@@ -533,13 +533,37 @@
     <value>Tryb głosowy</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.Subtitle" xml:space="preserve">
-    <value>Wkrótce. Skrót głosowy nie jest jeszcze przypisany ani dostępny.</value>
+    <value>Jednorazowe rozpoznawanie mowy dla poleceń głosowych openHAB</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ExpanderTitle" xml:space="preserve">
     <value>Tryb głosowy</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ExpanderSubtitle" xml:space="preserve">
-    <value>Planowany skrót głosowy, wkrótce</value>
+    <value>Wysyłaj rozpoznaną mowę do elementu openHAB</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.EnableAutomationName" xml:space="preserve">
+    <value>Włącz polecenia głosowe</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.EnableTitle" xml:space="preserve">
+    <value>Włącz polecenia głosowe</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.EnableSubtitle" xml:space="preserve">
+    <value>Pokaż przycisk mikrofonu w wysuwanym panelu i zezwól na uruchamianie akcji Głos</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.ConfirmationTitle" xml:space="preserve">
+    <value>Wymagaj potwierdzenia przed wysłaniem</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.ConfirmationSubtitle" xml:space="preserve">
+    <value>Sprawdź rozpoznaną frazę, zanim zostanie wysłana do openHAB</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.PrivacyTitle" xml:space="preserve">
+    <value>Prywatność</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.PrivacyText" xml:space="preserve">
+    <value>Dyktowanie swobodne w systemie Windows może korzystać z internetowych usług mowy firmy Microsoft. Polecenia głosowe wymagają uprawnień systemu Windows do mikrofonu i rozpoznawania mowy. Zwykła diagnostyka nie zapisuje rozpoznanych fraz; szczegółowa diagnostyka może zapisywać pełny tekst wypowiedzianego polecenia do diagnostics.log.</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.DefaultActionProtected" xml:space="preserve">
+    <value>Domyślna akcja Głos jest wymagana, gdy Tryb głosowy jest dostępny, i nie można jej usunąć.</value>
   </data>
   <data name="Settings.Shortcuts.Shortcut.Title" xml:space="preserve">
     <value>Skrót</value>
@@ -655,6 +679,9 @@ Dodaj akcje, aby były dostępne w menu poleceń.</value>
   </data>
   <data name="Settings.Shortcuts.CommandType.SendCommand" xml:space="preserve">
     <value>Wyślij polecenie</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.Voice" xml:space="preserve">
+    <value>Głos</value>
   </data>
   <data name="Settings.Shortcuts.DeleteDialog.Title" xml:space="preserve">
     <value>Usuń akcję</value>
