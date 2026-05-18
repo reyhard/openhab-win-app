@@ -22,24 +22,35 @@ Do not apply `[ExcludeFromCodeCoverage]` to files that mix OS glue with parseabl
 
 - Coverlet: list files in `coverage.runsettings` under `ExcludeByFile` using `**/src/...` globs.
 - Sonar: list files in `.github/workflows/sonarcloud.yml` under `sonar.coverage.exclusions` using repo-relative `src/...` patterns.
-- Attribute-based tools: use `[ExcludeFromCodeCoverage]` on every excluded top-level type that remains in source.
+- Attribute-based tools: use `[ExcludeFromCodeCoverage]` on thin wrapper types. Large WinUI code-behind and control-factory files are excluded through file-pattern configuration after their testable decisions have been extracted to neutral layers.
 
 ## Excluded Files
 
 | File | Reason | Verification |
 | --- | --- | --- |
+| `src/OpenHab.Windows.Tray/App.xaml.cs` | Windows App SDK activation and shell composition glue | Release build and smoke test |
 | `src/OpenHab.Windows.Tray/AcrylicBlurHelper.cs` | Win32/DWM composition wrapper | Release build |
 | `src/OpenHab.Windows.Tray/DwmWindowDecorations.cs` | Win32/DWM composition wrapper | Release build |
+| `src/OpenHab.Windows.Tray/FlyoutWindow.xaml.cs` | WinUI flyout code-behind after runtime, rendering, search, and transition planning extraction | App/rendering tests, Release build, and smoke test |
+| `src/OpenHab.Windows.Tray/MainWindow.xaml.cs` | WinUI main-window code-behind after shell, runtime, rendering, Main UI, search, and transition planning extraction | App/rendering tests, Release build, and smoke test |
 | `src/OpenHab.Windows.Tray/MainUi/MainUiWebViewHost.xaml.cs` | WebView2 host glue after URL/auth policy extraction | Release build and smoke test |
+| `src/OpenHab.Windows.Tray/Notifications/NotificationsPageControl.xaml.cs` | WinUI notification page binding and control glue after notification-store extraction | Notification tests, Release build, and smoke test |
+| `src/OpenHab.Windows.Tray/Rendering/OpenHabIconImageSourceLoader.cs` | WinUI `ImageSource` loading and stream glue after icon URI/cache-key/SVG policy extraction | Rendering tests and Release build |
 | `src/OpenHab.Windows.Tray/Rendering/CompositionAnimationHelper.cs` | WinUI composition animation wrapper | Release build |
 | `src/OpenHab.Windows.Tray/Rendering/SitemapComboHelper.cs` | WinUI ComboBox display glue | Release build |
+| `src/OpenHab.Windows.Tray/Rendering/SitemapControlFactory.cs` | WinUI control factory after row mapping, row policy, icon, chart, input, and transition decisions were extracted | Rendering tests, App tests, Release build, and smoke test |
 | `src/OpenHab.Windows.Tray/Rendering/SitemapPageTransitionAnimator.cs` | WinUI animation wrapper | Release build |
+| `src/OpenHab.Windows.Tray/Rendering/SitemapSurface/SitemapIconAuthResolver.cs` | Thin settings-to-icon-auth adapter for WinUI sitemap rendering | Settings tests and Release build |
+| `src/OpenHab.Windows.Tray/Rendering/SitemapSurface/SitemapSurfaceRenderer.cs` | WinUI `StackPanel` renderer after row planning extraction | App/rendering tests and Release build |
+| `src/OpenHab.Windows.Tray/Settings/SettingsPageControl.xaml.cs` | WinUI settings page binding and control glue after settings/shortcut policy extraction | Settings and shortcut tests, Release build, and smoke test |
 | `src/OpenHab.Windows.Tray/Shortcuts/GlobalHotkeyService.cs` | Win32 global hotkey registration | Release build |
 | `src/OpenHab.Windows.Tray/Shortcuts/HotkeyMessageWindow.cs` | Win32 message-only window | Release build |
 | `src/OpenHab.Windows.Tray/Shortcuts/RadialCommandMenuWindow.cs` | WinUI popup host after command planning extraction | Release build |
 | `src/OpenHab.Windows.Tray/Shortcuts/ShortcutInteractiveCommandWindow.cs` | WinUI command popup host after command planning extraction | Release build |
 | `src/OpenHab.Windows.Tray/Shortcuts/ShortcutRecorderControl.cs` | WinUI keyboard capture glue after key mapping extraction | `ShortcutWindowsMapperTests` and Release build |
+| `src/OpenHab.Windows.Tray/Shortcuts/ShortcutSettingsControls.cs` | WinUI shortcut settings controls after shortcut formatting extraction | Shortcut tests and Release build |
 | `src/OpenHab.Windows.Tray/Tray/TrayIconService.cs` | `NotifyIcon` shell integration | Release build |
+| `src/OpenHab.Windows.Tray/Tray/TrayFlyoutPositioner.cs` | Windows AppWindow/display-area positioning glue | Release build and smoke test |
 | `src/OpenHab.Windows.Tray/Startup/StartupManager.cs` | Windows startup registry integration | Release build |
 | `src/OpenHab.Windows.Tray/DeviceInfo/WindowsBatteryInfoReader.cs` | Live OS battery reader | Release build |
 | `src/OpenHab.Windows.Tray/DeviceInfo/WindowsBluetoothInfoReader.cs` | Live OS Bluetooth reader | Release build |

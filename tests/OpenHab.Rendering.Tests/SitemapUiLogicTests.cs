@@ -129,6 +129,18 @@ public sealed class SitemapUiLogicTests
     }
 
     [Theory]
+    [InlineData("ON", "on", true)]
+    [InlineData(" 3 ", "3.0", true)]
+    [InlineData("3.00009", "3", true)]
+    [InlineData("3.1", "3", false)]
+    [InlineData("", "3", false)]
+    [InlineData("3", null, false)]
+    public void SelectionValueMatches_HandlesTextAndNumericStates(string? left, string? right, bool expected)
+    {
+        Assert.Equal(expected, SitemapUiLogic.SelectionValueMatches(left, right));
+    }
+
+    [Theory]
     [InlineData(null, 300)]
     [InlineData(0, 300)]
     [InlineData(-1, 300)]

@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -790,7 +788,7 @@ public static partial class SitemapControlFactory
 
     private static void StartIconProbeIfNeeded(Uri baseUri, IconAuthContext authContext)
     {
-        var probeKey = $"{baseUri.Scheme}://{baseUri.Authority}|{GetAuthMode(authContext)}|{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}";
+        var probeKey = $"{baseUri.Scheme}://{baseUri.Authority}|{IconAuthHeaderHelper.GetAuthMode(authContext)}|{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}";
         lock (IconProbeSyncRoot)
         {
             if (!ProbedIconEndpoints.Add(probeKey))
@@ -809,14 +807,14 @@ public static partial class SitemapControlFactory
         try
         {
             using var headRequest = new HttpRequestMessage(HttpMethod.Head, probeUri);
-            ApplyAuthHeaders(headRequest, authContext);
+            IconAuthHeaderHelper.ApplyAuthHeaders(headRequest, authContext);
             using var headResponse = await IconHttpClient.SendAsync(headRequest);
 
             if (headResponse.IsSuccessStatusCode)
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
                 {
-                    DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+                    DiagnosticLogger.Info($"Icon probe OK (HEAD): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
                 }
 
                 return;
@@ -824,35 +822,35 @@ public static partial class SitemapControlFactory
 
             if (!DiagnosticLogger.SuppressIconLogging)
             {
-                DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
+                DiagnosticLogger.Warn($"Icon probe HEAD non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}', status={(int)headResponse.StatusCode}");
             }
         }
         catch (Exception ex)
         {
             if (!DiagnosticLogger.SuppressIconLogging)
             {
-                DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+                DiagnosticLogger.Warn($"Icon probe HEAD failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
             }
         }
 
         try
         {
             using var getRequest = new HttpRequestMessage(HttpMethod.Get, probeUri);
-            ApplyAuthHeaders(getRequest, authContext);
+            IconAuthHeaderHelper.ApplyAuthHeaders(getRequest, authContext);
             using var getResponse = await IconHttpClient.SendAsync(getRequest, HttpCompletionOption.ResponseHeadersRead);
 
             if (getResponse.IsSuccessStatusCode)
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
                 {
-                    DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                    DiagnosticLogger.Info($"Icon probe OK (GET): endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
                 }
             }
             else
             {
                 if (!DiagnosticLogger.SuppressIconLogging)
                 {
-                    DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
+                    DiagnosticLogger.Warn($"Icon probe GET non-success: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}', status={(int)getResponse.StatusCode}");
                 }
             }
         }
@@ -860,7 +858,7 @@ public static partial class SitemapControlFactory
         {
             if (!DiagnosticLogger.SuppressIconLogging)
             {
-                DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
+                DiagnosticLogger.Warn($"Icon probe GET failed: endpoint='{baseUri.Host}', transport='{authContext.TransportKind?.ToString() ?? UnknownDiagnosticText}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}', error='{ex.GetType().Name}: {ex.Message}'");
             }
         }
     }
@@ -895,7 +893,7 @@ public static partial class SitemapControlFactory
 
         if (!DiagnosticLogger.SuppressIconLogging)
         {
-            DiagnosticLogger.Warn($"Icon failed: icon='{iconName}', state='{iconState ?? MissingIconStateText}', formats='{string.Join(",", IconFormatsByPreference)}', attempts='{string.Join("; ", attempts)}', auth='{GetAuthMode(authContext)}'");
+            DiagnosticLogger.Warn($"Icon failed: icon='{iconName}', state='{iconState ?? MissingIconStateText}', formats='{string.Join(",", IconFormatsByPreference)}', attempts='{string.Join("; ", attempts)}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}'");
         }
     }
 
@@ -915,7 +913,7 @@ public static partial class SitemapControlFactory
             {
                 if (!DiagnosticLogger.SuppressIconLogging && result.Error?.StartsWith("status=", StringComparison.Ordinal) == true)
                 {
-                    DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? MissingIconStateText}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', {result.Error}, media='{result.MediaType ?? UnknownDiagnosticText}', auth='{GetAuthMode(authContext)}'");
+                    DiagnosticLogger.Warn($"Icon request failed: icon='{iconName}', state='{iconState ?? MissingIconStateText}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', {result.Error}, media='{result.MediaType ?? UnknownDiagnosticText}', auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}'");
                 }
                 return $"format={format}:{result.Error}";
             }
@@ -925,7 +923,7 @@ public static partial class SitemapControlFactory
                 var action = result.FromCache ? "Icon cache hit" : "Icon loaded";
                 var media = result.FromCache ? "cache" : result.MediaType ?? UnknownDiagnosticText;
                 var bytes = result.FromCache ? string.Empty : $", bytes={result.BytesLength}";
-                DiagnosticLogger.Info($"{action}: icon='{iconName}', state='{iconState ?? MissingIconStateText}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{result.DecodedAs}', media='{media}'{bytes}, auth='{GetAuthMode(authContext)}'");
+                DiagnosticLogger.Info($"{action}: icon='{iconName}', state='{iconState ?? MissingIconStateText}', url='{iconUri.PathAndQuery}', requestedFormat='{format}', decodedAs='{result.DecodedAs}', media='{media}'{bytes}, auth='{IconAuthHeaderHelper.GetAuthMode(authContext)}'");
             }
             return null;
         }
@@ -933,32 +931,6 @@ public static partial class SitemapControlFactory
         {
             return $"format={format}:error={ex.GetType().Name}";
         }
-    }
-
-    private static void ApplyAuthHeaders(HttpRequestMessage request, IconAuthContext authContext)
-    {
-        if (!string.IsNullOrWhiteSpace(authContext.ApiToken))
-        {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authContext.ApiToken);
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(authContext.BasicUserName))
-        {
-            var raw = $"{authContext.BasicUserName}:{authContext.BasicPassword ?? string.Empty}";
-            var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
-            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
-        }
-    }
-
-    private static string GetAuthMode(IconAuthContext? authContext)
-    {
-        if (authContext is null) return "none";
-
-        var context = authContext.Value;
-        if (!string.IsNullOrWhiteSpace(context.ApiToken)) return "bearer";
-        if (!string.IsNullOrWhiteSpace(context.BasicUserName)) return "basic";
-        return "none";
     }
 
     internal static Uri BuildOpenHabIconUri(Uri baseUri, string iconName, string? iconState, string format = "png")
@@ -1390,8 +1362,8 @@ public static partial class SitemapControlFactory
         {
             comboBox.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Command });
             var commandSource = row.RawItemState ?? row.RawState;
-            var matchesCommand = SelectionValueMatches(option.Command, commandSource);
-            var matchesLabel = SelectionValueMatches(option.Label, row.State);
+            var matchesCommand = SitemapUiLogic.SelectionValueMatches(option.Command, commandSource);
+            var matchesLabel = SitemapUiLogic.SelectionValueMatches(option.Label, row.State);
             if (selectedIndex < 0 && (matchesCommand || matchesLabel))
             {
                 selectedIndex = comboBox.Items.Count - 1;
@@ -1938,26 +1910,6 @@ public static partial class SitemapControlFactory
             : value;
     }
 
-    private static bool SelectionValueMatches(string? left, string? right)
-    {
-        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
-        {
-            return false;
-        }
-
-        var l = left.Trim();
-        var r = right.Trim();
-        if (string.Equals(l, r, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        // Handle numeric command/state variants such as "3" vs "3.0".
-        var leftIsNumber = double.TryParse(l, NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber);
-        var rightIsNumber = double.TryParse(r, NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber);
-        return leftIsNumber && rightIsNumber && Math.Abs(leftNumber - rightNumber) < 0.0001;
-    }
-
     private static Border CreateFallback(SitemapRowDescriptor row)
     {
         return WrapWithBorder(new Button
@@ -2361,7 +2313,7 @@ public static partial class SitemapControlFactory
             using var request = new HttpRequestMessage(HttpMethod.Get, chartUrl);
             if (iconAuth is { } context)
             {
-                ApplyAuthHeaders(request, context);
+                IconAuthHeaderHelper.ApplyAuthHeaders(request, context);
             }
 
             using var response = await IconHttpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead);

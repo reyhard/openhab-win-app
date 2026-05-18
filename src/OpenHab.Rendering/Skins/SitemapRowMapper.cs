@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Linq;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Sitemaps.Models;
@@ -18,7 +17,7 @@ internal static class SitemapRowMapper
             .Select(m => new SitemapMapOption(
                 m.Command,
                 m.Label,
-                IsActive: SelectionValueMatches(m.Command, commandSource)))
+                IsActive: SitemapUiLogic.SelectionValueMatches(m.Command, commandSource)))
             .ToArray();
         var isSectionHeader = widget.Type == SitemapWidgetType.Frame;
         var inputHint = widget.Type switch
@@ -116,22 +115,4 @@ internal static class SitemapRowMapper
         return RenderActionKind.None;
     }
 
-    private static bool SelectionValueMatches(string? left, string? right)
-    {
-        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
-        {
-            return false;
-        }
-
-        var l = left.Trim();
-        var r = right.Trim();
-        if (string.Equals(l, r, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var leftIsNumber = double.TryParse(l, NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber);
-        var rightIsNumber = double.TryParse(r, NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber);
-        return leftIsNumber && rightIsNumber && Math.Abs(leftNumber - rightNumber) < 0.0001;
-    }
 }
