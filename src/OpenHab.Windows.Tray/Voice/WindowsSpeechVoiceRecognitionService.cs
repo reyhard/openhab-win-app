@@ -1,9 +1,11 @@
 using OpenHab.Core;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using Windows.Media.SpeechRecognition;
 
 namespace OpenHab.Windows.Tray.Voice;
 
+[ExcludeFromCodeCoverage(Justification = "Windows speech recognition API integration.")]
 public sealed class WindowsSpeechVoiceRecognitionService
 {
     private const string SpeechUnavailableMessage = "Windows speech recognition is unavailable. Check microphone and online speech settings.";

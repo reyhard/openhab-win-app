@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,6 +8,7 @@ using Windows.UI;
 
 namespace OpenHab.Windows.Tray.Voice;
 
+[ExcludeFromCodeCoverage(Justification = "WinUI voice command confirmation window glue.")]
 public sealed class VoiceCommandConfirmationWindow : Window
 {
     private readonly TaskCompletionSource<bool> decisionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
