@@ -245,6 +245,14 @@ public sealed partial class FlyoutWindow : Window
         sitemapSurfaceRenderer.ForceFullRebuild();
     }
 
+    public void SetShellStatusText(string text)
+    {
+        StatusText.Text = text;
+        StatusText.Visibility = string.IsNullOrWhiteSpace(text)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
+
     private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
     {
         if (isRefreshing)

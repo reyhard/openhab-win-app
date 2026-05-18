@@ -1,4 +1,5 @@
 using OpenHab.Core;
+using System.Runtime.InteropServices;
 using Windows.Media.SpeechRecognition;
 
 namespace OpenHab.Windows.Tray.Voice;
@@ -7,6 +8,7 @@ public sealed class WindowsSpeechVoiceRecognitionService
 {
     private const string SpeechUnavailableMessage = "Windows speech recognition is unavailable. Check microphone and online speech settings.";
     private const string MicrophonePermissionMessage = "Microphone permission is required for voice commands.";
+    private const string SpeechPrivacyPolicyMessage = "Voice commands require Windows online speech recognition to be enabled in privacy settings.";
     private const string NoMatchMessage = "No voice command recognized.";
 
     public async Task<VoiceRecognitionResult> RecognizeOnceAsync(CancellationToken cancellationToken)
@@ -65,10 +67,28 @@ public sealed class WindowsSpeechVoiceRecognitionService
         catch (Exception ex)
         {
             DiagnosticLogger.Warn($"Voice recognition failed: {ex.GetType().Name}: {ex.Message}");
-            return VoiceRecognitionResult.Failed(
-                VoiceRecognitionFailure.Failed,
-                "Voice recognition failed.");
+            return ResolveExceptionResult(ex);
         }
+    }
+
+    internal static VoiceRecognitionResult ResolveExceptionResultForTesting(Exception exception)
+    {
+        return ResolveExceptionResult(exception);
+    }
+
+    private static VoiceRecognitionResult ResolveExceptionResult(Exception exception)
+    {
+        if (exception is COMException comException
+            && comException.Message.Contains("speech privacy policy", StringComparison.OrdinalIgnoreCase))
+        {
+            return VoiceRecognitionResult.Failed(
+                VoiceRecognitionFailure.PermissionOrSpeechDisabled,
+                SpeechPrivacyPolicyMessage);
+        }
+
+        return VoiceRecognitionResult.Failed(
+            VoiceRecognitionFailure.Failed,
+            "Voice recognition failed.");
     }
 
     private static VoiceRecognitionResult ResolveSuccessfulResult(string? text)

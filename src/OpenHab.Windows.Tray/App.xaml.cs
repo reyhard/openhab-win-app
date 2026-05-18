@@ -1425,11 +1425,17 @@ public partial class App : Application
         var dispatcher = uiDispatcherQueue;
         if (dispatcher is not null && !dispatcher.HasThreadAccess)
         {
-            _ = dispatcher.TryEnqueue(() => mainWindow?.SetShellStatusText(text));
+            _ = dispatcher.TryEnqueue(() => SetShellStatusTextOnUiThread(text));
             return;
         }
 
+        SetShellStatusTextOnUiThread(text);
+    }
+
+    private void SetShellStatusTextOnUiThread(string text)
+    {
         mainWindow?.SetShellStatusText(text);
+        flyoutWindow?.SetShellStatusText(text);
     }
 
     private void ShutdownTrayResources()
