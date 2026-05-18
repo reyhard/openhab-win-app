@@ -1234,8 +1234,8 @@ public partial class App : Application
             return;
         }
 
-        var normalized = settingsController?.Current.Shortcuts.Normalized();
-        if (normalized is null || !normalized.VoiceMode.Enabled)
+        var normalized = (settingsController?.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        if (!normalized.VoiceMode.Enabled)
         {
             return;
         }
@@ -1334,8 +1334,8 @@ public partial class App : Application
 
     private Task StartVoiceCommandFromFlyoutAsync()
     {
-        var normalized = settingsController?.Current.Shortcuts.Normalized();
-        if (normalized is null || !normalized.VoiceMode.Enabled)
+        var normalized = (settingsController?.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        if (!normalized.VoiceMode.Enabled)
         {
             return Task.CompletedTask;
         }

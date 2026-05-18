@@ -278,7 +278,7 @@ public sealed partial class FlyoutWindow : Window
 
     private void RefreshVoiceCommandButtonVisibility()
     {
-        var shortcuts = settingsController.Current.Shortcuts.Normalized();
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
         VoiceCommandButton.Visibility = shortcuts.VoiceMode.Enabled
             ? Visibility.Visible
             : Visibility.Collapsed;
