@@ -42,6 +42,12 @@ internal enum TraySurfaceRefreshOutcome
     Failed
 }
 
+internal enum VoiceCommandActivationSurface
+{
+    Flyout,
+    Overlay
+}
+
 public partial class App : Application
 {
     private MainWindow? mainWindow;
@@ -68,6 +74,7 @@ public partial class App : Application
     private VoiceCommandExecutor? voiceCommandExecutor;
     private WindowsSpeechVoiceRecognitionService? voiceRecognitionService;
     private VoiceCommandConfirmationWindow? voiceConfirmationWindow;
+    private VoiceListeningOverlayWindow? voiceListeningOverlayWindow;
     private CancellationTokenSource? voiceCommandCts;
     private DispatcherTimer? commandMenuHoldTimer;
     private ShortcutBinding? commandMenuHoldBinding;
@@ -181,6 +188,7 @@ public partial class App : Application
             () => runtimeController?.Current.ConnectionState ?? ConnectionState.Offline,
             message => DiagnosticLogger.Info(message));
         voiceRecognitionService = new WindowsSpeechVoiceRecognitionService();
+        voiceRecognitionService.ActivityChanged += VoiceRecognitionService_ActivityChanged;
         DiagnosticLogger.Info("Voice command services initialized");
         radialCommandMenuWindow = new RadialCommandMenuWindow();
         ShortcutRecorderControl.TextLocalizer = textLocalizer;
@@ -1167,7 +1175,7 @@ public partial class App : Application
         {
             if (action.CommandType == ShortcutCommandType.Voice)
             {
-                await StartVoiceCommandAsync(action);
+                await StartVoiceCommandAsync(action, VoiceCommandActivationSurface.Overlay);
                 return;
             }
 
@@ -1208,7 +1216,7 @@ public partial class App : Application
         return action.CommandType != ShortcutCommandType.Voice || settings.VoiceMode.Enabled;
     }
 
-    private async Task StartVoiceCommandAsync(ShortcutAction action)
+    private async Task StartVoiceCommandAsync(ShortcutAction action, VoiceCommandActivationSurface activationSurface)
     {
         var dispatcher = uiDispatcherQueue;
         if (dispatcher is not null && !dispatcher.HasThreadAccess)
@@ -1218,7 +1226,7 @@ public partial class App : Application
             {
                 try
                 {
-                    await StartVoiceCommandAsync(action);
+                    await StartVoiceCommandAsync(action, activationSurface);
                     tcs.TrySetResult();
                 }
                 catch (Exception ex)
@@ -1268,10 +1276,13 @@ public partial class App : Application
 
         var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
         voiceCommandCts = cts;
+        var voiceFeedbackActive = false;
 
         try
         {
             SetShellStatusText("Listening for voice command...");
+            BeginVoiceListeningFeedback(activationSurface);
+            voiceFeedbackActive = true;
             var recognitionResult = await recognizer.RecognizeOnceAsync(cts.Token);
             if (!recognitionResult.Succeeded)
             {
@@ -1280,8 +1291,12 @@ public partial class App : Application
                     SetShellStatusText(recognitionResult.Message);
                 }
 
+                await TryOpenVoiceRecognitionSettingsAsync(recognitionResult);
                 return;
             }
+
+            EndVoiceListeningFeedback(activationSurface);
+            voiceFeedbackActive = false;
 
             if (normalized.VoiceMode.RequireConfirmationBeforeSending)
             {
@@ -1328,6 +1343,10 @@ public partial class App : Application
                 voiceCommandCts = null;
             }
 
+            if (voiceFeedbackActive)
+            {
+                EndVoiceListeningFeedback(activationSurface);
+            }
             cts.Dispose();
         }
     }
@@ -1346,7 +1365,94 @@ public partial class App : Application
             return Task.CompletedTask;
         }
 
-        return StartVoiceCommandAsync(action);
+        return StartVoiceCommandAsync(action, VoiceCommandActivationSurface.Flyout);
+    }
+
+    private void BeginVoiceListeningFeedback(VoiceCommandActivationSurface activationSurface)
+    {
+        if (activationSurface == VoiceCommandActivationSurface.Flyout)
+        {
+            flyoutWindow?.SetVoiceListening(true);
+            return;
+        }
+
+        voiceListeningOverlayWindow?.Close();
+        var overlay = new VoiceListeningOverlayWindow();
+        voiceListeningOverlayWindow = overlay;
+        overlay.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(voiceListeningOverlayWindow, overlay))
+            {
+                voiceListeningOverlayWindow = null;
+            }
+        };
+        overlay.SetListening(true);
+        overlay.ShowOverlay();
+    }
+
+    private void EndVoiceListeningFeedback(VoiceCommandActivationSurface activationSurface)
+    {
+        if (activationSurface == VoiceCommandActivationSurface.Flyout)
+        {
+            flyoutWindow?.SetVoiceListening(false);
+            return;
+        }
+
+        var overlay = voiceListeningOverlayWindow;
+        voiceListeningOverlayWindow = null;
+        if (overlay is null)
+        {
+            return;
+        }
+
+        overlay.SetListening(false);
+        overlay.Close();
+    }
+
+    private void VoiceRecognitionService_ActivityChanged(object? sender, VoiceRecognitionActivityEventArgs args)
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            _ = dispatcher.TryEnqueue(() => ApplyVoiceRecognitionActivity(args));
+            return;
+        }
+
+        ApplyVoiceRecognitionActivity(args);
+    }
+
+    private void ApplyVoiceRecognitionActivity(VoiceRecognitionActivityEventArgs args)
+    {
+        if (args.Kind != VoiceRecognitionActivityKind.HypothesisGenerated)
+        {
+            return;
+        }
+
+        flyoutWindow?.PulseVoiceActivity();
+        voiceListeningOverlayWindow?.PulseVoiceActivity();
+    }
+
+    private async Task TryOpenVoiceRecognitionSettingsAsync(VoiceRecognitionResult recognitionResult)
+    {
+        var settingsUri = VoiceRecognitionSettingsUriResolver.Resolve(recognitionResult);
+        if (settingsUri is null)
+        {
+            return;
+        }
+
+        SetShellStatusText($"{recognitionResult.Message} Opening Windows Settings...");
+        try
+        {
+            var launched = await global::Windows.System.Launcher.LaunchUriAsync(settingsUri).AsTask().ConfigureAwait(true);
+            if (!launched)
+            {
+                DiagnosticLogger.Warn($"Voice recognition settings launch was not accepted: uri='{settingsUri}'");
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Voice recognition settings launch failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private async Task OpenShortcutInteractiveCommandWindowAsync(ShortcutAction action)
@@ -1491,6 +1597,12 @@ public partial class App : Application
         voiceCommandCts = null;
         voiceConfirmationWindow?.Close();
         voiceConfirmationWindow = null;
+        voiceListeningOverlayWindow?.Close();
+        voiceListeningOverlayWindow = null;
+        if (voiceRecognitionService is not null)
+        {
+            voiceRecognitionService.ActivityChanged -= VoiceRecognitionService_ActivityChanged;
+        }
         voiceRecognitionService = null;
         voiceCommandExecutor = null;
         shortcutActionExecutor = null;

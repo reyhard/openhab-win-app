@@ -11,6 +11,8 @@ public sealed class WindowsSpeechVoiceRecognitionService
     private const string SpeechPrivacyPolicyMessage = "Voice commands require Windows online speech recognition to be enabled in privacy settings.";
     private const string NoMatchMessage = "No voice command recognized.";
 
+    public event EventHandler<VoiceRecognitionActivityEventArgs>? ActivityChanged;
+
     public async Task<VoiceRecognitionResult> RecognizeOnceAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -18,6 +20,12 @@ public sealed class WindowsSpeechVoiceRecognitionService
         try
         {
             using var recognizer = new SpeechRecognizer();
+            recognizer.HypothesisGenerated += (_, args) =>
+            {
+                ActivityChanged?.Invoke(
+                    this,
+                    new VoiceRecognitionActivityEventArgs(VoiceRecognitionActivityKind.HypothesisGenerated, args.Hypothesis?.Text));
+            };
             recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(
                 SpeechRecognitionScenario.Dictation,
                 "openhab-voice-dictation"));
@@ -30,6 +38,7 @@ public sealed class WindowsSpeechVoiceRecognitionService
                     SpeechUnavailableMessage);
             }
 
+            ActivityChanged?.Invoke(this, new VoiceRecognitionActivityEventArgs(VoiceRecognitionActivityKind.ListeningStarted, null));
             var recognitionResult = await recognizer.RecognizeAsync().AsTask(cancellationToken).ConfigureAwait(false);
             if (recognitionResult is null)
             {

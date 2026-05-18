@@ -75,7 +75,27 @@
                         Visibility="Collapsed"
                         ToolTipService.ToolTip="Voice command"
                         Click="VoiceCommandButton_Click">
-                    <FontIcon Glyph="&#xE720;" FontSize="13" />
+                    <Grid Width="30"
+                          Height="30">
+                        <Ellipse x:Name="VoiceCommandPulseRing"
+                                 Width="25"
+                                 Height="25"
+                                 Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                                 StrokeThickness="2"
+                                 Opacity="0"
+                                 RenderTransformOrigin="0.5,0.5">
+                            <Ellipse.RenderTransform>
+                                <ScaleTransform x:Name="VoiceCommandPulseScale"
+                                                ScaleX="0.8"
+                                                ScaleY="0.8" />
+                            </Ellipse.RenderTransform>
+                        </Ellipse>
+                        <FontIcon x:Name="VoiceCommandIcon"
+                                  Glyph="&#xE720;"
+                                  FontSize="13"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                    </Grid>
                 </Button>
 
                 <Button x:Uid="Flyout_MinimizeButton"
