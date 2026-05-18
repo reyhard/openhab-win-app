@@ -50,6 +50,17 @@ public sealed class AppSettingsControllerTests
         return action;
     }
 
+    private static ShortcutAction AssertProtectedVoiceActionIdentity(ShortcutSettings shortcuts)
+    {
+        var action = Assert.Single(shortcuts.Actions);
+        Assert.Equal("built-in.voice.default", action.Id);
+        Assert.Equal("microphone", action.IconId);
+        Assert.Equal(ShortcutCommandType.Voice, action.CommandType);
+        Assert.Null(action.CommandValue);
+        Assert.True(action.ShowInCommandMenu);
+        return action;
+    }
+
     [Fact]
     public void DefaultsUseWindows11SkinAndAutomaticEndpointMode()
     {
@@ -170,7 +181,7 @@ public sealed class AppSettingsControllerTests
         });
 
         var shortcuts = AssertShortcuts(controller.Current);
-        var action = AssertProtectedVoiceDefault(shortcuts);
+        var action = AssertProtectedVoiceActionIdentity(shortcuts);
         Assert.Equal("Kitchen voice", action.Name);
         Assert.Equal("KitchenVoiceCommand", action.TargetItem);
         Assert.Equal("Ctrl + Alt + K", ShortcutBindingFormatter.Format(action.GlobalShortcut));
