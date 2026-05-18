@@ -2123,7 +2123,7 @@ public static partial class SitemapControlFactory
             var image = new Image { Stretch = Stretch.Uniform, HorizontalAlignment = HorizontalAlignment.Stretch };
             container.SizeChanged += (_, args) =>
             {
-                var targetWidth = Math.Max(120, args.NewSize.Width * 0.8);
+                var targetWidth = Math.Max(120, args.NewSize.Width * 0.98);
                 image.Width = targetWidth;
                 image.MaxWidth = targetWidth;
             };
