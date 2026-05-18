@@ -93,9 +93,12 @@ public sealed partial class SettingsPageControl : UserControl
     private TextBox? ImportantNotificationTagsText;
     private ToggleSwitch? DeviceInfoSyncEnabledToggle;
     private ToggleSwitch? CommandMenuEnabledToggle;
+    private ToggleSwitch? VoiceModeEnabledToggle;
+    private ToggleSwitch? VoiceModeConfirmationToggle;
     private ShortcutRecorderControl? CommandMenuShortcutRecorder;
     private ComboBox? CommandMenuActivationModeCombo;
     private ContentControl? CommandMenuPreviewContent;
+    private SettingsExpander? VoiceModeExpander;
     private int shortcutActionsSectionStartIndex = -1;
     private string? editingShortcutActionId;
     private bool creatingShortcutAction;
@@ -703,7 +706,8 @@ public sealed partial class SettingsPageControl : UserControl
         new(text.Get("Settings.Shortcuts.CommandType.OpenClose"), ShortcutCommandType.OpenClose),
         new(text.Get("Settings.Shortcuts.CommandType.OpenSlider"), ShortcutCommandType.OpenSlider),
         new(text.Get("Settings.Shortcuts.CommandType.OpenColorPicker"), ShortcutCommandType.OpenColorPicker),
-        new(text.Get("Settings.Shortcuts.CommandType.SendCommand"), ShortcutCommandType.SendCommand)
+        new(text.Get("Settings.Shortcuts.CommandType.SendCommand"), ShortcutCommandType.SendCommand),
+        new(text.Get("Settings.Shortcuts.CommandType.Voice"), ShortcutCommandType.Voice)
     ];
 
     private Grid CreateSettingsToggleRow(string glyph, string title, string subtitle, ToggleSwitch toggle)
@@ -983,39 +987,44 @@ public sealed partial class SettingsPageControl : UserControl
             CreateExpanderRows(globalShortcutRow, activationModeRow, previewRow),
             CreateSettingsToggleAction(CommandMenuEnabledToggle)));
 
-        var voiceModeStateRow = CreateSettingsControlRow(
-            "\uE720",
-            text.Get("Settings.Shortcuts.VoiceMode.Title"),
-            text.Get("Settings.Shortcuts.VoiceMode.Subtitle"),
+        VoiceModeEnabledToggle = new ToggleSwitch
+        {
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            IsOn = settings.VoiceMode.Enabled
+        };
+        AutomationProperties.SetName(VoiceModeEnabledToggle, text.Get("Settings.Shortcuts.VoiceMode.EnableAutomationName"));
+        VoiceModeEnabledToggle.Toggled += VoiceModeEnabledToggle_Toggled;
+
+        VoiceModeConfirmationToggle = new ToggleSwitch
+        {
+            OnContent = string.Empty,
+            OffContent = string.Empty,
+            IsOn = settings.VoiceMode.RequireConfirmationBeforeSending
+        };
+        VoiceModeConfirmationToggle.Toggled += VoiceModeConfirmationToggle_Toggled;
+        var voiceModeConfirmationRow = CreateSettingsControlRow(
+            "\uE8C9",
+            text.Get("Settings.Shortcuts.VoiceMode.ConfirmationTitle"),
+            text.Get("Settings.Shortcuts.VoiceMode.ConfirmationSubtitle"),
+            CreateSettingsToggleAction(VoiceModeConfirmationToggle));
+
+        var voiceModePrivacyRow = CreateSettingsControlRow(
+            "\uE72E",
+            text.Get("Settings.Shortcuts.VoiceMode.PrivacyTitle"),
+            text.Get("Settings.Shortcuts.VoiceMode.PrivacyText"),
             new TextBlock
             {
-                Text = text.Get("Common.Disabled"),
-                Opacity = 0.7,
-                VerticalAlignment = VerticalAlignment.Center
+                Text = string.Empty
             });
 
-        var voiceModeShortcutRow = CreateSettingsControlRow(
-            "\uE765",
-            text.Get("Settings.Shortcuts.Shortcut.Title"),
-            text.Get("Settings.Shortcuts.Shortcut.Unassigned"),
-            ShortcutSettingsControls.CreateShortcutChips(null));
-
-        var voiceModeContent = CreateExpanderRows(voiceModeStateRow, voiceModeShortcutRow);
-        foreach (var card in voiceModeContent)
-        {
-            card.Opacity = 0.72;
-        }
-        SettingsContent.Children.Add(CreateSettingsExpander(
+        VoiceModeExpander = CreateSettingsExpander(
             text.Get("Settings.Shortcuts.VoiceMode.ExpanderTitle"),
             text.Get("Settings.Shortcuts.VoiceMode.ExpanderSubtitle"),
-            voiceModeContent,
-            new TextBlock
-            {
-                Text = text.Get("Common.Disabled"),
-                Opacity = 0.7,
-                VerticalAlignment = VerticalAlignment.Center
-            },
-            isExpanded: false));
+            CreateExpanderRows(voiceModeConfirmationRow, voiceModePrivacyRow),
+            CreateSettingsToggleAction(VoiceModeEnabledToggle),
+            isExpanded: settings.VoiceMode.Enabled);
+        SettingsContent.Children.Add(VoiceModeExpander);
 
         shortcutActionsSectionStartIndex = SettingsContent.Children.Count;
         BuildShortcutActionsSection(settings);
@@ -1204,6 +1213,7 @@ public sealed partial class SettingsPageControl : UserControl
         ShortcutActionTypeCombo.SelectedItem = ShortcutActionTypeCombo.Items
             .OfType<ShortcutCommandTypeOption>()
             .First(option => option.CommandType == draftAction.CommandType);
+        ShortcutActionTypeCombo.SelectionChanged += ShortcutActionTypeCombo_SelectionChanged;
         var typeRow = CreateSettingsControlRow(
             "\uE8EF",
             text.Get("Settings.Shortcuts.Actions.ActionType"),
@@ -1221,6 +1231,7 @@ public sealed partial class SettingsPageControl : UserControl
             text.Get("Settings.Shortcuts.Editor.CommandValue.Subtitle"),
             ShortcutActionValueText,
             stretchControl: true);
+        ApplyCommandValueEditingBehavior(draftAction.CommandType);
 
         var actionButtons = new StackPanel
         {
@@ -1342,9 +1353,12 @@ public sealed partial class SettingsPageControl : UserControl
         ImportantNotificationTagsText = null;
         DeviceInfoSyncEnabledToggle = null;
         CommandMenuEnabledToggle = null;
+        VoiceModeEnabledToggle = null;
+        VoiceModeConfirmationToggle = null;
         CommandMenuShortcutRecorder = null;
         CommandMenuActivationModeCombo = null;
         CommandMenuPreviewContent = null;
+        VoiceModeExpander = null;
         shortcutActionsSectionStartIndex = -1;
         ResetShortcutActionEditorReferences();
         DeviceInfoSyncDisabledText = null;
@@ -1454,6 +1468,18 @@ public sealed partial class SettingsPageControl : UserControl
             if (CommandMenuEnabledToggle is not null)
             {
                 CommandMenuEnabledToggle.IsOn = shortcuts.CommandMenu.Enabled;
+            }
+            if (VoiceModeEnabledToggle is not null)
+            {
+                VoiceModeEnabledToggle.IsOn = shortcuts.VoiceMode.Enabled;
+            }
+            if (VoiceModeConfirmationToggle is not null)
+            {
+                VoiceModeConfirmationToggle.IsOn = shortcuts.VoiceMode.RequireConfirmationBeforeSending;
+            }
+            if (VoiceModeExpander is not null)
+            {
+                VoiceModeExpander.IsExpanded = shortcuts.VoiceMode.Enabled;
             }
             if (CommandMenuShortcutRecorder is not null)
             {
@@ -1868,6 +1894,42 @@ public sealed partial class SettingsPageControl : UserControl
         });
     }
 
+    private void VoiceModeEnabledToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ToggleSwitch toggle)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            VoiceMode = shortcuts.VoiceMode with
+            {
+                Enabled = toggle.IsOn
+            }
+        });
+
+        RefreshShortcutActionsSection();
+    }
+
+    private void VoiceModeConfirmationToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (isRefreshingSettingsBindings || sender is not ToggleSwitch toggle)
+        {
+            return;
+        }
+
+        var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
+        settingsController.SetShortcutSettings(shortcuts with
+        {
+            VoiceMode = shortcuts.VoiceMode with
+            {
+                RequireConfirmationBeforeSending = toggle.IsOn
+            }
+        });
+    }
+
     private void CommandMenuActivationModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (isRefreshingSettingsBindings || sender is not ComboBox combo || combo.SelectedItem is not RadialActivationModeOption option)
@@ -1982,7 +2044,15 @@ public sealed partial class SettingsPageControl : UserControl
         var editButton = CreateActionIconButton("\uE70F", text.Get("Settings.Shortcuts.Actions.Edit"), action.Id);
         editButton.Click += EditShortcutActionButton_Click;
         var deleteButton = CreateActionIconButton("\uE74D", text.Get("Settings.Shortcuts.Actions.Delete"), action.Id);
-        deleteButton.Click += DeleteShortcutActionButton_Click;
+        if (VoiceShortcutPolicy.IsProtectedDefaultVoiceAction(action))
+        {
+            deleteButton.IsEnabled = false;
+            ToolTipService.SetToolTip(deleteButton, text.Get("Settings.Shortcuts.VoiceMode.DefaultActionProtected"));
+        }
+        else
+        {
+            deleteButton.Click += DeleteShortcutActionButton_Click;
+        }
         actionsPanel.Children.Add(moveUpButton);
         actionsPanel.Children.Add(moveDownButton);
         actionsPanel.Children.Add(editButton);
@@ -2267,6 +2337,9 @@ public sealed partial class SettingsPageControl : UserControl
                 ? option.CommandType
                 : ShortcutCommandType.Toggle;
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
+        var commandValue = selectedType == ShortcutCommandType.Voice
+            ? null
+            : ShortcutActionValueText?.Text;
 
         var draft = new ShortcutActionEditorDraft(
             Id: creatingShortcutAction ? null : editingShortcutActionId,
@@ -2276,7 +2349,7 @@ public sealed partial class SettingsPageControl : UserControl
             GlobalShortcut: ShortcutActionGlobalShortcutRecorder?.Binding,
             TargetItem: ShortcutActionTargetItemText?.Text ?? string.Empty,
             CommandType: selectedType,
-            CommandValue: ShortcutActionValueText?.Text);
+            CommandValue: commandValue);
         var updated = shortcutActionEditorPlanner.BuildAction(draft);
 
         var errors = new List<string>();
@@ -2388,6 +2461,9 @@ public sealed partial class SettingsPageControl : UserControl
                 ? option.CommandType
                 : ShortcutCommandType.Toggle;
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
+        var commandValue = selectedType == ShortcutCommandType.Voice
+            ? null
+            : ShortcutActionValueText.Text;
 
         return new ShortcutActionEditorDraft(
             Id: creatingShortcutAction ? null : editingShortcutActionId,
@@ -2397,7 +2473,41 @@ public sealed partial class SettingsPageControl : UserControl
             GlobalShortcut: ShortcutActionGlobalShortcutRecorder?.Binding,
             TargetItem: ShortcutActionTargetItemText.Text,
             CommandType: selectedType,
-            CommandValue: ShortcutActionValueText.Text);
+            CommandValue: commandValue);
+    }
+
+    private void ShortcutActionTypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox combo)
+        {
+            return;
+        }
+
+        var selectedType = combo.SelectedItem is ShortcutCommandType commandType
+            ? commandType
+            : combo.SelectedItem is ShortcutCommandTypeOption option
+                ? option.CommandType
+                : ShortcutCommandType.Toggle;
+        ApplyCommandValueEditingBehavior(selectedType);
+    }
+
+    private void ApplyCommandValueEditingBehavior(ShortcutCommandType commandType)
+    {
+        if (ShortcutActionValueText is null)
+        {
+            return;
+        }
+
+        if (commandType == ShortcutCommandType.Voice)
+        {
+            ShortcutActionValueText.Text = string.Empty;
+            ShortcutActionValueText.PlaceholderText = "-";
+            ShortcutActionValueText.IsEnabled = false;
+            return;
+        }
+
+        ShortcutActionValueText.PlaceholderText = string.Empty;
+        ShortcutActionValueText.IsEnabled = true;
     }
 
     private static ShortcutIconDefinition? GetSelectedShortcutIcon(ComboBox? combo)

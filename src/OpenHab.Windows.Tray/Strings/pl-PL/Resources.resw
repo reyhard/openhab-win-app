@@ -533,13 +533,37 @@
     <value>Tryb głosowy</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.Subtitle" xml:space="preserve">
-    <value>Wkrótce. Skrót głosowy nie jest jeszcze przypisany ani dostępny.</value>
+    <value>Single-shot speech recognition for openHAB voice commands</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ExpanderTitle" xml:space="preserve">
     <value>Tryb głosowy</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ExpanderSubtitle" xml:space="preserve">
-    <value>Planowany skrót głosowy, wkrótce</value>
+    <value>Send recognized speech to an openHAB item</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.EnableAutomationName" xml:space="preserve">
+    <value>Enable voice commands</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.EnableTitle" xml:space="preserve">
+    <value>Enable voice commands</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.EnableSubtitle" xml:space="preserve">
+    <value>Show the flyout microphone button and allow Voice actions to run</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.ConfirmationTitle" xml:space="preserve">
+    <value>Require confirmation before sending</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.ConfirmationSubtitle" xml:space="preserve">
+    <value>Review the recognized phrase before it is sent to openHAB</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.PrivacyTitle" xml:space="preserve">
+    <value>Privacy</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.PrivacyText" xml:space="preserve">
+    <value>Windows free-form dictation can use Microsoft online speech services. Voice commands require Windows microphone and speech-recognition permissions. Normal diagnostics do not log recognized phrases; verbose diagnostics may log full spoken command text to diagnostics.log.</value>
+  </data>
+  <data name="Settings.Shortcuts.VoiceMode.DefaultActionProtected" xml:space="preserve">
+    <value>The default Voice action is required while Voice Mode exists and cannot be deleted.</value>
   </data>
   <data name="Settings.Shortcuts.Shortcut.Title" xml:space="preserve">
     <value>Skrót</value>
@@ -655,6 +679,9 @@ Dodaj akcje, aby były dostępne w menu poleceń.</value>
   </data>
   <data name="Settings.Shortcuts.CommandType.SendCommand" xml:space="preserve">
     <value>Wyślij polecenie</value>
+  </data>
+  <data name="Settings.Shortcuts.CommandType.Voice" xml:space="preserve">
+    <value>Voice</value>
   </data>
   <data name="Settings.Shortcuts.DeleteDialog.Title" xml:space="preserve">
     <value>Usuń akcję</value>
