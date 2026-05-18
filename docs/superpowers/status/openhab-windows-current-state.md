@@ -1,6 +1,6 @@
 # openHAB Windows Current State
 
-Date: 2026-05-15
+Date: 2026-05-18
 
 ## Purpose
 
@@ -18,6 +18,7 @@ Read this file before implementation. Older dated status files remain useful as 
 - Cloud notifications support nested payload normalization, custom title/tag/reference id, app logo/hero image media resolution, toast buttons, command actions, URL/UI navigation actions, log-only notifications, and hide/remove semantics.
 - Windows-specific functionality includes tray icon integration, startup task handling, notification activation, device-state sync readers, global hotkeys, and a radial shortcut command menu.
 - Diagnostics now use `SafeDiagnosticText` and `SensitiveTextRedactor` for privacy-safe logs and user-facing status text in the main runtime, event stream, notifications, and Windows status surfaces.
+- App-owned UI text now routes through localization resources with English and Polish resource sets. Appearance settings include a language selector with System language, English, and Polish options; explicit overrides are applied during startup through WinUI resource/culture override APIs, and the UI shows a restart-required notice when a changed language is not yet loaded.
 - Packaging exists through `src/OpenHab.Windows.Package/OpenHab.Windows.Package.wapproj` and `build-package.ps1`; official package identity, signing ownership, distribution, and support policy remain release decisions.
 
 ## Recently Completed Remediation
@@ -29,13 +30,15 @@ Read this file before implementation. Older dated status files remain useful as 
 - Sitemap event-stream start/connect failure handling now supports retry, stale attempt suppression, online-to-degraded state updates, and event handler attachment before duplicate-start detection.
 - Settings saves are serialized and observable through queued saves plus `FlushAsync`.
 - Tracked temporary signing/user/package artifacts are no longer present in `git ls-files`; `.gitignore` now covers `.pfx`, user project metadata, `AppPackages`, and `BundleArtifacts`.
+- Crowdin localization foundation has landed on `main`: `crowdin.yml`, translation ownership docs, English and Polish WinUI `.resw` resources, fallback `ITextLocalizer` coverage, localized package manifest/app chrome/runtime/status/settings strings, and regression tests for resource parity, placeholder parity, and representative hardcoded settings labels.
+- Language override support has landed on `main`: persisted app language setting, startup WinUI resource/culture override, Appearance language selector, explicit Polish override behavior, and restart-required messaging for non-live language changes.
 
 ## Current High-Priority Backlog
 
 - P0: Finalize release ownership decisions: official package identity, signing certificate ownership, Microsoft Store or other distribution ownership, support policy, and security response path.
 - P1: Run and record manual UI smoke checks for tray flyout, main window, Main UI WebView2 auth/navigation, notifications, settings, and shortcut command menu.
 - P1: Run and record manual memory/performance measurements for launch, flyout open/close, main window open/close, and background resource release. `docs/superpowers/verification/2026-05-14-performance-optimization-results.md` currently records build success but no manual measurements.
-- P1: Complete localization, accessibility, dependency/license, and release packaging review before treating the app as official release-ready.
+- P1: Complete accessibility, dependency/license, and release packaging review before treating the app as official release-ready. Localization has a resource-backed English/Polish baseline, but still needs manual UI smoke review for wording, truncation, and untranslated app-owned strings.
 - P2: Finish sitemap media cache policy: chart rendering still uses cache-busting URLs by default, and icon payload caching exists but lacks a bounded eviction or profile-change clearing policy.
 
 ## Verification Gates
@@ -47,6 +50,16 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-05-18 localization/language merge on `main` at `f209aac`:
+
+- Passed before merge on `crowdin-translations-plan`: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -p:UseSharedCompilation=false` (`463/463`).
+- Passed before merge on `crowdin-translations-plan`: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Passed before merge on `crowdin-translations-plan`: `.\build-package.ps1 -Configuration Release -Platform x64`.
+- Merge into `main` required one conflict resolution in `src/OpenHab.Windows.Tray/Settings/SettingsPageControl.xaml.cs`; the resolution preserved both the existing `ShortcutActionEditorPlanner` field from `main` and the localization fields from the feature branch.
+- Passed after merge on `main`: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -p:UseSharedCompilation=false` (`521/521`).
+- Passed after merge on `main`: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Debug --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Release tray build after merge was blocked by a local running `openHAB.exe` process (`PID 24336`) holding Release output DLLs, matching the known local output-lock caveat rather than a compile failure.
 
 2026-05-15 current-state review on `main` at `4eb7fbf`:
 
