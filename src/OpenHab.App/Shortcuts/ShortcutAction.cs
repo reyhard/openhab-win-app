@@ -7,7 +7,8 @@ public enum ShortcutCommandType
     OpenClose,
     OpenSlider,
     OpenColorPicker,
-    SendCommand
+    SendCommand,
+    Voice
 }
 
 public sealed record ShortcutAction(

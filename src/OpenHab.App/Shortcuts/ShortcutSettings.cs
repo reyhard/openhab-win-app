@@ -7,9 +7,13 @@ public sealed record BuiltInShortcutSettings(
     ShortcutBinding? Binding,
     RadialActivationMode RadialActivationMode = RadialActivationMode.Toggle);
 
+public sealed record VoiceModeShortcutSettings(
+    bool Enabled,
+    bool RequireConfirmationBeforeSending = false);
+
 public sealed record ShortcutSettings(
     BuiltInShortcutSettings CommandMenu,
-    BuiltInShortcutSettings VoiceMode,
+    VoiceModeShortcutSettings VoiceMode,
     ImmutableArray<ShortcutAction> Actions)
 {
     public static ShortcutSettings Default { get; } = new(
@@ -17,10 +21,9 @@ public sealed record ShortcutSettings(
             Enabled: true,
             Binding: new ShortcutBinding([ShortcutModifier.Win], "O"),
             RadialActivationMode: RadialActivationMode.Toggle),
-        new BuiltInShortcutSettings(
+        new VoiceModeShortcutSettings(
             Enabled: false,
-            Binding: null,
-            RadialActivationMode: RadialActivationMode.Toggle),
+            RequireConfirmationBeforeSending: false),
         []);
 
     public ShortcutSettings Normalized()
@@ -48,9 +51,18 @@ public sealed record ShortcutSettings(
                     GlobalShortcut = ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out var normalizedShortcut) ? normalizedShortcut : null,
                     TargetItem = action.TargetItem?.Trim() ?? string.Empty,
                     CommandType = Enum.IsDefined(action.CommandType) ? action.CommandType : ShortcutCommandType.SendCommand,
-                    CommandValue = string.IsNullOrWhiteSpace(action.CommandValue) ? null : action.CommandValue.Trim()
+                    CommandValue = action.CommandType == ShortcutCommandType.Voice
+                        ? null
+                        : string.IsNullOrWhiteSpace(action.CommandValue) ? null : action.CommandValue.Trim()
                 })
                 .ToImmutableArray();
+
+        if (voiceMode.Enabled)
+        {
+            actions = VoiceShortcutPolicy
+                .EnsureProtectedDefaultVoiceAction(actions)
+                .ToImmutableArray();
+        }
 
         return new ShortcutSettings(
             commandMenu with
@@ -58,13 +70,7 @@ public sealed record ShortcutSettings(
                 Binding = commandMenuBinding,
                 RadialActivationMode = commandMenuMode
             },
-            // Voice Mode is intentionally locked for this release and must not register shortcuts yet.
-            voiceMode with
-            {
-                Enabled = false,
-                Binding = null,
-                RadialActivationMode = RadialActivationMode.Toggle
-            },
+            voiceMode,
             actions);
     }
 }
