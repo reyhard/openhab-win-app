@@ -1,0 +1,81 @@
+using OpenHab.Core;
+using Windows.Media.SpeechRecognition;
+
+namespace OpenHab.Windows.Tray.Voice;
+
+public sealed class WindowsSpeechVoiceRecognitionService
+{
+    private const string SpeechUnavailableMessage = "Windows speech recognition is unavailable. Check microphone and online speech settings.";
+    private const string MicrophonePermissionMessage = "Microphone permission is required for voice commands.";
+    private const string NoMatchMessage = "No voice command recognized.";
+
+    public async Task<VoiceRecognitionResult> RecognizeOnceAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            using var recognizer = new SpeechRecognizer();
+            recognizer.Constraints.Add(new SpeechRecognitionTopicConstraint(
+                SpeechRecognitionScenario.Dictation,
+                "openhab-voice-dictation"));
+
+            var compileResult = await recognizer.CompileConstraintsAsync().AsTask(cancellationToken).ConfigureAwait(false);
+            if (compileResult.Status != SpeechRecognitionResultStatus.Success)
+            {
+                return VoiceRecognitionResult.Failed(
+                    VoiceRecognitionFailure.PermissionOrSpeechDisabled,
+                    SpeechUnavailableMessage);
+            }
+
+            var recognitionResult = await recognizer.RecognizeAsync().AsTask(cancellationToken).ConfigureAwait(false);
+            if (recognitionResult is null)
+            {
+                return VoiceRecognitionResult.Failed(VoiceRecognitionFailure.NoMatch, NoMatchMessage);
+            }
+
+            return recognitionResult.Status switch
+            {
+                SpeechRecognitionResultStatus.Success => ResolveSuccessfulResult(recognitionResult.Text),
+                SpeechRecognitionResultStatus.UserCanceled => VoiceRecognitionResult.Failed(
+                    VoiceRecognitionFailure.Canceled,
+                    "Voice command canceled."),
+                SpeechRecognitionResultStatus.AudioQualityFailure => VoiceRecognitionResult.Failed(
+                    VoiceRecognitionFailure.NoMatch,
+                    NoMatchMessage),
+                SpeechRecognitionResultStatus.TimeoutExceeded => VoiceRecognitionResult.Failed(
+                    VoiceRecognitionFailure.NoMatch,
+                    NoMatchMessage),
+                SpeechRecognitionResultStatus.PauseLimitExceeded => VoiceRecognitionResult.Failed(
+                    VoiceRecognitionFailure.NoMatch,
+                    NoMatchMessage),
+                _ => VoiceRecognitionResult.Failed(VoiceRecognitionFailure.NoMatch, NoMatchMessage)
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return VoiceRecognitionResult.Failed(
+                VoiceRecognitionFailure.PermissionOrSpeechDisabled,
+                MicrophonePermissionMessage);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Voice recognition failed: {ex.GetType().Name}: {ex.Message}");
+            return VoiceRecognitionResult.Failed(
+                VoiceRecognitionFailure.Failed,
+                "Voice recognition failed.");
+        }
+    }
+
+    private static VoiceRecognitionResult ResolveSuccessfulResult(string? text)
+    {
+        var normalized = (text ?? string.Empty).Trim();
+        return normalized.Length > 0
+            ? VoiceRecognitionResult.Success(normalized)
+            : VoiceRecognitionResult.Failed(VoiceRecognitionFailure.NoMatch, NoMatchMessage);
+    }
+}

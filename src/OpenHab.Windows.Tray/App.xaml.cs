@@ -24,6 +24,7 @@ using OpenHab.Windows.Tray.Tray;
 using OpenHab.Windows.Tray.Startup;
 using OpenHab.Windows.Tray.DeviceInfo;
 using OpenHab.Windows.Tray.Shortcuts;
+using OpenHab.Windows.Tray.Voice;
 using Microsoft.UI.Dispatching;
 using System.Net.Http;
 using Microsoft.Win32;
@@ -64,6 +65,10 @@ public partial class App : Application
     private BackgroundResourceReleaseController? backgroundResourceReleaseController;
     private RadialCommandMenuWindow? radialCommandMenuWindow;
     private ShortcutInteractiveCommandWindow? shortcutInteractiveCommandWindow;
+    private VoiceCommandExecutor? voiceCommandExecutor;
+    private WindowsSpeechVoiceRecognitionService? voiceRecognitionService;
+    private VoiceCommandConfirmationWindow? voiceConfirmationWindow;
+    private CancellationTokenSource? voiceCommandCts;
     private DispatcherTimer? commandMenuHoldTimer;
     private ShortcutBinding? commandMenuHoldBinding;
     private DeviceInfoSyncService? deviceInfoSyncService;
@@ -171,6 +176,12 @@ public partial class App : Application
         shortcutActionExecutor = new ShortcutActionExecutor(
             CreateActiveShortcutClient,
             () => runtimeController?.Current.ConnectionState ?? ConnectionState.Offline);
+        voiceCommandExecutor = new VoiceCommandExecutor(
+            CreateActiveShortcutClient,
+            () => runtimeController?.Current.ConnectionState ?? ConnectionState.Offline,
+            message => DiagnosticLogger.Info(message));
+        voiceRecognitionService = new WindowsSpeechVoiceRecognitionService();
+        DiagnosticLogger.Info("Voice command services initialized");
         radialCommandMenuWindow = new RadialCommandMenuWindow();
         ShortcutRecorderControl.TextLocalizer = textLocalizer;
         SitemapControlFactory.TextLocalizer = textLocalizer;
@@ -1197,10 +1208,128 @@ public partial class App : Application
         return action.CommandType != ShortcutCommandType.Voice || settings.VoiceMode.Enabled;
     }
 
-    private Task StartVoiceCommandAsync(ShortcutAction action)
+    private async Task StartVoiceCommandAsync(ShortcutAction action)
     {
-        SetShellStatusText("Voice command support is initializing.");
-        return Task.CompletedTask;
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!dispatcher.TryEnqueue(async () =>
+            {
+                try
+                {
+                    await StartVoiceCommandAsync(action);
+                    tcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.TrySetException(ex);
+                }
+            }))
+            {
+                return;
+            }
+
+            await tcs.Task;
+            return;
+        }
+
+        var normalized = settingsController?.Current.Shortcuts.Normalized();
+        if (normalized is null || !normalized.VoiceMode.Enabled)
+        {
+            return;
+        }
+
+        if (voiceCommandCts is not null)
+        {
+            voiceConfirmationWindow?.Activate();
+            return;
+        }
+
+        if (runtimeController?.Current.ConnectionState != ConnectionState.Online)
+        {
+            SetShellStatusText("Voice commands require an online openHAB connection.");
+            return;
+        }
+
+        if (!ShortcutValidation.ValidateAction(action).IsValid || action.CommandType != ShortcutCommandType.Voice)
+        {
+            SetShellStatusText("Voice command action is invalid.");
+            return;
+        }
+
+        var recognizer = voiceRecognitionService;
+        var executor = voiceCommandExecutor;
+        if (recognizer is null || executor is null)
+        {
+            SetShellStatusText("Voice command service is unavailable.");
+            return;
+        }
+
+        var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        voiceCommandCts = cts;
+
+        try
+        {
+            SetShellStatusText("Listening for voice command...");
+            var recognitionResult = await recognizer.RecognizeOnceAsync(cts.Token);
+            if (!recognitionResult.Succeeded)
+            {
+                if (!string.IsNullOrWhiteSpace(recognitionResult.Message))
+                {
+                    SetShellStatusText(recognitionResult.Message);
+                }
+
+                return;
+            }
+
+            if (normalized.VoiceMode.RequireConfirmationBeforeSending)
+            {
+                voiceConfirmationWindow?.Close();
+                var confirmationWindow = new VoiceCommandConfirmationWindow(recognitionResult.Text ?? string.Empty);
+                voiceConfirmationWindow = confirmationWindow;
+                confirmationWindow.Closed += (_, _) =>
+                {
+                    if (ReferenceEquals(voiceConfirmationWindow, confirmationWindow))
+                    {
+                        voiceConfirmationWindow = null;
+                    }
+                };
+
+                var approved = await confirmationWindow.WaitForDecisionAsync(cts.Token);
+                if (!approved)
+                {
+                    SetShellStatusText("Voice command canceled.");
+                    return;
+                }
+            }
+
+            var result = await executor.ExecuteAsync(
+                action,
+                recognitionResult.Text ?? string.Empty,
+                logPhrase: settingsController?.Current.VerboseDiagnostics == true,
+                cts.Token);
+            if (!result.Succeeded)
+            {
+                SetShellStatusText(result.Message);
+                return;
+            }
+
+            SetShellStatusText(string.Empty);
+        }
+        catch (OperationCanceledException)
+        {
+            SetShellStatusText("Voice command canceled.");
+        }
+        finally
+        {
+            if (ReferenceEquals(voiceCommandCts, cts))
+            {
+                voiceCommandCts = null;
+            }
+
+            cts.Dispose();
+        }
     }
 
     private Task StartVoiceCommandFromFlyoutAsync()
@@ -1351,6 +1480,13 @@ public partial class App : Application
         radialCommandMenuWindow = null;
         shortcutInteractiveCommandWindow?.Close();
         shortcutInteractiveCommandWindow = null;
+        voiceCommandCts?.Cancel();
+        voiceCommandCts?.Dispose();
+        voiceCommandCts = null;
+        voiceConfirmationWindow?.Close();
+        voiceConfirmationWindow = null;
+        voiceRecognitionService = null;
+        voiceCommandExecutor = null;
         shortcutActionExecutor = null;
         trayIcon?.Dispose();
         trayIcon = null;
