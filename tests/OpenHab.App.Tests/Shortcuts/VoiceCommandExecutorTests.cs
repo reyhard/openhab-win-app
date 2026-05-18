@@ -128,6 +128,33 @@ public sealed class VoiceCommandExecutorTests
         Assert.Empty(client.Commands);
     }
 
+    [Fact]
+    public async Task NullClientReturnsMissingClientWithoutThrowing()
+    {
+        var executor = CreateExecutor(() => null);
+        var action = VoiceAction();
+
+        var result = await executor.ExecuteAsync(action, "turn on", logPhrase: false, CancellationToken.None);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(VoiceCommandExecutionFailure.MissingClient, result.Failure);
+        Assert.Equal("Client is unavailable.", result.Message);
+    }
+
+    [Fact]
+    public async Task SendCommandCancellationIsRethrown()
+    {
+        var client = new RecordingVoiceClient
+        {
+            SendCommandException = new OperationCanceledException("cancel")
+        };
+        var executor = CreateExecutor(() => client);
+        var action = VoiceAction();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => executor.ExecuteAsync(action, "turn on", logPhrase: false, CancellationToken.None));
+    }
+
     private static VoiceCommandExecutor CreateExecutor(
         Func<IOpenHabClient?> getClient,
         Func<ConnectionState>? getConnectionState = null,
