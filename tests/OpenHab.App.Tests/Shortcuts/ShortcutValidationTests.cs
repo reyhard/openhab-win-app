@@ -182,6 +182,61 @@ public sealed class ShortcutValidationTests
         Assert.Contains(result.Errors, error => error.Contains("command menu", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void VoiceActionDoesNotRequireCommandValue()
+    {
+        var action = new ShortcutAction(
+            "voice-1",
+            "Voice",
+            "microphone",
+            true,
+            null,
+            "VoiceCommand",
+            ShortcutCommandType.Voice,
+            null);
+
+        var result = ShortcutValidation.ValidateAction(action);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void VoiceActionMayBeHiddenAndUnassigned()
+    {
+        var action = new ShortcutAction(
+            "voice-2",
+            "Voice",
+            "microphone",
+            false,
+            null,
+            "VoiceCommand",
+            ShortcutCommandType.Voice,
+            null);
+
+        var result = ShortcutValidation.ValidateAction(action);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public void VoiceActionStillRequiresTargetItem()
+    {
+        var action = new ShortcutAction(
+            "voice-3",
+            "Voice",
+            "microphone",
+            true,
+            null,
+            "   ",
+            ShortcutCommandType.Voice,
+            null);
+
+        var result = ShortcutValidation.ValidateAction(action);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error => error.Contains("target item", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData(ShortcutCommandType.OnOff, "MAYBE")]
     [InlineData(ShortcutCommandType.OpenClose, "HALF")]

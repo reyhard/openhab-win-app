@@ -107,6 +107,21 @@ public sealed class ShortcutActionEditorPlannerTests
     }
 
     [Fact]
+    public void RemoveActionPreservesProtectedDefaultVoiceAction()
+    {
+        var planner = new ShortcutActionEditorPlanner();
+        var protectedAction = VoiceShortcutPolicy.CreateDefaultVoiceAction();
+        var otherAction = Action("a2", "Second");
+
+        var result = planner.RemoveAction([protectedAction, otherAction], VoiceShortcutPolicy.ProtectedDefaultActionId);
+
+        Assert.Collection(
+            result,
+            first => Assert.Equal(protectedAction, first),
+            second => Assert.Equal(otherAction, second));
+    }
+
+    [Fact]
     public void MoveActionClampsDestinationInsideList()
     {
         var planner = new ShortcutActionEditorPlanner();

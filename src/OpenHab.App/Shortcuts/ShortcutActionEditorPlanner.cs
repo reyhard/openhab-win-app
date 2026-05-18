@@ -83,6 +83,11 @@ public sealed class ShortcutActionEditorPlanner
 
     public ImmutableArray<ShortcutAction> RemoveAction(IEnumerable<ShortcutAction> actions, string actionId)
     {
+        if (VoiceShortcutPolicy.IsProtectedDefaultVoiceAction(actionId))
+        {
+            return actions.ToImmutableArray();
+        }
+
         return actions
             .Where(action => !string.Equals(action.Id, actionId, StringComparison.Ordinal))
             .ToImmutableArray();

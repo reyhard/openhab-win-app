@@ -149,6 +149,8 @@ public static class ShortcutValidation
                 }
 
                 break;
+            case ShortcutCommandType.Voice:
+                break;
         }
 
         if (action.GlobalShortcut is not null && !ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out _))
@@ -156,7 +158,9 @@ public static class ShortcutValidation
             errors.Add(text.Get("Shortcuts.Validation.GlobalShortcutInvalid"));
         }
 
-        if (!action.ShowInCommandMenu && action.GlobalShortcut is null)
+        if (action.CommandType != ShortcutCommandType.Voice
+            && !action.ShowInCommandMenu
+            && action.GlobalShortcut is null)
         {
             errors.Add(text.Get("Shortcuts.Validation.ActionAvailabilityRequired"));
         }
