@@ -306,6 +306,10 @@ public partial class App : Application
             {
                 shellController?.HandleWindowCloseRequested(TrayShellSurface.Flyout);
                 _ = ApplyShellStateAsync();
+            },
+            requestVoiceCommand: () =>
+            {
+                _ = StartVoiceCommandFromFlyoutAsync();
             });
 
         window.AppWindow.Closing += (sender, args) =>
@@ -1060,7 +1064,10 @@ public partial class App : Application
 
         var actions = settings
             .Actions
-            .Where(static action => action.ShowInCommandMenu && ShortcutValidation.ValidateAction(action).IsValid)
+            .Where(action =>
+                action.ShowInCommandMenu
+                && IsActionAvailableForCurrentShortcutMode(settings, action)
+                && ShortcutValidation.ValidateAction(action).IsValid)
             .ToList();
         menuWindow.ShowActions(actions, ExecuteShortcutActionAsync);
         if (settings.CommandMenu.RadialActivationMode == RadialActivationMode.Hold && canPollHoldBinding)
@@ -1147,6 +1154,12 @@ public partial class App : Application
     {
         try
         {
+            if (action.CommandType == ShortcutCommandType.Voice)
+            {
+                await StartVoiceCommandAsync(action);
+                return;
+            }
+
             if (action.CommandType is ShortcutCommandType.OpenSlider or ShortcutCommandType.OpenColorPicker)
             {
                 await OpenShortcutInteractiveCommandWindowAsync(action);
@@ -1177,6 +1190,34 @@ public partial class App : Application
             DiagnosticLogger.Warn(
                 $"Shortcut action execution failed unexpectedly: action='{action.Name}', error='{ex.GetType().Name}: {ex.Message}'");
         }
+    }
+
+    private static bool IsActionAvailableForCurrentShortcutMode(ShortcutSettings settings, ShortcutAction action)
+    {
+        return action.CommandType != ShortcutCommandType.Voice || settings.VoiceMode.Enabled;
+    }
+
+    private Task StartVoiceCommandAsync(ShortcutAction action)
+    {
+        SetShellStatusText("Voice command support is initializing.");
+        return Task.CompletedTask;
+    }
+
+    private Task StartVoiceCommandFromFlyoutAsync()
+    {
+        var normalized = settingsController?.Current.Shortcuts.Normalized();
+        if (normalized is null || !normalized.VoiceMode.Enabled)
+        {
+            return Task.CompletedTask;
+        }
+
+        var action = normalized.Actions.FirstOrDefault(VoiceShortcutPolicy.IsProtectedDefaultVoiceAction);
+        if (action is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return StartVoiceCommandAsync(action);
     }
 
     private async Task OpenShortcutInteractiveCommandWindowAsync(ShortcutAction action)

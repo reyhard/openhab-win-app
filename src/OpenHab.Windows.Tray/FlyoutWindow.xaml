@@ -26,6 +26,7 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <Image Grid.Column="0"
@@ -66,8 +67,19 @@
                               Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                 </Button>
 
-                <Button x:Uid="Flyout_MinimizeButton"
+                <Button x:Name="VoiceCommandButton"
                         Grid.Column="3"
+                        Width="34"
+                        Height="34"
+                        Padding="0"
+                        Visibility="Collapsed"
+                        ToolTipService.ToolTip="Voice command"
+                        Click="VoiceCommandButton_Click">
+                    <FontIcon Glyph="&#xE720;" FontSize="13" />
+                </Button>
+
+                <Button x:Uid="Flyout_MinimizeButton"
+                        Grid.Column="4"
                         Width="34"
                         Height="34"
                         Padding="0"

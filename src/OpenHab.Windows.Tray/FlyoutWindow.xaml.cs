@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
+using OpenHab.App.Shortcuts;
 using OpenHab.App.Tray;
 using OpenHab.Core;
 using OpenHab.Core.Api;
@@ -35,6 +36,7 @@ public sealed partial class FlyoutWindow : Window
     private readonly Action requestOpenSettings;
     private readonly Action requestOpenNotifications;
     private readonly Action requestHideFlyout;
+    private readonly Action requestVoiceCommand;
     private readonly SitemapSurfaceRenderer sitemapSurfaceRenderer;
     private readonly DispatcherRefreshGate snapshotRefreshGate;
     private readonly DispatcherRefreshGate notificationRefreshGate;
@@ -68,7 +70,8 @@ public sealed partial class FlyoutWindow : Window
         Action requestOpenMainWindow,
         Action requestOpenSettings,
         Action requestOpenNotifications,
-        Action requestHideFlyout)
+        Action requestHideFlyout,
+        Action requestVoiceCommand)
     {
         this.settingsController = settingsController;
         this.runtimeController = runtimeController;
@@ -77,6 +80,7 @@ public sealed partial class FlyoutWindow : Window
         this.requestOpenSettings = requestOpenSettings;
         this.requestOpenNotifications = requestOpenNotifications;
         this.requestHideFlyout = requestHideFlyout;
+        this.requestVoiceCommand = requestVoiceCommand;
         var iconAuthResolver = new SitemapIconAuthResolver(settingsController);
         sitemapSurfaceRenderer = new SitemapSurfaceRenderer(
             settingsController,
@@ -88,6 +92,7 @@ public sealed partial class FlyoutWindow : Window
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
+        RefreshVoiceCommandButtonVisibility();
         settingsController.SettingsChanged += OnSettingsChanged;
         ApplyFlyoutTheme();
         ConfigureFlyoutWindow();
@@ -269,6 +274,14 @@ public sealed partial class FlyoutWindow : Window
     private static void RefreshSettingsBindings()
     {
         // Sitemap selection is now reflected via the title; no ComboBox to update.
+    }
+
+    private void RefreshVoiceCommandButtonVisibility()
+    {
+        var shortcuts = settingsController.Current.Shortcuts.Normalized();
+        VoiceCommandButton.Visibility = shortcuts.VoiceMode.Enabled
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void RefreshChromeBindings(SitemapRuntimeSnapshot snapshot)
@@ -547,6 +560,11 @@ public sealed partial class FlyoutWindow : Window
     private void OpenNotificationsButton_Click(object sender, RoutedEventArgs e)
     {
         requestOpenNotifications();
+    }
+
+    private void VoiceCommandButton_Click(object sender, RoutedEventArgs e)
+    {
+        requestVoiceCommand();
     }
 
     private void NavigateBack_Click(object sender, RoutedEventArgs e)
@@ -865,6 +883,7 @@ public sealed partial class FlyoutWindow : Window
         {
             ApplyFlyoutTheme();
             ScheduleNativeDecorationApply();
+            RefreshVoiceCommandButtonVisibility();
             sitemapSurfaceRenderer.ForceFullRebuild();
             RefreshRuntimeBindings();
         });
