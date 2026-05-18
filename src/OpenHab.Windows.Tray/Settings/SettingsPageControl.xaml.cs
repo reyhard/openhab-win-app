@@ -2168,6 +2168,7 @@ public sealed partial class SettingsPageControl : UserControl
             ShortcutCommandType.OpenSlider => text.Get("Settings.Shortcuts.CommandType.OpenSlider"),
             ShortcutCommandType.OpenColorPicker => text.Get("Settings.Shortcuts.CommandType.OpenColorPicker"),
             ShortcutCommandType.SendCommand => text.Get("Settings.Shortcuts.CommandType.SendCommand"),
+            ShortcutCommandType.Voice => text.Get("Settings.Shortcuts.CommandType.Voice"),
             _ => commandType.ToString()
         };
 
@@ -2270,6 +2271,11 @@ public sealed partial class SettingsPageControl : UserControl
     {
         if (sender is not Button { Tag: string actionId } || string.IsNullOrWhiteSpace(actionId))
         {
+            return;
+        }
+        if (VoiceShortcutPolicy.IsProtectedDefaultVoiceAction(actionId))
+        {
+            setStatusText(text.Get("Settings.Shortcuts.VoiceMode.DefaultActionProtected"));
             return;
         }
 
@@ -2500,7 +2506,6 @@ public sealed partial class SettingsPageControl : UserControl
 
         if (commandType == ShortcutCommandType.Voice)
         {
-            ShortcutActionValueText.Text = string.Empty;
             ShortcutActionValueText.PlaceholderText = "-";
             ShortcutActionValueText.IsEnabled = false;
             return;

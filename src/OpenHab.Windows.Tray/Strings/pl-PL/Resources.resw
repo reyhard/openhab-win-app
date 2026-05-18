@@ -533,37 +533,37 @@
     <value>Tryb głosowy</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.Subtitle" xml:space="preserve">
-    <value>Single-shot speech recognition for openHAB voice commands</value>
+    <value>Jednorazowe rozpoznawanie mowy dla poleceń głosowych openHAB</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ExpanderTitle" xml:space="preserve">
     <value>Tryb głosowy</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ExpanderSubtitle" xml:space="preserve">
-    <value>Send recognized speech to an openHAB item</value>
+    <value>Wysyłaj rozpoznaną mowę do elementu openHAB</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.EnableAutomationName" xml:space="preserve">
-    <value>Enable voice commands</value>
+    <value>Włącz polecenia głosowe</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.EnableTitle" xml:space="preserve">
-    <value>Enable voice commands</value>
+    <value>Włącz polecenia głosowe</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.EnableSubtitle" xml:space="preserve">
-    <value>Show the flyout microphone button and allow Voice actions to run</value>
+    <value>Pokaż przycisk mikrofonu w wysuwanym panelu i zezwól na uruchamianie akcji Głos</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ConfirmationTitle" xml:space="preserve">
-    <value>Require confirmation before sending</value>
+    <value>Wymagaj potwierdzenia przed wysłaniem</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.ConfirmationSubtitle" xml:space="preserve">
-    <value>Review the recognized phrase before it is sent to openHAB</value>
+    <value>Sprawdź rozpoznaną frazę, zanim zostanie wysłana do openHAB</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.PrivacyTitle" xml:space="preserve">
-    <value>Privacy</value>
+    <value>Prywatność</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.PrivacyText" xml:space="preserve">
-    <value>Windows free-form dictation can use Microsoft online speech services. Voice commands require Windows microphone and speech-recognition permissions. Normal diagnostics do not log recognized phrases; verbose diagnostics may log full spoken command text to diagnostics.log.</value>
+    <value>Dyktowanie swobodne w systemie Windows może korzystać z internetowych usług mowy firmy Microsoft. Polecenia głosowe wymagają uprawnień systemu Windows do mikrofonu i rozpoznawania mowy. Zwykła diagnostyka nie zapisuje rozpoznanych fraz; szczegółowa diagnostyka może zapisywać pełny tekst wypowiedzianego polecenia do diagnostics.log.</value>
   </data>
   <data name="Settings.Shortcuts.VoiceMode.DefaultActionProtected" xml:space="preserve">
-    <value>The default Voice action is required while Voice Mode exists and cannot be deleted.</value>
+    <value>Domyślna akcja Głos jest wymagana, gdy Tryb głosowy jest dostępny, i nie można jej usunąć.</value>
   </data>
   <data name="Settings.Shortcuts.Shortcut.Title" xml:space="preserve">
     <value>Skrót</value>
@@ -681,7 +681,7 @@ Dodaj akcje, aby były dostępne w menu poleceń.</value>
     <value>Wyślij polecenie</value>
   </data>
   <data name="Settings.Shortcuts.CommandType.Voice" xml:space="preserve">
-    <value>Voice</value>
+    <value>Głos</value>
   </data>
   <data name="Settings.Shortcuts.DeleteDialog.Title" xml:space="preserve">
     <value>Usuń akcję</value>
