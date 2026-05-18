@@ -96,6 +96,19 @@ If Release build fails because files cannot be copied or overwritten while the a
 
 If a change is isolated to one layer, targeted tests are fine during iteration, but run the full solution tests before claiming completion when practical.
 
+## Coverage and Sonar
+
+Treat coverage as a signal for testable logic, not as a reason to hide behavior. Add or extend tests for pure decisions, parsing, planning, formatting, mapping, and state transitions before considering exclusions.
+
+When code cannot be tested meaningfully because it is thin WinUI, WinRT, Win32, Windows App SDK, COM, registry, credential, toast, tray, WebView, or live OS integration glue, keep exclusions narrow and documented:
+
+- File-level exclusions must be listed in `docs/superpowers/verification/coverage-exclusion-inventory.md`, `coverage.runsettings`, and `.github/workflows/sonarcloud.yml` using the syntax each tool expects.
+- Partial method or constructor exclusions should use `[ExcludeFromCodeCoverage]` with a specific justification and must be documented under the inventory's partial exclusions section.
+- Do not exclude large mixed files until testable decisions have been extracted to `OpenHab.App`, `OpenHab.Rendering`, `OpenHab.Sitemaps`, `OpenHab.Core`, or a small tested helper.
+- Keep duplicated WinUI code-behind out of Sonar CPD only when shared behavior has already been extracted and tested elsewhere; document this in the Sonar workflow comment or the coverage inventory.
+- After changing exclusions, run coverage with `--collect "XPlat Code Coverage" --settings coverage.runsettings` and confirm excluded files or members are absent from generated `coverage.opencover.xml` where practical.
+- CsWinRT warnings such as `CsWinRT1030` are expected for some Windows-targeted projects because generated WinRT interop may require unsafe code for trimming/AOT compatibility. Keep `AllowUnsafeBlocks` centralized and conditional for `*-windows*` target frameworks; do not add handwritten unsafe code unless there is a separate reviewed need.
+
 ## Subagent Delegation
 
 When delegating work to subagents, choose the model based on task complexity:

@@ -30,6 +30,7 @@ public sealed partial class SettingsPageControl : UserControl
     private const string CustomShortcutIconId = "custom";
     private const string CardStrokeBrushResourceKey = "CardStrokeColorDefaultBrush";
     private const string LocalTransportTag = "Local";
+    private const string DeviceInfoSyncTitleKey = "Settings.DeviceInfoSync.Title";
 
     private sealed record AppColorThemeOption(string Label, AppColorTheme Theme)
     {
@@ -171,7 +172,7 @@ public sealed partial class SettingsPageControl : UserControl
                 SettingsContent.Children.Add(CreateCategoryRow("\uE713", text.Get("Settings.Connection.Title"), text.Get("Settings.Connection.Subtitle"), SettingsPageKind.Connection));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE770", text.Get("Settings.General.Title"), text.Get("Settings.General.Subtitle"), SettingsPageKind.General));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE790", text.Get("Settings.Appearance.Title"), text.Get("Settings.Appearance.Subtitle"), SettingsPageKind.Appearance));
-                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", text.Get("Settings.DeviceInfoSync.Title"), text.Get("Settings.DeviceInfoSync.Subtitle"), SettingsPageKind.DeviceInfoSync));
+                SettingsContent.Children.Add(CreateCategoryRow("\uE7F4", text.Get(DeviceInfoSyncTitleKey), text.Get("Settings.DeviceInfoSync.Subtitle"), SettingsPageKind.DeviceInfoSync));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE765", text.Get("Settings.Shortcuts.Title"), text.Get("Settings.Shortcuts.Subtitle"), SettingsPageKind.Shortcuts));
                 SettingsContent.Children.Add(CreateCategoryRow("\uE946", text.Get("Settings.About.Title"), text.Get("Settings.About.Subtitle"), SettingsPageKind.About));
                 break;
@@ -191,7 +192,7 @@ public sealed partial class SettingsPageControl : UserControl
                 BuildAppearanceSettingsPage();
                 break;
             case SettingsPageKind.DeviceInfoSync:
-                UpdateSettingsBreadcrumb(text.Get("Settings.DeviceInfoSync.Title"));
+                UpdateSettingsBreadcrumb(text.Get(DeviceInfoSyncTitleKey));
                 SettingsSubtitleText.Text = text.Get("Settings.DeviceInfoSync.Subtitle");
                 BuildDeviceInfoSyncSettingsPage();
                 break;
@@ -581,7 +582,7 @@ public sealed partial class SettingsPageControl : UserControl
             };
             syncContent.Children.Add(DeviceInfoSyncDisabledText);
             SettingsContent.Children.Add(CreateSettingsExpander(
-                text.Get("Settings.DeviceInfoSync.Title"),
+                text.Get(DeviceInfoSyncTitleKey),
                 text.Get("Settings.DeviceInfoSync.Description"),
                 CreateExpanderRows(syncContent),
                 enabledAction));
@@ -607,7 +608,7 @@ public sealed partial class SettingsPageControl : UserControl
         syncContent.Children.Add(DeviceInfoSyncIntervalBox);
 
         SettingsContent.Children.Add(CreateSettingsExpander(
-            text.Get("Settings.DeviceInfoSync.Title"),
+            text.Get(DeviceInfoSyncTitleKey),
             text.Get("Settings.DeviceInfoSync.Description"),
             CreateExpanderRows(syncContent),
             enabledAction));
@@ -2182,7 +2183,7 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
-        var updatedActions = shortcutActionEditorPlanner.MoveAction(shortcuts.Actions, actionId, offset);
+        var updatedActions = ShortcutActionEditorPlanner.MoveAction(shortcuts.Actions, actionId, offset);
         if (updatedActions.SequenceEqual(shortcuts.Actions))
         {
             return;
@@ -2234,7 +2235,7 @@ public sealed partial class SettingsPageControl : UserControl
 
         settingsController.SetShortcutSettings(shortcuts with
         {
-            Actions = shortcutActionEditorPlanner.RemoveAction(shortcuts.Actions, actionId)
+            Actions = ShortcutActionEditorPlanner.RemoveAction(shortcuts.Actions, actionId)
         });
         if (string.Equals(editingShortcutActionId, actionId, StringComparison.Ordinal))
         {
@@ -2261,11 +2262,7 @@ public sealed partial class SettingsPageControl : UserControl
     private void SaveShortcutActionButton_Click(object sender, RoutedEventArgs e)
     {
         var shortcuts = (settingsController.Current.Shortcuts ?? ShortcutSettings.Default).Normalized();
-        var selectedType = ShortcutActionTypeCombo?.SelectedItem is ShortcutCommandType commandType
-            ? commandType
-            : ShortcutActionTypeCombo?.SelectedItem is ShortcutCommandTypeOption option
-                ? option.CommandType
-                : ShortcutCommandType.Toggle;
+        var selectedType = ResolveSelectedShortcutCommandType(ShortcutActionTypeCombo?.SelectedItem);
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
         var draft = new ShortcutActionEditorDraft(
@@ -2335,7 +2332,7 @@ public sealed partial class SettingsPageControl : UserControl
             ShortcutActionGlobalShortcutRecorder.Error = null;
         }
 
-        var updatedActions = shortcutActionEditorPlanner.UpsertAction(shortcuts.Actions, updated);
+        var updatedActions = ShortcutActionEditorPlanner.UpsertAction(shortcuts.Actions, updated);
         settingsController.SetShortcutSettings(shortcuts with { Actions = updatedActions });
 
         creatingShortcutAction = false;
@@ -2382,11 +2379,7 @@ public sealed partial class SettingsPageControl : UserControl
             return null;
         }
 
-        var selectedType = ShortcutActionTypeCombo.SelectedItem is ShortcutCommandType commandType
-            ? commandType
-            : ShortcutActionTypeCombo.SelectedItem is ShortcutCommandTypeOption option
-                ? option.CommandType
-                : ShortcutCommandType.Toggle;
+        var selectedType = ResolveSelectedShortcutCommandType(ShortcutActionTypeCombo.SelectedItem);
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
 
         return new ShortcutActionEditorDraft(
@@ -2404,6 +2397,16 @@ public sealed partial class SettingsPageControl : UserControl
     {
         return (combo?.SelectedItem as ComboBoxItem)?.Tag as ShortcutIconDefinition
             ?? combo?.SelectedItem as ShortcutIconDefinition;
+    }
+
+    private static ShortcutCommandType ResolveSelectedShortcutCommandType(object? selectedItem)
+    {
+        return selectedItem switch
+        {
+            ShortcutCommandType commandType => commandType,
+            ShortcutCommandTypeOption option => option.CommandType,
+            _ => ShortcutCommandType.Toggle
+        };
     }
 
     private async Task NavigateToSettingsPageWithDiscardConfirmationAsync(SettingsPageKind destination)

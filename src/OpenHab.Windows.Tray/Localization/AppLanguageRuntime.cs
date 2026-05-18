@@ -1,5 +1,6 @@
 using OpenHab.App.Settings;
 using OpenHab.Core;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using ApplicationLanguages = Microsoft.Windows.Globalization.ApplicationLanguages;
@@ -20,6 +21,7 @@ internal static class AppLanguageRuntime
     public static bool ShouldShowRestartNotice(AppLanguage savedLanguage, AppLanguage appliedLanguage) =>
         savedLanguage != appliedLanguage;
 
+    [ExcludeFromCodeCoverage(Justification = "Thin WinRT ApplicationLanguages wrapper; injectable overload covers language selection behavior.")]
     public static AppLanguage ApplyLanguage(AppLanguage language) =>
         ApplyLanguage(language, static tag => ApplicationLanguages.PrimaryLanguageOverride = tag);
 

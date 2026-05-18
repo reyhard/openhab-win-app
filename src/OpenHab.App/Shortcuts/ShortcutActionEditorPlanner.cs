@@ -67,7 +67,7 @@ public sealed class ShortcutActionEditorPlanner
             string.IsNullOrWhiteSpace(draft.CommandValue) ? null : draft.CommandValue.Trim());
     }
 
-    public ImmutableArray<ShortcutAction> UpsertAction(IEnumerable<ShortcutAction> actions, ShortcutAction updated)
+    public static ImmutableArray<ShortcutAction> UpsertAction(IEnumerable<ShortcutAction> actions, ShortcutAction updated)
     {
         var list = actions.ToList();
         var index = list.FindIndex(action => string.Equals(action.Id, updated.Id, StringComparison.Ordinal));
@@ -81,14 +81,14 @@ public sealed class ShortcutActionEditorPlanner
         return list.ToImmutableArray();
     }
 
-    public ImmutableArray<ShortcutAction> RemoveAction(IEnumerable<ShortcutAction> actions, string actionId)
+    public static ImmutableArray<ShortcutAction> RemoveAction(IEnumerable<ShortcutAction> actions, string actionId)
     {
         return actions
             .Where(action => !string.Equals(action.Id, actionId, StringComparison.Ordinal))
             .ToImmutableArray();
     }
 
-    public ImmutableArray<ShortcutAction> MoveAction(IReadOnlyList<ShortcutAction> actions, string actionId, int offset)
+    public static ImmutableArray<ShortcutAction> MoveAction(IReadOnlyList<ShortcutAction> actions, string actionId, int offset)
     {
         if (actions.Count <= 1 || offset == 0)
         {

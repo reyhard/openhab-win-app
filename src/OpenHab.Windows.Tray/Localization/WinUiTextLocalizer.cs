@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Windows.ApplicationModel.Resources;
 using OpenHab.App.Localization;
 
@@ -8,11 +9,13 @@ internal sealed class WinUiTextLocalizer : ITextLocalizer
 {
     private readonly Func<string, string?> resourceLookup;
 
+    [ExcludeFromCodeCoverage(Justification = "WinUI ResourceLoader construction is framework glue; injected lookup behavior is unit tested.")]
     public WinUiTextLocalizer()
         : this(languageTag: null)
     {
     }
 
+    [ExcludeFromCodeCoverage(Justification = "WinUI ResourceManager construction is framework glue; injected lookup behavior is unit tested.")]
     public WinUiTextLocalizer(string? languageTag)
         : this(CreateResourceLookup(languageTag))
     {
@@ -47,6 +50,7 @@ internal sealed class WinUiTextLocalizer : ITextLocalizer
     public string Format(string key, params object[] args) =>
         string.Format(CultureInfo.CurrentCulture, Get(key), args);
 
+    [ExcludeFromCodeCoverage(Justification = "WinUI resource lookup is framework glue; fallback and key-candidate behavior use the injected constructor in tests.")]
     private static Func<string, string?> CreateResourceLookup(string? languageTag)
     {
         if (!string.IsNullOrWhiteSpace(languageTag))
