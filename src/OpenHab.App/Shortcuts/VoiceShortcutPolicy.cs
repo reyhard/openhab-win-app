@@ -40,6 +40,9 @@ public static class VoiceShortcutPolicy
 
         var normalized = actions
             .Where(static action => action is not null)
+            .Select(static action => IsProtectedDefaultVoiceAction(action)
+                ? RepairProtectedDefaultVoiceAction(action)
+                : action)
             .ToList();
 
         if (normalized.Any(IsProtectedDefaultVoiceAction))
@@ -49,5 +52,14 @@ public static class VoiceShortcutPolicy
 
         normalized.Insert(0, CreateDefaultVoiceAction());
         return normalized;
+    }
+
+    private static ShortcutAction RepairProtectedDefaultVoiceAction(ShortcutAction action)
+    {
+        return action with
+        {
+            CommandType = ShortcutCommandType.Voice,
+            CommandValue = null
+        };
     }
 }

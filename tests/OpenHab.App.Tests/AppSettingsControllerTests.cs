@@ -189,6 +189,34 @@ public sealed class AppSettingsControllerTests
     }
 
     [Fact]
+    public void VoiceModeEnabledRepairsProtectedDefaultVoiceActionType()
+    {
+        var controller = CreateController();
+        controller.SetShortcutSettings(ShortcutSettings.Default with
+        {
+            VoiceMode = new VoiceModeShortcutSettings(Enabled: true),
+            Actions =
+            [
+                new ShortcutAction(
+                    "built-in.voice.default",
+                    "Kitchen voice",
+                    "microphone",
+                    ShowInCommandMenu: true,
+                    GlobalShortcut: new ShortcutBinding([ShortcutModifier.Ctrl, ShortcutModifier.Alt], "K"),
+                    TargetItem: "KitchenVoiceCommand",
+                    CommandType: ShortcutCommandType.SendCommand,
+                    CommandValue: "ON")
+            ]
+        });
+
+        var shortcuts = AssertShortcuts(controller.Current);
+        var action = AssertProtectedVoiceActionIdentity(shortcuts);
+        Assert.Equal("Kitchen voice", action.Name);
+        Assert.Equal("KitchenVoiceCommand", action.TargetItem);
+        Assert.Equal("Ctrl + Alt + K", ShortcutBindingFormatter.Format(action.GlobalShortcut));
+    }
+
+    [Fact]
     public void LegacyVoiceModeObjectLoadsAsEnabledAndCreatesProtectedDefaultVoiceAction()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);

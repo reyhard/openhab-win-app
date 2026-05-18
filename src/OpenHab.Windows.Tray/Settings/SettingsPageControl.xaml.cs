@@ -1208,7 +1208,8 @@ public sealed partial class SettingsPageControl : UserControl
         ShortcutActionTypeCombo = new ComboBox
         {
             Width = 280,
-            ItemsSource = CreateShortcutCommandTypeOptions()
+            ItemsSource = CreateShortcutCommandTypeOptions(),
+            IsEnabled = !VoiceShortcutPolicy.IsProtectedDefaultVoiceAction(draftAction)
         };
         ShortcutActionTypeCombo.SelectedItem = ShortcutActionTypeCombo.Items
             .OfType<ShortcutCommandTypeOption>()
@@ -2342,6 +2343,11 @@ public sealed partial class SettingsPageControl : UserControl
             : ShortcutActionTypeCombo?.SelectedItem is ShortcutCommandTypeOption option
                 ? option.CommandType
                 : ShortcutCommandType.Toggle;
+        if (VoiceShortcutPolicy.IsProtectedDefaultVoiceAction(editingShortcutActionId))
+        {
+            selectedType = ShortcutCommandType.Voice;
+        }
+
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
         var commandValue = selectedType == ShortcutCommandType.Voice
             ? null
@@ -2466,6 +2472,11 @@ public sealed partial class SettingsPageControl : UserControl
             : ShortcutActionTypeCombo.SelectedItem is ShortcutCommandTypeOption option
                 ? option.CommandType
                 : ShortcutCommandType.Toggle;
+        if (VoiceShortcutPolicy.IsProtectedDefaultVoiceAction(editingShortcutActionId))
+        {
+            selectedType = ShortcutCommandType.Voice;
+        }
+
         var selectedIcon = GetSelectedShortcutIcon(ShortcutActionIconCombo);
         var commandValue = selectedType == ShortcutCommandType.Voice
             ? null
