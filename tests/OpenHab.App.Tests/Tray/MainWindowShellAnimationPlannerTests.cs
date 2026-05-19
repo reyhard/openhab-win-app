@@ -5,7 +5,7 @@ namespace OpenHab.App.Tests.Tray;
 public sealed class MainWindowShellAnimationPlannerTests
 {
     [Fact]
-    public void CreateSidebarPlan_CollapseKeepsExpandedLayoutUntilWidthAnimationCompletes()
+    public void CreateSidebarPlan_CollapseHidesTextBeforeWidthAnimation()
     {
         var plan = MainWindowShellAnimationPlanner.CreateSidebarPlan(
             targetCollapsed: true,
@@ -14,9 +14,25 @@ public sealed class MainWindowShellAnimationPlannerTests
             collapsedWidth: 56d);
 
         Assert.Equal(56d, plan.TargetWidth);
-        Assert.Equal(SidebarLayoutState.Expanded, plan.LayoutAtAnimationStart);
+        Assert.Equal(SidebarLayoutState.Collapsed, plan.LayoutAtAnimationStart);
         Assert.Equal(SidebarLayoutState.Collapsed, plan.LayoutAtAnimationEnd);
         Assert.True(plan.AnimatesWidth);
+    }
+
+    [Theory]
+    [InlineData(false, 0d)]
+    [InlineData(true, 180d)]
+    public void ResolveSidebarCollapseIconAngle_ReturnsTargetRotation(bool isCollapsed, double expectedAngle)
+    {
+        Assert.Equal(expectedAngle, MainWindowShellAnimationPlanner.ResolveSidebarCollapseIconAngle(isCollapsed));
+    }
+
+    [Theory]
+    [InlineData(false, 0d)]
+    [InlineData(true, 180d)]
+    public void ResolveMainUiPagesChevronAngle_ReturnsTargetRotation(bool isExpanded, double expectedAngle)
+    {
+        Assert.Equal(expectedAngle, MainWindowShellAnimationPlanner.ResolveMainUiPagesChevronAngle(isExpanded));
     }
 
     [Fact]
@@ -32,6 +48,28 @@ public sealed class MainWindowShellAnimationPlannerTests
         Assert.Equal(SidebarLayoutState.Collapsed, plan.LayoutAtAnimationStart);
         Assert.Equal(SidebarLayoutState.Expanded, plan.LayoutAtAnimationEnd);
         Assert.True(plan.AnimatesWidth);
+    }
+
+    [Fact]
+    public void ResolveSidebarChromeDuration_UsesSlightlySlowerMotion()
+    {
+        Assert.Equal(240, MainWindowShellAnimationPlanner.ResolveSidebarChromeDurationMs());
+    }
+
+    [Fact]
+    public void ResolveSidebarLayoutMetrics_UsesSameIconLaneInCollapsedAndExpandedLayouts()
+    {
+        var collapsed = MainWindowShellAnimationPlanner.ResolveSidebarLayoutMetrics(SidebarLayoutState.Collapsed);
+        var expanded = MainWindowShellAnimationPlanner.ResolveSidebarLayoutMetrics(SidebarLayoutState.Expanded);
+
+        Assert.Equal(expanded.SidePadding, collapsed.SidePadding);
+        Assert.Equal(expanded.NavButtonPadding, collapsed.NavButtonPadding);
+        Assert.Equal(expanded.BrandMargin.Left, collapsed.BrandMargin.Left);
+        Assert.Equal(expanded.BrandMinHeight, collapsed.BrandMinHeight);
+        Assert.Equal(34d, collapsed.NavButtonHeight);
+        Assert.Equal(expanded.NavButtonHeight, collapsed.NavButtonHeight);
+        Assert.Equal(34d, collapsed.IconLaneWidth);
+        Assert.Equal(expanded.IconLaneWidth, collapsed.IconLaneWidth);
     }
 
     [Fact]

@@ -41,9 +41,8 @@ public sealed partial class MainWindow : Window
     }
 
     private const double ExpandedSidebarWidth = 220d;
-    private const double CollapsedSidebarWidth = 56d;
+    private const double CollapsedSidebarWidth = 64d;
     private const double ExpandedSitemapPaneWidth = 380d;
-    private const int ShellChromeAnimationDurationMs = 180;
     private static readonly HttpClient FallbackOpenHabClient = new();
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
@@ -81,8 +80,10 @@ public sealed partial class MainWindow : Window
     private bool pendingMainUiTransportResync;
     private bool hasAppliedInitialShellState;
     private DispatcherTimer? sidebarWidthAnimationTimer;
+    private DispatcherTimer? sidebarCollapseIconAnimationTimer;
     private DispatcherTimer? sitemapPaneWidthAnimationTimer;
     private DispatcherTimer? mainUiPagesListAnimationTimer;
+    private DispatcherTimer? mainUiPagesChevronAnimationTimer;
     private string? pendingExplicitMainUiRoute;
     private MainUiWebViewHost? mainUiHost;
     private DateTimeOffset lastSettingsTouchUtc = DateTimeOffset.MinValue;
@@ -586,7 +587,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshPromotedMainUiPagesList(bool discoveryError = false, bool animate = false)
     {
-        UpdateMainUiPagesChrome();
+        UpdateMainUiPagesChrome(animate);
         var shouldShow = ShouldShowMainUiPagesList();
         if (!shouldShow)
         {
@@ -1266,6 +1267,16 @@ public sealed partial class MainWindow : Window
             GetCurrentColumnWidth(SidebarColumn),
             ExpandedSidebarWidth,
             CollapsedSidebarWidth);
+        var targetIconAngle = MainWindowShellAnimationPlanner.ResolveSidebarCollapseIconAngle(isSidebarCollapsed);
+
+        if (animate)
+        {
+            AnimateSidebarCollapseIcon(targetIconAngle);
+        }
+        else
+        {
+            SetSidebarCollapseIconAngle(targetIconAngle);
+        }
 
         if (animate && plan.AnimatesWidth)
         {
@@ -1285,8 +1296,9 @@ public sealed partial class MainWindow : Window
     {
         sidebarLayoutState = layoutState;
         var isCollapsedLayout = layoutState == SidebarLayoutState.Collapsed;
+        var metrics = MainWindowShellAnimationPlanner.ResolveSidebarLayoutMetrics(layoutState);
 
-        SidebarLayoutRoot.Padding = isCollapsedLayout ? new Thickness(8, 18, 8, 12) : new Thickness(12, 18, 12, 12);
+        SidebarLayoutRoot.Padding = new Thickness(metrics.SidePadding, 18, metrics.SidePadding, 12);
         SidebarBrandTextPanel.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
         HomeNavText.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
         NotificationsNavText.Visibility = isCollapsedLayout ? Visibility.Collapsed : Visibility.Visible;
@@ -1303,24 +1315,45 @@ public sealed partial class MainWindow : Window
         }
 
         Grid.SetColumnSpan(HomeNavButton, isCollapsedLayout ? 2 : 1);
-        HomeNavButton.Padding = isCollapsedLayout ? new Thickness(0) : new Thickness(10, 0, 10, 0);
-        NotificationsNavButton.Padding = isCollapsedLayout ? new Thickness(0) : new Thickness(10, 0, 10, 0);
-        SettingsNavButton.Padding = isCollapsedLayout ? new Thickness(0) : new Thickness(10, 0, 10, 0);
-        HomeNavButton.HorizontalContentAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        NotificationsNavButton.HorizontalContentAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        SettingsNavButton.HorizontalContentAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        HomeNavButton.Padding = metrics.NavButtonPadding;
+        NotificationsNavButton.Padding = metrics.NavButtonPadding;
+        SettingsNavButton.Padding = metrics.NavButtonPadding;
+        HomeNavButton.Height = metrics.NavButtonHeight;
+        HomeNavButton.MinHeight = metrics.NavButtonHeight;
+        HomeNavButton.MaxHeight = metrics.NavButtonHeight;
+        HomePagesToggleButton.Height = metrics.NavButtonHeight;
+        HomePagesToggleButton.MinHeight = metrics.NavButtonHeight;
+        HomePagesToggleButton.MaxHeight = metrics.NavButtonHeight;
+        NotificationsNavButton.Height = metrics.NavButtonHeight;
+        NotificationsNavButton.MinHeight = metrics.NavButtonHeight;
+        NotificationsNavButton.MaxHeight = metrics.NavButtonHeight;
+        SettingsNavButton.Height = metrics.NavButtonHeight;
+        SettingsNavButton.MinHeight = metrics.NavButtonHeight;
+        SettingsNavButton.MaxHeight = metrics.NavButtonHeight;
+        HomeNavButton.HorizontalContentAlignment = HorizontalAlignment.Left;
+        NotificationsNavButton.HorizontalContentAlignment = HorizontalAlignment.Left;
+        SettingsNavButton.HorizontalContentAlignment = HorizontalAlignment.Left;
 
-        SidebarBrandPanel.Margin = isCollapsedLayout ? new Thickness(0, 0, 0, 14) : new Thickness(4, 0, 0, 14);
-        SidebarBrandPanel.HorizontalAlignment = isCollapsedLayout ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        SidebarCollapseIcon.Glyph = isCollapsedLayout ? "\uE970" : "\uE96F";
+        SidebarBrandPanel.Margin = metrics.BrandMargin;
+        SidebarBrandPanel.MinHeight = metrics.BrandMinHeight;
+        SidebarBrandPanel.HorizontalAlignment = HorizontalAlignment.Left;
         ToolTipService.SetToolTip(SidebarCollapseButton, isCollapsedLayout ? "Expand navigation" : "Collapse navigation");
         AutomationProperties.SetName(SidebarCollapseButton, isCollapsedLayout ? "Expand navigation" : "Collapse navigation");
     }
 
-    private void UpdateMainUiPagesChrome()
+    private void UpdateMainUiPagesChrome(bool animate = false)
     {
         var isExpanded = settingsController.Current.MainUiPagesExpanded;
-        MainUiPagesChevron.Glyph = isExpanded ? "\uE70E" : "\uE70D";
+        var targetAngle = MainWindowShellAnimationPlanner.ResolveMainUiPagesChevronAngle(isExpanded);
+        if (animate)
+        {
+            AnimateMainUiPagesChevron(targetAngle);
+        }
+        else
+        {
+            SetMainUiPagesChevronAngle(targetAngle);
+        }
+
         HomePagesToggleButton.Visibility = sidebarLayoutState == SidebarLayoutState.Collapsed
             ? Visibility.Collapsed
             : Visibility.Visible;
@@ -1377,7 +1410,7 @@ public sealed partial class MainWindow : Window
         sidebarWidthAnimationTimer = timer;
         timer.Tick += (_, _) =>
         {
-            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / ShellChromeAnimationDurationMs, 0d, 1d);
+            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / MainWindowShellAnimationPlanner.ResolveSidebarChromeDurationMs(), 0d, 1d);
             var width = Lerp(startWidth, targetWidth, EaseOutCubic(progress));
             SidebarColumn.Width = new GridLength(width);
             if (progress < 1d)
@@ -1393,6 +1426,93 @@ public sealed partial class MainWindow : Window
 
             SidebarColumn.Width = new GridLength(targetWidth);
             completed?.Invoke();
+        };
+        timer.Start();
+    }
+
+    private void SetSidebarCollapseIconAngle(double angle)
+    {
+        sidebarCollapseIconAnimationTimer?.Stop();
+        sidebarCollapseIconAnimationTimer = null;
+        SidebarCollapseIconRotateTransform.Angle = angle;
+    }
+
+    private void AnimateSidebarCollapseIcon(double targetAngle)
+    {
+        sidebarCollapseIconAnimationTimer?.Stop();
+        var startAngle = SidebarCollapseIconRotateTransform.Angle;
+        if (Math.Abs(startAngle - targetAngle) < 0.5d)
+        {
+            SidebarCollapseIconRotateTransform.Angle = targetAngle;
+            return;
+        }
+
+        var started = DateTimeOffset.UtcNow;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        sidebarCollapseIconAnimationTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / MainWindowShellAnimationPlanner.ResolveSidebarChromeDurationMs(), 0d, 1d);
+            SidebarCollapseIconRotateTransform.Angle = Lerp(startAngle, targetAngle, EaseOutCubic(progress));
+            if (progress < 1d)
+            {
+                return;
+            }
+
+            timer.Stop();
+            if (ReferenceEquals(sidebarCollapseIconAnimationTimer, timer))
+            {
+                sidebarCollapseIconAnimationTimer = null;
+            }
+
+            SidebarCollapseIconRotateTransform.Angle = targetAngle;
+        };
+        timer.Start();
+    }
+
+    private void SetMainUiPagesChevronAngle(double angle)
+    {
+        mainUiPagesChevronAnimationTimer?.Stop();
+        mainUiPagesChevronAnimationTimer = null;
+        MainUiPagesChevronRotateTransform.Angle = angle;
+    }
+
+    private void AnimateMainUiPagesChevron(double targetAngle)
+    {
+        mainUiPagesChevronAnimationTimer?.Stop();
+        var startAngle = MainUiPagesChevronRotateTransform.Angle;
+        if (Math.Abs(startAngle - targetAngle) < 0.5d)
+        {
+            MainUiPagesChevronRotateTransform.Angle = targetAngle;
+            return;
+        }
+
+        var durationMs = SitemapPageTransitionAnimator.ResolveDurationMs(settingsController.GetFlyoutAnimationDurationMs());
+        if (durationMs <= 0)
+        {
+            MainUiPagesChevronRotateTransform.Angle = targetAngle;
+            return;
+        }
+
+        var started = DateTimeOffset.UtcNow;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        mainUiPagesChevronAnimationTimer = timer;
+        timer.Tick += (_, _) =>
+        {
+            var progress = Math.Clamp((DateTimeOffset.UtcNow - started).TotalMilliseconds / durationMs, 0d, 1d);
+            MainUiPagesChevronRotateTransform.Angle = Lerp(startAngle, targetAngle, EaseOutCubic(progress));
+            if (progress < 1d)
+            {
+                return;
+            }
+
+            timer.Stop();
+            if (ReferenceEquals(mainUiPagesChevronAnimationTimer, timer))
+            {
+                mainUiPagesChevronAnimationTimer = null;
+            }
+
+            MainUiPagesChevronRotateTransform.Angle = targetAngle;
         };
         timer.Start();
     }

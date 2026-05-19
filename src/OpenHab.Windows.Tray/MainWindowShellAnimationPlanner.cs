@@ -1,3 +1,5 @@
+using Microsoft.UI.Xaml;
+
 namespace OpenHab.Windows.Tray;
 
 internal enum SidebarLayoutState
@@ -11,6 +13,14 @@ internal readonly record struct SidebarAnimationPlan(
     SidebarLayoutState LayoutAtAnimationStart,
     SidebarLayoutState LayoutAtAnimationEnd,
     bool AnimatesWidth);
+
+internal readonly record struct SidebarLayoutMetrics(
+    double SidePadding,
+    Thickness NavButtonPadding,
+    Thickness BrandMargin,
+    double BrandMinHeight,
+    double NavButtonHeight,
+    double IconLaneWidth);
 
 internal readonly record struct PageListAnimationPlan(
     bool VisibleAtAnimationStart,
@@ -35,6 +45,7 @@ internal readonly record struct SitemapPaneAnimationPlan(
 
 internal static class MainWindowShellAnimationPlanner
 {
+    private const int SidebarChromeDurationMs = 240;
     private const double SitemapPaneDurationMultiplier = 1.5d;
 
     public static SidebarAnimationPlan CreateSidebarPlan(
@@ -44,14 +55,29 @@ internal static class MainWindowShellAnimationPlanner
         double collapsedWidth)
     {
         var targetWidth = targetCollapsed ? collapsedWidth : expandedWidth;
-        var startLayout = targetCollapsed ? SidebarLayoutState.Expanded : SidebarLayoutState.Collapsed;
         var endLayout = targetCollapsed ? SidebarLayoutState.Collapsed : SidebarLayoutState.Expanded;
+        var startLayout = SidebarLayoutState.Collapsed;
         return new SidebarAnimationPlan(
             targetWidth,
             startLayout,
             endLayout,
             Math.Abs(currentWidth - targetWidth) >= 0.5d);
     }
+
+    public static double ResolveSidebarCollapseIconAngle(bool isCollapsed) => isCollapsed ? 180d : 0d;
+
+    public static double ResolveMainUiPagesChevronAngle(bool isExpanded) => isExpanded ? 180d : 0d;
+
+    public static int ResolveSidebarChromeDurationMs() => SidebarChromeDurationMs;
+
+    public static SidebarLayoutMetrics ResolveSidebarLayoutMetrics(SidebarLayoutState layoutState) =>
+        new(
+            SidePadding: 12d,
+            NavButtonPadding: new Thickness(0),
+            BrandMargin: new Thickness(0, 0, 0, 14),
+            BrandMinHeight: 44d,
+            NavButtonHeight: 34d,
+            IconLaneWidth: 34d);
 
     public static PageListAnimationPlan CreatePageListPlan(
         bool targetVisible,
