@@ -16,10 +16,12 @@ public sealed record ShortcutSettings(
     VoiceModeShortcutSettings VoiceMode,
     ImmutableArray<ShortcutAction> Actions)
 {
+    private static readonly ShortcutBinding LegacyWinOCommandMenuBinding = new([ShortcutModifier.Win], "O");
+
     public static ShortcutSettings Default { get; } = new(
         new BuiltInShortcutSettings(
             Enabled: true,
-            Binding: new ShortcutBinding([ShortcutModifier.Win], "O"),
+            Binding: new ShortcutBinding([ShortcutModifier.Win, ShortcutModifier.Shift], "I"),
             RadialActivationMode: RadialActivationMode.Toggle),
         new VoiceModeShortcutSettings(
             Enabled: false,
@@ -34,6 +36,10 @@ public sealed record ShortcutSettings(
         var commandMenuBinding = ShortcutBindingFormatter.TryNormalize(commandMenu.Binding, out var normalizedCommandMenuBinding)
             ? normalizedCommandMenuBinding
             : Default.CommandMenu.Binding;
+        if (IsSameBinding(commandMenuBinding, LegacyWinOCommandMenuBinding))
+        {
+            commandMenuBinding = Default.CommandMenu.Binding;
+        }
 
         var commandMenuMode = Enum.IsDefined(commandMenu.RadialActivationMode)
             ? commandMenu.RadialActivationMode
@@ -72,5 +78,15 @@ public sealed record ShortcutSettings(
             },
             voiceMode,
             actions);
+    }
+
+    private static bool IsSameBinding(ShortcutBinding? first, ShortcutBinding? second)
+    {
+        return ShortcutBindingFormatter.TryNormalize(first, out var normalizedFirst)
+            && ShortcutBindingFormatter.TryNormalize(second, out var normalizedSecond)
+            && string.Equals(
+                ShortcutBindingFormatter.Format(normalizedFirst),
+                ShortcutBindingFormatter.Format(normalizedSecond),
+                StringComparison.Ordinal);
     }
 }

@@ -1985,6 +1985,14 @@ public sealed partial class SettingsPageControl : UserControl
             return;
         }
 
+        var availabilityError = GetShortcutAvailabilityError(binding);
+        if (availabilityError is not null)
+        {
+            recorder.Error = availabilityError;
+            recorder.Binding = shortcuts.CommandMenu.Binding;
+            return;
+        }
+
         recorder.Error = null;
         settingsController.SetShortcutSettings(shortcuts with
         {
@@ -2360,6 +2368,8 @@ public sealed partial class SettingsPageControl : UserControl
             CommandType: selectedType,
             CommandValue: commandValue);
         var updated = shortcutActionEditorPlanner.BuildAction(draft);
+        var existingAction = shortcuts.Actions.FirstOrDefault(action =>
+            string.Equals(action.Id, updated.Id, StringComparison.Ordinal));
 
         var errors = new List<string>();
         var actionValidation = ShortcutValidation.ValidateAction(updated, text);
@@ -2390,6 +2400,15 @@ public sealed partial class SettingsPageControl : UserControl
             errors.AddRange(bindingValidation.Errors);
         }
 
+        var availabilityError = updated.GlobalShortcut is not null
+            && !ShortcutBindingsEqual(existingAction?.GlobalShortcut, updated.GlobalShortcut)
+                ? GetShortcutAvailabilityError(updated.GlobalShortcut)
+                : null;
+        if (availabilityError is not null)
+        {
+            errors.Add(availabilityError);
+        }
+
         if (errors.Count > 0)
         {
             if (ShortcutActionEditorErrorText is not null)
@@ -2399,9 +2418,19 @@ public sealed partial class SettingsPageControl : UserControl
             }
             if (ShortcutActionGlobalShortcutRecorder is not null)
             {
-                ShortcutActionGlobalShortcutRecorder.Error = bindingValidation.IsValid
+                var shortcutErrors = new List<string>();
+                if (!bindingValidation.IsValid)
+                {
+                    shortcutErrors.AddRange(bindingValidation.Errors);
+                }
+                if (availabilityError is not null)
+                {
+                    shortcutErrors.Add(availabilityError);
+                }
+
+                ShortcutActionGlobalShortcutRecorder.Error = shortcutErrors.Count == 0
                     ? null
-                    : string.Join(Environment.NewLine, bindingValidation.Errors);
+                    : string.Join(Environment.NewLine, shortcutErrors.Distinct(StringComparer.Ordinal));
             }
 
             return;
@@ -2423,6 +2452,32 @@ public sealed partial class SettingsPageControl : UserControl
         creatingShortcutAction = false;
         editingShortcutActionId = null;
         RefreshShortcutActionsSection();
+    }
+
+    private string? GetShortcutAvailabilityError(ShortcutBinding? binding)
+    {
+        var availability = ShortcutHotkeyAvailabilityChecker.Check(binding);
+        return availability.Status switch
+        {
+            ShortcutHotkeyAvailabilityStatus.Invalid => text.Get("Shortcuts.Validation.KeyInvalid"),
+            ShortcutHotkeyAvailabilityStatus.Unmappable => text.Get("Shortcuts.Validation.KeyInvalid"),
+            ShortcutHotkeyAvailabilityStatus.Unavailable => text.Get("Shortcuts.Validation.HotkeyUnavailable"),
+            _ => null
+        };
+    }
+
+    private static bool ShortcutBindingsEqual(ShortcutBinding? first, ShortcutBinding? second)
+    {
+        if (!ShortcutBindingFormatter.TryNormalize(first, out var normalizedFirst))
+        {
+            return !ShortcutBindingFormatter.TryNormalize(second, out _);
+        }
+
+        return ShortcutBindingFormatter.TryNormalize(second, out var normalizedSecond)
+            && string.Equals(
+                ShortcutBindingFormatter.Format(normalizedFirst),
+                ShortcutBindingFormatter.Format(normalizedSecond),
+                StringComparison.Ordinal);
     }
 
     private async Task<bool> ConfirmDiscardShortcutActionChangesIfNeededAsync()

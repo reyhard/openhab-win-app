@@ -90,7 +90,7 @@ public sealed class AppSettingsControllerTests
         var shortcuts = AssertShortcuts(controller.Current);
 
         Assert.True(shortcuts.CommandMenu.Enabled);
-        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.Equal("Win + Shift + I", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
         Assert.Equal(RadialActivationMode.Toggle, shortcuts.CommandMenu.RadialActivationMode);
         Assert.False(shortcuts.VoiceMode.Enabled);
         Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
@@ -273,14 +273,14 @@ public sealed class AppSettingsControllerTests
         var shortcuts = AssertShortcuts(controller.Current);
 
         Assert.True(shortcuts.CommandMenu.Enabled);
-        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.Equal("Win + Shift + I", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
         Assert.False(shortcuts.VoiceMode.Enabled);
         Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
         Assert.Empty(shortcuts.Actions);
     }
 
     [Fact]
-    public void LoadedSettingsWithBlankCommandMenuBindingFallsBackToWinO()
+    public void LoadedSettingsWithBlankCommandMenuBindingFallsBackToDefaultCommandMenuShortcut()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
         var json = """
@@ -306,7 +306,37 @@ public sealed class AppSettingsControllerTests
         var controller = CreateController();
         var shortcuts = AssertShortcuts(controller.Current);
 
-        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.Equal("Win + Shift + I", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+    }
+
+    [Fact]
+    public void LoadedSettingsWithLegacyWinOCommandMenuBindingMigratesToDefaultCommandMenuShortcut()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsFilePath)!);
+        var json = """
+        {
+          "Skin": 1,
+          "EndpointMode": 0,
+          "LocalEndpoint": "http://openhab:8080/",
+          "CloudEndpoint": "https://myopenhab.org/",
+          "SitemapName": "home",
+          "Shortcuts": {
+            "CommandMenu": {
+              "Enabled": true,
+              "Binding": { "Modifiers": [ 0 ], "Key": "O" },
+              "RadialActivationMode": 1
+            },
+            "VoiceMode": { "Enabled": false },
+            "Actions": []
+          }
+        }
+        """;
+        File.WriteAllText(settingsFilePath, json);
+
+        var controller = CreateController();
+        var shortcuts = AssertShortcuts(controller.Current);
+
+        Assert.Equal("Win + Shift + I", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
     }
 
     [Fact]
@@ -434,7 +464,7 @@ public sealed class AppSettingsControllerTests
         Assert.Equal("custom-home", controller.Current.SitemapName);
         Assert.Equal(420, controller.Current.FlyoutWidth);
         Assert.Equal(EndpointMode.CloudOnly, controller.Current.EndpointMode);
-        Assert.Equal("Win + O", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
+        Assert.Equal("Win + Shift + I", ShortcutBindingFormatter.Format(shortcuts.CommandMenu.Binding));
         Assert.False(shortcuts.VoiceMode.Enabled);
         Assert.False(shortcuts.VoiceMode.RequireConfirmationBeforeSending);
         var action = Assert.Single(shortcuts.Actions);

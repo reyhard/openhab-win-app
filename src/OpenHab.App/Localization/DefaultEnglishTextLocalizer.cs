@@ -223,6 +223,7 @@ public static class DefaultEnglishTextLocalizer
         ["Shortcuts.Validation.SingleKeyBlocked"] = "'{0}' by itself cannot be used as a shortcut.",
         ["Shortcuts.Validation.KeyInvalid"] = "Shortcut key is invalid.",
         ["Shortcuts.Validation.ReservedByWindows"] = "'{0}' is reserved by Windows and cannot be used.",
+        ["Shortcuts.Validation.HotkeyUnavailable"] = "This shortcut is already used by Windows or another app.",
         ["Shortcuts.Validation.BindingAlreadyUsed"] = "'{0}' is already used by '{1}'.",
         ["Shortcuts.Validation.ActionRequired"] = "Action is required.",
         ["Shortcuts.Validation.ActionIdRequired"] = "Action ID is required.",

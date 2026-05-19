@@ -823,6 +823,9 @@ Add actions to make them available in the command menu.</value>
     <value>'{0}' is reserved by Windows and cannot be used.</value>
     <comment>{0}: shortcut text, for example Win + V.</comment>
   </data>
+  <data name="Shortcuts.Validation.HotkeyUnavailable" xml:space="preserve">
+    <value>This shortcut is already used by Windows or another app.</value>
+  </data>
   <data name="Shortcuts.Validation.BindingAlreadyUsed" xml:space="preserve">
     <value>'{0}' is already used by '{1}'.</value>
     <comment>{0}: shortcut text. {1}: owner of the existing shortcut.</comment>
