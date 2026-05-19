@@ -1,36 +1,20 @@
 using System;
 using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using OpenHab.App.Localization;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
-using OpenHab.Core.Api;
 using OpenHab.Core.Profiles;
 using OpenHab.Windows.Tray.Localization;
-using OpenHab.Windows.Tray.Rendering;
-using OpenHab.Windows.Tray.Rendering.SitemapSurface;
 
 namespace OpenHab.Windows.Tray.Notifications;
 
 public sealed partial class NotificationsPageControl : UserControl
 {
-    private enum NotificationSortOrder
-    {
-        DateDescending,
-        DateAscending,
-        Name
-    }
-
     private readonly AppSettingsController settingsController;
     private readonly NotificationStore? notificationStore;
-    private readonly SitemapIconAuthResolver sitemapIconAuthResolver;
     private readonly DispatcherRefreshGate notificationRefreshGate;
     private readonly ITextLocalizer text;
     private bool notificationControlsReady;
@@ -40,7 +24,6 @@ public sealed partial class NotificationsPageControl : UserControl
         this.settingsController = settingsController;
         this.notificationStore = notificationStore;
         this.text = text ?? DefaultEnglishTextLocalizer.Instance;
-        sitemapIconAuthResolver = new SitemapIconAuthResolver(settingsController);
         notificationRefreshGate = new DispatcherRefreshGate(action => DispatcherQueue.TryEnqueue(() => action()));
 
         InitializeComponent();
@@ -162,7 +145,7 @@ public sealed partial class NotificationsPageControl : UserControl
 
             if (notificationStore is null)
             {
-                NotificationRows.Children.Clear();
+                NotificationRowsList.ItemsSource = Array.Empty<NotificationRowViewModel>();
                 UnreadBadge.Visibility = Visibility.Collapsed;
                 UnreadCountText.Text = "0";
                 EmptyNotificationsText.Text = GetEmptyNotificationsText(filter, searchText);
@@ -172,162 +155,14 @@ public sealed partial class NotificationsPageControl : UserControl
 
             var sortOrder = CurrentNotificationSortOrder;
             var notifications = notificationStore.GetNotifications(filter, searchText);
-            notifications = sortOrder switch
-            {
-                NotificationSortOrder.DateAscending => notifications
-                    .OrderBy(n => n.Created)
-                    .ThenBy(n => n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle), StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(n => n.Id, StringComparer.Ordinal)
-                    .ToList(),
-                NotificationSortOrder.Name => notifications
-                    .OrderBy(n => n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle), StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(n => n.Id, StringComparer.Ordinal)
-                    .ToList(),
-                _ => notifications
-                    .OrderByDescending(n => n.Created)
-                    .ThenBy(n => n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle), StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(n => n.Message ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                    .ThenBy(n => n.Id, StringComparer.Ordinal)
-                    .ToList()
-            };
-            var useWin11Icons = settingsController.Current.UseWindows11Icons;
-
-            var iconTransport = settingsController.Current.EndpointMode == EndpointMode.CloudOnly
-                ? TransportKind.Cloud
-                : TransportKind.Local;
-            var iconBaseUri = iconTransport == TransportKind.Local
-                ? settingsController.Current.LocalEndpoint
-                : settingsController.Current.CloudEndpoint;
-            var iconAuth = sitemapIconAuthResolver.Resolve(iconTransport);
-
-            NotificationRows.Children.Clear();
-
-            foreach (var n in notifications)
-            {
-                var elapsed = DateTimeOffset.UtcNow - n.Created;
-                var timeStr = FormatElapsedTime(elapsed);
-
-                var isUnread = !n.IsRead && !n.IsDismissed;
-                var title = n.Title ?? text.Get(AppResourceKeys.NotificationsDefaultTitle);
-                var hasTag = !string.IsNullOrWhiteSpace(n.Severity);
-
-                var row = new Grid
-                {
-                    Padding = new Thickness(8, 9, 10, 9),
-                    ColumnSpacing = 10,
-                    MinHeight = 58
-                };
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-                AddNotificationIcon(row, 0, n.Icon, iconBaseUri, useWin11Icons, iconAuth);
-
-                var contentPanel = new StackPanel { Spacing = 2 };
-                Grid.SetColumn(contentPanel, 1);
-
-                var titleBlock = new TextBlock
-                {
-                    Text = title,
-                    FontWeight = FontWeights.SemiBold,
-                    TextWrapping = TextWrapping.Wrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxLines = 2
-                };
-                contentPanel.Children.Add(titleBlock);
-
-                var previewBlock = new TextBlock
-                {
-                    Text = n.Message,
-                    Opacity = 0.68,
-                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                    TextWrapping = TextWrapping.Wrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis,
-                    MaxLines = 3
-                };
-                contentPanel.Children.Add(previewBlock);
-
-                if (hasTag)
-                {
-                    var tagBorder = new Border
-                    {
-                        Background = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                        CornerRadius = new CornerRadius(4),
-                        Padding = new Thickness(6, 1, 6, 1),
-                        HorizontalAlignment = HorizontalAlignment.Left,
-                        Child = new TextBlock { Text = n.Severity, FontSize = 11, Opacity = 0.6 }
-                    };
-                    contentPanel.Children.Add(tagBorder);
-                }
-
-                row.Children.Add(contentPanel);
-
-                var metaPanel = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right };
-                Grid.SetColumn(metaPanel, 2);
-
-                metaPanel.Children.Add(new TextBlock
-                {
-                    Text = timeStr,
-                    Opacity = 0.68,
-                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
-                });
-
-                if (isUnread)
-                {
-                    metaPanel.Children.Add(new FontIcon
-                    {
-                        Glyph = "\uEA3A",
-                        FontSize = 8,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"]
-                    });
-                }
-
-                row.Children.Add(metaPanel);
-
-                var rowFrame = new Border
-                {
-                    Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
-                    BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(4),
-                    Child = row
-                };
-
-                var capturedId = n.Id;
-                var capturedIsUnread = isUnread;
-                var button = new Button
-                {
-                    Content = rowFrame,
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(0),
-                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                    BorderThickness = new Thickness(0)
-                };
-                button.ContextFlyout = CreateNotificationContextMenu(n);
-                button.Click += (_, _) =>
-                {
-                    if (capturedIsUnread)
-                    {
-                        notificationStore.MarkRead(capturedId);
-                    }
-                    else
-                    {
-                        notificationStore.MarkUnread(capturedId);
-                    }
-                };
-
-                NotificationRows.Children.Add(button);
-            }
+            var rows = NotificationListProjection.CreateRows(notifications, sortOrder, text, DateTimeOffset.UtcNow);
+            NotificationRowsList.ItemsSource = rows;
 
             var unreadCount = notificationStore.UnreadCount;
             UnreadBadge.Visibility = unreadCount > 0 ? Visibility.Visible : Visibility.Collapsed;
             UnreadCountText.Text = unreadCount.ToString();
             EmptyNotificationsText.Text = GetEmptyNotificationsText(filter, searchText);
-            EmptyNotificationsText.Visibility = notifications.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            EmptyNotificationsText.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
         finally
         {
@@ -335,65 +170,34 @@ public sealed partial class NotificationsPageControl : UserControl
         }
     }
 
-    private static void AddNotificationIcon(
-        Grid grid,
-        int column,
-        string? iconName,
-        Uri baseUri,
-        bool useWindowsIcons,
-        SitemapControlFactory.IconAuthContext iconAuth)
+    private void NotificationRowsList_ItemClick(object sender, ItemClickEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(iconName))
+        if (e.ClickedItem is not NotificationRowViewModel notification)
         {
             return;
         }
 
-        if (useWindowsIcons)
+        if (notification.IsUnread)
         {
-            var glyph = SitemapControlFactory.ResolveGlyphForIcon(iconName);
-            if (glyph is not null)
-            {
-                var fontIcon = new FontIcon
-                {
-                    Glyph = glyph,
-                    FontSize = 18,
-                    VerticalAlignment = VerticalAlignment.Top,
-                    Margin = new Thickness(0, 2, 0, 0),
-                    Opacity = 0.8
-                };
-                Grid.SetColumn(fontIcon, column);
-                grid.Children.Add(fontIcon);
-                return;
-            }
+            notificationStore?.MarkRead(notification.Id);
         }
-
-        var image = new Image
+        else
         {
-            Width = NotificationUiMetrics.ServerIconSize,
-            Height = NotificationUiMetrics.ServerIconSize,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 2, 0, 0)
-        };
-        Grid.SetColumn(image, column);
-        grid.Children.Add(image);
-
-        _ = LoadNotificationIconAsync(image, baseUri, iconName, iconAuth);
+            notificationStore?.MarkUnread(notification.Id);
+        }
     }
 
-    private static async Task LoadNotificationIconAsync(
-        Image image,
-        Uri baseUri,
-        string iconName,
-        SitemapControlFactory.IconAuthContext iconAuth)
+    private void NotificationRowsList_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
     {
-        var iconUri = SitemapControlFactory.BuildOpenHabIconUri(baseUri, iconName, null, "svg");
-        try
+        if (args.InRecycleQueue)
         {
-            _ = await OpenHabIconImageSourceLoader.TryLoadAsync(image, iconUri, iconColor: null, iconAuth);
+            args.ItemContainer.ContextFlyout = null;
+            return;
         }
-        catch
+
+        if (args.Item is NotificationRowViewModel notification)
         {
-            // Best-effort icon loading
+            args.ItemContainer.ContextFlyout = CreateNotificationContextMenu(notification.Notification);
         }
     }
 
@@ -425,20 +229,4 @@ public sealed partial class NotificationsPageControl : UserControl
         }
     }
 
-    private string FormatElapsedTime(TimeSpan elapsed)
-    {
-        if (elapsed.TotalMinutes < 1)
-        {
-            return text.Get(AppResourceKeys.NotificationsElapsedJustNow);
-        }
-
-        if (elapsed.TotalHours < 1)
-        {
-            return text.Format(AppResourceKeys.NotificationsElapsedMinutesAgo, (int)elapsed.TotalMinutes);
-        }
-
-        return elapsed.TotalDays < 1
-            ? text.Format(AppResourceKeys.NotificationsElapsedHoursAgo, (int)elapsed.TotalHours)
-            : text.Format(AppResourceKeys.NotificationsElapsedDaysAgo, (int)elapsed.TotalDays);
-    }
 }
