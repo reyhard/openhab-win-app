@@ -308,8 +308,7 @@ public sealed partial class MainWindow : Window
     private void ShowNotificationsPage()
     {
         notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore, text);
-        CenterContentHost.Children.Clear();
-        CenterContentHost.Children.Add(notificationsPage);
+        ShowCenterContent(notificationsPage);
     }
 
     private void ShowSettingsPage()
@@ -322,9 +321,26 @@ public sealed partial class MainWindow : Window
             text);
         settingsPage.PointerPressed -= SettingsPage_PointerPressed;
         settingsPage.PointerPressed += SettingsPage_PointerPressed;
-        settingsPage.ShowRoot();
+        if (!IsCenterContentShown(settingsPage))
+        {
+            settingsPage.ShowRoot();
+        }
+
+        ShowCenterContent(settingsPage);
+    }
+
+    private bool IsCenterContentShown(UIElement element) =>
+        CenterContentHost.Children.Count == 1 && ReferenceEquals(CenterContentHost.Children[0], element);
+
+    private void ShowCenterContent(UIElement element)
+    {
+        if (IsCenterContentShown(element))
+        {
+            return;
+        }
+
         CenterContentHost.Children.Clear();
-        CenterContentHost.Children.Add(settingsPage);
+        CenterContentHost.Children.Add(element);
     }
 
     private void ApplyMainWindowShellState()
