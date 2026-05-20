@@ -164,3 +164,77 @@ Voice actions can appear in the shortcuts and actions list. They are controlled 
 | Desk lamp | Command menu only | `Toggle` on `Desk_Lamp` |
 | Volume | Command menu only | `Open slider` on `Media_Volume` |
 | Listen | Command menu or global shortcut | `Voice`, when Voice Mode is enabled |
+
+## Device Info Sync
+
+Device Info Sync can send selected Windows device information to openHAB Items. It is opt-in.
+
+No device information is sent until Device Info Sync is enabled and at least one signal is mapped to an Item. Each signal can be configured separately. A blank Item mapping disables that signal.
+
+The device identifier is used to generate default Item names. For example, a device identifier of `Desk` produces names such as `DeskBatteryLevel` and `DeskWifiConnected`. You can edit every Item name.
+
+The app sends Device Info Sync updates through the active openHAB connection. It does not use a separate server profile.
+
+Sync can happen:
+
+- after the app starts,
+- on the configured interval,
+- when Windows lock, resume, network, Bluetooth, or focus state changes are detected,
+- when the openHAB connection state changes.
+
+If a sync fails, the app records the result in status and diagnostics. A failed sync should not block sitemap browsing, commands, notifications, or other app use.
+
+<!-- Screenshot idea: Device Info Sync settings with several mapped signals. -->
+
+### Signals
+
+| Signal | Typical openHAB Item | Values |
+| --- | --- | --- |
+| Battery level | `Number` | `0` to `100`, omitted when unavailable |
+| Charging state | `Switch` | `ON` or `OFF` |
+| Locked state | `Switch` | `ON` or `OFF` |
+| Session state | `String` | `active`, `locked`, `sleep`, `resume`, `unknown` |
+| Wi-Fi connected | `Switch` | `ON` or `OFF` |
+| Wi-Fi name | `String` | SSID or `UNDEF` |
+| Bluetooth connected | `Switch` | `ON` or `OFF` |
+| Bluetooth device names | `String` | connected device names or `UNDEF` |
+| openHAB connection | `String` | `online`, `degraded`, `offline`, `unknown` |
+| Focus / DND | `Switch` or `String` | `ON`, `OFF`, or `UNSUPPORTED` |
+
+### Example Items
+
+These examples use `Desk` as the device identifier.
+
+```java
+Number DeskBatteryLevel "Desk battery [%d %%]"
+Switch DeskChargingState "Desk charging"
+
+Switch DeskLockedState "Desk locked"
+String DeskSessionState "Desk session [%s]"
+
+Switch DeskWifiConnected "Desk Wi-Fi connected"
+String DeskWifiName "Desk Wi-Fi [%s]"
+
+Switch DeskBluetoothConnected "Desk Bluetooth connected"
+String DeskBluetoothDeviceNames "Desk Bluetooth devices [%s]"
+
+String DeskOpenHabConnection "Desk openHAB connection [%s]"
+String DeskFocusState "Desk focus state [%s]"
+```
+
+For Item syntax and Item types, see the [openHAB Items documentation](https://www.openhab.org/docs/configuration/items).
+
+### Privacy
+
+Device Info Sync sends only the signals you enable and map.
+
+It does not send:
+
+- Windows username,
+- IP address,
+- MAC address,
+- Wi-Fi BSSID,
+- openHAB credentials,
+- API tokens.
+
+Wi-Fi name and Bluetooth device names can reveal private information about your environment. Leave those mappings blank if you do not want them sent to openHAB.
