@@ -238,3 +238,85 @@ It does not send:
 - API tokens.
 
 Wi-Fi name and Bluetooth device names can reveal private information about your environment. Leave those mappings blank if you do not want them sent to openHAB.
+
+## Appearance And Language
+
+Appearance settings control how native app surfaces look.
+
+Available settings include:
+
+- sitemap skin selection,
+- icon style,
+- app theme behavior,
+- language selection.
+
+If you change the app language, some text may require an app restart before the new language is fully loaded.
+
+## Privacy And Diagnostics
+
+The app stores settings, notification history, and diagnostics locally under:
+
+```text
+%LocalAppData%\OpenHab.WinApp
+```
+
+Useful files include:
+
+- `diagnostics.log`,
+- `task-crash.log`,
+- `settings.json`,
+- `notifications.json`.
+
+Diagnostics are intended to redact credentials, tokens, passwords, and sensitive endpoint details. Still, avoid posting full logs publicly. Logs can include private server data such as Item names, notification text, or other details from your openHAB setup.
+
+## Troubleshooting
+
+### The App Cannot Connect
+
+Check that the endpoint URL is reachable from Windows. Local URLs usually look like `http://openhab:8080` or `http://192.168.1.3:8080`.
+
+If Automatic mode fails at home, verify the local endpoint first. If Cloud only mode fails, verify your myopenHAB endpoint and credentials.
+
+### Local API Token Problems
+
+If local access requires authentication, verify that the token is current and was copied completely. In openHAB, API tokens are managed from the user profile in Main UI.
+
+### Main UI Does Not Load
+
+The main window uses WebView2 for embedded openHAB Main UI. If Main UI does not load:
+
+- verify WebView2 Runtime is installed,
+- try opening the same endpoint in a browser,
+- verify cloud or local credentials,
+- use the app's open-in-browser action if available.
+
+### Notifications Do Not Appear
+
+Cloud notifications require cloud credentials and a mode that allows cloud access. New cloud notifications are unavailable in Local only mode.
+
+Also check Windows notification settings for the app. Windows can suppress notifications through Focus, Do Not Disturb, or per-app notification settings.
+
+### A Shortcut Cannot Be Registered
+
+Some shortcuts are reserved by Windows or already used by another app. This is especially common for some Windows-key combinations.
+
+Choose a different shortcut in Settings. The app can save shortcut settings even while disconnected, but actions only run when openHAB is connected.
+
+### Device Info Sync Does Not Update Items
+
+Check that:
+
+- Device Info Sync is enabled,
+- each signal has the correct Item name,
+- the target Items exist in openHAB,
+- Item types match the values being sent,
+- the active endpoint is connected,
+- the app has a valid local token or cloud credentials for the selected endpoint mode.
+
+Use the Device Info Sync status in Settings and `diagnostics.log` for more detail.
+
+## Current Limitations
+
+- The app is under active development and is not yet an official release-ready openHAB distribution.
+- The tray flyout currently uses native sitemap rendering and does not host openHAB Main UI.
+- Cloud notifications depend on cloud credentials and notification polling.
