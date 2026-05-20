@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -25,6 +26,8 @@ public sealed class RadialCommandMenuWindow
     private const float HoverCaptionSideMaxWidth = 96f;
     private const float HoverCaptionPaddingX = 8f;
     private const float HoverCaptionPaddingY = 4f;
+    private const uint AnimationTimerId = 1;
+    private const uint AnimationFrameIntervalMs = 16;
     private const string WindowClassName = "OpenHabRadialCommandMenuLayeredWindow";
 
     private static readonly ConcurrentDictionary<IntPtr, RadialCommandMenuWindow> Instances = new();
@@ -35,9 +38,11 @@ public sealed class RadialCommandMenuWindow
     private readonly List<ShortcutAction> validActions = [];
     private readonly List<RadialDisplayEntry> displayedEntries = [];
     private readonly List<RadialButtonLayout> buttonLayouts = [];
+    private readonly Stopwatch animationStopwatch = new();
 
     private Func<ShortcutAction, Task>? executeActionAsync;
     private IntPtr hwnd;
+    private RadialCommandMenuAnimationKind? activeAnimationKind;
     private int selectedActionIndex;
     private int hoveredButtonIndex = int.MinValue;
     private int currentPageIndex;
@@ -61,6 +66,7 @@ public sealed class RadialCommandMenuWindow
             : (int)Math.Ceiling(validActions.Count / (double)MaxActionSlotsPerPage);
 
         EnsureWindow();
+        StopAnimation();
         BuildDisplayedEntriesForCurrentPage();
         PositionUnderCursor();
         RenderAndShow();
@@ -68,14 +74,13 @@ public sealed class RadialCommandMenuWindow
 
     public void CloseMenu()
     {
-        if (!isVisible)
+        if (!isVisible || activeAnimationKind == RadialCommandMenuAnimationKind.Closing)
         {
             return;
         }
 
-        isVisible = false;
+        StartAnimation(RadialCommandMenuAnimationKind.Closing);
         ReleaseCapture();
-        ShowWindow(hwnd, SW_HIDE);
         hoveredButtonIndex = int.MinValue;
     }
 
@@ -182,6 +187,7 @@ public sealed class RadialCommandMenuWindow
 
     private void RenderAndShow()
     {
+        StartAnimation(RadialCommandMenuAnimationKind.Opening);
         RenderLayeredBitmap();
         ShowWindow(hwnd, SW_SHOWNORMAL);
         SetWindowPos(hwnd, HWND_TOPMOST, windowX, windowY, WindowSize, WindowSize, SWP_SHOWWINDOW);
@@ -189,6 +195,59 @@ public sealed class RadialCommandMenuWindow
         SetFocus(hwnd);
         SetCapture(hwnd);
         isVisible = true;
+    }
+
+    private void StartAnimation(RadialCommandMenuAnimationKind kind)
+    {
+        activeAnimationKind = kind;
+        animationStopwatch.Restart();
+        SetTimer(hwnd, AnimationTimerId, AnimationFrameIntervalMs, IntPtr.Zero);
+    }
+
+    private void StopAnimation()
+    {
+        if (hwnd != IntPtr.Zero)
+        {
+            KillTimer(hwnd, AnimationTimerId);
+        }
+
+        activeAnimationKind = null;
+        animationStopwatch.Reset();
+    }
+
+    private void CompleteCloseAnimation()
+    {
+        StopAnimation();
+        isVisible = false;
+        ShowWindow(hwnd, SW_HIDE);
+        hoveredButtonIndex = int.MinValue;
+    }
+
+    private void AdvanceAnimationFrame()
+    {
+        if (activeAnimationKind is null)
+        {
+            return;
+        }
+
+        var duration = activeAnimationKind == RadialCommandMenuAnimationKind.Opening
+            ? RadialCommandMenuLogic.OpeningAnimationDuration + ResolveOpeningAnimationDelay(MaxVisibleRadialSlots - 1)
+            : RadialCommandMenuLogic.ClosingAnimationDuration;
+
+        RenderLayeredBitmap();
+        if (animationStopwatch.Elapsed < duration)
+        {
+            return;
+        }
+
+        if (activeAnimationKind == RadialCommandMenuAnimationKind.Closing)
+        {
+            CompleteCloseAnimation();
+            return;
+        }
+
+        StopAnimation();
+        RenderLayeredBitmap();
     }
 
     private void RenderLayeredBitmap()
@@ -253,7 +312,10 @@ public sealed class RadialCommandMenuWindow
             DrawButton(graphics, layout);
         }
 
-        DrawHoverCaption(graphics);
+        if (activeAnimationKind is null)
+        {
+            DrawHoverCaption(graphics);
+        }
     }
 
     private void AddButtonLayout(int buttonIndex, PointF center, float size)
@@ -265,13 +327,40 @@ public sealed class RadialCommandMenuWindow
         }
 
         var scaledSize = size * scale;
+        var bounds = new RectangleF(center.X - (scaledSize / 2f), center.Y - (scaledSize / 2f), scaledSize, scaledSize);
+        var alpha = (byte)255;
+        if (activeAnimationKind is { } animationKind)
+        {
+            var state = RadialCommandMenuLogic.ResolveAnimatedButtonState(
+                bounds,
+                new SizeF(WindowSize, WindowSize),
+                animationKind,
+                animationStopwatch.Elapsed,
+                animationKind == RadialCommandMenuAnimationKind.Opening
+                    ? ResolveOpeningAnimationDelay(buttonIndex)
+                    : TimeSpan.Zero);
+            scaledSize *= state.Scale;
+            bounds = new RectangleF(
+                state.Center.X - (scaledSize / 2f),
+                state.Center.Y - (scaledSize / 2f),
+                scaledSize,
+                scaledSize);
+            alpha = state.Alpha;
+        }
+
         buttonLayouts.Add(new RadialButtonLayout(
             buttonIndex,
-            new RectangleF(center.X - (scaledSize / 2f), center.Y - (scaledSize / 2f), scaledSize, scaledSize)));
+            bounds,
+            alpha));
     }
 
     private void DrawButton(Graphics graphics, RadialButtonLayout layout)
     {
+        if (layout.Alpha == 0)
+        {
+            return;
+        }
+
         var isClose = layout.ButtonIndex == ButtonIndexClose;
         var isHovered = hoveredButtonIndex == layout.ButtonIndex;
         var isSelected = !isClose && layout.ButtonIndex == selectedActionIndex;
@@ -282,6 +371,8 @@ public sealed class RadialCommandMenuWindow
         var stroke = isSelected || isHovered
             ? Color.FromArgb(255, 15, 23, 42)
             : Color.FromArgb(255, 40, 49, 64);
+        fill = ApplyAlpha(fill, layout.Alpha);
+        stroke = ApplyAlpha(stroke, layout.Alpha);
         var strokeWidth = isSelected || isHovered ? 2.2f : 1.6f;
 
         using var path = new GraphicsPath();
@@ -292,8 +383,25 @@ public sealed class RadialCommandMenuWindow
         graphics.DrawPath(strokePen, path);
 
         var glyph = ResolveButtonGlyph(layout.ButtonIndex);
-        using var glyphBrush = new SolidBrush(isClose ? Color.FromArgb(255, 12, 18, 26) : Color.FromArgb(255, 15, 23, 42));
+        using var glyphBrush = new SolidBrush(ApplyAlpha(
+            isClose ? Color.FromArgb(255, 12, 18, 26) : Color.FromArgb(255, 15, 23, 42),
+            layout.Alpha));
         DrawCenteredGlyph(graphics, glyph, glyphBrush, layout.Bounds, isClose ? 19f : 17f);
+    }
+
+    private static Color ApplyAlpha(Color color, byte alpha)
+    {
+        return Color.FromArgb((byte)(color.A * alpha / 255), color.R, color.G, color.B);
+    }
+
+    private static TimeSpan ResolveOpeningAnimationDelay(int buttonIndex)
+    {
+        if (buttonIndex == ButtonIndexClose)
+        {
+            return TimeSpan.Zero;
+        }
+
+        return TimeSpan.FromMilliseconds(Math.Max(0, buttonIndex) * 8);
     }
 
     private void DrawHoverCaption(Graphics graphics)
@@ -438,6 +546,11 @@ public sealed class RadialCommandMenuWindow
 
     private void HandleButtonClick(int buttonIndex)
     {
+        if (activeAnimationKind is not null)
+        {
+            return;
+        }
+
         if (buttonIndex == ButtonIndexClose || buttonIndex == int.MinValue)
         {
             CloseMenu();
@@ -474,6 +587,7 @@ public sealed class RadialCommandMenuWindow
         }
 
         currentPageIndex = (currentPageIndex + 1) % totalPages;
+        StopAnimation();
         BuildDisplayedEntriesForCurrentPage();
         hoveredButtonIndex = int.MinValue;
         RenderLayeredBitmap();
@@ -526,6 +640,11 @@ public sealed class RadialCommandMenuWindow
         {
             case WM_MOUSEMOVE:
             {
+                if (activeAnimationKind is not null)
+                {
+                    return IntPtr.Zero;
+                }
+
                 var x = GetSignedLowWord(lParam);
                 var y = GetSignedHighWord(lParam);
                 var hover = HitTestButton(x, y);
@@ -566,20 +685,29 @@ public sealed class RadialCommandMenuWindow
 
                 break;
             }
+            case WM_TIMER:
+                if (wParam == new IntPtr(AnimationTimerId))
+                {
+                    AdvanceAnimationFrame();
+                    return IntPtr.Zero;
+                }
+
+                break;
             case WM_CAPTURECHANGED:
-                if (isVisible)
+                if (isVisible && activeAnimationKind != RadialCommandMenuAnimationKind.Closing)
                 {
                     CloseMenu();
                 }
                 return IntPtr.Zero;
             case WM_KILLFOCUS:
-                if (isVisible)
+                if (isVisible && activeAnimationKind != RadialCommandMenuAnimationKind.Closing)
                 {
                     CloseMenu();
                 }
                 return IntPtr.Zero;
             case WM_DESTROY:
                 Instances.TryRemove(hwnd, out _);
+                StopAnimation();
                 hwnd = IntPtr.Zero;
                 isVisible = false;
                 break;
@@ -665,6 +793,7 @@ public sealed class RadialCommandMenuWindow
     private const uint WM_KILLFOCUS = 0x0008;
     private const uint WM_CAPTURECHANGED = 0x0215;
     private const uint WM_DESTROY = 0x0002;
+    private const uint WM_TIMER = 0x0113;
 
     private enum RadialEntryType
     {
@@ -674,7 +803,7 @@ public sealed class RadialCommandMenuWindow
 
     private sealed record RadialDisplayEntry(ShortcutAction? Action, RadialEntryType EntryType);
 
-    private sealed record RadialButtonLayout(int ButtonIndex, RectangleF Bounds);
+    private sealed record RadialButtonLayout(int ButtonIndex, RectangleF Bounds, byte Alpha);
 
     private delegate IntPtr WndProcDelegate(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
@@ -774,6 +903,12 @@ public sealed class RadialCommandMenuWindow
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(IntPtr hwnd, IntPtr hwndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SetTimer(IntPtr hwnd, uint nIDEvent, uint uElapse, IntPtr lpTimerFunc);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool KillTimer(IntPtr hwnd, uint uIDEvent);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetForegroundWindow(IntPtr hwnd);

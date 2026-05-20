@@ -84,4 +84,114 @@ public sealed class RadialCommandMenuLogicTests
                 break;
         }
     }
+
+    [Fact]
+    public void ResolveAnimatedButtonBoundsOpensFromMenuCenterAtFivePercentScale()
+    {
+        var finalBounds = new RectangleF(194, 112, 52, 52);
+
+        var state = RadialCommandMenuLogic.ResolveAnimatedButtonState(
+            finalBounds,
+            new SizeF(440, 440),
+            RadialCommandMenuAnimationKind.Opening,
+            elapsed: TimeSpan.Zero,
+            delay: TimeSpan.Zero);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(450), RadialCommandMenuLogic.OpeningAnimationDuration);
+        Assert.Equal(new PointF(220, 220), state.Center);
+        Assert.Equal(0.05f, state.Scale, precision: 3);
+        Assert.Equal(0, state.Alpha);
+    }
+
+    [Fact]
+    public void ResolveAnimatedButtonBoundsOpensToFinalBoundsAfterDuration()
+    {
+        var finalBounds = new RectangleF(194, 112, 52, 52);
+
+        var state = RadialCommandMenuLogic.ResolveAnimatedButtonState(
+            finalBounds,
+            new SizeF(440, 440),
+            RadialCommandMenuAnimationKind.Opening,
+            RadialCommandMenuLogic.OpeningAnimationDuration,
+            delay: TimeSpan.Zero);
+
+        Assert.Equal(new PointF(220, 138), state.Center);
+        Assert.Equal(1f, state.Scale, precision: 3);
+        Assert.Equal(255, state.Alpha);
+    }
+
+    [Fact]
+    public void ResolveAnimatedButtonBoundsOpensByScalingAtCenterBeforeMovingOutward()
+    {
+        var finalBounds = new RectangleF(276, 194, 52, 52);
+        var elapsed = TimeSpan.FromMilliseconds(
+            RadialCommandMenuLogic.OpeningAnimationDuration.TotalMilliseconds
+            * RadialCommandMenuLogic.OpenCenterScaleProgress);
+
+        var state = RadialCommandMenuLogic.ResolveAnimatedButtonState(
+            finalBounds,
+            new SizeF(440, 440),
+            RadialCommandMenuAnimationKind.Opening,
+            elapsed,
+            delay: TimeSpan.Zero);
+
+        Assert.Equal(new PointF(220, 220), state.Center);
+        Assert.Equal(0.85f, state.Scale, precision: 3);
+        Assert.Equal(255, state.Alpha);
+    }
+
+    [Fact]
+    public void ResolveAnimatedButtonBoundsHonorsOpeningDelay()
+    {
+        var finalBounds = new RectangleF(276, 194, 52, 52);
+
+        var state = RadialCommandMenuLogic.ResolveAnimatedButtonState(
+            finalBounds,
+            new SizeF(440, 440),
+            RadialCommandMenuAnimationKind.Opening,
+            elapsed: TimeSpan.FromMilliseconds(40),
+            delay: TimeSpan.FromMilliseconds(80));
+
+        Assert.Equal(new PointF(220, 220), state.Center);
+        Assert.Equal(0.05f, state.Scale, precision: 3);
+        Assert.Equal(0, state.Alpha);
+    }
+
+    [Fact]
+    public void ResolveAnimatedButtonBoundsCollapsesPositionBeforeFinalShrink()
+    {
+        var finalBounds = new RectangleF(276, 194, 52, 52);
+        var elapsed = TimeSpan.FromMilliseconds(
+            RadialCommandMenuLogic.ClosingAnimationDuration.TotalMilliseconds
+            * RadialCommandMenuLogic.CollapseConvergedProgress);
+
+        var state = RadialCommandMenuLogic.ResolveAnimatedButtonState(
+            finalBounds,
+            new SizeF(440, 440),
+            RadialCommandMenuAnimationKind.Closing,
+            elapsed,
+            delay: TimeSpan.Zero);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(350), RadialCommandMenuLogic.ClosingAnimationDuration);
+        Assert.Equal(new PointF(220, 220), state.Center);
+        Assert.Equal(0.85f, state.Scale, precision: 3);
+        Assert.Equal(255, state.Alpha);
+    }
+
+    [Fact]
+    public void ResolveAnimatedButtonBoundsClosesAtCenterWithFivePercentScale()
+    {
+        var finalBounds = new RectangleF(276, 194, 52, 52);
+
+        var state = RadialCommandMenuLogic.ResolveAnimatedButtonState(
+            finalBounds,
+            new SizeF(440, 440),
+            RadialCommandMenuAnimationKind.Closing,
+            RadialCommandMenuLogic.ClosingAnimationDuration,
+            delay: TimeSpan.Zero);
+
+        Assert.Equal(new PointF(220, 220), state.Center);
+        Assert.Equal(0.05f, state.Scale, precision: 3);
+        Assert.Equal(0, state.Alpha);
+    }
 }
