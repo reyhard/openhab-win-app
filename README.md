@@ -22,6 +22,8 @@ Known release-readiness items still need maintainer decisions or follow-up imple
 - Settings, notifications, startup integration, sitemap navigation, and shortcut command menu work.
 - Local app state and diagnostics under `%LocalAppData%\OpenHab.WinApp`.
 
+For setup and feature usage, see the [App Guide](docs/app-guide.md).
+
 ## Repository Layout
 
 - `src/OpenHab.Core` - endpoint selection, server profiles, HTTP client, credentials, diagnostics, event streams, and device-state mapping.
