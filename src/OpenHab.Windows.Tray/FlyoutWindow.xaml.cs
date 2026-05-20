@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using OpenHab.App.Notifications;
 using OpenHab.App.Runtime;
 using OpenHab.App.Settings;
@@ -439,10 +440,13 @@ public sealed partial class FlyoutWindow : Window
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
-            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
-            RefreshChromeBindings(runtimeController.Current);
+            using (SuppressRowsTransitions())
+            {
+                RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
+                RefreshChromeBindings(runtimeController.Current);
 
-            await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
+                await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
+            }
 
             ActiveRows.Children.Clear();
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
@@ -681,10 +685,13 @@ public sealed partial class FlyoutWindow : Window
                 _suppressNextSnapshotRefresh = true;
                 InactiveSlotContainer.Visibility = Visibility.Visible;
                 InactiveSlotContainer.Opacity = 1d;
-                RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
-                RefreshChromeBindings(runtimeController.Current);
+                using (SuppressRowsTransitions())
+                {
+                    RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
+                    RefreshChromeBindings(runtimeController.Current);
 
-                await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
+                    await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
+                }
 
                 ActiveRows.Children.Clear();
                 ActiveSlotContainer.Visibility = Visibility.Collapsed;
@@ -1138,10 +1145,13 @@ public sealed partial class FlyoutWindow : Window
 
             InactiveSlotContainer.Visibility = Visibility.Visible;
             InactiveSlotContainer.Opacity = 1d;
-            RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
-            RefreshChromeBindings(runtimeController.Current);
+            using (SuppressRowsTransitions())
+            {
+                RefreshRuntimeBindings(InactiveRows, animateStructuralInsertions: false);
+                RefreshChromeBindings(runtimeController.Current);
 
-            await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
+                await AnimatePageTransitionOverlapAsync(ToWinUiNavigationDirection(transitionPlan.Direction));
+            }
 
             ActiveRows.Children.Clear();
             ActiveSlotContainer.Visibility = Visibility.Collapsed;
@@ -1194,6 +1204,40 @@ public sealed partial class FlyoutWindow : Window
             InactiveSlotContainer,
             direction,
             durationMs);
+    }
+
+    private IDisposable SuppressRowsTransitions()
+    {
+        var rows = InactiveRows;
+        var transitions = rows.Transitions;
+        if (transitions is null || transitions.Count == 0)
+        {
+            return NoopDisposable.Instance;
+        }
+
+        rows.Transitions = null;
+        return new RowTransitionSuppression(rows, transitions);
+    }
+
+    private sealed class RowTransitionSuppression(StackPanel rows, TransitionCollection transitions) : IDisposable
+    {
+        public void Dispose()
+        {
+            rows.Transitions = transitions;
+        }
+    }
+
+    private sealed class NoopDisposable : IDisposable
+    {
+        public static readonly NoopDisposable Instance = new();
+
+        private NoopDisposable()
+        {
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     private void RefreshNotificationBadge()
