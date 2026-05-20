@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
@@ -84,6 +85,7 @@ public sealed partial class MainWindow : Window
     private DispatcherTimer? sitemapPaneWidthAnimationTimer;
     private DispatcherTimer? mainUiPagesListAnimationTimer;
     private DispatcherTimer? mainUiPagesChevronAnimationTimer;
+    private Storyboard? centerContentEntranceStoryboard;
     private string? pendingExplicitMainUiRoute;
     private MainUiWebViewHost? mainUiHost;
     private DateTimeOffset lastSettingsTouchUtc = DateTimeOffset.MinValue;
@@ -306,13 +308,13 @@ public sealed partial class MainWindow : Window
         mainUiHost = null;
     }
 
-    private void ShowNotificationsPage()
+    private void ShowNotificationsPage(bool animate)
     {
         notificationsPage ??= new Notifications.NotificationsPageControl(settingsController, notificationStore, text);
-        ShowCenterContent(notificationsPage);
+        ShowCenterContent(notificationsPage, animate);
     }
 
-    private void ShowSettingsPage()
+    private void ShowSettingsPage(bool animate)
     {
         settingsPage ??= new Settings.SettingsPageControl(
             settingsController,
@@ -327,26 +329,94 @@ public sealed partial class MainWindow : Window
             settingsPage.ShowRoot();
         }
 
-        ShowCenterContent(settingsPage);
+        ShowCenterContent(settingsPage, animate);
     }
 
     private bool IsCenterContentShown(UIElement element) =>
         CenterContentHost.Children.Count == 1 && ReferenceEquals(CenterContentHost.Children[0], element);
 
-    private void ShowCenterContent(UIElement element)
+    private void ShowCenterContent(UIElement element, bool animate)
     {
         if (IsCenterContentShown(element))
         {
             return;
         }
 
+        centerContentEntranceStoryboard?.Stop();
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(element);
+        AnimateCenterContentEntrance(element, animate);
+    }
+
+    private void AnimateCenterContentEntrance(UIElement element, bool animate)
+    {
+        var plan = MainWindowShellAnimationPlanner.CreateCenterContentTransitionPlan(
+            animate ? settingsController.GetFlyoutAnimationDurationMs() : 0);
+
+        if (element is not FrameworkElement content || !plan.Animates)
+        {
+            element.Opacity = plan.TargetOpacity;
+            EnsureTranslateTransform(element).Y = plan.TargetTranslationY;
+            return;
+        }
+
+        var transform = EnsureTranslateTransform(content);
+        content.Opacity = plan.StartOpacity;
+        transform.Y = plan.StartTranslationY;
+
+        var duration = TimeSpan.FromMilliseconds(plan.DurationMs);
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var slideIn = new DoubleAnimation
+        {
+            To = plan.TargetTranslationY,
+            Duration = duration,
+            EasingFunction = easing
+        };
+        var fadeIn = new DoubleAnimation
+        {
+            To = plan.TargetOpacity,
+            Duration = duration,
+            EasingFunction = easing
+        };
+
+        var storyboard = new Storyboard();
+        Storyboard.SetTarget(slideIn, transform);
+        Storyboard.SetTargetProperty(slideIn, "Y");
+        Storyboard.SetTarget(fadeIn, content);
+        Storyboard.SetTargetProperty(fadeIn, "Opacity");
+        storyboard.Children.Add(slideIn);
+        storyboard.Children.Add(fadeIn);
+
+        centerContentEntranceStoryboard = storyboard;
+        storyboard.Completed += (_, _) =>
+        {
+            if (ReferenceEquals(centerContentEntranceStoryboard, storyboard))
+            {
+                centerContentEntranceStoryboard = null;
+            }
+
+            transform.Y = plan.TargetTranslationY;
+            content.Opacity = plan.TargetOpacity;
+        };
+        storyboard.Begin();
+    }
+
+    private static TranslateTransform EnsureTranslateTransform(UIElement element)
+    {
+        if (element.RenderTransform is TranslateTransform translate)
+        {
+            return translate;
+        }
+
+        translate = new TranslateTransform();
+        element.RenderTransform = translate;
+        return translate;
     }
 
     private void ApplyMainWindowShellState()
     {
         var state = shellController.Current;
+        var animateCenterContent = hasAppliedInitialShellState;
         SetSitemapPaneVisibility(state.IsSitemapVisible, animate: hasAppliedInitialShellState);
         ToggleSitemapIcon.Foreground = state.IsSitemapVisible
             ? GetThemeBrush("AccentTextFillColorPrimaryBrush")
@@ -359,12 +429,12 @@ public sealed partial class MainWindow : Window
         }
 
         SyncSidebarStateFromSettings();
-        hasAppliedInitialShellState = true;
 
         if (state.CenterPage == MainWindowCenterPage.MainUi)
         {
-            if (!TryShowMainUi(out var host))
+            if (!TryShowMainUi(out var host, animateCenterContent))
             {
+                hasAppliedInitialShellState = true;
                 return;
             }
 
@@ -390,24 +460,22 @@ public sealed partial class MainWindow : Window
         }
         else if (state.CenterPage == MainWindowCenterPage.Notifications)
         {
-            ShowNotificationsPage();
+            ShowNotificationsPage(animateCenterContent);
         }
         else if (state.CenterPage == MainWindowCenterPage.Settings)
         {
-            ShowSettingsPage();
+            ShowSettingsPage(animateCenterContent);
         }
+
+        hasAppliedInitialShellState = true;
     }
 
-    private bool TryShowMainUi(out MainUiWebViewHost host)
+    private bool TryShowMainUi(out MainUiWebViewHost host, bool animate)
     {
         try
         {
             host = MainUiHost;
-            if (!CenterContentHost.Children.Contains(host))
-            {
-                CenterContentHost.Children.Clear();
-                CenterContentHost.Children.Add(host);
-            }
+            ShowCenterContent(host, animate);
 
             return true;
         }
@@ -415,16 +483,15 @@ public sealed partial class MainWindow : Window
         {
             DiagnosticLogger.Warn($"Main UI host creation failed: {ex.GetType().Name}");
             ShellConnectionText.Text = text.Get("Runtime.MainUi.LoadError");
-            ShowMainUiUnavailable();
+            ShowMainUiUnavailable(animate);
             host = null!;
             return false;
         }
     }
 
-    private void ShowMainUiUnavailable()
+    private void ShowMainUiUnavailable(bool animate)
     {
-        CenterContentHost.Children.Clear();
-        CenterContentHost.Children.Add(new Grid
+        ShowCenterContent(new Grid
         {
             Children =
             {
@@ -436,7 +503,7 @@ public sealed partial class MainWindow : Window
                     TextWrapping = TextWrapping.WrapWholeWords
                 }
             }
-        });
+        }, animate);
     }
 
     private MainUiWebViewHost CreateMainUiHost()

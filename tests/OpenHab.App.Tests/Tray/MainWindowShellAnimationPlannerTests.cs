@@ -240,4 +240,26 @@ public sealed class MainWindowShellAnimationPlannerTests
         Assert.Equal(450, MainWindowShellAnimationPlanner.ResolveSitemapPaneDurationMs(300));
         Assert.Equal(0, MainWindowShellAnimationPlanner.ResolveSitemapPaneDurationMs(0));
     }
+
+    [Fact]
+    public void CreateCenterContentTransitionPlan_UsesBottomToTopEntrance()
+    {
+        var plan = MainWindowShellAnimationPlanner.CreateCenterContentTransitionPlan(configuredFlyoutMs: 300);
+
+        Assert.True(plan.Animates);
+        Assert.Equal(24d, plan.StartTranslationY);
+        Assert.Equal(0d, plan.TargetTranslationY);
+        Assert.Equal(0d, plan.StartOpacity);
+        Assert.Equal(1d, plan.TargetOpacity);
+        Assert.Equal(180, plan.DurationMs);
+    }
+
+    [Fact]
+    public void CreateCenterContentTransitionPlan_DisablesAnimationWhenConfiguredOff()
+    {
+        var plan = MainWindowShellAnimationPlanner.CreateCenterContentTransitionPlan(configuredFlyoutMs: 0);
+
+        Assert.False(plan.Animates);
+        Assert.Equal(0, plan.DurationMs);
+    }
 }

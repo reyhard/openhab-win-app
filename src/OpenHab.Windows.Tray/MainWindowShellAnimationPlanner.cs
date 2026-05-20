@@ -43,10 +43,19 @@ internal readonly record struct SitemapPaneAnimationPlan(
     double TargetOpacity,
     bool Animates);
 
+internal readonly record struct CenterContentTransitionPlan(
+    bool Animates,
+    int DurationMs,
+    double StartTranslationY,
+    double TargetTranslationY,
+    double StartOpacity,
+    double TargetOpacity);
+
 internal static class MainWindowShellAnimationPlanner
 {
     private const int SidebarChromeDurationMs = 240;
     private const double SitemapPaneDurationMultiplier = 1.5d;
+    private const double CenterContentEntranceOffsetY = 24d;
 
     public static SidebarAnimationPlan CreateSidebarPlan(
         bool targetCollapsed,
@@ -157,6 +166,18 @@ internal static class MainWindowShellAnimationPlanner
     public static int ResolveSitemapPaneDurationMs(int configuredFlyoutMs)
     {
         return configuredFlyoutMs <= 0 ? 0 : (int)Math.Round(configuredFlyoutMs * SitemapPaneDurationMultiplier);
+    }
+
+    public static CenterContentTransitionPlan CreateCenterContentTransitionPlan(int configuredFlyoutMs)
+    {
+        var durationMs = configuredFlyoutMs <= 0 ? 0 : Math.Max(100, (int)(configuredFlyoutMs * 0.6d));
+        return new CenterContentTransitionPlan(
+            Animates: durationMs > 0,
+            DurationMs: durationMs,
+            StartTranslationY: durationMs > 0 ? CenterContentEntranceOffsetY : 0d,
+            TargetTranslationY: 0d,
+            StartOpacity: durationMs > 0 ? 0d : 1d,
+            TargetOpacity: 1d);
     }
 
     private static double ResolveSitemapPaneStartOpacity(double startWidth, double opacityFromWidth, bool targetVisible)
