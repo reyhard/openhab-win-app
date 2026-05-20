@@ -90,3 +90,77 @@ The app also adds Windows-specific navigation conveniences:
 - sitemap search.
 
 For sitemap syntax and available sitemap element types, see the [openHAB Sitemaps documentation](https://www.openhab.org/docs/ui/sitemaps).
+
+## Notifications
+
+The app can show openHAB Cloud notifications as native Windows notifications when cloud access is configured. Notifications also appear in the app's Notifications page.
+
+Notification features include:
+
+- Windows toast notifications,
+- an in-app notification inbox,
+- search and filtering,
+- read and hidden states,
+- tags and reference IDs,
+- rich media when available,
+- action buttons,
+- log-only notifications,
+- hide and remove behavior from openHAB Cloud notification actions.
+
+New cloud notifications are unavailable in Local only mode. Use Automatic or Cloud only mode when you want the app to poll cloud notifications.
+
+### Notification Actions
+
+openHAB Cloud notifications can include click actions and up to three action buttons. The Windows app supports common action forms:
+
+| Action | Result |
+| --- | --- |
+| `command:LivingRoom_Light:ON` | Sends `ON` to the `LivingRoom_Light` Item. |
+| `ui:/` | Opens the openHAB UI start page in the app. |
+| `ui:navigate:/page/my_page` | Navigates Main UI to the specified page when possible. |
+| `https://www.openhab.org` | Opens the web link. |
+
+The app stores notification history locally so you can review messages later. Log-only notifications appear in the inbox but do not show a Windows toast.
+
+For openHAB Cloud notification actions, tags, reference IDs, media attachments, and hide actions, see the [openHAB Cloud Connector documentation](https://www.openhab.org/addons/integrations/openhabcloud/).
+
+## Command Menu And Shortcuts
+
+The app includes a command menu for actions you want to run quickly from Windows. The command menu is a radial menu opened by a configurable global shortcut.
+
+You can configure an action to be available in one or both places:
+
+- command menu only,
+- its own global shortcut only,
+- command menu and its own global shortcut.
+
+The command menu itself also has a configurable global shortcut.
+
+Windows or another app may reserve or intercept some key combinations, especially some shortcuts that include the Windows key. If a shortcut cannot be registered, choose another combination in Settings.
+
+Shortcuts can be configured while openHAB is disconnected. Running an action requires an active openHAB connection.
+
+<!-- Screenshot idea: Command menu with several configured actions. -->
+
+### Action Types
+
+| Action type | What it does |
+| --- | --- |
+| Toggle | Reads an Item state and sends the opposite `ON` or `OFF` command when the state is known. |
+| On / Off | Sends either `ON` or `OFF`. |
+| Open / Close | Sends either `OPEN` or `CLOSE`. |
+| Open slider | Opens a compact slider for a numeric or dimmer-style Item. |
+| Open color picker | Opens a compact color picker for color-style Items. |
+| Send command | Sends custom command text to the target Item. |
+| Voice | Starts voice command mode when Voice Mode is enabled. |
+
+Voice actions can appear in the shortcuts and actions list. They are controlled by Voice Mode settings, and behavior depends on Windows speech availability and app configuration.
+
+### Examples
+
+| Example action | Placement | Type |
+| --- | --- | --- |
+| Movie scene | Command menu and global shortcut | `Send command` to `MovieScene` with `ON` |
+| Desk lamp | Command menu only | `Toggle` on `Desk_Lamp` |
+| Volume | Command menu only | `Open slider` on `Media_Volume` |
+| Listen | Command menu or global shortcut | `Voice`, when Voice Mode is enabled |
