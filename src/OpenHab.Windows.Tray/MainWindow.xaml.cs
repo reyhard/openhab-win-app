@@ -343,27 +343,48 @@ public sealed partial class MainWindow : Window
         }
 
         centerContentEntranceStoryboard?.Stop();
+        var plan = PrepareCenterContentEntrance(element, animate);
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(element);
-        AnimateCenterContentEntrance(element, animate);
+
+        if (element is FrameworkElement content && plan.Animates)
+        {
+            if (!DispatcherQueue.TryEnqueue(() => StartCenterContentEntranceStoryboard(content, plan)))
+            {
+                StartCenterContentEntranceStoryboard(content, plan);
+            }
+        }
     }
 
-    private void AnimateCenterContentEntrance(UIElement element, bool animate)
+    private CenterContentTransitionPlan PrepareCenterContentEntrance(UIElement element, bool animate)
     {
         var plan = MainWindowShellAnimationPlanner.CreateCenterContentTransitionPlan(
             animate ? settingsController.GetFlyoutAnimationDurationMs() : 0);
+        var transform = EnsureTranslateTransform(element);
 
         if (element is not FrameworkElement content || !plan.Animates)
         {
             element.Opacity = plan.TargetOpacity;
-            EnsureTranslateTransform(element).Y = plan.TargetTranslationY;
+            transform.Y = plan.TargetTranslationY;
+            return plan;
+        }
+
+        content.Opacity = plan.StartOpacity;
+        transform.Y = plan.StartTranslationY;
+        return plan;
+    }
+
+    private void StartCenterContentEntranceStoryboard(FrameworkElement content, CenterContentTransitionPlan plan)
+    {
+        if (!IsCenterContentShown(content))
+        {
             return;
         }
 
         var transform = EnsureTranslateTransform(content);
+        content.UpdateLayout();
         content.Opacity = plan.StartOpacity;
         transform.Y = plan.StartTranslationY;
-
         var duration = TimeSpan.FromMilliseconds(plan.DurationMs);
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
         var slideIn = new DoubleAnimation
