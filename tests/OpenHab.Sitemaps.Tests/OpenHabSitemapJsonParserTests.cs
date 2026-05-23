@@ -389,6 +389,33 @@ public sealed class OpenHabSitemapJsonParserTests
     }
 
     [Fact]
+    public void ParseWidgetParsesVideoEncoding()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Video",
+                    "label": "Camera",
+                    "url": "https://demo.openhab.org/Hue.m4v",
+                    "encoding": "mjpeg"
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+        var widget = Assert.Single(parsed.Widgets);
+
+        Assert.Equal(SitemapWidgetType.Video, widget.Type);
+        Assert.Equal("https://demo.openhab.org/Hue.m4v", widget.Url);
+        Assert.Equal("mjpeg", widget.Encoding);
+    }
+
+    [Fact]
     public void ParseWidgetParsesResolvedColors()
     {
         const string json = """

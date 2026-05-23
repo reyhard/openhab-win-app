@@ -154,6 +154,50 @@ public static class SitemapUiLogic
         return new Uri(baseUri, $"chart?{query}");
     }
 
+    public static Uri? BuildMapviewUrl(SitemapRowDescriptor row, int zoom = 16)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var location = row.RawItemState ?? row.RawState ?? row.State;
+        if (!TryParseOpenHabLocationState(location, out var latitude, out var longitude))
+        {
+            return null;
+        }
+
+        zoom = Math.Clamp(zoom, 1, 19);
+        var lat = latitude.ToString("0.#####", CultureInfo.InvariantCulture);
+        var lon = longitude.ToString("0.#####", CultureInfo.InvariantCulture);
+        var margin = Math.Clamp(400d / Math.Pow(2d, zoom), 0.001d, 20d);
+        var minLatitude = Math.Clamp(latitude - margin, -90d, 90d).ToString("0.#####", CultureInfo.InvariantCulture);
+        var maxLatitude = Math.Clamp(latitude + margin, -90d, 90d).ToString("0.#####", CultureInfo.InvariantCulture);
+        var minLongitude = Math.Clamp(longitude - margin, -180d, 180d).ToString("0.#####", CultureInfo.InvariantCulture);
+        var maxLongitude = Math.Clamp(longitude + margin, -180d, 180d).ToString("0.#####", CultureInfo.InvariantCulture);
+        var bbox = Uri.EscapeDataString($"{minLongitude},{minLatitude},{maxLongitude},{maxLatitude}");
+        var marker = Uri.EscapeDataString($"{lat},{lon}");
+        return new Uri($"https://www.openstreetmap.org/export/embed.html?bbox={bbox}&layer=mapnik&marker={marker}");
+    }
+
+    public static Uri? ResolveEmbeddedUrl(SitemapRowDescriptor row, Uri? baseUri)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var url = row.Url ?? row.RawItemState ?? row.RawState ?? row.State;
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        var trimmed = url.Trim();
+        if (Uri.TryCreate(trimmed, UriKind.Absolute, out var absoluteUri))
+        {
+            return absoluteUri;
+        }
+
+        return baseUri is not null && Uri.TryCreate(baseUri, trimmed, out var relativeUri)
+            ? relativeUri
+            : null;
+    }
+
     public static string BuildIconPayloadCacheKey(Uri iconUri, string? iconColor, string authMode)
     {
         ArgumentNullException.ThrowIfNull(iconUri);
@@ -228,6 +272,31 @@ public static class SitemapUiLogic
         saturation = Math.Clamp(saturation, 0d, 100d);
         brightness = Math.Clamp(brightness, 0d, 100d);
         return true;
+    }
+
+    public static bool TryParseOpenHabLocationState(string? raw, out double latitude, out double longitude)
+    {
+        latitude = 0;
+        longitude = 0;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var parts = raw.Trim().Split(',');
+        if (parts.Length < 2)
+        {
+            return false;
+        }
+
+        if (!TryParseDoubleInvariant(parts[0], out latitude)
+            || !TryParseDoubleInvariant(parts[1], out longitude))
+        {
+            return false;
+        }
+
+        return latitude is >= -90d and <= 90d
+            && longitude is >= -180d and <= 180d;
     }
 
     public static bool TryResolveOpenHabColor(string? raw, out SitemapColor color)

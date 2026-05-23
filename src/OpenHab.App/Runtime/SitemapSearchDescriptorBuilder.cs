@@ -362,7 +362,8 @@ public static class SitemapSearchDescriptorBuilder
             widget.Command ?? string.Empty,
             widget.ReleaseCommand ?? string.Empty,
             widget.Url ?? string.Empty,
-            widget.Period ?? string.Empty);
+            widget.Period ?? string.Empty,
+            widget.Encoding ?? string.Empty);
     }
 
     private static SitemapRowDescriptor CreateHeaderRow(string searchResultKey, string label, string? state)

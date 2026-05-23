@@ -52,10 +52,13 @@ public static partial class SitemapRowVisualPolicy
     public static string BuildRowVisualStateKey(SitemapRowDescriptor row, int rowIndex)
     {
         ArgumentNullException.ThrowIfNull(row);
+        var mediaSource = row.Control is RenderControlKind.Webview or RenderControlKind.Mapview or RenderControlKind.Video
+            ? $"|url:{row.Url ?? string.Empty}|raw:{row.RawItemState ?? row.RawState ?? row.State ?? string.Empty}|encoding:{row.Encoding ?? string.Empty}|height:{row.HeightRows?.ToString(CultureInfo.InvariantCulture) ?? string.Empty}"
+            : string.Empty;
 
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"key:{BuildRowIdentityKey(row)}|control:{row.Control}|action:{row.Action}|label:{row.Label}|icon:{row.IconName ?? string.Empty}|command:{row.Command ?? string.Empty}|release:{row.ReleaseCommand ?? string.Empty}");
+            $"key:{BuildRowIdentityKey(row)}|control:{row.Control}|action:{row.Action}|label:{row.Label}|icon:{row.IconName ?? string.Empty}|command:{row.Command ?? string.Empty}|release:{row.ReleaseCommand ?? string.Empty}{mediaSource}");
     }
 
     public static string FormatSliderStateText(string? template, double value)

@@ -83,17 +83,19 @@ public sealed class SitemapNavigatorTests
         Assert.Throws<InvalidOperationException>(() => navigator.ActivateWidget(0));
     }
 
-    [Fact]
-    public void FallbackWidgetCreatesOpenFallbackIntent()
+    [Theory]
+    [InlineData(SitemapWidgetType.Mapview)]
+    [InlineData(SitemapWidgetType.Video)]
+    public void NativeMediaWidgetCreatesNoOpIntent(SitemapWidgetType type)
     {
         var root = new SitemapPage("root", "Home", [
-            new SitemapWidget("Video", SitemapWidgetType.Video, null, null, [], true, [])
+            new SitemapWidget("Media", type, null, null, [], true, [])
         ]);
         var navigator = new SitemapNavigator(root);
 
         var intent = navigator.ActivateWidget(0);
 
-        Assert.Equal(new OpenFallbackIntent("Video"), intent);
+        Assert.Equal(new NoOpIntent(), intent);
     }
 
     [Fact]

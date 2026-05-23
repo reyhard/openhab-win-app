@@ -1525,6 +1525,7 @@ public sealed class SitemapRuntimeController
             a.Stateless != b.Stateless ||
             a.Url != b.Url ||
             a.Period != b.Period ||
+            a.Encoding != b.Encoding ||
             a.ItemName != b.ItemName ||
             a.WidgetId != b.WidgetId ||
             a.SearchResultKey != b.SearchResultKey ||

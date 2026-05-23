@@ -216,6 +216,8 @@ public static class DefaultEnglishTextLocalizer
         ["Sitemap.Action.Run"] = "Run",
         ["Sitemap.WebView.NoUrlConfigured"] = "No URL configured",
         ["Sitemap.WebView.OpenInBrowser"] = "Open in browser",
+        ["Sitemap.MapView.NoLocationConfigured"] = "No location configured",
+        ["Sitemap.Video.NoUrlConfigured"] = "No video URL configured",
         ["Sitemap.Chart.RequiresItem"] = "Chart requires an item",
         ["Shortcuts.Validation.ShortcutRequired"] = "Shortcut is required.",
         ["Shortcuts.Validation.ModifierRequired"] = "Shortcut must include at least one modifier.",
