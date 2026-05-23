@@ -55,7 +55,8 @@ internal static class SitemapRowMapper
             ItemName: widget.ItemName,
             InputHint: inputHint,
             WidgetId: widget.WidgetId,
-            HeightRows: widget.HeightRows);
+            HeightRows: widget.HeightRows,
+            Encoding: widget.Encoding);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
@@ -84,6 +85,8 @@ internal static class SitemapRowMapper
             SitemapWidgetType.Buttongrid => RenderControlKind.ButtonGrid,
             SitemapWidgetType.Image => RenderControlKind.Image,
             SitemapWidgetType.Webview => RenderControlKind.Webview,
+            SitemapWidgetType.Mapview => RenderControlKind.Mapview,
+            SitemapWidgetType.Video => RenderControlKind.Video,
             SitemapWidgetType.Chart => RenderControlKind.Chart,
             SitemapWidgetType.Input => RenderControlKind.Input,
             _ => RenderControlKind.Text

@@ -118,6 +118,76 @@ public sealed class SitemapUiLogicTests
     }
 
     [Fact]
+    public void BuildMapviewUrl_UsesLocationState()
+    {
+        var row = new SitemapRowDescriptor(
+            "Tracker",
+            "52.5200,13.4050,34",
+            RenderControlKind.Mapview,
+            RenderActionKind.None,
+            RenderDensity.Compact,
+            []);
+
+        var uri = SitemapUiLogic.BuildMapviewUrl(row);
+
+        Assert.NotNull(uri);
+        Assert.Equal("https", uri!.Scheme);
+        Assert.Contains("openstreetmap.org", uri.Host);
+        Assert.Contains("/export/embed.html", uri.AbsolutePath);
+        Assert.Contains("bbox=", uri.Query);
+        Assert.Contains("marker=52.52%2C13.405", uri.Query);
+        Assert.DoesNotContain("#map=", uri.ToString());
+    }
+
+    [Fact]
+    public void BuildMapviewUrl_ReturnsNullForInvalidLocationState()
+    {
+        var row = new SitemapRowDescriptor(
+            "Tracker",
+            "UNDEF",
+            RenderControlKind.Mapview,
+            RenderActionKind.None,
+            RenderDensity.Compact,
+            []);
+
+        Assert.Null(SitemapUiLogic.BuildMapviewUrl(row));
+    }
+
+    [Fact]
+    public void ResolveEmbeddedUrl_UsesAbsoluteUrlBeforeItemState()
+    {
+        var row = new SitemapRowDescriptor(
+            "Camera",
+            "https://items.example.test/camera.m3u8",
+            RenderControlKind.Video,
+            RenderActionKind.None,
+            RenderDensity.Compact,
+            [],
+            Url: "https://sitemap.example.test/camera.mjpeg");
+
+        var uri = SitemapUiLogic.ResolveEmbeddedUrl(row, new Uri("http://openhab:8080/"));
+
+        Assert.Equal("https://sitemap.example.test/camera.mjpeg", uri?.AbsoluteUri);
+    }
+
+    [Fact]
+    public void ResolveEmbeddedUrl_ResolvesRelativeUrlAgainstEndpoint()
+    {
+        var row = new SitemapRowDescriptor(
+            "Camera",
+            null,
+            RenderControlKind.Video,
+            RenderActionKind.None,
+            RenderDensity.Compact,
+            [],
+            Url: "/static/camera.mjpeg");
+
+        var uri = SitemapUiLogic.ResolveEmbeddedUrl(row, new Uri("http://openhab:8080/rest/"));
+
+        Assert.Equal("http://openhab:8080/static/camera.mjpeg", uri?.AbsoluteUri);
+    }
+
+    [Fact]
     public void BuildIconPayloadCacheKey_DoesNotIncludeVisualDimensions()
     {
         var uri = new Uri("https://demo.local/icon/light?format=svg&state=ON");

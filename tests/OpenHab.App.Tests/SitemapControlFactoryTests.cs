@@ -256,6 +256,32 @@ public class SitemapControlFactoryTests
         Assert.Equal(expectedHeight, SitemapControlFactory.ResolveWebviewHeight(row));
     }
 
+    [Theory]
+    [InlineData(RenderControlKind.Webview)]
+    [InlineData(RenderControlKind.Mapview)]
+    [InlineData(RenderControlKind.Video)]
+    public void CreateEmbeddedRows_PlacesOpenInBrowserButtonInHeader(RenderControlKind control)
+    {
+        var row = new SitemapRowDescriptor(
+            "Media",
+            control == RenderControlKind.Mapview ? "52.5200,13.4050" : null,
+            control,
+            RenderActionKind.None,
+            RenderDensity.Compact,
+            [],
+            Url: control == RenderControlKind.Mapview ? null : "https://demo.openhab.org/media");
+
+        var element = SitemapControlFactory.Create(row, null, baseUri: new Uri("http://openhab:8080/"));
+
+        var border = Assert.IsType<Border>(element);
+        var panel = Assert.IsType<StackPanel>(border.Child);
+        var header = Assert.IsType<Grid>(panel.Children[0]);
+        Assert.Contains(header.Children, child => child is Button button
+            && Equals(button.Tag, "sitemap-open-browser"));
+        Assert.DoesNotContain(panel.Children.Skip(1), child => child is StackPanel stack
+            && stack.Children.OfType<Button>().Any(button => Equals(button.Tag, "sitemap-open-browser")));
+    }
+
     [Fact]
     public void WidgetUnhideAnimation_UsesFullHeightLinearMotionWithDelayedFade()
     {

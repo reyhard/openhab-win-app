@@ -800,6 +800,12 @@ Add actions to make them available in the command menu.</value>
   <data name="Sitemap.WebView.OpenInBrowser" xml:space="preserve">
     <value>Open in browser</value>
   </data>
+  <data name="Sitemap.MapView.NoLocationConfigured" xml:space="preserve">
+    <value>No location configured</value>
+  </data>
+  <data name="Sitemap.Video.NoUrlConfigured" xml:space="preserve">
+    <value>No video URL configured</value>
+  </data>
   <data name="Sitemap.Chart.RequiresItem" xml:space="preserve">
     <value>Chart requires an item</value>
   </data>

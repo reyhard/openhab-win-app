@@ -26,13 +26,28 @@ public sealed class SitemapNormalizerTests
     public void MarksUnsupportedWidgetsWithFallback()
     {
         var page = new SitemapPage("root", "Home", [
-            new SitemapWidget("Camera", SitemapWidgetType.Video, "FrontCamera", "", [], true, [])
+            new SitemapWidget("Unknown", (SitemapWidgetType)999, "UnsupportedItem", "", [], true, [])
         ]);
 
         var normalized = SitemapNormalizer.Normalize(page);
 
         Assert.True(normalized.Widgets[0].RequiresFallback);
         Assert.Equal(SitemapFallbackKind.MainUiOrBrowser, normalized.Widgets[0].FallbackKind);
+    }
+
+    [Theory]
+    [InlineData(SitemapWidgetType.Mapview)]
+    [InlineData(SitemapWidgetType.Video)]
+    public void MarksMediaWidgetsWithoutFallback(SitemapWidgetType type)
+    {
+        var page = new SitemapPage("root", "Home", [
+            new SitemapWidget("Media", type, "MediaItem", "", [], true, [])
+        ]);
+
+        var normalized = SitemapNormalizer.Normalize(page);
+
+        Assert.False(normalized.Widgets[0].RequiresFallback);
+        Assert.Equal(SitemapFallbackKind.None, normalized.Widgets[0].FallbackKind);
     }
 
     [Fact]

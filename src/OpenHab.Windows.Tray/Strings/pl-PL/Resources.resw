@@ -800,6 +800,12 @@ Dodaj akcje, aby były dostępne w menu poleceń.</value>
   <data name="Sitemap.WebView.OpenInBrowser" xml:space="preserve">
     <value>Otwórz w przeglądarce</value>
   </data>
+  <data name="Sitemap.MapView.NoLocationConfigured" xml:space="preserve">
+    <value>Nie skonfigurowano lokalizacji</value>
+  </data>
+  <data name="Sitemap.Video.NoUrlConfigured" xml:space="preserve">
+    <value>Nie skonfigurowano adresu URL wideo</value>
+  </data>
   <data name="Sitemap.Chart.RequiresItem" xml:space="preserve">
     <value>Wykres wymaga elementu</value>
   </data>

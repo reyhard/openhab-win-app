@@ -21,6 +21,8 @@ public static class SitemapNormalizer
         SitemapWidgetType.Button,
         SitemapWidgetType.Image,
         SitemapWidgetType.Webview,
+        SitemapWidgetType.Mapview,
+        SitemapWidgetType.Video,
         SitemapWidgetType.Chart
     ];
 
@@ -84,6 +86,7 @@ public static class SitemapNormalizer
             Period: widget.Period,
             Service: widget.Service,
             InputHint: widget.InputHint,
-            HeightRows: widget.HeightRows);
+            HeightRows: widget.HeightRows,
+            Encoding: widget.Encoding);
     }
 }

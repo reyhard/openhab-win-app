@@ -61,6 +61,6 @@ public sealed class SitemapNavigator
 
     private static bool IsFallbackWidget(SitemapWidgetType type)
     {
-        return type is SitemapWidgetType.Mapview or SitemapWidgetType.Video;
+        return false;
     }
 }

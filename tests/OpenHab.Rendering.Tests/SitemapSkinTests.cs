@@ -135,7 +135,8 @@ public sealed class SitemapSkinTests
             new NormalizedSitemapWidget("Setpoint", SitemapWidgetType.Setpoint, "Setpoint", "20", [], false, false, SitemapFallbackKind.None, []),
             new NormalizedSitemapWidget("Mode", SitemapWidgetType.Selection, "Mode", "Home", [], false, false, SitemapFallbackKind.None, []),
             new NormalizedSitemapWidget("Chart", SitemapWidgetType.Chart, "Chart", "", [], false, false, SitemapFallbackKind.None, []),
-            new NormalizedSitemapWidget("Camera", SitemapWidgetType.Video, "Camera", "", [], false, true, SitemapFallbackKind.MainUiOrBrowser, [])
+            new NormalizedSitemapWidget("Map", SitemapWidgetType.Mapview, "Tracker", "52.5200,13.4050", [], false, false, SitemapFallbackKind.None, []),
+            new NormalizedSitemapWidget("Camera", SitemapWidgetType.Video, "Camera", "", [], false, false, SitemapFallbackKind.None, [])
         ]);
 
         var basic = new BasicSitemapSkin().Render(page);
@@ -207,12 +208,45 @@ public sealed class SitemapSkinTests
     public void SkinDescriptorsExposeFallbackAction()
     {
         var page = new NormalizedSitemapPage("root", "Home", [
-            new NormalizedSitemapWidget("Camera", SitemapWidgetType.Video, "Camera", "", [], false, true, SitemapFallbackKind.MainUiOrBrowser, [])
+            new NormalizedSitemapWidget("Unknown", (SitemapWidgetType)999, "Unsupported", "", [], false, true, SitemapFallbackKind.MainUiOrBrowser, [])
         ]);
 
         var descriptor = new Windows11SitemapSkin().Render(page);
 
         Assert.Equal(RenderActionKind.OpenFallback, descriptor.Rows[0].Action);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin), SitemapWidgetType.Mapview, RenderControlKind.Mapview)]
+    [InlineData(typeof(Windows11SitemapSkin), SitemapWidgetType.Mapview, RenderControlKind.Mapview)]
+    [InlineData(typeof(BasicSitemapSkin), SitemapWidgetType.Video, RenderControlKind.Video)]
+    [InlineData(typeof(Windows11SitemapSkin), SitemapWidgetType.Video, RenderControlKind.Video)]
+    public void MediaWidgetsMapToNativeControls(Type skinType, SitemapWidgetType widgetType, RenderControlKind expectedControl)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Media",
+                widgetType,
+                "MediaItem",
+                widgetType == SitemapWidgetType.Mapview ? "52.5200,13.4050" : "https://demo.openhab.org/Hue.m4v",
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                Url: widgetType == SitemapWidgetType.Video ? "https://demo.openhab.org/Hue.m4v" : null,
+                HeightRows: 5,
+                Encoding: widgetType == SitemapWidgetType.Video ? "HLS" : null)
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(expectedControl, row.Control);
+        Assert.Equal(RenderActionKind.None, row.Action);
+        Assert.Equal(5, row.HeightRows);
+        Assert.Equal(widgetType == SitemapWidgetType.Video ? "HLS" : null, row.Encoding);
     }
 
     [Fact]

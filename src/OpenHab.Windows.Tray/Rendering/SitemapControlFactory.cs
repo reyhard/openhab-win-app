@@ -154,6 +154,8 @@ public static partial class SitemapControlFactory
             RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, sendButtonGridCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Image => CreateImage(row, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Webview => CreateWebview(row, baseUri),
+            RenderControlKind.Mapview => CreateMapview(row, baseUri),
+            RenderControlKind.Video => CreateVideo(row, baseUri),
             RenderControlKind.Chart => CreateChart(row, baseUri, chartDpi, iconAuth),
             RenderControlKind.Fallback => CreateFallback(row),
             _ => CreateText(row, activateRow, baseUri, useWindowsIcons, iconAuth)
@@ -226,6 +228,8 @@ public static partial class SitemapControlFactory
             case RenderControlKind.Input:
             case RenderControlKind.Text:
             case RenderControlKind.Webview:
+            case RenderControlKind.Mapview:
+            case RenderControlKind.Video:
             case RenderControlKind.Chart:
             case RenderControlKind.Fallback:
                 UpdateStateTextBlock(inner, updated.State ?? string.Empty);
@@ -2154,11 +2158,11 @@ public static partial class SitemapControlFactory
     {
         var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
         var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons: false, iconAuth: null);
-        container.Children.Add(layout.Grid);
 
-        var url = row.Url ?? row.RawItemState ?? row.RawState ?? row.State;
-        if (string.IsNullOrWhiteSpace(url))
+        var resolvedUri = SitemapUiLogic.ResolveEmbeddedUrl(row, baseUri);
+        if (resolvedUri is null)
         {
+            container.Children.Add(layout.Grid);
             container.Children.Add(new TextBlock
             {
                 Text = TextLocalizer.Get("Sitemap.WebView.NoUrlConfigured"),
@@ -2168,28 +2172,9 @@ public static partial class SitemapControlFactory
             return WrapWithBorder(container);
         }
 
-        if (!TryResolveWebviewUrl(url, baseUri, out var resolvedUri))
-        {
-            container.Children.Add(new TextBlock
-            {
-                Text = $"Invalid URL: {url}",
-                Opacity = 0.6,
-                FontStyle = global::Windows.UI.Text.FontStyle.Italic
-            });
-            return WrapWithBorder(container);
-        }
-
-        // Reliable fallback: always show an "Open in browser" button
-        var fallbackPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        var openButton = new Button
-        {
-            Content = TextLocalizer.Get("Sitemap.WebView.OpenInBrowser"),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-            MinHeight = 36
-        };
-        openButton.Click += (_, _) => OpenUrlInBrowser(resolvedUri!);
-        fallbackPanel.Children.Add(openButton);
-        container.Children.Add(fallbackPanel);
+        // Reliable fallback: always show an "Open in browser" button.
+        AddOpenInBrowserHeaderButton(layout, resolvedUri);
+        container.Children.Add(layout.Grid);
 
         // Try WebView2 for inline display; WebView2 runtime may be missing
         var webview = new WebView2
@@ -2202,24 +2187,6 @@ public static partial class SitemapControlFactory
         container.Children.Add(webview);
 
         return WrapWithBorder(container);
-    }
-
-    private static bool TryResolveWebviewUrl(string url, Uri? baseUri, out Uri? resolvedUri)
-    {
-        if (Uri.TryCreate(url, UriKind.Absolute, out var absoluteUri))
-        {
-            resolvedUri = absoluteUri;
-            return true;
-        }
-
-        if (baseUri is not null && Uri.TryCreate(baseUri, url, out var relativeUri))
-        {
-            resolvedUri = relativeUri;
-            return true;
-        }
-
-        resolvedUri = null;
-        return false;
     }
 
     private static void OpenUrlInBrowser(Uri uri)
@@ -2255,6 +2222,149 @@ public static partial class SitemapControlFactory
             webview.Visibility = Visibility.Collapsed;
             webview.Height = 0;
         }
+    }
+
+    private static async Task InitializeWebViewHtmlAsync(WebView2 webview, string html)
+    {
+        try
+        {
+            await webview.EnsureCoreWebView2Async();
+            webview.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            webview.CoreWebView2.Settings.IsScriptEnabled = true;
+            webview.NavigateToString(html);
+        }
+        catch
+        {
+            webview.Visibility = Visibility.Collapsed;
+            webview.Height = 0;
+        }
+    }
+
+    private static Border CreateMapview(SitemapRowDescriptor row, Uri? baseUri)
+    {
+        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName ?? "location", row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons: false, iconAuth: null);
+
+        var mapUri = BuildMapviewUrl(row);
+        if (mapUri is null)
+        {
+            container.Children.Add(layout.Grid);
+            container.Children.Add(new TextBlock
+            {
+                Text = TextLocalizer.Get("Sitemap.MapView.NoLocationConfigured"),
+                Opacity = 0.4,
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic
+            });
+            return WrapWithBorder(container);
+        }
+
+        AddOpenInBrowserHeaderButton(layout, mapUri);
+        container.Children.Add(layout.Grid);
+        var webview = new WebView2
+        {
+            Height = ResolveWebviewHeight(row),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        _ = InitializeWebViewAsync(webview, mapUri);
+        container.Children.Add(webview);
+        return WrapWithBorder(container);
+    }
+
+    private static Border CreateVideo(SitemapRowDescriptor row, Uri? baseUri)
+    {
+        var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 };
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName ?? "video", row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons: false, iconAuth: null);
+
+        var videoUri = SitemapUiLogic.ResolveEmbeddedUrl(row, baseUri);
+        if (videoUri is null)
+        {
+            container.Children.Add(layout.Grid);
+            container.Children.Add(new TextBlock
+            {
+                Text = TextLocalizer.Get("Sitemap.Video.NoUrlConfigured"),
+                Opacity = 0.4,
+                FontStyle = global::Windows.UI.Text.FontStyle.Italic
+            });
+            return WrapWithBorder(container);
+        }
+
+        AddOpenInBrowserHeaderButton(layout, videoUri);
+        container.Children.Add(layout.Grid);
+        var webview = new WebView2
+        {
+            Height = ResolveWebviewHeight(row),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Top
+        };
+        _ = InitializeWebViewHtmlAsync(webview, BuildVideoHtml(videoUri, row.Encoding));
+        container.Children.Add(webview);
+        return WrapWithBorder(container);
+    }
+
+    private static void AddOpenInBrowserHeaderButton(RowLayout layout, Uri uri)
+    {
+        var openButton = new Button
+        {
+            Tag = "sitemap-open-browser",
+            Content = new FontIcon
+            {
+                Glyph = "\uE8A7",
+                FontSize = 13,
+                FontFamily = new FontFamily("Segoe MDL2 Assets")
+            },
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Width = 34,
+            MinWidth = 0,
+            MinHeight = 30,
+            Padding = new Thickness(4),
+            BorderThickness = new Thickness(0)
+        };
+        ToolTipService.SetToolTip(openButton, TextLocalizer.Get("Sitemap.WebView.OpenInBrowser"));
+        openButton.Click += (_, _) => OpenUrlInBrowser(uri);
+        layout.Grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(40);
+        Grid.SetColumn(openButton, layout.ControlColumn);
+        layout.Grid.Children.Add(openButton);
+    }
+
+    private static string BuildVideoHtml(Uri uri, string? encoding)
+    {
+        var source = System.Net.WebUtility.HtmlEncode(uri.AbsoluteUri);
+        var isMjpeg = string.Equals(encoding, "mjpeg", StringComparison.OrdinalIgnoreCase);
+        var media = isMjpeg
+            ? $"""<img src="{source}" alt="" style="max-width:100%;width:100%;height:100%;object-fit:contain;" />"""
+            : $"""<video src="{source}" controls autoplay muted playsinline style="max-width:100%;width:100%;height:100%;object-fit:contain;background:#000;"></video>""";
+
+        return $$"""
+            <!doctype html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                html, body {
+                  margin: 0;
+                  width: 100%;
+                  height: 100%;
+                  background: #000;
+                  overflow: hidden;
+                }
+                body {
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                }
+              </style>
+            </head>
+            <body>{{media}}</body>
+            </html>
+            """;
+    }
+
+    internal static Uri? BuildMapviewUrl(SitemapRowDescriptor row)
+    {
+        return SitemapUiLogic.BuildMapviewUrl(row);
     }
 
     private static Border CreateChart(SitemapRowDescriptor row, Uri? baseUri, int chartDpi, IconAuthContext? iconAuth)
