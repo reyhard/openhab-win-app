@@ -89,6 +89,7 @@ public partial class App : Application
     private int isShuttingDown;
     private bool shortcutHotkeysSuspended;
     private bool notificationActivationHandlersRegistered;
+    private SitemapMediaCacheProfile? sitemapMediaCacheProfile;
     private readonly SemaphoreSlim notificationPollingSettingsChangeSemaphore = new(1, 1);
 
     [DllImport("shell32.dll", SetLastError = true)]
@@ -226,6 +227,7 @@ public partial class App : Application
         RefreshShortcutHotkeys();
         settingsController.SettingsChanged += (_, _) =>
         {
+            ApplySitemapMediaCacheInvalidation();
             RefreshShortcutHotkeys();
             _ = HandleNotificationPollingSettingsChangedAsync();
         };
@@ -862,6 +864,7 @@ public partial class App : Application
     private async Task CompleteStartupAsync(AppSettingsController settingsController, AppActivationArguments? activatedEventArgs)
     {
         await InitializeAsync(settingsController);
+        sitemapMediaCacheProfile = BuildSitemapMediaCacheProfile(settingsController);
 
         RegisterDeviceInfoSyncEvents();
         deviceInfoSyncService?.Start();
@@ -958,6 +961,33 @@ public partial class App : Application
         {
             DiagnosticLogger.Warn($"Startup Main UI page discovery failed: {ex.GetType().Name}");
         }
+    }
+
+    private void ApplySitemapMediaCacheInvalidation()
+    {
+        var controller = settingsController;
+        if (controller is null)
+        {
+            return;
+        }
+
+        var currentProfile = BuildSitemapMediaCacheProfile(controller);
+        if (sitemapMediaCacheProfile is { } previousProfile
+            && SitemapMediaCacheInvalidationPolicy.ShouldClear(previousProfile, currentProfile))
+        {
+            SitemapControlFactory.ClearSitemapMediaCaches();
+            DiagnosticLogger.Info("Sitemap media caches cleared after endpoint or credential settings changed.");
+        }
+
+        sitemapMediaCacheProfile = currentProfile;
+    }
+
+    private static SitemapMediaCacheProfile BuildSitemapMediaCacheProfile(AppSettingsController controller)
+    {
+        var settings = controller.Current;
+        var localToken = settings.HasLocalToken ? GetApiTokenSync(controller, TransportKind.Local) : null;
+        var cloudCredentials = settings.HasCloudCredentials ? GetCloudCredentialsSync(controller) : null;
+        return SitemapMediaCacheProfile.FromSettings(settings, localToken, cloudCredentials);
     }
 
     private void RefreshShortcutHotkeys()

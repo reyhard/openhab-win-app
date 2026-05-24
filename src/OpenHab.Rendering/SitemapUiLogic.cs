@@ -128,7 +128,7 @@ public static class SitemapUiLogic
     public static string BuildRowVisualStateKey(SitemapRowDescriptor row, int rowIndex) =>
         SitemapRowVisualPolicy.BuildRowVisualStateKey(row, rowIndex);
 
-    public static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi = 96, bool cacheBust = true)
+    public static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi = 96, bool cacheBust = false)
     {
         ArgumentNullException.ThrowIfNull(row);
 

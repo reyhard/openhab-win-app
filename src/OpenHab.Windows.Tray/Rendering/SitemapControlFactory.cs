@@ -43,6 +43,15 @@ public static partial class SitemapControlFactory
     private static readonly HashSet<string> ProbedIconEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private sealed record IconImageTag(Uri BaseUri, string IconName, string? IconState, string? IconColor, IconAuthContext? AuthContext);
 
+    internal static void ClearSitemapMediaCaches()
+    {
+        OpenHabIconImageSourceLoader.ClearPayloadCache();
+        lock (IconProbeSyncRoot)
+        {
+            ProbedIconEndpoints.Clear();
+        }
+    }
+
     internal static string? ResolveGlyphForIcon(string? iconName)
     {
         return SitemapUiLogic.ResolveWin11Glyph(iconName);
@@ -2411,7 +2420,7 @@ public static partial class SitemapControlFactory
     }
 
     /// <summary>Builds an openHAB chart image URL from the row descriptor and base URI.</summary>
-    internal static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi = 96, bool cacheBust = true)
+    internal static Uri? BuildChartUrl(SitemapRowDescriptor row, Uri? baseUri, int chartDpi = 96, bool cacheBust = false)
     {
         return SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi, cacheBust);
     }

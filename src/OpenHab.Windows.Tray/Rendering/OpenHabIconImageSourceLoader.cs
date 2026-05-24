@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -9,10 +8,9 @@ namespace OpenHab.Windows.Tray.Rendering;
 
 internal static class OpenHabIconImageSourceLoader
 {
+    private const int MaxIconPayloadCacheEntries = 256;
     private static readonly HttpClient IconHttpClient = new();
-    private static readonly ConcurrentDictionary<string, IconPayload> IconPayloadCache = new(StringComparer.Ordinal);
-
-    private sealed record IconPayload(byte[] Bytes, string? MediaType);
+    private static readonly SitemapMediaPayloadCache IconPayloadCache = new(MaxIconPayloadCacheEntries);
 
     internal sealed record LoadResult(
         bool Success,
@@ -29,7 +27,7 @@ internal static class OpenHabIconImageSourceLoader
         SitemapControlFactory.IconAuthContext? authContext)
     {
         var cacheKey = BuildPayloadCacheKey(iconUri, iconColor, authContext);
-        if (IconPayloadCache.TryGetValue(cacheKey, out var cachedPayload))
+        if (IconPayloadCache.TryGet(cacheKey, out var cachedPayload))
         {
             var targetSize = ResolveImageDecodeSize(image);
             var cachedSource = await CreateImageSourceFromBytesAsync(
@@ -81,8 +79,15 @@ internal static class OpenHabIconImageSourceLoader
         }
 
         image.Source = source;
-        IconPayloadCache.TryAdd(cacheKey, new IconPayload(bytes.ToArray(), mediaType));
+        IconPayloadCache.AddOrUpdate(cacheKey, bytes, mediaType);
         return Succeeded(source, mediaType, bytes.Length, fromCache: false);
+    }
+
+    internal static int CachedPayloadCount => IconPayloadCache.Count;
+
+    internal static void ClearPayloadCache()
+    {
+        IconPayloadCache.Clear();
     }
 
     internal static string BuildPayloadCacheKey(

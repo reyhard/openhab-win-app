@@ -86,35 +86,36 @@ public sealed class SitemapUiLogicTests
     }
 
     [Fact]
-    public void BuildChartUrl_UsesItemNamePeriodAndDpi()
+    public void BuildChartUrl_UsesStableUrlByDefault()
     {
         var row = new SitemapRowDescriptor(
             "Power", "12", RenderControlKind.Chart, RenderActionKind.None, RenderDensity.Compact,
             [], ItemName: "Weather_Temperature", Period: "D");
         var baseUri = new Uri("http://localhost:8080/");
 
-        var uri = SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi: 192);
+        var first = SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi: 192);
+        var second = SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi: 192);
 
-        Assert.NotNull(uri);
-        Assert.Contains("items=Weather_Temperature", uri!.ToString());
-        Assert.Contains("period=D", uri.ToString());
-        Assert.Contains("dpi=192", uri.ToString());
-        Assert.Contains("random=", uri.ToString());
+        Assert.NotNull(first);
+        Assert.Equal(first, second);
+        Assert.Contains("items=Weather_Temperature", first!.ToString());
+        Assert.Contains("period=D", first.ToString());
+        Assert.Contains("dpi=192", first.ToString());
+        Assert.DoesNotContain("random=", first.ToString());
     }
 
     [Fact]
-    public void BuildChartUrl_UsesStableUrlWhenCacheBustDisabled()
+    public void BuildChartUrl_AppendsRandomWhenCacheBustEnabled()
     {
         var row = new SitemapRowDescriptor(
             "Power", "12", RenderControlKind.Chart, RenderActionKind.None, RenderDensity.Compact,
             [], ItemName: "Weather_Temperature", Period: "D");
         var baseUri = new Uri("http://localhost:8080/");
 
-        var first = SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi: 192, cacheBust: false);
-        var second = SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi: 192, cacheBust: false);
+        var uri = SitemapUiLogic.BuildChartUrl(row, baseUri, chartDpi: 192, cacheBust: true);
 
-        Assert.Equal(first, second);
-        Assert.DoesNotContain("random=", first!.ToString());
+        Assert.NotNull(uri);
+        Assert.Contains("random=", uri!.ToString());
     }
 
     [Fact]

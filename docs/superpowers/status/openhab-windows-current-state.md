@@ -1,6 +1,6 @@
 # openHAB Windows Current State
 
-Date: 2026-05-18
+Date: 2026-05-24
 
 ## Purpose
 
@@ -32,6 +32,7 @@ Read this file before implementation. Older dated status files remain useful as 
 - Tracked temporary signing/user/package artifacts are no longer present in `git ls-files`; `.gitignore` now covers `.pfx`, user project metadata, `AppPackages`, and `BundleArtifacts`.
 - Crowdin localization foundation has landed on `main`: `crowdin.yml`, translation ownership docs, English and Polish WinUI `.resw` resources, fallback `ITextLocalizer` coverage, localized package manifest/app chrome/runtime/status/settings strings, and regression tests for resource parity, placeholder parity, and representative hardcoded settings labels.
 - Language override support has landed on `main`: persisted app language setting, startup WinUI resource/culture override, Appearance language selector, explicit Polish override behavior, and restart-required messaging for non-live language changes.
+- Sitemap media cache policy is implemented: chart URLs are stable by default with explicit opt-in cache busting, icon payload caching is bounded, and sitemap media caches clear when endpoint or credential profile inputs change.
 
 ## Current High-Priority Backlog
 
@@ -39,7 +40,6 @@ Read this file before implementation. Older dated status files remain useful as 
 - P1: Run and record manual UI smoke checks for tray flyout, main window, Main UI WebView2 auth/navigation, notifications, settings, and shortcut command menu.
 - P1: Run and record manual memory/performance measurements for launch, flyout open/close, main window open/close, and background resource release. `docs/superpowers/verification/2026-05-14-performance-optimization-results.md` currently records build success but no manual measurements.
 - P1: Complete accessibility, dependency/license, and release packaging review before treating the app as official release-ready. Localization has a resource-backed English/Polish baseline, but still needs manual UI smoke review for wording, truncation, and untranslated app-owned strings.
-- P2: Finish sitemap media cache policy: chart rendering still uses cache-busting URLs by default, and icon payload caching exists but lacks a bounded eviction or profile-change clearing policy.
 
 ## Verification Gates
 
@@ -50,6 +50,14 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-05-24 sitemap media cache policy worktree `investigate/sitemap-media-cache-policy`:
+
+- Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`79/79`).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`43/43`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`125/125`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`587/587`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
 
 2026-05-18 localization/language merge on `main` at `f209aac`:
 
