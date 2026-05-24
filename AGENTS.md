@@ -13,13 +13,21 @@ The implementation is intentionally layered:
 - `OpenHab.Windows.Tray`: WinUI/Windows App SDK shell, tray icon, flyout window, and current settings surface.
 - `tests/*`: xUnit coverage for core, sitemap, rendering, and app/runtime behavior.
 
-## Current Status
+## Status Page First
 
-Do not maintain implementation progress directly in this file.
-
-Use the status docs as the source of truth for what is finished, what was verified, and what remains out of scope. Read this consolidated tracker first:
+Before making assumptions about shipped behavior, backlog priority, release blockers, or verification gates, read:
 
 - `docs/superpowers/status/openhab-windows-current-state.md`
+
+Treat that status page as the source of truth for:
+
+- what is actually finished;
+- what remains out of scope;
+- current high-priority backlog items;
+- latest verification evidence;
+- which verification gate applies to the change.
+
+Do not maintain implementation progress directly in this file. If work changes shipped behavior, release readiness, backlog status, or verification evidence, update the status page instead of adding progress notes here.
 
 Historical status references:
 
@@ -27,7 +35,7 @@ Historical status references:
 - `docs/superpowers/status/2026-05-05-openhab-windows-ui-slice-status.md`
 - `docs/superpowers/status/2026-05-05-openhab-windows-connected-homepage-status.md`
 
-Read the latest relevant status doc before assuming a feature exists. The design/spec docs describe intended direction, not necessarily shipped behavior.
+Use historical status files only as background evidence. The design/spec docs describe intended direction, not necessarily shipped behavior.
 
 ## Key Files
 
@@ -48,7 +56,7 @@ Runtime logs and local app state are written under:
 
 Useful files there include `diagnostics.log`, `task-crash.log`, `settings.json`, and `notifications.json`. Prefer `diagnostics.log` first when tracing runtime behavior.
 
-Useful project docs:
+Useful project docs, in priority order:
 
 - `docs/superpowers/status/openhab-windows-current-state.md` - start here for current shipped behavior, release blockers, and verification gates.
 - `docs/superpowers/verification/openhab-windows-quality-gates.md` - direct test and full-solution verification commands, including DesktopBridge caveats.
