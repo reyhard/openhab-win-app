@@ -64,17 +64,17 @@ The tray flyout opens from the Windows tray and is meant for quick control. It u
 
 The flyout currently does not host openHAB Main UI. Use the main window when you want the full Main UI experience.
 
-<!-- Screenshot idea: Tray flyout with a native sitemap page and search button. -->
+![show_hide_anim](D:\Source\Openhab\openhab-win-app\docs\img\show_hide_anim.gif)
 
 ### Main Window
 
 The main window is for longer sessions and configuration. It contains:
 
-- embedded openHAB Main UI through WebView2,
-- app Settings,
-- the Notifications page,
-- promoted Main UI pages discovered from openHAB,
-- an optional native sitemap pane.
+- embedded openHAB Main UI through WebView2
+- app Settings
+- the Notifications page
+- promoted Main UI pages discovered from openHAB
+- an optional native sitemap pane
 
 The optional sitemap pane can stay visible while you use Main UI, Settings, or Notifications.
 
@@ -86,8 +86,10 @@ The Windows app can render openHAB sitemaps natively. Sitemaps are useful when y
 
 The app also adds Windows-specific navigation conveniences:
 
-- breadcrumbs for subpage navigation,
-- sitemap search.
+- breadcrumbs for subpage navigation
+- sitemap search
+
+![searching](D:\Source\Openhab\openhab-win-app\docs\img\searching.gif)
 
 For sitemap syntax and available sitemap element types, see the [openHAB Sitemaps documentation](https://www.openhab.org/docs/ui/sitemaps).
 
@@ -95,17 +97,19 @@ For sitemap syntax and available sitemap element types, see the [openHAB Sitemap
 
 The app can show openHAB Cloud notifications as native Windows notifications when cloud access is configured. Notifications also appear in the app's Notifications page.
 
+![image-20260525121528614](D:\Source\Openhab\openhab-win-app\docs\img\notifications_panel)
+
 Notification features include:
 
-- Windows toast notifications,
-- an in-app notification inbox,
-- search and filtering,
-- read and hidden states,
-- tags and reference IDs,
-- rich media when available,
-- action buttons,
-- log-only notifications,
-- hide and remove behavior from openHAB Cloud notification actions.
+- Windows toast notifications
+- an in-app notification inbox
+- search and filtering
+- read and hidden states
+- tags and reference IDs
+- rich media when available
+- action buttons
+- log-only notifications
+- hide and remove behavior from openHAB Cloud notification actions
 
 New cloud notifications are unavailable in Local only mode. Use Automatic or Cloud only mode when you want the app to poll cloud notifications.
 
@@ -130,9 +134,9 @@ The app includes a command menu for actions you want to run quickly from Windows
 
 You can configure an action to be available in one or both places:
 
-- command menu only,
-- its own global shortcut only,
-- command menu and its own global shortcut.
+- command menu only
+- its own global shortcut only
+- command menu and its own global shortcut
 
 The command menu itself also has a configurable global shortcut.
 
@@ -140,7 +144,7 @@ Windows or another app may reserve or intercept some key combinations, especiall
 
 Shortcuts can be configured while openHAB is disconnected. Running an action requires an active openHAB connection.
 
-<!-- Screenshot idea: Command menu with several configured actions. -->
+![command_menu](D:\Source\Openhab\openhab-win-app\docs\img\command_menu.gif)
 
 ### Action Types
 
@@ -183,8 +187,6 @@ Sync can happen:
 - when the openHAB connection state changes.
 
 If a sync fails, the app records the result in status and diagnostics. A failed sync should not block sitemap browsing, commands, notifications, or other app use.
-
-<!-- Screenshot idea: Device Info Sync settings with several mapped signals. -->
 
 ### Signals
 
