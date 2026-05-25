@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -92,6 +93,10 @@ public partial class App : Application
     private SitemapMediaCacheProfile? sitemapMediaCacheProfile;
     private readonly SemaphoreSlim notificationPollingSettingsChangeSemaphore = new(1, 1);
 
+    [SuppressMessage(
+        "Interoperability",
+        "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+        Justification = "LibraryImport source generation currently fails the Windows App SDK XAML compile path; keep DllImport for this process identity call.")]
     [DllImport("shell32.dll", SetLastError = true)]
     private static extern void SetCurrentProcessExplicitAppUserModelID(
         [MarshalAs(UnmanagedType.LPWStr)] string appId);

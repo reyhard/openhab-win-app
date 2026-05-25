@@ -2548,11 +2548,7 @@ public sealed partial class SettingsPageControl : UserControl
             return;
         }
 
-        var selectedType = combo.SelectedItem is ShortcutCommandType commandType
-            ? commandType
-            : combo.SelectedItem is ShortcutCommandTypeOption option
-                ? option.CommandType
-                : ShortcutCommandType.Toggle;
+        var selectedType = ResolveSelectedShortcutCommandType(combo.SelectedItem);
         ApplyCommandValueEditingBehavior(selectedType);
     }
 

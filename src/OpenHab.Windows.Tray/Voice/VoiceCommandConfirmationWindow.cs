@@ -67,7 +67,7 @@ public sealed class VoiceCommandConfirmationWindow : Window
         }
     }
 
-    private UIElement BuildContent(string recognizedText)
+    private Border BuildContent(string recognizedText)
     {
         var transcript = new TextBlock
         {

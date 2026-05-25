@@ -57,9 +57,7 @@ public sealed record ShortcutSettings(
                     GlobalShortcut = ShortcutBindingFormatter.TryNormalize(action.GlobalShortcut, out var normalizedShortcut) ? normalizedShortcut : null,
                     TargetItem = action.TargetItem?.Trim() ?? string.Empty,
                     CommandType = Enum.IsDefined(action.CommandType) ? action.CommandType : ShortcutCommandType.SendCommand,
-                    CommandValue = action.CommandType == ShortcutCommandType.Voice
-                        ? null
-                        : string.IsNullOrWhiteSpace(action.CommandValue) ? null : action.CommandValue.Trim()
+                    CommandValue = NormalizeCommandValue(action)
                 })
                 .ToImmutableArray();
 
@@ -88,5 +86,15 @@ public sealed record ShortcutSettings(
                 ShortcutBindingFormatter.Format(normalizedFirst),
                 ShortcutBindingFormatter.Format(normalizedSecond),
                 StringComparison.Ordinal);
+    }
+
+    private static string? NormalizeCommandValue(ShortcutAction action)
+    {
+        if (action.CommandType == ShortcutCommandType.Voice || string.IsNullOrWhiteSpace(action.CommandValue))
+        {
+            return null;
+        }
+
+        return action.CommandValue.Trim();
     }
 }

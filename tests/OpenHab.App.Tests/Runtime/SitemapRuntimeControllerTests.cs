@@ -12,6 +12,8 @@ namespace OpenHab.App.Tests.Runtime;
 
 public sealed class SitemapRuntimeControllerTests
 {
+    private static readonly int[] FirstRowChanged = [0];
+
     private readonly string settingsFilePath = Path.Combine(
         Path.GetTempPath(),
         "OpenHab.App.Tests",
@@ -969,7 +971,7 @@ public sealed class SitemapRuntimeControllerTests
             DescriptionChanged: false));
 
         // Assert delta indices
-        Assert.Equal(new[] { 0 }, controller.Current.ChangedRowIndices);
+        Assert.Equal(FirstRowChanged, controller.Current.ChangedRowIndices);
 
         // Assert descriptor shows updated state
         Assert.Equal("ON", controller.Current.Descriptor!.Rows[0].State);
@@ -1154,7 +1156,7 @@ public sealed class SitemapRuntimeControllerTests
     }
 }
 
-public sealed class FakeEventStreamClient : IOpenHabEventStreamClient
+public sealed partial class FakeEventStreamClient : IOpenHabEventStreamClient
 {
     public event EventHandler<OpenHabEvent>? EventReceived;
     public event EventHandler<SitemapWidgetEvent>? WidgetEventReceived;

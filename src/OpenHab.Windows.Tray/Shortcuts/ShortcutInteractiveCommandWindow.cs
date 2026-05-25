@@ -14,6 +14,10 @@ using Windows.UI;
 namespace OpenHab.Windows.Tray.Shortcuts;
 
 [ExcludeFromCodeCoverage(Justification = "WinUI command popup host glue.")]
+[SuppressMessage(
+    "Interoperability",
+    "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+    Justification = "LibraryImport source generation currently fails the Windows App SDK XAML compile path and does not support the PointInt32 out parameter here.")]
 public sealed partial class ShortcutInteractiveCommandWindow : Window
 {
     private const int SliderWidth = 300;
@@ -319,5 +323,6 @@ public sealed partial class ShortcutInteractiveCommandWindow : Window
     }
 
     [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out PointInt32 point);
 }

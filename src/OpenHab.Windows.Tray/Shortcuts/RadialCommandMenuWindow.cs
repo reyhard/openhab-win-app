@@ -14,6 +14,10 @@ using Windows.System;
 namespace OpenHab.Windows.Tray.Shortcuts;
 
 [ExcludeFromCodeCoverage(Justification = "WinUI command popup host glue.")]
+[SuppressMessage(
+    "Interoperability",
+    "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+    Justification = "LibraryImport source generation currently fails the Windows App SDK XAML compile path; keep DllImport for the layered popup host.")]
 public sealed class RadialCommandMenuWindow
 {
     private const int WindowSize = 440;
@@ -908,6 +912,7 @@ public sealed class RadialCommandMenuWindow
     private static extern IntPtr SetTimer(IntPtr hwnd, uint nIDEvent, uint uElapse, IntPtr lpTimerFunc);
 
     [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool KillTimer(IntPtr hwnd, uint uIDEvent);
 
     [DllImport("user32.dll", SetLastError = true)]

@@ -10,6 +10,8 @@ public readonly record struct SitemapColor(byte A, byte R, byte G, byte B);
 
 public static class SitemapUiLogic
 {
+    private const string OpenStreetMapCoordinateFormat = "0.#####";
+
     private static readonly Dictionary<string, string> Win11IconMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["light"] = "\uE706", ["lights"] = "\uE706",
@@ -165,13 +167,13 @@ public static class SitemapUiLogic
         }
 
         zoom = Math.Clamp(zoom, 1, 19);
-        var lat = latitude.ToString("0.#####", CultureInfo.InvariantCulture);
-        var lon = longitude.ToString("0.#####", CultureInfo.InvariantCulture);
+        var lat = latitude.ToString(OpenStreetMapCoordinateFormat, CultureInfo.InvariantCulture);
+        var lon = longitude.ToString(OpenStreetMapCoordinateFormat, CultureInfo.InvariantCulture);
         var margin = Math.Clamp(400d / Math.Pow(2d, zoom), 0.001d, 20d);
-        var minLatitude = Math.Clamp(latitude - margin, -90d, 90d).ToString("0.#####", CultureInfo.InvariantCulture);
-        var maxLatitude = Math.Clamp(latitude + margin, -90d, 90d).ToString("0.#####", CultureInfo.InvariantCulture);
-        var minLongitude = Math.Clamp(longitude - margin, -180d, 180d).ToString("0.#####", CultureInfo.InvariantCulture);
-        var maxLongitude = Math.Clamp(longitude + margin, -180d, 180d).ToString("0.#####", CultureInfo.InvariantCulture);
+        var minLatitude = Math.Clamp(latitude - margin, -90d, 90d).ToString(OpenStreetMapCoordinateFormat, CultureInfo.InvariantCulture);
+        var maxLatitude = Math.Clamp(latitude + margin, -90d, 90d).ToString(OpenStreetMapCoordinateFormat, CultureInfo.InvariantCulture);
+        var minLongitude = Math.Clamp(longitude - margin, -180d, 180d).ToString(OpenStreetMapCoordinateFormat, CultureInfo.InvariantCulture);
+        var maxLongitude = Math.Clamp(longitude + margin, -180d, 180d).ToString(OpenStreetMapCoordinateFormat, CultureInfo.InvariantCulture);
         var bbox = Uri.EscapeDataString($"{minLongitude},{minLatitude},{maxLongitude},{maxLatitude}");
         var marker = Uri.EscapeDataString($"{lat},{lon}");
         return new Uri($"https://www.openstreetmap.org/export/embed.html?bbox={bbox}&layer=mapnik&marker={marker}");

@@ -18,6 +18,10 @@ internal sealed record HotkeyRefreshResult(ImmutableArray<HotkeyRegistrationFail
 }
 
 [ExcludeFromCodeCoverage(Justification = "Win32 global hotkey registration wrapper.")]
+[SuppressMessage(
+    "Interoperability",
+    "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+    Justification = "LibraryImport source generation currently fails the Windows App SDK XAML compile path; keep DllImport for hotkey and subclass calls.")]
 internal sealed partial class GlobalHotkeyService : IDisposable
 {
     private const int FirstHotkeyId = 0x4F00;
@@ -260,9 +264,11 @@ internal sealed partial class GlobalHotkeyService : IDisposable
         IntPtr refData);
 
     [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
     [DllImport("comctl32.dll", SetLastError = true)]

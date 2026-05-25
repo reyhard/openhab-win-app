@@ -12,6 +12,10 @@ internal enum ShortcutHotkeyAvailabilityStatus
     Unavailable
 }
 
+[SuppressMessage(
+    "Interoperability",
+    "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+    Justification = "LibraryImport source generation currently fails the Windows App SDK XAML compile path; keep DllImport for this hotkey probe.")]
 internal static partial class ShortcutHotkeyAvailabilityChecker
 {
     private const int ProbeHotkeyId = 0x5F00;
@@ -56,9 +60,11 @@ internal static partial class ShortcutHotkeyAvailabilityChecker
     }
 
     [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
     [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 }
 

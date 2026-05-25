@@ -25,9 +25,14 @@ using Windows.UI.ViewManagement;
 using Windows.Graphics;
 using Microsoft.UI.Dispatching;
 using Windows.System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenHab.Windows.Tray;
 
+[SuppressMessage(
+    "Interoperability",
+    "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+    Justification = "LibraryImport source generation currently fails the Windows App SDK XAML compile path; keep DllImport for HWND style and foreground calls.")]
 public sealed partial class FlyoutWindow : Window
 {
     private readonly AppSettingsController settingsController;
@@ -489,7 +494,7 @@ public sealed partial class FlyoutWindow : Window
         await RunNavigateTransitionAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
     }
 
-    private Task SendCommandForRowKeyAsync(string rowKey, string command)
+    private Task<bool> SendCommandForRowKeyAsync(string rowKey, string command)
     {
         return runtimeController.SendCommandForRowKeyAsync(rowKey, command);
     }
@@ -1219,7 +1224,7 @@ public sealed partial class FlyoutWindow : Window
         return new RowTransitionSuppression(rows, transitions);
     }
 
-    private sealed class RowTransitionSuppression(StackPanel rows, TransitionCollection transitions) : IDisposable
+    private sealed partial class RowTransitionSuppression(StackPanel rows, TransitionCollection transitions) : IDisposable
     {
         public void Dispose()
         {
@@ -1227,7 +1232,7 @@ public sealed partial class FlyoutWindow : Window
         }
     }
 
-    private sealed class NoopDisposable : IDisposable
+    private sealed partial class NoopDisposable : IDisposable
     {
         public static readonly NoopDisposable Instance = new();
 

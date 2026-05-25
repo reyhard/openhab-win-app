@@ -36,6 +36,7 @@ public static partial class SitemapControlFactory
     private const double WidgetVisibilityAnimationDurationMs = 320d;
     private const string MissingIconStateText = "(none)";
     private const string UnknownDiagnosticText = "unknown";
+    private const string SegoeMdl2AssetsFontFamily = "Segoe MDL2 Assets";
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
     private static readonly Regex FirstNumberRegex = FirstNumberRegexFactory();
@@ -68,7 +69,7 @@ public static partial class SitemapControlFactory
             Glyph = glyph,
             FontSize = 14,
             Opacity = 0.8,
-            FontFamily = new FontFamily("Segoe MDL2 Assets")
+            FontFamily = new FontFamily(SegoeMdl2AssetsFontFamily)
         };
     }
 
@@ -1685,7 +1686,7 @@ public static partial class SitemapControlFactory
             Glyph = glyph,
             FontSize = 12,
             Opacity = 0.65,
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontFamily = new FontFamily(SegoeMdl2AssetsFontFamily),
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(icon, 1);
@@ -1733,7 +1734,7 @@ public static partial class SitemapControlFactory
             Glyph = glyph,
             FontSize = 12,
             Opacity = 0.65,
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontFamily = new FontFamily(SegoeMdl2AssetsFontFamily),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right
         };
@@ -2320,7 +2321,7 @@ public static partial class SitemapControlFactory
             {
                 Glyph = "\uE8A7",
                 FontSize = 13,
-                FontFamily = new FontFamily("Segoe MDL2 Assets")
+                FontFamily = new FontFamily(SegoeMdl2AssetsFontFamily)
             },
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,

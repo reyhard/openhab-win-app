@@ -347,12 +347,11 @@ public sealed partial class MainWindow : Window
         CenterContentHost.Children.Clear();
         CenterContentHost.Children.Add(element);
 
-        if (element is FrameworkElement content && plan.Animates)
+        if (element is FrameworkElement content
+            && plan.Animates
+            && !DispatcherQueue.TryEnqueue(() => StartCenterContentEntranceStoryboard(content, plan)))
         {
-            if (!DispatcherQueue.TryEnqueue(() => StartCenterContentEntranceStoryboard(content, plan)))
-            {
-                StartCenterContentEntranceStoryboard(content, plan);
-            }
+            StartCenterContentEntranceStoryboard(content, plan);
         }
     }
 
@@ -923,7 +922,7 @@ public sealed partial class MainWindow : Window
         await RunNavigateTransitionAsync(ct => runtimeController.NavigateRowByKeyAsync(rowKey, ct));
     }
 
-    private Task SendCommandForRowKeyAsync(string rowKey, string command)
+    private Task<bool> SendCommandForRowKeyAsync(string rowKey, string command)
     {
         return runtimeController.SendCommandForRowKeyAsync(rowKey, command);
     }

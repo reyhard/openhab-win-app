@@ -10,6 +10,10 @@ using Microsoft.UI.Xaml;
 namespace OpenHab.Windows.Tray.Voice;
 
 [ExcludeFromCodeCoverage(Justification = "Native layered-window visual host.")]
+[SuppressMessage(
+    "Interoperability",
+    "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+    Justification = "The overlay registers a Win32 window class with callback and string-marshaled WNDCLASSEX data; keep DllImport to avoid changing native lifetime behavior.")]
 public sealed class VoiceListeningOverlayWindow
 {
     private const int WindowWidth = 220;
@@ -21,6 +25,10 @@ public sealed class VoiceListeningOverlayWindow
     private static readonly ConcurrentDictionary<IntPtr, VoiceListeningOverlayWindow> Instances = new();
     private static readonly object ClassRegistrationLock = new();
     private static bool windowClassRegistered;
+    [SuppressMessage(
+        "Major Code Smell",
+        "S1450:Private fields only used as local variables should become local variables",
+        Justification = "The delegate must stay rooted for the lifetime of the registered Win32 window class.")]
     private static WndProcDelegate? sharedWndProc;
 
     private readonly DispatcherTimer animationTimer = new();
@@ -223,7 +231,7 @@ public sealed class VoiceListeningOverlayWindow
             SelectObject(memoryDc, oldBitmap);
             DeleteObject(bitmapHandle);
             DeleteDC(memoryDc);
-            ReleaseDC(IntPtr.Zero, screenDc);
+            _ = ReleaseDC(IntPtr.Zero, screenDc);
         }
     }
 
@@ -291,13 +299,13 @@ public sealed class VoiceListeningOverlayWindow
     {
         if (Instances.TryGetValue(hwnd, out var instance))
         {
-            return instance.WndProc(hwnd, msg, wParam, lParam);
+            return WndProc(hwnd, msg, wParam, lParam);
         }
 
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
 
-    private IntPtr WndProc(IntPtr windowHandle, uint msg, IntPtr wParam, IntPtr lParam)
+    private static IntPtr WndProc(IntPtr windowHandle, uint msg, IntPtr wParam, IntPtr lParam)
     {
         if (msg == WM_DESTROY)
         {

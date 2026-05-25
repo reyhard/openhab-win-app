@@ -51,6 +51,14 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Latest Verification Evidence
 
+2026-05-24 SonarQube reported-issues remediation worktree `fix/sonarqube-reported-issues`:
+
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`79/79`).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`43/43`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`125/125`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`587/587`).
+
 2026-05-24 sitemap media cache policy worktree `investigate/sitemap-media-cache-policy`:
 
 - Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`79/79`).

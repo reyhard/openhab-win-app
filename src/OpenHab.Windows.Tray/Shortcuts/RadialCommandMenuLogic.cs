@@ -201,12 +201,6 @@ internal static class RadialCommandMenuLogic
         return from + ((to - from) * Clamp(progress, 0f, 1f));
     }
 
-    private static float EaseOut(float progress)
-    {
-        var t = Clamp(progress, 0f, 1f);
-        return 1f - (float)Math.Pow(1f - t, 3d);
-    }
-
     private static float EaseIn(float progress)
     {
         var t = Clamp(progress, 0f, 1f);

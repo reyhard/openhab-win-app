@@ -5,6 +5,10 @@ using OpenHab.App.Tray;
 namespace OpenHab.Windows.Tray;
 
 [ExcludeFromCodeCoverage(Justification = "Win32/DWM composition wrapper.")]
+[SuppressMessage(
+    "Interoperability",
+    "SYSLIB1054:Use LibraryImportAttribute instead of DllImportAttribute",
+    Justification = "LibraryImport source generation currently fails the Windows App SDK XAML compile path; keep DllImport for this thin Win32 wrapper.")]
 internal static class AcrylicBlurHelper
 {
     private enum AccentState
