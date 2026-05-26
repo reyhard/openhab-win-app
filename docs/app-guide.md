@@ -4,7 +4,7 @@ The openHAB Windows app is a Windows 11 companion app for openHAB. It provides a
 
 This guide describes how to configure and use the app. It is written for users of the Windows app, not for contributors working on the app source code.
 
-![](img\app-main-window.png)
+![](img/app-main-window.png)
 
 ## Requirements
 
@@ -64,7 +64,7 @@ The tray flyout opens from the Windows tray and is meant for quick control. It u
 
 The flyout currently does not host openHAB Main UI. Use the main window when you want the full Main UI experience.
 
-![](img\show_hide_anim.gif)
+![](img/show_hide_anim.gif)
 
 ### Main Window
 
@@ -89,7 +89,7 @@ The app also adds Windows-specific navigation conveniences:
 - breadcrumbs for subpage navigation
 - sitemap search
 
-![searching](img\searching.gif)
+![searching](img/searching.gif)
 
 For sitemap syntax and available sitemap element types, see the [openHAB Sitemaps documentation](https://www.openhab.org/docs/ui/sitemaps).
 
@@ -97,7 +97,7 @@ For sitemap syntax and available sitemap element types, see the [openHAB Sitemap
 
 The app can show openHAB Cloud notifications as native Windows notifications when cloud access is configured. Notifications also appear in the app's Notifications page.
 
-![image-20260525121528614](img\notifications_panel.png)
+![image-20260525121528614](img/notifications_panel.png)
 
 Notification features include:
 
@@ -144,7 +144,7 @@ Windows or another app may reserve or intercept some key combinations, especiall
 
 Shortcuts can be configured while openHAB is disconnected. Running an action requires an active openHAB connection.
 
-![command_menu](img\command_menu.gif)
+![command_menu](img/command_menu.gif)
 
 ### Action Types
 
