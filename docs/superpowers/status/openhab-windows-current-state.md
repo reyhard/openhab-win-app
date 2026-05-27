@@ -10,7 +10,7 @@ Read this file before implementation. Older dated status files remain useful as 
 
 - Windows 11 tray app with compact flyout and larger main window.
 - Main window defaults to embedded openHAB Main UI through WebView2.
-- Main window left rail contains Settings, Notifications, and collapsible promoted Main UI pages discovered from `/rest/ui/components/ui:page`.
+- Main window left rail contains Settings, Notifications, and collapsible promoted Main UI pages discovered from `/rest/ui/components/ui:page`; cached promoted links render immediately, then refresh when the main window is created, and promoted page icons from `config.icon` are downloaded through the shared openHAB/Iconify icon loading path.
 - Native sitemap rendering remains available as an independent right-side pane that is hidden by default and can stay visible while Main UI, Settings, or Notifications are active.
 - Flyout and main window sitemap surfaces share the Windows sitemap renderer and row-planning path through `OpenHab.Rendering.SitemapSurface.SitemapRowPlanner` and `OpenHab.Windows.Tray.Rendering.SitemapSurface.SitemapSurfaceRenderer`.
 - Connected sitemap homepage loading, subpage navigation, breadcrumbs, search descriptors, ButtonGrid dispatch, and event-stream widget updates route through `OpenHab.App.Runtime.SitemapRuntimeController`.
@@ -50,6 +50,14 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-05-27 Main UI promoted page icon worktree `feature/main-ui-page-icons`:
+
+- Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`79/79`).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`43/43`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`125/125`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`595/595`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
 
 2026-05-24 SonarQube reported-issues remediation worktree `fix/sonarqube-reported-issues`:
 

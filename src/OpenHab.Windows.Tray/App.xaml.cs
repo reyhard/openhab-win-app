@@ -298,7 +298,33 @@ public partial class App : Application
             text: textLocalizer);
 
         PopulateWindowSitemaps(window);
+        SchedulePromotedMainUiPageRefresh(window);
         return window;
+    }
+
+    private void SchedulePromotedMainUiPageRefresh(MainWindow window)
+    {
+        var discoveryCancellationToken = promotedMainUiDiscoveryCts?.Token ?? CancellationToken.None;
+        _ = RefreshPromotedMainUiPagesForWindowCreationAsync(window, discoveryCancellationToken);
+    }
+
+    private async Task RefreshPromotedMainUiPagesForWindowCreationAsync(
+        MainWindow window,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RefreshPromotedMainUiPagesAsync(window, cancellationToken);
+        }
+        catch (OperationCanceledException ex)
+            when (cancellationToken.IsCancellationRequested && ex.CancellationToken == cancellationToken)
+        {
+            // Expected when the app exits while page discovery is still in flight.
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Main window Main UI page discovery failed: {ex.GetType().Name}");
+        }
     }
 
     private FlyoutWindow CreateFlyoutWindow()
@@ -954,7 +980,7 @@ public partial class App : Application
         {
             if (mainWindow is not null)
             {
-                await mainWindow.RefreshPromotedMainUiPagesAsync(cancellationToken);
+                await RefreshPromotedMainUiPagesAsync(mainWindow, cancellationToken);
             }
         }
         catch (OperationCanceledException ex)
@@ -966,6 +992,11 @@ public partial class App : Application
         {
             DiagnosticLogger.Warn($"Startup Main UI page discovery failed: {ex.GetType().Name}");
         }
+    }
+
+    private static async Task RefreshPromotedMainUiPagesAsync(MainWindow window, CancellationToken cancellationToken)
+    {
+        await window.RefreshPromotedMainUiPagesAsync(cancellationToken);
     }
 
     private void ApplySitemapMediaCacheInvalidation()

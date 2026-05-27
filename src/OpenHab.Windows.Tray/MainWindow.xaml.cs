@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 64d;
     private const double ExpandedSitemapPaneWidth = 380d;
+    private const double MainUiPageIconSize = 20d;
     private static readonly HttpClient FallbackOpenHabClient = new();
     private readonly AppSettingsController settingsController;
     private readonly SitemapRuntimeController runtimeController;
@@ -730,13 +731,7 @@ public sealed partial class MainWindow : Window
 
         foreach (var page in linksToRender)
         {
-            var button = new Button
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                Content = page.Label,
-                Tag = page.Route
-            };
+            var button = CreatePromotedMainUiPageButton(page);
             button.Click += PromotedMainUiPageButton_Click;
             MainUiPagesList.Children.Add(button);
         }
@@ -748,6 +743,93 @@ public sealed partial class MainWindow : Window
         else
         {
             SetMainUiPagesListVisibility(visible: true);
+        }
+    }
+
+    private Button CreatePromotedMainUiPageButton(OpenHab.App.MainUi.MainUiPageLink page)
+    {
+        var content = new Grid
+        {
+            ColumnSpacing = 10,
+            Height = 32,
+            MinHeight = 32,
+            MaxHeight = 32
+        };
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var icon = CreatePromotedMainUiPageIcon(page.Icon);
+        if (icon is not null)
+        {
+            Grid.SetColumn(icon, 0);
+            content.Children.Add(icon);
+        }
+
+        var label = new TextBlock
+        {
+            Text = page.Label,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        Grid.SetColumn(label, 1);
+        content.Children.Add(label);
+
+        var button = new Button
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            MinWidth = 0,
+            Height = 32,
+            MinHeight = 32,
+            MaxHeight = 32,
+            Padding = new Thickness(8, 0, 8, 0),
+            Content = content,
+            Tag = page.Route
+        };
+        ToolTipService.SetToolTip(button, page.Label);
+        AutomationProperties.SetName(button, page.Label);
+        return button;
+    }
+
+    private Image? CreatePromotedMainUiPageIcon(string? iconName)
+    {
+        var settings = settingsController.Current;
+        var selectedTransport = GetPreferredMainUiTransport();
+        var endpoint = selectedTransport == TransportKind.Cloud
+            ? settings.CloudEndpoint
+            : settings.LocalEndpoint;
+        var iconUri = MainUiPageIconPolicy.BuildIconUri(endpoint, iconName);
+        if (iconUri is null)
+        {
+            return null;
+        }
+
+        var image = new Image
+        {
+            Width = MainUiPageIconSize,
+            Height = MainUiPageIconSize,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        SitemapControlFactory.IconAuthContext? iconAuth = MainUiPageIconPolicy.ShouldAttachOpenHabAuth(iconUri, endpoint)
+            ? sitemapIconAuthResolver.Resolve(selectedTransport)
+            : null;
+        _ = LoadPromotedMainUiPageIconAsync(image, iconUri, iconAuth);
+        return image;
+    }
+
+    private static async Task LoadPromotedMainUiPageIconAsync(
+        Image image,
+        Uri iconUri,
+        SitemapControlFactory.IconAuthContext? iconAuth)
+    {
+        try
+        {
+            _ = await OpenHabIconImageSourceLoader.TryLoadAsync(image, iconUri, iconColor: null, iconAuth);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Main UI page icon load failed: {ex.GetType().Name}");
         }
     }
 
