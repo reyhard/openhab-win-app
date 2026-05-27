@@ -77,6 +77,16 @@ internal static class MainWindowShellAnimationPlanner
 
     public static double ResolveMainUiPagesChevronAngle(bool isExpanded) => isExpanded ? 180d : 0d;
 
+    public static bool ShouldRenderMainUiPagesListItems(
+        bool mainUiPagesExpanded,
+        SidebarLayoutState sidebarLayoutState) =>
+        sidebarLayoutState switch
+        {
+            SidebarLayoutState.Expanded => mainUiPagesExpanded,
+            SidebarLayoutState.Collapsed => mainUiPagesExpanded,
+            _ => false
+        };
+
     public static int ResolveSidebarChromeDurationMs() => SidebarChromeDurationMs;
 
     public static SidebarLayoutMetrics ResolveSidebarLayoutMetrics(SidebarLayoutState layoutState) =>

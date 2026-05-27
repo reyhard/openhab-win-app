@@ -35,6 +35,23 @@ public sealed class MainWindowShellAnimationPlannerTests
         Assert.Equal(expectedAngle, MainWindowShellAnimationPlanner.ResolveMainUiPagesChevronAngle(isExpanded));
     }
 
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    public void ShouldRenderMainUiPagesListItems_FollowsExpandedStateInsteadOfSidebarVisibility(
+        bool mainUiPagesExpanded,
+        bool sidebarCollapsed,
+        bool expected)
+    {
+        var sidebarLayoutState = sidebarCollapsed ? SidebarLayoutState.Collapsed : SidebarLayoutState.Expanded;
+
+        Assert.Equal(
+            expected,
+            MainWindowShellAnimationPlanner.ShouldRenderMainUiPagesListItems(mainUiPagesExpanded, sidebarLayoutState));
+    }
+
     [Fact]
     public void CreateSidebarPlan_ExpandKeepsCollapsedLayoutUntilWidthAnimationCompletes()
     {

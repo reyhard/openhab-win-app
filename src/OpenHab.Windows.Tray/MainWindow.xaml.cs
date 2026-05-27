@@ -697,17 +697,13 @@ public sealed partial class MainWindow : Window
     private void RefreshPromotedMainUiPagesList(bool discoveryError = false, bool animate = false)
     {
         UpdateMainUiPagesChrome(animate);
+        var shouldRender = MainWindowShellAnimationPlanner.ShouldRenderMainUiPagesListItems(
+            settingsController.Current.MainUiPagesExpanded,
+            sidebarLayoutState);
         var shouldShow = ShouldShowMainUiPagesList();
-        if (!shouldShow)
+        if (!shouldRender)
         {
-            if (animate)
-            {
-                AnimateMainUiPagesListVisibility(targetVisible: false);
-            }
-            else
-            {
-                SetMainUiPagesListVisibility(visible: false);
-            }
+            ApplyMainUiPagesListVisibility(visible: false, animate);
             return;
         }
 
@@ -731,24 +727,18 @@ public sealed partial class MainWindow : Window
             {
                 Text = "No promoted pages"
             });
-            return;
-        }
-
-        foreach (var page in linksToRender)
-        {
-            var button = CreatePromotedMainUiPageButton(page);
-            button.Click += PromotedMainUiPageButton_Click;
-            MainUiPagesList.Children.Add(button);
-        }
-
-        if (animate)
-        {
-            AnimateMainUiPagesListVisibility(targetVisible: true);
         }
         else
         {
-            SetMainUiPagesListVisibility(visible: true);
+            foreach (var page in linksToRender)
+            {
+                var button = CreatePromotedMainUiPageButton(page);
+                button.Click += PromotedMainUiPageButton_Click;
+                MainUiPagesList.Children.Add(button);
+            }
         }
+
+        ApplyMainUiPagesListVisibility(shouldShow, animate);
     }
 
     private Button CreatePromotedMainUiPageButton(OpenHab.App.MainUi.MainUiPageLink page)
@@ -1721,6 +1711,18 @@ public sealed partial class MainWindow : Window
         else
         {
             UpdateMainUiPagesListClip(0d);
+        }
+    }
+
+    private void ApplyMainUiPagesListVisibility(bool visible, bool animate)
+    {
+        if (animate)
+        {
+            AnimateMainUiPagesListVisibility(visible);
+        }
+        else
+        {
+            SetMainUiPagesListVisibility(visible);
         }
     }
 
