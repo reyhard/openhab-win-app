@@ -78,6 +78,19 @@ public sealed class MainWindowShellControllerTests
     }
 
     [Fact]
+    public void SelectingMainUiCenterPageReturnsToMainUiRoot()
+    {
+        var controller = new MainWindowShellController(initialSitemapVisible: true);
+
+        controller.SelectPromotedMainUiPage("/page/energy");
+        controller.SelectCenterPage(MainWindowCenterPage.Settings);
+        controller.SelectCenterPage(MainWindowCenterPage.MainUi);
+
+        Assert.Equal(MainWindowCenterPage.MainUi, controller.Current.CenterPage);
+        Assert.Equal("/", controller.Current.PendingMainUiRoute);
+    }
+
+    [Fact]
     public void SyncCurrentMainUiRouteDoesNotRaiseChangedWhenRouteUnchanged()
     {
         var controller = new MainWindowShellController(initialSitemapVisible: true);

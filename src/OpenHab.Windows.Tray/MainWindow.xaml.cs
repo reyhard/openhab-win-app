@@ -272,6 +272,11 @@ public sealed partial class MainWindow : Window
         shellController.SelectCenterPage(MainWindowCenterPage.Notifications);
     }
 
+    public void ShowMainUiHome()
+    {
+        shellController.SelectCenterPage(MainWindowCenterPage.MainUi);
+    }
+
     public void ShowSettingsTab()
     {
         MarkSettingsTouched();

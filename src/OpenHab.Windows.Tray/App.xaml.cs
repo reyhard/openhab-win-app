@@ -339,6 +339,7 @@ public partial class App : Application
             notifications,
             requestOpenMainWindow: () =>
             {
+                EnsureMainWindow().ShowMainUiHome();
                 shellController?.HandleOpenMainWindow();
                 _ = ApplyShellStateAsync();
             },

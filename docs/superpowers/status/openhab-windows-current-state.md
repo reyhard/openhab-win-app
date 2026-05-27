@@ -20,6 +20,7 @@ Read this file before implementation. Older dated status files remain useful as 
 - Diagnostics now use `SafeDiagnosticText` and `SensitiveTextRedactor` for privacy-safe logs and user-facing status text in the main runtime, event stream, notifications, and Windows status surfaces.
 - App-owned UI text now routes through localization resources with English and Polish resource sets. Appearance settings include a language selector with System language, English, and Polish options; explicit overrides are applied during startup through WinUI resource/culture override APIs, and the UI shows a restart-required notice when a changed language is not yet loaded.
 - Packaging exists through `src/OpenHab.Windows.Package/OpenHab.Windows.Package.wapproj` and `build-package.ps1`; official package identity, signing ownership, distribution, and support policy remain release decisions.
+- The sitemap flyout "Open main window" button opens the main window on the Main UI root page by default instead of restoring the last selected main-window page; tray context-menu open behavior remains separate.
 
 ## Recently Completed Remediation
 
@@ -58,6 +59,15 @@ Read this file before implementation. Older dated status files remain useful as 
 - Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`125/125`).
 - Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`595/595`).
 - Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+
+2026-05-27 flyout open-main-window default Main UI behavior worktree `fix/open-main-window-default-main-ui`:
+
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter "FullyQualifiedName~MainWindowShellControllerTests" --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`8/8`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`588/588`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Passed by exit code: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=normal" -p:UseSharedCompilation=false`.
+- Passed by exit code: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=normal" -p:UseSharedCompilation=false`.
+- Passed by exit code: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=normal" -p:UseSharedCompilation=false`.
 
 2026-05-24 SonarQube reported-issues remediation worktree `fix/sonarqube-reported-issues`:
 
