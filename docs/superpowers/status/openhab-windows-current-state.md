@@ -21,6 +21,7 @@ Read this file before implementation. Older dated status files remain useful as 
 - App-owned UI text now routes through localization resources with English and Polish resource sets. Appearance settings include a language selector with System language, English, and Polish options; explicit overrides are applied during startup through WinUI resource/culture override APIs, and the UI shows a restart-required notice when a changed language is not yet loaded.
 - Packaging exists through `src/OpenHab.Windows.Package/OpenHab.Windows.Package.wapproj` and `build-package.ps1`; official package identity, signing ownership, distribution, and support policy remain release decisions.
 - The sitemap flyout "Open main window" button opens the main window on the Main UI root page by default instead of restoring the last selected main-window page; tray context-menu open behavior remains separate.
+- Main window promoted Main UI page links stay materialized while the left sidebar is collapsed, so re-expanding the sidebar restores visible promoted pages when their chevron is still expanded.
 
 ## Recently Completed Remediation
 
@@ -51,6 +52,13 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-05-27 main-window promoted page sidebar visibility worktree `fix/sidebar-promoted-pages-visibility`:
+
+- Red/green regression: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter "FullyQualifiedName~MainWindowShellAnimationPlannerTests" --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` first failed for missing `ShouldRenderMainUiPagesListItems`, then passed (`26/26`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`600/600`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Baseline caveat: `dotnet test OpenHab.Windows.sln` hit the known SDK DesktopBridge import failure for `OpenHab.Windows.Package.wapproj` and transient compiler output locks; direct test projects were used per the documented gate.
 
 2026-05-27 Main UI promoted page icon worktree `feature/main-ui-page-icons`:
 
