@@ -16,7 +16,7 @@ public sealed class MainWindowShellController
         var next = Current with
         {
             CenterPage = page,
-            PendingMainUiRoute = page == MainWindowCenterPage.MainUi ? Current.PendingMainUiRoute : null
+            PendingMainUiRoute = page == MainWindowCenterPage.MainUi ? "/" : null
         };
 
         if (EqualityComparer<MainWindowShellState>.Default.Equals(Current, next))
