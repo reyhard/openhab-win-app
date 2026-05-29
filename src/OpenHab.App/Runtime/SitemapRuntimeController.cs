@@ -19,12 +19,16 @@ namespace OpenHab.App.Runtime;
 public sealed class SitemapRuntimeController
 {
     private const string NullDiagnosticText = "<null>";
+    private static readonly TimeSpan OptimisticSwitchStateHold = TimeSpan.FromSeconds(2);
 
     private readonly AppSettingsController settingsController;
     private readonly SitemapRenderController renderController;
     private readonly Func<TransportKind, Uri, IOpenHabClient> clientFactory;
     private readonly IOpenHabEventStreamClient? sitemapEventStreamClient;
     private readonly ITextLocalizer text;
+    private readonly Func<DateTimeOffset> utcNow;
+    private readonly object optimisticSwitchStatesSync = new();
+    private readonly Dictionary<string, OptimisticSwitchState> optimisticSwitchStates = new(StringComparer.Ordinal);
     private NormalizedSitemapPage? currentPage;
     private readonly Stack<NormalizedSitemapPage> backStack = new();
     private Dictionary<string, int>? itemIndexMap;
@@ -59,12 +63,15 @@ public sealed class SitemapRuntimeController
         int WidgetIndex,
         IReadOnlyList<NormalizedSitemapPage> SourcePageChain);
 
+    private sealed record OptimisticSwitchState(string DisplayState, string RawItemState, DateTimeOffset ExpiresUtc);
+
     public SitemapRuntimeController(
         AppSettingsController settingsController,
         SitemapRenderController renderController,
         Func<TransportKind, Uri, IOpenHabClient> clientFactory,
         IOpenHabEventStreamClient? sitemapEventStreamClient = null,
-        ITextLocalizer? text = null)
+        ITextLocalizer? text = null,
+        Func<DateTimeOffset>? utcNow = null)
     {
         ArgumentNullException.ThrowIfNull(settingsController);
         ArgumentNullException.ThrowIfNull(renderController);
@@ -75,6 +82,7 @@ public sealed class SitemapRuntimeController
         this.clientFactory = clientFactory;
         this.sitemapEventStreamClient = sitemapEventStreamClient;
         this.text = text ?? DefaultEnglishTextLocalizer.Instance;
+        this.utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
     }
 
     public SitemapRuntimeSnapshot Current { get; private set; } = SitemapRuntimeSnapshot.Initial;
@@ -556,9 +564,10 @@ public sealed class SitemapRuntimeController
             ? settingsController.Current.LocalEndpoint
             : settingsController.Current.CloudEndpoint;
         var client = clientFactory(activeTransport, endpoint);
-        var command = string.Equals(widget.State, "ON", StringComparison.OrdinalIgnoreCase) ? "OFF" : "ON";
+        var command = ResolveToggleCommand(widget);
         await client.SendCommandAsync(widget.ItemName, command, cancellationToken);
-        await ReconcileCurrentPageAsync(cancellationToken);
+        ApplyOptimisticSwitchState(widget, command);
+        ReconcileCurrentPageInBackground();
         return true;
     }
 
@@ -582,9 +591,10 @@ public sealed class SitemapRuntimeController
             ? settingsController.Current.LocalEndpoint
             : settingsController.Current.CloudEndpoint;
         var client = clientFactory(activeTransport, endpoint);
-        var command = string.Equals(widget.State, "ON", StringComparison.OrdinalIgnoreCase) ? "OFF" : "ON";
+        var command = ResolveToggleCommand(widget);
         await client.SendCommandAsync(widget.ItemName, command, cancellationToken);
-        await ReconcileCurrentPageAsync(cancellationToken);
+        ApplyOptimisticSwitchState(widget, command);
+        ReconcileCurrentPageInBackground();
         return true;
     }
 
@@ -946,10 +956,31 @@ public sealed class SitemapRuntimeController
             var changed = false;
 
             // Apply state change
-            if (!string.IsNullOrEmpty(e.ItemState) && !string.Equals(widget.State, e.ItemState, StringComparison.Ordinal))
+            if (!string.IsNullOrEmpty(e.ItemState))
             {
-                widget = widget with { State = e.ItemState };
-                changed = true;
+                var pendingState = GetActiveOptimisticSwitchState(widget.ItemName);
+                if (pendingState is not null &&
+                    !string.Equals(pendingState.RawItemState, e.ItemState, StringComparison.OrdinalIgnoreCase))
+                {
+                    DiagnosticLogger.Info(
+                        $"SSE widget event ignored stale switch state item={e.ItemName ?? NullDiagnosticText} " +
+                        $"event={e.ItemState} pending={pendingState.RawItemState}");
+                }
+                else
+                {
+                    if (pendingState is not null)
+                    {
+                        ClearOptimisticSwitchState(widget.ItemName);
+                    }
+
+                    var displayState = SitemapSwitchStateResolver.ResolveEventDisplayState(widget.State, e.ItemState);
+                    if (!string.Equals(widget.State, displayState, StringComparison.Ordinal) ||
+                        !string.Equals(widget.RawItemState, e.ItemState, StringComparison.Ordinal))
+                    {
+                        widget = widget with { State = displayState, RawItemState = e.ItemState };
+                        changed = true;
+                    }
+                }
             }
 
             // Apply label change if description changed
@@ -1208,6 +1239,21 @@ public sealed class SitemapRuntimeController
         {
             SnapshotChanged?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    private void ReconcileCurrentPageInBackground()
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await ReconcileCurrentPageAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticLogger.Warn($"Background sitemap reconcile failed: {SafeDiagnosticText.ForLog(ex)}");
+            }
+        });
     }
 
     private static SitemapPage? FindPageById(SitemapPage page, string pageId)
@@ -1478,6 +1524,81 @@ public sealed class SitemapRuntimeController
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private string ResolveToggleCommand(NormalizedSitemapWidget widget)
+    {
+        var optimisticState = GetActiveOptimisticSwitchState(widget.ItemName);
+        return optimisticState is null
+            ? SitemapSwitchStateResolver.ResolveToggleCommand(widget.State, widget.RawItemState)
+            : SitemapSwitchStateResolver.ResolveToggleCommand(optimisticState.DisplayState, optimisticState.RawItemState);
+    }
+
+    private void ApplyOptimisticSwitchState(NormalizedSitemapWidget widget, string command)
+    {
+        if (string.IsNullOrWhiteSpace(widget.ItemName) || currentPage is null)
+        {
+            return;
+        }
+
+        var optimistic = new OptimisticSwitchState(
+            SitemapSwitchStateResolver.ResolveEventDisplayState(widget.State, command),
+            command,
+            utcNow().Add(OptimisticSwitchStateHold));
+        lock (optimisticSwitchStatesSync)
+        {
+            optimisticSwitchStates[widget.ItemName] = optimistic;
+        }
+
+        var normalDescriptor = renderController.BuildCurrentDescriptor(currentPage);
+        var effectiveDescriptor = BuildEffectiveDescriptor(normalDescriptor);
+        var changedRowIndices = ComputeChangedRowIndices(Current.Descriptor, effectiveDescriptor);
+        Current = Current with
+        {
+            Descriptor = effectiveDescriptor,
+            ChangedRowIndices = changedRowIndices,
+            IsSearchActive = HasActiveSearch,
+            SearchQuery = SearchSnapshotQuery,
+            SearchResultCount = SearchSnapshotResultCount
+        };
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private OptimisticSwitchState? GetActiveOptimisticSwitchState(string? itemName)
+    {
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            return null;
+        }
+
+        lock (optimisticSwitchStatesSync)
+        {
+            if (!optimisticSwitchStates.TryGetValue(itemName, out var state))
+            {
+                return null;
+            }
+
+            if (state.ExpiresUtc > utcNow())
+            {
+                return state;
+            }
+
+            optimisticSwitchStates.Remove(itemName);
+            return null;
+        }
+    }
+
+    private void ClearOptimisticSwitchState(string? itemName)
+    {
+        if (string.IsNullOrWhiteSpace(itemName))
+        {
+            return;
+        }
+
+        lock (optimisticSwitchStatesSync)
+        {
+            optimisticSwitchStates.Remove(itemName);
+        }
+    }
+
     private static List<int> ComputeChangedRowIndices(
         SitemapRenderDescriptor? oldDescriptor,
         SitemapRenderDescriptor newDescriptor)
@@ -1635,12 +1756,13 @@ public sealed class SitemapRuntimeController
 
     private SitemapSearchBuildResult BuildSearchResultForPage(NormalizedSitemapPage page, string? query)
     {
-        var normalDescriptor = renderController.BuildCurrentDescriptor(page);
+        var normalDescriptor = ApplyOptimisticSwitchStates(renderController.BuildCurrentDescriptor(page));
         return SitemapSearchDescriptorBuilder.Build(page, normalDescriptor, query, renderController);
     }
 
     private SitemapRenderDescriptor BuildEffectiveDescriptor(SitemapRenderDescriptor normalDescriptor)
     {
+        normalDescriptor = ApplyOptimisticSwitchStates(normalDescriptor);
         if (_activeSearchQuery.Length == 0 || currentPage is null)
         {
             return normalDescriptor;
@@ -1659,4 +1781,48 @@ public sealed class SitemapRuntimeController
         _activeSearchSources = new Dictionary<string, SitemapSearchSource>(search.SourcesByResultKey, StringComparer.Ordinal);
         return search.Descriptor;
     }
+
+    private SitemapRenderDescriptor ApplyOptimisticSwitchStates(SitemapRenderDescriptor descriptor)
+    {
+        if (descriptor.Rows.Count == 0)
+        {
+            return descriptor;
+        }
+
+        var changed = false;
+        var rows = new SitemapRowDescriptor[descriptor.Rows.Count];
+        for (var index = 0; index < descriptor.Rows.Count; index++)
+        {
+            var row = descriptor.Rows[index];
+            rows[index] = row;
+
+            var optimisticState = GetActiveOptimisticSwitchState(row.ItemName);
+            if (optimisticState is null)
+            {
+                continue;
+            }
+
+            if (RowMatchesOptimisticSwitchState(row, optimisticState))
+            {
+                ClearOptimisticSwitchState(row.ItemName);
+                continue;
+            }
+
+            rows[index] = row with
+            {
+                State = optimisticState.DisplayState,
+                RawState = optimisticState.DisplayState,
+                RawItemState = optimisticState.RawItemState
+            };
+            changed = true;
+        }
+
+        return changed ? descriptor with { Rows = rows } : descriptor;
+    }
+
+    private static bool RowMatchesOptimisticSwitchState(SitemapRowDescriptor row, OptimisticSwitchState state) =>
+        string.Equals(row.State, state.DisplayState, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(row.RawState, state.DisplayState, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(row.RawItemState, state.RawItemState, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(row.RawState, state.RawItemState, StringComparison.OrdinalIgnoreCase);
 }

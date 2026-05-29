@@ -86,6 +86,46 @@ public sealed class SitemapUiLogicTests
     }
 
     [Fact]
+    public void ResolveToggleVisualState_UsesFormattedLockState()
+    {
+        var row = new SitemapRowDescriptor(
+            "Zamek",
+            "LOCKED",
+            RenderControlKind.Toggle,
+            RenderActionKind.SendCommand,
+            RenderDensity.Compact,
+            [],
+            RawState: "LOCKED",
+            RawItemState: "ON",
+            IconName: "lock");
+
+        var state = SitemapUiLogic.ResolveToggleVisualState(row);
+
+        Assert.Equal("LOCKED", state.DisplayText);
+        Assert.True(state.IsOn);
+    }
+
+    [Fact]
+    public void ResolveToggleVisualState_UsesFormattedUnlockedState()
+    {
+        var row = new SitemapRowDescriptor(
+            "Zamek",
+            "UNLOCKED",
+            RenderControlKind.Toggle,
+            RenderActionKind.SendCommand,
+            RenderDensity.Compact,
+            [],
+            RawState: "UNLOCKED",
+            RawItemState: "OFF",
+            IconName: "lock");
+
+        var state = SitemapUiLogic.ResolveToggleVisualState(row);
+
+        Assert.Equal("UNLOCKED", state.DisplayText);
+        Assert.False(state.IsOn);
+    }
+
+    [Fact]
     public void BuildChartUrl_UsesStableUrlByDefault()
     {
         var row = new SitemapRowDescriptor(

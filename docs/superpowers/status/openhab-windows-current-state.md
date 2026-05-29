@@ -1,6 +1,6 @@
 # openHAB Windows Current State
 
-Date: 2026-05-24
+Date: 2026-05-29
 
 ## Purpose
 
@@ -52,6 +52,21 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-05-29 lock switch formatted-state worktree `fix/lock-switch-state-labels`:
+
+- Red/green regressions: formatted lock toggle visual-state tests first failed for missing `SitemapUiLogic.ResolveToggleVisualState`, then passed (`2/2`); formatted switch activation first sent `ON` instead of expected `OFF`, then passed (`1/1`); sitemap navigator formatted switch command first sent `ON` instead of expected `OFF`, then passed (`1/1`); formatted lock SSE event snapshot first published raw `OFF` instead of `LOCKED`, then passed (`2/2`); optimistic formatted lock activation first stayed `UNLOCKED` after a stale immediate reconcile, then passed (`2/2`); non-blocking activation first waited for reconcile, then passed (`1/1`).
+- Diagnostics follow-up: real sitemap events showed `SmartLock_01_DoorLock` uses raw `OFF` with label `UNLOCKED` and raw `ON` with label `LOCKED`; lock optimistic display mapping was corrected to match that evidence.
+- Display-only toggle follow-up: switch rows now activate through the row button while the `ToggleSwitch` visual remains snapshot-driven, preventing the native control from optimistically flipping before openHAB state/events arrive.
+- Optimistic-state follow-up: switch activation now publishes the command target state immediately, returns before background sitemap reconcile completes, and holds the target briefly across stale reconcile/SSE updates until actual state arrives or the hold expires.
+- Passed by exit code: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=normal" -p:UseSharedCompilation=false` (console produced no test-count summary).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`44/44`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`127/127`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`606/606`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors) after closing the local app process that had held Release output DLLs; rerun after display-only toggle follow-up also passed (0 warnings, 0 errors); rerun after optimistic-state follow-up also passed (0 warnings, 0 errors); rerun after non-blocking optimistic activation also passed (0 warnings, 0 errors).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Debug --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Caveat: one parallel App regression run hit a transient compiler output lock on `OpenHab.Sitemaps.dll`; rerunning the test sequentially passed.
+- Caveat: Release tray build was briefly blocked by local `openHAB.exe` PID 33664 holding Release output DLLs, matching the known output-lock caveat; rerunning after closing the app passed. A later Release build after optimistic-state follow-up was blocked by another running `openHAB.exe` PID 30060 holding `OpenHab.App.dll`; rerunning after closing the app passed.
 
 2026-05-27 main-window promoted page sidebar visibility worktree `fix/sidebar-promoted-pages-visibility`:
 

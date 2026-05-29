@@ -4,6 +4,7 @@ using OpenHab.App.Sitemaps;
 using OpenHab.Core.Api;
 using OpenHab.Core.Events;
 using OpenHab.Core.Profiles;
+using OpenHab.Rendering;
 using OpenHab.Rendering.Descriptors;
 using System.IO;
 using System.Reflection;
@@ -126,7 +127,123 @@ public sealed class SitemapRuntimeControllerTests
         var command = Assert.Single(localClient.CommandsSent);
         Assert.Equal("LivingRoom_Light", command.ItemName);
         Assert.Equal("ON", command.Command);
+        for (var i = 0; i < 20 && localClient.RequestedSitemaps.Count < 2; i++)
+        {
+            await Task.Delay(20);
+        }
+
         Assert.Equal(2, localClient.RequestedSitemaps.Count);
+    }
+
+    [Fact]
+    public async Task ActivateSwitchRowUsesRawBinaryItemStateForFormattedState()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(FormattedSwitchJson("LOCKED", "ON"));
+        localClient.EnqueueSitemapJson(FormattedSwitchJson("UNLOCKED", "OFF"));
+        var cloudClient = new FakeOpenHabClient();
+        var controller = CreateRuntimeController(settings, localClient, cloudClient);
+
+        await controller.LoadAsync();
+        var activated = await controller.ActivateRowAsync(0);
+
+        Assert.True(activated);
+        var command = Assert.Single(localClient.CommandsSent);
+        Assert.Equal("FrontDoor_Lock", command.ItemName);
+        Assert.Equal("OFF", command.Command);
+    }
+
+    [Fact]
+    public async Task ActivateSwitchRowKeepsOptimisticFormattedStateWhenImmediateReconcileIsStale()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(FormattedSwitchJson("UNLOCKED", "OFF"));
+        localClient.EnqueueSitemapJson(FormattedSwitchJson("UNLOCKED", "OFF"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+
+        await controller.LoadAsync();
+        var activated = await controller.ActivateRowAsync(0);
+
+        Assert.True(activated);
+        var command = Assert.Single(localClient.CommandsSent);
+        Assert.Equal("ON", command.Command);
+        var row = controller.Current.Descriptor!.Rows[0];
+        var visualState = SitemapUiLogic.ResolveToggleVisualState(row);
+        Assert.Equal("LOCKED", row.State);
+        Assert.Equal("ON", row.RawItemState);
+        Assert.Equal("LOCKED", visualState.DisplayText);
+        Assert.True(visualState.IsOn);
+    }
+
+    [Fact]
+    public async Task ActivateSwitchRowReturnsAfterOptimisticStateBeforeReconcileCompletes()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var reconcileStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowReconcile = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(FormattedSwitchJson("UNLOCKED", "OFF"));
+        localClient.EnqueueSitemapResponse(async (_, _) =>
+        {
+            reconcileStarted.SetResult();
+            await allowReconcile.Task;
+            return FormattedSwitchJson("LOCKED", "ON");
+        });
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+
+        await controller.LoadAsync();
+        var activationTask = controller.ActivateRowAsync(0);
+        await reconcileStarted.Task;
+
+        Assert.True(activationTask.IsCompleted);
+        Assert.True(await activationTask);
+        var row = controller.Current.Descriptor!.Rows[0];
+        Assert.Equal("LOCKED", row.State);
+        Assert.Equal("ON", row.RawItemState);
+
+        allowReconcile.SetResult();
+    }
+
+    [Fact]
+    public async Task WidgetEventDuringOptimisticFormattedStateHoldIgnoresStaleRawState()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(FormattedSwitchJson("UNLOCKED", "OFF"));
+        localClient.EnqueueSitemapJson(FormattedSwitchJson("UNLOCKED", "OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        await controller.ActivateRowAsync(0);
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "front-door-lock",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "FrontDoor_Lock",
+            ItemState: "OFF",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        var row = controller.Current.Descriptor!.Rows[0];
+        var visualState = SitemapUiLogic.ResolveToggleVisualState(row);
+        Assert.Equal("LOCKED", row.State);
+        Assert.Equal("ON", row.RawItemState);
+        Assert.True(visualState.IsOn);
     }
 
     [Fact]
@@ -582,6 +699,31 @@ public sealed class SitemapRuntimeControllerTests
             """;
     }
 
+    private static string FormattedSwitchJson(string displayState, string rawItemState)
+    {
+        return $$"""
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  {
+                    "type": "Switch",
+                    "widgetId": "front-door-lock",
+                    "label": "Front Door Lock [{{displayState}}]",
+                    "icon": "lock",
+                    "item": {
+                      "name": "FrontDoor_Lock",
+                      "state": "{{rawItemState}}"
+                    },
+                    "visibility": true
+                  }
+                ]
+              }
+            }
+            """;
+    }
+
     private static string HomepageWithChildJson()
     {
         return """
@@ -978,6 +1120,45 @@ public sealed class SitemapRuntimeControllerTests
 
         // Hallway_Temperature should be unchanged
         Assert.Equal("21.4 C", controller.Current.Descriptor!.Rows[1].State);
+    }
+
+    [Theory]
+    [InlineData("UNLOCKED", "OFF", "ON", "LOCKED", true)]
+    [InlineData("LOCKED", "ON", "OFF", "UNLOCKED", false)]
+    public async Task WidgetEventForFormattedLockStateDoesNotPublishRawBinaryState(
+        string initialDisplayState,
+        string initialRawItemState,
+        string eventRawItemState,
+        string expectedDisplayState,
+        bool expectedIsOn)
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(FormattedSwitchJson(initialDisplayState, initialRawItemState));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "front-door-lock",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "FrontDoor_Lock",
+            ItemState: eventRawItemState,
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        var row = controller.Current.Descriptor!.Rows[0];
+        var visualState = SitemapUiLogic.ResolveToggleVisualState(row);
+        Assert.Equal(expectedDisplayState, row.State);
+        Assert.Equal(expectedDisplayState, visualState.DisplayText);
+        Assert.Equal(expectedIsOn, visualState.IsOn);
     }
 
     [Fact]
