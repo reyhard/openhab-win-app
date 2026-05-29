@@ -2,6 +2,8 @@
 
 This repository contains an unofficial Windows companion app for openHAB. The current product direction is a Windows 11 tray app with a compact flyout, a larger main window, embedded openHAB Main UI, and native sitemap rendering for Windows-specific workflows.
 
+This is not an official openHAB app or release channel.
+
 
 
 ## Features

@@ -194,6 +194,7 @@ public static class DefaultEnglishTextLocalizer
         ["Settings.About.VerboseDiagnostics.Subtitle"] = "Log additional safe diagnostic flow details for troubleshooting",
         ["Settings.About.VerboseDiagnostics.EnabledStatus"] = "Verbose diagnostics enabled.",
         ["Settings.About.VerboseDiagnostics.DisabledStatus"] = "Verbose diagnostics disabled.",
+        ["Settings.About.VersionAndAuthor"] = "openHAB Windows App v{0} - Author: {1}",
         ["Settings.About.OpenLogsFailed"] = "Could not open logs.",
         ["Settings.About.OpenSettingsFolderFailed"] = "Could not open settings folder.",
         ["Runtime.Status.Loading"] = "Loading...",

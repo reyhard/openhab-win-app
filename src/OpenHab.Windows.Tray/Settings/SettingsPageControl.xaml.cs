@@ -31,6 +31,7 @@ public sealed partial class SettingsPageControl : UserControl
     private const string CardStrokeBrushResourceKey = "CardStrokeColorDefaultBrush";
     private const string LocalTransportTag = "Local";
     private const string DeviceInfoSyncTitleKey = "Settings.DeviceInfoSync.Title";
+    private const string AppAuthor = "reyhard";
 
     private sealed record AppColorThemeOption(string Label, AppColorTheme Theme)
     {
@@ -1533,7 +1534,7 @@ public sealed partial class SettingsPageControl : UserControl
             if (VersionText is not null)
             {
                 var version = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "unknown";
-                VersionText.Text = $"openHAB Windows App v{version}";
+                VersionText.Text = text.Format("Settings.About.VersionAndAuthor", version, AppAuthor);
             }
             localTokenEdited = false;
             cloudTokenEdited = false;

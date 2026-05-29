@@ -30,6 +30,7 @@ public sealed partial class LocalizationResourceTests
         Assert.Contains("Settings.Appearance.Theme.FollowSystem", names);
         Assert.Contains("Settings.Appearance.IconStyle.Title", names);
         Assert.Contains("Settings.Appearance.IconStyle.Subtitle", names);
+        Assert.Contains("Settings.About.VersionAndAuthor", names);
     }
 
     [Fact]
@@ -128,6 +129,7 @@ public sealed partial class LocalizationResourceTests
             "openHAB Item mappings",
             "View logs",
             "Diagnostic logs",
+            "openHAB Windows App v{version}",
             "Built-in shortcuts",
             "Global shortcut",
             "Command menu preview",

@@ -730,6 +730,10 @@ Add actions to make them available in the command menu.</value>
   <data name="Settings.About.VerboseDiagnostics.DisabledStatus" xml:space="preserve">
     <value>Verbose diagnostics disabled.</value>
   </data>
+  <data name="Settings.About.VersionAndAuthor" xml:space="preserve">
+    <value>openHAB Windows App v{0} - Author: {1}</value>
+    <comment>{0}: app version. {1}: app author.</comment>
+  </data>
   <data name="Settings.About.OpenLogsFailed" xml:space="preserve">
     <value>Could not open logs.</value>
   </data>
