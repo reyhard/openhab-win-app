@@ -119,6 +119,10 @@ Maintainers still need to create or connect the Crowdin project, preferably unde
 
 Release signing is not finalized. Official distribution must use signing certificates, package identity, and release infrastructure owned by the appropriate openHAB maintainers.
 
+When installing a release MSIX package outside the Microsoft Store, Windows must trust the certificate used to sign the app. Install the release certificate before installing the app package. Certificate is part of release zip.
+
+Advanced Installer documents the Windows certificate installation steps here: [How to install a test certificate from an MSIX package](https://www.advancedinstaller.com/install-test-certificate-from-msix.html).
+
 Local temporary signing files and package output must not be committed.
 
 
