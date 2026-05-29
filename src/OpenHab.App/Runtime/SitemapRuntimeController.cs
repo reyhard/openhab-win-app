@@ -1794,17 +1794,18 @@ public sealed class SitemapRuntimeController
         for (var index = 0; index < descriptor.Rows.Count; index++)
         {
             var row = descriptor.Rows[index];
-            rows[index] = row;
 
             var optimisticState = GetActiveOptimisticSwitchState(row.ItemName);
             if (optimisticState is null)
             {
+                rows[index] = row;
                 continue;
             }
 
             if (RowMatchesOptimisticSwitchState(row, optimisticState))
             {
                 ClearOptimisticSwitchState(row.ItemName);
+                rows[index] = row;
                 continue;
             }
 

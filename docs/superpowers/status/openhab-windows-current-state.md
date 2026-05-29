@@ -53,6 +53,16 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Latest Verification Evidence
 
+2026-05-29 SonarQube S4143 collection-write remediation:
+
+- Fixed Sonar issue `AZ50seACLi_CR9r889Ad` in `src/OpenHab.App/Runtime/SitemapRuntimeController.cs` by assigning each optimistic switch descriptor row array slot once after the row decision is known.
+- Initial targeted App test attempt hit a local parallel build output lock on `OpenHab.Rendering.dll`/`OpenHab.Windows.Notifications.dll`, matching the known transient compiler output-lock caveat; rerunning with serialized MSBuild passed.
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter "FullyQualifiedName~SitemapRuntimeControllerTests" --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`43/43`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`606/606`).
+- Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`79/79`).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`44/44`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`127/127`).
+
 2026-05-29 lock switch formatted-state worktree `fix/lock-switch-state-labels`:
 
 - Red/green regressions: formatted lock toggle visual-state tests first failed for missing `SitemapUiLogic.ResolveToggleVisualState`, then passed (`2/2`); formatted switch activation first sent `ON` instead of expected `OFF`, then passed (`1/1`); sitemap navigator formatted switch command first sent `ON` instead of expected `OFF`, then passed (`1/1`); formatted lock SSE event snapshot first published raw `OFF` instead of `LOCKED`, then passed (`2/2`); optimistic formatted lock activation first stayed `UNLOCKED` after a stale immediate reconcile, then passed (`2/2`); non-blocking activation first waited for reconcile, then passed (`1/1`).
