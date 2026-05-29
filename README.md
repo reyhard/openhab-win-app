@@ -129,8 +129,8 @@ Local temporary signing files and package output must not be committed.
 
 This project started mainly because I was looking for a way to solve two issues:
 
-• A nice way to handle OpenHAB notifications on Windows.
-• The ability to control OpenHAB without launching a browser.
+- A nice way to handle OpenHAB notifications on Windows.
+- The ability to control OpenHAB without launching a browser.
 
 When I’m not using my phone, I often keep its internet connection turned off, and sometimes I missed notifications from my OpenHAB setup. I thought having those visible on my PC would be handy.
 
@@ -142,8 +142,8 @@ At work, we recently started rolling out more agentic tools, and for some time I
 
 For this project, though, I wanted to see how far I could go with tools like:
 
-• Codex with a basic subscription
-• OpenCode with a Go subscription and DeepSeek V4
+- Codex with a basic subscription
+- OpenCode with a Go subscription and DeepSeek V4
 
 The initial groundwork was done in ChatGPT. I did a few deep searches, then tried to narrow down the design, and finally started creating some static mockups with image generation. The actual initial implementation was done by Codex using the 5.3 Codex model. For UI mockups, I used the 5.5 model, but on the basic subscription I had to be very careful with prompts, since it was quite easy to burn through the 5-hour limits this way.
 
@@ -159,9 +159,9 @@ In any case, the whole project was mostly done in less than one week - by that I
 
 *Some random stats:*
 
-*• 6k turns were reported by Codex analytics*
-*• 400 million tokens spent on DeepSeek*
-*• Longest autonomous session took 7 hours*
+- *6k turns were reported by Codex analytics*
+- *400 million tokens spent on DeepSeek*
+- *Longest autonomous session took 7 hours*
 
 ## Contributing
 
