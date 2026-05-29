@@ -3,10 +3,12 @@ using System.Text;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Rendering.SitemapSurface;
 using OpenHab.Sitemaps.Models;
+using OpenHab.Sitemaps.Runtime;
 
 namespace OpenHab.Rendering;
 
 public readonly record struct SitemapColor(byte A, byte R, byte G, byte B);
+public readonly record struct SitemapToggleVisualState(string DisplayText, bool IsOn);
 
 public static class SitemapUiLogic
 {
@@ -121,6 +123,19 @@ public static class SitemapUiLogic
 
     public static bool CanResolveWin11Glyph(string? iconName) => ResolveWin11Glyph(iconName) is not null;
 
+    public static SitemapToggleVisualState ResolveToggleVisualState(SitemapRowDescriptor row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var displayText = FirstNonBlank(row.State, row.RawState, row.RawItemState) ?? "OFF";
+        var isOn =
+            SitemapSwitchStateResolver.TryResolveIsOn(row.State) ??
+            SitemapSwitchStateResolver.TryResolveIsOn(row.RawState) ??
+            SitemapSwitchStateResolver.TryResolveIsOn(row.RawItemState) ??
+            false;
+        return new SitemapToggleVisualState(displayText, isOn);
+    }
+
     public static double ResolveWebviewHeight(SitemapRowDescriptor row) =>
         SitemapRowVisualPolicy.ResolveWebviewHeight(row);
 
@@ -225,6 +240,19 @@ public static class SitemapUiLogic
         var leftIsNumber = double.TryParse(l, NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber);
         var rightIsNumber = double.TryParse(r, NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber);
         return leftIsNumber && rightIsNumber && Math.Abs(leftNumber - rightNumber) < 0.0001;
+    }
+
+    private static string? FirstNonBlank(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 
     public static string? NormalizeInputByHint(string? raw, SitemapInputHint hint)

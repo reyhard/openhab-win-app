@@ -151,6 +151,27 @@ public sealed class SitemapNavigatorTests
     }
 
     [Fact]
+    public void SwitchWidgetWithFormattedStateUsesRawItemStateForCommandIntent()
+    {
+        var root = new SitemapPage("root", "Home", [
+            new SitemapWidget(
+                "Lock",
+                SitemapWidgetType.Switch,
+                "FrontDoor_Lock",
+                "UNLOCKED",
+                [],
+                true,
+                [],
+                RawItemState: "OFF")
+        ]);
+        var navigator = new SitemapNavigator(root);
+
+        var intent = navigator.ActivateWidget(0);
+
+        Assert.Equal(new SendCommandIntent("FrontDoor_Lock", "ON"), intent);
+    }
+
+    [Fact]
     public void SwitchWidgetWithNullItemNameCreatesNoOpIntent()
     {
         var root = new SitemapPage("root", "Home", [

@@ -36,7 +36,7 @@ public sealed class SitemapNavigator
 
         if (widget.Type == SitemapWidgetType.Switch && widget.ItemName is not null)
         {
-            var command = string.Equals(widget.State, "ON", StringComparison.OrdinalIgnoreCase) ? "OFF" : "ON";
+            var command = SitemapSwitchStateResolver.ResolveToggleCommand(widget.State, widget.RawItemState);
             return new SendCommandIntent(widget.ItemName, command);
         }
 

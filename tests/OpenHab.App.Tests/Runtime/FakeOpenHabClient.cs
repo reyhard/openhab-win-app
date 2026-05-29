@@ -27,6 +27,11 @@ public sealed class FakeOpenHabClient : IOpenHabClient
         sitemapResponses.Enqueue((_, _) => Task.FromException<string>(exception));
     }
 
+    public void EnqueueSitemapResponse(Func<string, CancellationToken, Task<string>> response)
+    {
+        sitemapResponses.Enqueue(response);
+    }
+
     public Task SendCommandAsync(string itemName, string command, CancellationToken cancellationToken)
     {
         CommandsSent.Add((itemName, command));

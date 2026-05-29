@@ -192,19 +192,19 @@ public static partial class SitemapControlFactory
         {
             case RenderControlKind.Toggle:
                 var toggle = FindVisualChild<ToggleSwitch>(inner);
+                var visualState = SitemapUiLogic.ResolveToggleVisualState(updated);
                 if (toggle is not null)
                 {
-                    var isOn = string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase);
-                    if (toggle.IsOn != isOn)
+                    if (toggle.IsOn != visualState.IsOn)
                     {
                         // Suppress Toggled event to prevent feedback loop.
                         toggle.Tag = "suppress";
-                        toggle.IsOn = isOn;
+                        toggle.IsOn = visualState.IsOn;
                         toggle.Tag = null;
                     }
                 }
                 // Also update the state text next to the toggle
-                UpdateStateTextBlock(inner, string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase) ? "ON" : "OFF");
+                UpdateStateTextBlock(inner, visualState.DisplayText);
                 break;
 
             case RenderControlKind.Slider:
@@ -1137,10 +1137,10 @@ public static partial class SitemapControlFactory
     {
         var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
         var grid = layout.Grid;
-        var rawState = row.RawState ?? row.State;
+        var visualState = SitemapUiLogic.ResolveToggleVisualState(row);
 
         var stateBlock = CreateStateTextBlock(
-            string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase) ? "ON" : "OFF",
+            visualState.DisplayText,
             row.ValueColor);
         stateBlock.Margin = new Thickness(0, 0, 8, 0);
         stateBlock.Opacity = 0.7;
@@ -1151,9 +1151,11 @@ public static partial class SitemapControlFactory
 
         var toggle = new ToggleSwitch
         {
-            IsOn = string.Equals(rawState, "ON", StringComparison.OrdinalIgnoreCase),
+            IsOn = visualState.IsOn,
             OnContent = string.Empty,
             OffContent = string.Empty,
+            IsHitTestVisible = false,
+            IsTabStop = false,
             Width = 48,
             MinWidth = 0,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -1164,11 +1166,18 @@ public static partial class SitemapControlFactory
 
         if (row.Action == RenderActionKind.SendCommand && activateRow is not null)
         {
-            toggle.Toggled += async (s, _) =>
+            var button = new Button
             {
-                if (s is ToggleSwitch ts && ts.Tag as string == "suppress") return;
-                await activateRow();
+                Content = grid,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Padding = new Thickness(0, 4, 0, 4),
+                MinHeight = 36,
+                BorderThickness = new Thickness(0)
             };
+            button.Click += async (_, _) => await activateRow();
+            return WrapWithBorder(button);
         }
 
         return WrapWithBorder(grid);
