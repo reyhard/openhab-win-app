@@ -66,6 +66,8 @@ Read this file before implementation. Older dated status files remain useful as 
 - Initial Release tray build after Device Info Sync follow-up was blocked by local `openHAB.exe` PID 36888 holding `src\OpenHab.Windows.Tray\bin\Release\...\openHAB.exe`, matching the known output-lock caveat; rerunning after the lock cleared passed.
 - Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
 - Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Debug --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Post-merge on `main` passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`612/612`).
+- Post-merge on `main` passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
 
 2026-05-31 tray flyout first-open preload worktree `fix-tray-preload-content`:
 
