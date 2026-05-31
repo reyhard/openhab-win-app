@@ -54,6 +54,15 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Latest Verification Evidence
 
+2026-05-31 CI runtime test determinism fix on `main`:
+
+- GitHub Actions run `26713695049`, job `78728404461`, failed in `Test App` at `SitemapRuntimeControllerTests.NavigateToChildDoesNotWaitForColdSitemapEventSubscriptionStartup`: the test expected the `Task.Run` navigation wrapper to complete before a 250 ms delay, but the Windows 2025 runner completed the delay first while the wrapper was still waiting for activation.
+- Root cause: the test depended on thread-pool scheduling latency rather than only asserting the intended contract that `NavigateToChildAsync` completes without waiting for cold sitemap event subscription startup.
+- Fix: the fake event stream client now supports an asynchronous subscription block, and the test calls `NavigateToChildAsync` directly, asserting the returned task is already complete before releasing the blocked subscription.
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter "FullyQualifiedName~SitemapRuntimeControllerTests.NavigateToChildDoesNotWaitForColdSitemapEventSubscriptionStartup" --logger "console;verbosity=normal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`1/1`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`612/612`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+
 2026-05-31 shortcut settings expander load-animation worktree `fix/settings-expander-load-animation`:
 
 - Investigation: CommunityToolkit `SettingsExpander.IsExpanded` defaults to `false`, and the Toolkit template binds it into a WinUI `Expander` whose expanded visual state animates content translation. The Shortcuts page was creating the Command Menu expander with the shared factory default `isExpanded: true`, so each page rebuild started from a fresh expanded control and replayed the opening visual.
