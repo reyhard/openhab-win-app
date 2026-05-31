@@ -54,6 +54,19 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Latest Verification Evidence
 
+2026-05-31 shortcut settings expander load-animation worktree `fix/settings-expander-load-animation`:
+
+- Investigation: CommunityToolkit `SettingsExpander.IsExpanded` defaults to `false`, and the Toolkit template binds it into a WinUI `Expander` whose expanded visual state animates content translation. The Shortcuts page was creating the Command Menu expander with the shared factory default `isExpanded: true`, so each page rebuild started from a fresh expanded control and replayed the opening visual.
+- Red/green regression: `SettingsPageControlTransitionTests.CommandMenuSettingsExpanderStartsExpandedWithoutInitialExpansionAnimation` first failed because the source still used `isExpanded: false`, then passed after adding the first-load non-transition expansion path (`1/1`).
+- Device Info Sync follow-up: `SettingsPageControlTransitionTests.DeviceInfoSyncSettingsExpandersStartExpandedWithoutInitialExpansionAnimation` first failed because only the Command Menu expander used the suppression path, then passed after applying it to all three Device Info Sync expanders (`1/1`).
+- Fix: the Command Menu and Device Info Sync `SettingsExpander` controls remain expanded on page load while still using the CommunityToolkit control; the app creates them from the Toolkit collapsed default and expands the inner WinUI `Expander` on first load with `VisualStateManager.GoToState(..., useTransitions: false)`, preserving normal user-triggered expand/collapse behavior afterward.
+- Initial tray build attempt with `--no-restore` failed in the fresh worktree because `src/OpenHab.Windows.Tray/obj/project.assets.json` did not exist.
+- Passed after restore materialized assets: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-build --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`612/612`).
+- Initial Release tray build after Device Info Sync follow-up was blocked by local `openHAB.exe` PID 36888 holding `src\OpenHab.Windows.Tray\bin\Release\...\openHAB.exe`, matching the known output-lock caveat; rerunning after the lock cleared passed.
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Debug --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+
 2026-05-31 tray flyout first-open preload worktree `fix-tray-preload-content`:
 
 - Red/green regression: `TrayFlyoutShowPlannerTests` first failed because `TrayFlyoutShowPlanner` did not exist, then passed after adding the app-layer preload planner (`4/4`); the shell integration assertion first failed because `App.xaml.cs` did not apply the preload before `flyout.Activate()`, then passed after wiring the hidden render path.

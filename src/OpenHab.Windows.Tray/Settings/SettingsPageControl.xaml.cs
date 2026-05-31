@@ -32,6 +32,7 @@ public sealed partial class SettingsPageControl : UserControl
     private const string LocalTransportTag = "Local";
     private const string DeviceInfoSyncTitleKey = "Settings.DeviceInfoSync.Title";
     private const string AppAuthor = "reyhard";
+    private const string ExpanderExpandedDownState = "ExpandDown";
 
     private sealed record AppColorThemeOption(string Label, AppColorTheme Theme)
     {
@@ -589,7 +590,8 @@ public sealed partial class SettingsPageControl : UserControl
                 text.Get(DeviceInfoSyncTitleKey),
                 text.Get("Settings.DeviceInfoSync.Description"),
                 CreateExpanderRows(syncContent),
-                enabledAction));
+                enabledAction,
+                suppressInitialExpansionAnimation: true));
             return;
         }
 
@@ -615,7 +617,8 @@ public sealed partial class SettingsPageControl : UserControl
             text.Get(DeviceInfoSyncTitleKey),
             text.Get("Settings.DeviceInfoSync.Description"),
             CreateExpanderRows(syncContent),
-            enabledAction));
+            enabledAction,
+            suppressInitialExpansionAnimation: true));
 
         AddSettingsSectionTitle(text.Get("Settings.DeviceInfoSync.Mappings.Title"));
         var mappingContent = new StackPanel
@@ -636,7 +639,8 @@ public sealed partial class SettingsPageControl : UserControl
         SettingsContent.Children.Add(CreateSettingsExpander(
             text.Get("Settings.DeviceInfoSync.ItemSuffixes.Title"),
             text.Get("Settings.DeviceInfoSync.ItemSuffixes.Subtitle"),
-            CreateExpanderRows(mappingContent)));
+            CreateExpanderRows(mappingContent),
+            suppressInitialExpansionAnimation: true));
     }
 
     private void AddDeviceInfoSyncMappingTextBox(StackPanel target, string key, string title, string placeholder)
@@ -987,7 +991,9 @@ public sealed partial class SettingsPageControl : UserControl
             text.Get("Settings.Shortcuts.CommandMenu.Title"),
             text.Get("Settings.Shortcuts.CommandMenu.Subtitle"),
             CreateExpanderRows(globalShortcutRow, activationModeRow, previewRow),
-            CreateSettingsToggleAction(CommandMenuEnabledToggle)));
+            CreateSettingsToggleAction(CommandMenuEnabledToggle),
+            isExpanded: true,
+            suppressInitialExpansionAnimation: true));
 
         VoiceModeEnabledToggle = new ToggleSwitch
         {
@@ -1312,7 +1318,8 @@ public sealed partial class SettingsPageControl : UserControl
         string subtitle,
         IEnumerable<SettingsCard> items,
         UIElement? action = null,
-        bool isExpanded = true)
+        bool isExpanded = true,
+        bool suppressInitialExpansionAnimation = false)
     {
         if (action is FrameworkElement actionElement)
         {
@@ -1323,9 +1330,14 @@ public sealed partial class SettingsPageControl : UserControl
         {
             Header = title,
             Description = subtitle,
-            IsExpanded = isExpanded,
+            IsExpanded = suppressInitialExpansionAnimation && isExpanded ? false : isExpanded,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
+        if (suppressInitialExpansionAnimation && isExpanded)
+        {
+            ExpandOnFirstLoadWithoutAnimation(expander);
+        }
+
         if (action is not null)
         {
             expander.Content = action;
@@ -1337,6 +1349,49 @@ public sealed partial class SettingsPageControl : UserControl
         }
 
         return expander;
+    }
+
+    private static void ExpandOnFirstLoadWithoutAnimation(SettingsExpander expander)
+    {
+        RoutedEventHandler? loadedHandler = null;
+        loadedHandler = (_, _) =>
+        {
+            expander.Loaded -= loadedHandler;
+
+            var innerExpander = FindDescendant<Expander>(expander);
+            if (innerExpander is null)
+            {
+                expander.IsExpanded = true;
+                return;
+            }
+
+            innerExpander.IsExpanded = true;
+            innerExpander.UpdateLayout();
+            _ = VisualStateManager.GoToState(innerExpander, ExpanderExpandedDownState, useTransitions: false);
+            expander.IsExpanded = true;
+        };
+        expander.Loaded += loadedHandler;
+    }
+
+    private static T? FindDescendant<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+            {
+                return match;
+            }
+
+            var nested = FindDescendant<T>(child);
+            if (nested is not null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 
     private void ResetSettingsControlReferences()
