@@ -46,6 +46,10 @@ jobs:
       - name: Build tray project
         run: dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore
 
+      - name: Verify app versions are synchronized
+        shell: pwsh
+        run: .\scripts\Sync-AppVersion.ps1 -CheckOnly
+
   package-validation:
     name: Package Validation (MSIX)
     runs-on: windows-2025-vs2026

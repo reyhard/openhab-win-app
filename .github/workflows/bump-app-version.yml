@@ -1,0 +1,63 @@
+name: Bump App Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      increment:
+        description: "Version part to increment"
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - revision
+      version:
+        description: "Optional explicit version (major.minor.patch[.revision]). If set, increment is ignored."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    name: Bump and Commit Version
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply version update
+        id: sync
+        shell: pwsh
+        env:
+          INPUT_INCREMENT: ${{ inputs.increment }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:INPUT_VERSION)) {
+            .\scripts\Sync-AppVersion.ps1 -Version $env:INPUT_VERSION
+          }
+          else {
+            .\scripts\Sync-AppVersion.ps1 -Increment $env:INPUT_INCREMENT
+          }
+
+      - name: Commit and push
+        shell: pwsh
+        run: |
+          if (-not (git diff --quiet)) {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/OpenHab.Windows.Tray/OpenHab.Windows.Tray.csproj
+            git add src/OpenHab.Windows.Tray/Package.appxmanifest
+            git add src/OpenHab.Windows.Package/Package.appxmanifest
+            git commit -m "chore: bump app version to ${{ steps.sync.outputs.version }}"
+            git push
+          }
+          else {
+            Write-Host "No version changes were produced."
+          }
