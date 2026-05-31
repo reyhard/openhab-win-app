@@ -151,6 +151,11 @@ public sealed partial class FlyoutWindow : Window
         await RunRuntimeOperationAsync(ct => runtimeController.LoadAsync(ct));
     }
 
+    public async Task<bool> LoadRuntimeBeforeShowAsync()
+    {
+        return await RunRuntimeOperationAsync(ct => runtimeController.LoadAsync(ct), allowHiddenRender: true);
+    }
+
     public async Task<bool> RefreshRuntimeAsync()
     {
         return await RunRuntimeOperationAsync(ct => runtimeController.RefreshAsync(ct));
@@ -297,7 +302,7 @@ public sealed partial class FlyoutWindow : Window
         UpdateVoiceListeningVisual();
     }
 
-    private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation)
+    private async Task<bool> RunRuntimeOperationAsync(Func<CancellationToken, Task> operation, bool allowHiddenRender = false)
     {
         if (isRefreshing)
         {
@@ -308,7 +313,9 @@ public sealed partial class FlyoutWindow : Window
         try
         {
             await operation(CancellationToken.None);
-            var refreshApplied = TryRefreshRuntimeBindings();
+            var refreshApplied = allowHiddenRender
+                ? TryRefreshRuntimeBindings(ActiveRows, animateStructuralInsertions: false)
+                : TryRefreshRuntimeBindings();
             RefreshSettingsBindings();
             return refreshApplied;
         }

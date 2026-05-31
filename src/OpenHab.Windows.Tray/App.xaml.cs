@@ -788,6 +788,7 @@ public partial class App : Application
             var state = shellController.Current;
             var refreshRequestVersion = state.RefreshRequestVersion;
             var visibleSurface = state.VisibleSurface;
+            var refreshSatisfiedBeforeShow = false;
 
             if (state.ShouldExitProcess)
             {
@@ -808,6 +809,9 @@ public partial class App : Application
                     break;
                 case TrayShellSurface.Flyout:
                     var flyout = EnsureFlyoutWindow();
+                    var flyoutShowPlan = TrayFlyoutShowPlanner.PlanShow(
+                        flyout.AppWindow.IsVisible,
+                        runtimeController?.Current ?? SitemapRuntimeSnapshot.Initial);
                     if (mainWindow is not null)
                     {
                         mainWindow.AppWindow.Hide();
@@ -815,6 +819,10 @@ public partial class App : Application
                     TrayFlyoutPositioner.PlaceNearTrayArea(
                         flyout,
                         settingsController?.Current.FlyoutWidth ?? AppSettings.Default.FlyoutWidth);
+                    if (flyoutShowPlan.PreloadBeforeShow)
+                    {
+                        refreshSatisfiedBeforeShow = await flyout.LoadRuntimeBeforeShowAsync();
+                    }
                     flyout.PrepareForShowAnimation();
                     FlyoutWindow.GrantForegroundPermission(
                         WinRT.Interop.WindowNative.GetWindowHandle(flyout));
@@ -842,6 +850,12 @@ public partial class App : Application
 
             if (state.PendingRefresh)
             {
+                if (refreshSatisfiedBeforeShow)
+                {
+                    shellController.HandleRefreshCompleted(refreshRequestVersion, visibleSurface);
+                    return;
+                }
+
                 var refreshOutcome = await RefreshCurrentVisibleRuntimeSurfaceAsync(visibleSurface);
                 switch (refreshOutcome)
                 {

@@ -13,6 +13,7 @@ Read this file before implementation. Older dated status files remain useful as 
 - Main window left rail contains Settings, Notifications, and collapsible promoted Main UI pages discovered from `/rest/ui/components/ui:page`; cached promoted links render immediately, then refresh when the main window is created, and promoted page icons from `config.icon` are downloaded through the shared openHAB/Iconify icon loading path.
 - Native sitemap rendering remains available as an independent right-side pane that is hidden by default and can stay visible while Main UI, Settings, or Notifications are active.
 - Flyout and main window sitemap surfaces share the Windows sitemap renderer and row-planning path through `OpenHab.Rendering.SitemapSurface.SitemapRowPlanner` and `OpenHab.Windows.Tray.Rendering.SitemapSurface.SitemapSurfaceRenderer`.
+- First flyout activation preloads and renders the sitemap snapshot before showing when no cached runtime descriptor exists, avoiding an empty first-open surface while preserving fast cached subsequent opens.
 - Connected sitemap homepage loading, subpage navigation, breadcrumbs, search descriptors, ButtonGrid dispatch, and event-stream widget updates route through `OpenHab.App.Runtime.SitemapRuntimeController`.
 - App settings are UI-independent, persisted by `OpenHab.App.Settings.AppSettingsController`, and include endpoint mode, sitemap/main window shell state, notification preferences, device info sync, shortcuts, and verbose diagnostics.
 - Cloud notifications support nested payload normalization, custom title/tag/reference id, app logo/hero image media resolution, toast buttons, command actions, URL/UI navigation actions, log-only notifications, and hide/remove semantics.
@@ -52,6 +53,17 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-05-31 tray flyout first-open preload worktree `fix-tray-preload-content`:
+
+- Red/green regression: `TrayFlyoutShowPlannerTests` first failed because `TrayFlyoutShowPlanner` did not exist, then passed after adding the app-layer preload planner (`4/4`); the shell integration assertion first failed because `App.xaml.cs` did not apply the preload before `flyout.Activate()`, then passed after wiring the hidden render path.
+- Baseline caveat: `dotnet test OpenHab.Windows.sln -m:1 -p:UseSharedCompilation=false` ran direct projects successfully (`79/79`, `44/44`, `127/127`, `606/606`) but exited nonzero on the documented standalone SDK `Microsoft.DesktopBridge.props` import failure for `OpenHab.Windows.Package.wapproj`.
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter "FullyQualifiedName~TrayFlyoutShowPlannerTests" --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`4/4`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`610/610`).
+- Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`79/79`).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`44/44`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=minimal" -p:UseSharedCompilation=false` (`127/127`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
 
 2026-05-29 SonarQube S4143 collection-write remediation:
 
