@@ -4,10 +4,16 @@ This repository contains an unofficial Windows companion app for openHAB. The cu
 
 ## Features
 
-- Windows tray app with compact flyout.![](img/show_hide_anim.gif) ![app-tray](docs/img/app-tray.png)
+- Windows tray app with compact flyout.
 - Main window with embedded openHAB Main UI through WebView2.
 - Optional native sitemap pane backed by the shared sitemap/runtime/rendering pipeline.
 - Settings, notifications, startup integration, sitemap navigation, and shortcut command menu work.
+
+<p align="center">
+  <img src="docs/img/show_hide_anim.gif" alt="Tray flyout show and hide animation" width="340">
+  <img src="docs/img/searching.gif" alt="Sitemap search" width="280">
+  <img src="docs/img/command_menu.gif" alt="Command menu" width="320">
+</p>
 
 For setup and feature usage, see the [App Guide](docs/app-guide.md).
 
