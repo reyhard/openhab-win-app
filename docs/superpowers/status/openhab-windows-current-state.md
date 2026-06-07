@@ -13,6 +13,7 @@ Read this file before implementation. Older dated status files remain useful as 
 - Main window left rail contains Settings, Notifications, and collapsible promoted Main UI pages discovered from `/rest/ui/components/ui:page`; cached promoted links render immediately, then refresh when the main window is created, and promoted page icons from `config.icon` are downloaded through the shared openHAB/Iconify icon loading path.
 - Native sitemap rendering remains available as an independent right-side pane that is hidden by default and can stay visible while Main UI, Settings, or Notifications are active.
 - Flyout and main window sitemap surfaces share the Windows sitemap renderer and row-planning path through `OpenHab.Rendering.SitemapSurface.SitemapRowPlanner` and `OpenHab.Windows.Tray.Rendering.SitemapSurface.SitemapSurfaceRenderer`.
+- Native sitemap Setpoint widgets render as decrease/increase button pairs that send clamped `step` commands; Slider widgets continue to render as sliders.
 - First flyout activation preloads and renders the sitemap snapshot before showing when no cached runtime descriptor exists, avoiding an empty first-open surface while preserving fast cached subsequent opens.
 - Connected sitemap homepage loading, subpage navigation, breadcrumbs, search descriptors, ButtonGrid dispatch, and event-stream widget updates route through `OpenHab.App.Runtime.SitemapRuntimeController`.
 - App settings are UI-independent, persisted by `OpenHab.App.Settings.AppSettingsController`, and include endpoint mode, sitemap/main window shell state, notification preferences, device info sync, shortcuts, and verbose diagnostics.
@@ -53,6 +54,18 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-06-07 setpoint button rendering worktree `fix/setpoint-buttons`:
+
+- Confirmed against openHAB sitemap documentation that Setpoint renders a value controlled by decrease/increase buttons, while Slider presents a user-adjustable slider.
+- Fix: sitemap Setpoint widgets now map to `RenderControlKind.Setpoint` instead of `RenderControlKind.Slider`; the WinUI sitemap factory renders compact down/up chevron buttons that send clamped numeric commands based on `minValue`, `maxValue`, and `step`.
+- Slider widgets and color-temperature picker widgets continue to map to slider controls.
+- Passed by exit code: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`.
+- Passed by exit code: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`.
+- Passed by exit code: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`.
+- Passed by exit code: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`.
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Fresh worktree caveat: initial tray build without restore failed because `src\OpenHab.Windows.Tray\obj\project.assets.json` did not exist; restore required approved network access to NuGet.
 
 2026-05-31 CI runtime test determinism fix on `main`:
 

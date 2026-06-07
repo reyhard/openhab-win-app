@@ -68,6 +68,14 @@ public sealed class SitemapRowVisualPolicyTests
         Assert.Equal(expected, SitemapRowVisualPolicy.FormatSliderStateText(template, value));
     }
 
+    [Theory]
+    [InlineData("21.5 °C", 22.25, "22.25 °C")]
+    [InlineData(null, 4.5, "4.5")]
+    public void FormatSetpointStateText_PreservesFractionalValues(string? template, double value, string expected)
+    {
+        Assert.Equal(expected, SitemapRowVisualPolicy.FormatSetpointStateText(template, value));
+    }
+
     [Fact]
     public void ResolveWebviewHeight_UsesPositiveHeightRows()
     {

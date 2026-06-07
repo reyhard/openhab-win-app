@@ -51,7 +51,7 @@ public sealed class SitemapRenderControllerTests
         var row2 = descriptor.Rows[2];
         Assert.Equal("Office Brightness", row2.Label);
         Assert.Equal("33", row2.State);
-        Assert.Equal(RenderControlKind.Slider, row2.Control);
+        Assert.Equal(RenderControlKind.Setpoint, row2.Control);
         Assert.Equal(RenderActionKind.SendCommand, row2.Action);
         Assert.Equal(RenderDensity.Comfortable, row2.Density);
     }

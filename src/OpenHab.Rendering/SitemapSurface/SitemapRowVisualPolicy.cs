@@ -64,6 +64,17 @@ public static partial class SitemapRowVisualPolicy
     public static string FormatSliderStateText(string? template, double value)
     {
         var numeric = value.ToString("F0", CultureInfo.InvariantCulture);
+        return FormatNumericStateText(template, numeric);
+    }
+
+    public static string FormatSetpointStateText(string? template, double value)
+    {
+        var numeric = value.ToString("0.########", CultureInfo.InvariantCulture);
+        return FormatNumericStateText(template, numeric);
+    }
+
+    private static string FormatNumericStateText(string? template, string numeric)
+    {
         if (string.IsNullOrWhiteSpace(template))
         {
             return numeric;

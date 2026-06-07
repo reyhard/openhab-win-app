@@ -9,7 +9,7 @@ public sealed class SitemapSkinTests
     [Theory]
     [InlineData(typeof(BasicSitemapSkin))]
     [InlineData(typeof(Windows11SitemapSkin))]
-    public void SetpointMapsToSliderWithSendCommand(Type skinType)
+    public void SetpointMapsToSetpointWithSendCommand(Type skinType)
     {
         var page = new NormalizedSitemapPage("root", "Home", [
             new NormalizedSitemapWidget("Target Temp", SitemapWidgetType.Setpoint, "Target Temp", "21", [], false, false, SitemapFallbackKind.None, [])
@@ -19,7 +19,7 @@ public sealed class SitemapSkinTests
         var descriptor = skin.Render(page);
         var row = Assert.Single(descriptor.Rows);
 
-        Assert.Equal(RenderControlKind.Slider, row.Control);
+        Assert.Equal(RenderControlKind.Setpoint, row.Control);
         Assert.Equal(RenderActionKind.SendCommand, row.Action);
         Assert.False(row.SliderUpdateOnMove);
     }
