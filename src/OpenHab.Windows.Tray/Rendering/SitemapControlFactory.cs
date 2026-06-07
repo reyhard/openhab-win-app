@@ -157,6 +157,7 @@ public static partial class SitemapControlFactory
         return row.Control switch
         {
             RenderControlKind.Toggle => CreateToggle(row, activateRow, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.Setpoint => CreateSetpoint(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Slider => CreateSlider(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Selection => CreateSelection(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Input => CreateInput(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
@@ -205,6 +206,10 @@ public static partial class SitemapControlFactory
                 }
                 // Also update the state text next to the toggle
                 UpdateStateTextBlock(inner, visualState.DisplayText);
+                break;
+
+            case RenderControlKind.Setpoint:
+                UpdateSetpointState(inner, updated);
                 break;
 
             case RenderControlKind.Slider:
@@ -1340,6 +1345,115 @@ public static partial class SitemapControlFactory
         grid.Children.Add(slider);
 
         return WrapWithBorder(grid);
+    }
+
+    private static Border CreateSetpoint(
+        SitemapRowDescriptor row,
+        Func<string, Task>? sendCommand,
+        Uri? baseUri = null,
+        bool useWindowsIcons = false,
+        IconAuthContext? iconAuth = null)
+    {
+        var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
+        var grid = layout.Grid;
+        grid.ColumnDefinitions[layout.ControlColumn].Width = new GridLength(92);
+
+        var (min, max) = ResolveNumericRange(row);
+        var step = row.Step is > 0 ? row.Step.Value : 1;
+        var stateBlock = CreateStateTextBlock(row.State ?? string.Empty, row.ValueColor);
+        stateBlock.Margin = new Thickness(0, 0, 8, 0);
+        stateBlock.Opacity = 0.85;
+        Grid.SetColumn(stateBlock, layout.ValueColumn);
+        grid.Children.Add(stateBlock);
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Spacing = 6
+        };
+
+        buttons.Children.Add(CreateSetpointButton("\uE70D", -step, min, max, stateBlock, sendCommand));
+        buttons.Children.Add(CreateSetpointButton("\uE70E", step, min, max, stateBlock, sendCommand));
+
+        Grid.SetColumn(buttons, layout.ControlColumn);
+        grid.Children.Add(buttons);
+
+        return WrapWithBorder(grid);
+    }
+
+    private static Button CreateSetpointButton(
+        string glyph,
+        double delta,
+        double min,
+        double max,
+        TextBlock stateBlock,
+        Func<string, Task>? sendCommand)
+    {
+        var button = new Button
+        {
+            Content = new FontIcon
+            {
+                Glyph = glyph,
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily(SegoeMdl2AssetsFontFamily),
+                FontSize = 12
+            },
+            Width = 40,
+            Height = 32,
+            MinWidth = 0,
+            Padding = new Thickness(0),
+            IsEnabled = sendCommand is not null
+        };
+
+        button.Click += async (_, _) =>
+        {
+            if (sendCommand is null)
+            {
+                return;
+            }
+
+            var current = TryParseNumericState(stateBlock.Text, out var parsed)
+                ? parsed
+                : min;
+            var next = Math.Clamp(current + delta, min, max);
+            stateBlock.Text = SitemapRowVisualPolicy.FormatSetpointStateText(stateBlock.Text, next);
+            await sendCommand(FormatSetpointCommand(next));
+        };
+
+        return button;
+    }
+
+    private static void UpdateSetpointState(FrameworkElement inner, SitemapRowDescriptor updated)
+    {
+        var rawState = updated.RawState ?? updated.State;
+        var stateText = updated.State ?? rawState ?? string.Empty;
+        var currentStateText = FindStateTextBlockText(inner);
+
+        if (TryParseNumericState(rawState, out var value))
+        {
+            UpdateStateTextBlock(inner, SitemapRowVisualPolicy.FormatSetpointStateText(currentStateText, value));
+            return;
+        }
+
+        UpdateStateTextBlock(inner, stateText);
+    }
+
+    private static (double Min, double Max) ResolveNumericRange(SitemapRowDescriptor row)
+    {
+        var min = row.MinValue ?? 0;
+        var max = row.MaxValue ?? 100;
+        if (max < min)
+        {
+            (min, max) = (max, min);
+        }
+
+        return (min, max);
+    }
+
+    private static string FormatSetpointCommand(double value)
+    {
+        return value.ToString("0.########", CultureInfo.InvariantCulture);
     }
 
     private static bool TryParseNumericState(string? raw, out double value)

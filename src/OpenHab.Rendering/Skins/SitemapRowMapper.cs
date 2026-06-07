@@ -78,7 +78,8 @@ internal static class SitemapRowMapper
         {
             SitemapWidgetType.Switch when widget.Mappings.Count > 0 => RenderControlKind.ButtonGrid,
             SitemapWidgetType.Switch => RenderControlKind.Toggle,
-            SitemapWidgetType.Slider or SitemapWidgetType.Setpoint or SitemapWidgetType.Colortemperaturepicker => RenderControlKind.Slider,
+            SitemapWidgetType.Setpoint => RenderControlKind.Setpoint,
+            SitemapWidgetType.Slider or SitemapWidgetType.Colortemperaturepicker => RenderControlKind.Slider,
             SitemapWidgetType.Selection => RenderControlKind.Selection,
             SitemapWidgetType.Colorpicker => RenderControlKind.Input,
             SitemapWidgetType.Button => RenderControlKind.Button,
@@ -105,7 +106,7 @@ internal static class SitemapRowMapper
             return RenderActionKind.Navigate;
         }
 
-        if (control is RenderControlKind.Toggle or RenderControlKind.Slider or RenderControlKind.Selection or RenderControlKind.ButtonGrid or RenderControlKind.Input)
+        if (control is RenderControlKind.Toggle or RenderControlKind.Setpoint or RenderControlKind.Slider or RenderControlKind.Selection or RenderControlKind.ButtonGrid or RenderControlKind.Input)
         {
             return RenderActionKind.SendCommand;
         }

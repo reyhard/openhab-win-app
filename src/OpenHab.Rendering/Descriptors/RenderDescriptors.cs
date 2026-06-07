@@ -75,6 +75,7 @@ public enum RenderControlKind
 {
     Text,
     Toggle,
+    Setpoint,
     Slider,
     Selection,
     Button,
