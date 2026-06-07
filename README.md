@@ -165,6 +165,8 @@ After getting home, I usually reviewed the results to see if things were going i
 
 In any case, the whole project was mostly done in less than one week - by that I mean a usable app, though still missing some polish. Another week was spent on more manual tweaks and adding a few stretch goals. The later phase involved more use of Visual Studio and debugging with breakpoints, which I had to do by hand.
 
+Another week was spent to actually understand all the code that was written by LLMs and that was also done with help with Codex. Overall, it seems code is quite defensive (and sometimes perhaps over defensive) but I don't have certainty which checks are valid and which are not so I left them as is. At some point clean up of those might be a good idea.
+
 *Some random stats:*
 
 - *6k turns were reported by Codex analytics*
