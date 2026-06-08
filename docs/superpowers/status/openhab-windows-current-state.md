@@ -55,6 +55,18 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Latest Verification Evidence
 
+2026-06-08 SonarQube MCP reported-issues remediation:
+
+- Queried SonarQube MCP project `reyhard_openhab-win-app`: 156 open issues, 0 bugs, 0 vulnerabilities, 0 security hotspots.
+- Addressed a focused low-risk batch of reported issues: boolean literal cleanup, LINQ filter simplifications, static method candidates, dead fallback helper removal, unused local removal, nested ternary extraction, repeated resource-key literal extraction, test `Thread.Sleep` replacement, and `DeviceStateMapper` cognitive-complexity refactoring.
+- Left broader architectural debt and expected WinRT analyzer warnings for separate work: constructor parameter-count issues, larger WinUI/App cognitive-complexity refactors, native callback lifetime field in `RadialCommandMenuWindow`, and CsWinRT warnings called out by project guidance.
+- Initial targeted Core test hit a local `CS2012` output lock on `OpenHab.Core.dll`; rerunning after the lock cleared passed.
+- Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`79/79`).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`44/44`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`129/129`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`612/612`).
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+
 2026-06-07 setpoint button rendering worktree `fix/setpoint-buttons`:
 
 - Confirmed against openHAB sitemap documentation that Setpoint renders a value controlled by decrease/increase buttons, while Slider presents a user-adjustable slider.

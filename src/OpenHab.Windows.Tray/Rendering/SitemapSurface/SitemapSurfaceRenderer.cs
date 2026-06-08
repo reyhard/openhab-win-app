@@ -94,7 +94,7 @@ public sealed class SitemapSurfaceRenderer(
         }
     }
 
-    private bool ShouldUseChunkedSearchRender(SitemapRuntimeSnapshot snapshot, int visualRowCount)
+    private static bool ShouldUseChunkedSearchRender(SitemapRuntimeSnapshot snapshot, int visualRowCount)
     {
         return snapshot.IsSearchActive && visualRowCount > SearchChunkThreshold;
     }

@@ -308,7 +308,7 @@ public partial class App : Application
         _ = RefreshPromotedMainUiPagesForWindowCreationAsync(window, discoveryCancellationToken);
     }
 
-    private async Task RefreshPromotedMainUiPagesForWindowCreationAsync(
+    private static async Task RefreshPromotedMainUiPagesForWindowCreationAsync(
         MainWindow window,
         CancellationToken cancellationToken)
     {

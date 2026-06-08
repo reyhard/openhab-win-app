@@ -85,7 +85,7 @@ public sealed partial class ShortcutInteractiveCommandWindow : Window
         }
     }
 
-    private Border CreateLoadingContent()
+    private static Border CreateLoadingContent()
     {
         return CreateRoot(new ProgressRing
         {
@@ -96,7 +96,7 @@ public sealed partial class ShortcutInteractiveCommandWindow : Window
         });
     }
 
-    private Border CreateMessageContent(string message)
+    private static Border CreateMessageContent(string message)
     {
         return CreateRoot(new TextBlock
         {

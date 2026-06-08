@@ -37,6 +37,7 @@ public static partial class SitemapControlFactory
     private const string MissingIconStateText = "(none)";
     private const string UnknownDiagnosticText = "unknown";
     private const string SegoeMdl2AssetsFontFamily = "Segoe MDL2 Assets";
+    private const string CardStrokeColorDefaultBrushKey = "CardStrokeColorDefaultBrush";
     private static readonly string[] IconFormatsByPreference = ["svg", "png"];
     private static readonly HttpClient IconHttpClient = new();
     private static readonly Regex FirstNumberRegex = FirstNumberRegexFactory();
@@ -194,15 +195,12 @@ public static partial class SitemapControlFactory
             case RenderControlKind.Toggle:
                 var toggle = FindVisualChild<ToggleSwitch>(inner);
                 var visualState = SitemapUiLogic.ResolveToggleVisualState(updated);
-                if (toggle is not null)
+                if (toggle is not null && toggle.IsOn != visualState.IsOn)
                 {
-                    if (toggle.IsOn != visualState.IsOn)
-                    {
-                        // Suppress Toggled event to prevent feedback loop.
-                        toggle.Tag = "suppress";
-                        toggle.IsOn = visualState.IsOn;
-                        toggle.Tag = null;
-                    }
+                    // Suppress Toggled event to prevent feedback loop.
+                    toggle.Tag = "suppress";
+                    toggle.IsOn = visualState.IsOn;
+                    toggle.Tag = null;
                 }
                 // Also update the state text next to the toggle
                 UpdateStateTextBlock(inner, visualState.DisplayText);
@@ -1041,7 +1039,7 @@ public static partial class SitemapControlFactory
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             CornerRadius = new CornerRadius(3),
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources[CardStrokeColorDefaultBrushKey],
             BorderThickness = new Thickness(1),
             Background = new SolidColorBrush(color)
         };
@@ -1582,7 +1580,7 @@ public static partial class SitemapControlFactory
                 Height = 28,
                 CornerRadius = new CornerRadius(4),
                 Background = new SolidColorBrush(selectedColor),
-                BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+                BorderBrush = (Brush)Application.Current.Resources[CardStrokeColorDefaultBrushKey],
                 BorderThickness = new Thickness(1)
             };
 
@@ -1846,7 +1844,7 @@ public static partial class SitemapControlFactory
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             CornerRadius = new CornerRadius(4),
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources[CardStrokeColorDefaultBrushKey],
             BorderThickness = new Thickness(1),
             Background = new SolidColorBrush(color)
         };
@@ -2601,7 +2599,7 @@ public static partial class SitemapControlFactory
         return new Border
         {
             Child = child,
-            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources[CardStrokeColorDefaultBrushKey],
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8, 4, 8, 4),

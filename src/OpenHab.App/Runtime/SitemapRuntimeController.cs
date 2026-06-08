@@ -945,13 +945,8 @@ public sealed class SitemapRuntimeController
         var widgets = currentPage.Widgets.ToList();
         var changedIndices = new List<int>();
 
-        foreach (var index in targetIndices)
+        foreach (var index in targetIndices.Where(index => index >= 0 && index < widgets.Count))
         {
-            if (index < 0 || index >= widgets.Count)
-            {
-                continue;
-            }
-
             var widget = widgets[index];
             var changed = false;
 

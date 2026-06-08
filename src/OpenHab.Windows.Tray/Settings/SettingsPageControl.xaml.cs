@@ -1330,7 +1330,7 @@ public sealed partial class SettingsPageControl : UserControl
         {
             Header = title,
             Description = subtitle,
-            IsExpanded = suppressInitialExpansionAnimation && isExpanded ? false : isExpanded,
+            IsExpanded = isExpanded && !suppressInitialExpansionAnimation,
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
         if (suppressInitialExpansionAnimation && isExpanded)

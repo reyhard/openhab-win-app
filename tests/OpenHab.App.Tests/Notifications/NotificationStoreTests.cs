@@ -545,7 +545,7 @@ public sealed class NotificationStoreTests : IDisposable
     // ─────────────────────── Round-trip persistence ───────────────────────
 
     [Fact]
-    public void Store_SurvivesRoundTrip_LoadsCorrectly()
+    public async Task Store_SurvivesRoundTrip_LoadsCorrectly()
     {
         var original = CreateStore(persistChanges: true);
         var created = new DateTimeOffset(2026, 5, 7, 14, 0, 0, TimeSpan.Zero);
@@ -561,7 +561,7 @@ public sealed class NotificationStoreTests : IDisposable
                 break;
             }
 
-            Thread.Sleep(50);
+            await Task.Delay(50);
         }
 
         Assert.NotNull(loaded);

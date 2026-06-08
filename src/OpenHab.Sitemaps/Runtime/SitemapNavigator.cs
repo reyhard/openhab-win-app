@@ -40,11 +40,6 @@ public sealed class SitemapNavigator
             return new SendCommandIntent(widget.ItemName, command);
         }
 
-        if (IsFallbackWidget())
-        {
-            return new OpenFallbackIntent(widget.Label);
-        }
-
         return new NoOpIntent();
     }
 
@@ -59,8 +54,4 @@ public sealed class SitemapNavigator
         return true;
     }
 
-    private static bool IsFallbackWidget()
-    {
-        return false;
-    }
 }

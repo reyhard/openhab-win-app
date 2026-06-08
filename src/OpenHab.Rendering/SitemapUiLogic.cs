@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Rendering.SitemapSurface;
@@ -244,15 +245,7 @@ public static class SitemapUiLogic
 
     private static string? FirstNonBlank(params string?[] values)
     {
-        foreach (var value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
+        return values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value));
     }
 
     public static string? NormalizeInputByHint(string? raw, SitemapInputHint hint)

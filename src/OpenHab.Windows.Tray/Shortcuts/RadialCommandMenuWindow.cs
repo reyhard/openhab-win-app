@@ -369,12 +369,8 @@ public sealed class RadialCommandMenuWindow
         var isHovered = hoveredButtonIndex == layout.ButtonIndex;
         var isSelected = !isClose && layout.ButtonIndex == selectedActionIndex;
 
-        var fill = isClose
-            ? (isHovered ? Color.FromArgb(255, 67, 76, 90) : Color.FromArgb(255, 88, 97, 112))
-            : (isHovered ? Color.FromArgb(255, 232, 242, 255) : Color.FromArgb(255, 248, 250, 252));
-        var stroke = isSelected || isHovered
-            ? Color.FromArgb(255, 15, 23, 42)
-            : Color.FromArgb(255, 40, 49, 64);
+        var fill = ResolveButtonFill(isClose, isHovered);
+        var stroke = ResolveButtonStroke(isSelected, isHovered);
         fill = ApplyAlpha(fill, layout.Alpha);
         stroke = ApplyAlpha(stroke, layout.Alpha);
         var strokeWidth = isSelected || isHovered ? 2.2f : 1.6f;
@@ -391,6 +387,27 @@ public sealed class RadialCommandMenuWindow
             isClose ? Color.FromArgb(255, 12, 18, 26) : Color.FromArgb(255, 15, 23, 42),
             layout.Alpha));
         DrawCenteredGlyph(graphics, glyph, glyphBrush, layout.Bounds, isClose ? 19f : 17f);
+    }
+
+    private static Color ResolveButtonFill(bool isClose, bool isHovered)
+    {
+        if (isClose)
+        {
+            return isHovered
+                ? Color.FromArgb(255, 67, 76, 90)
+                : Color.FromArgb(255, 88, 97, 112);
+        }
+
+        return isHovered
+            ? Color.FromArgb(255, 232, 242, 255)
+            : Color.FromArgb(255, 248, 250, 252);
+    }
+
+    private static Color ResolveButtonStroke(bool isSelected, bool isHovered)
+    {
+        return isSelected || isHovered
+            ? Color.FromArgb(255, 15, 23, 42)
+            : Color.FromArgb(255, 40, 49, 64);
     }
 
     private static Color ApplyAlpha(Color color, byte alpha)

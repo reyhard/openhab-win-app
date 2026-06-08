@@ -119,7 +119,7 @@ public sealed class SitemapRenderControllerTests
                     Array.Empty<SitemapPage>()),
                 new NormalizedSitemapWidget(
                     "Office Brightness",
-                    SitemapWidgetType.Slider,
+                    SitemapWidgetType.Setpoint,
                     "Office_Dimmer",
                     "33",
                     Array.Empty<SitemapMapping>(),

@@ -297,7 +297,7 @@ public sealed class VoiceListeningOverlayWindow
 
     private static IntPtr StaticWndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        if (Instances.TryGetValue(hwnd, out var instance))
+        if (Instances.ContainsKey(hwnd))
         {
             return WndProc(hwnd, msg, wParam, lParam);
         }
