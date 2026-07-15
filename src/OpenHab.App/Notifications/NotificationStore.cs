@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OpenHab.Core;
 
 namespace OpenHab.App.Notifications;
 
@@ -44,6 +45,7 @@ public sealed class NotificationStore
 
     private readonly string storageFilePath;
     private readonly bool persistChanges;
+    private readonly NotificationStorePersistenceQueue? persistenceQueue;
     private readonly object syncRoot = new();
     private readonly Dictionary<string, StoredNotification> notifications = new();
 
@@ -60,11 +62,25 @@ public sealed class NotificationStore
     }
 
     public NotificationStore(string? storageFilePath = null, bool persistChanges = true)
+        : this(storageFilePath, persistChanges, snapshotWriter: null)
     {
-        this.storageFilePath = string.IsNullOrWhiteSpace(storageFilePath)
+    }
+
+    internal NotificationStore(
+        string? storageFilePath,
+        bool persistChanges,
+        INotificationSnapshotWriter? snapshotWriter)
+    {
+        this.storageFilePath = Path.GetFullPath(string.IsNullOrWhiteSpace(storageFilePath)
             ? DefaultStorageFilePath
-            : storageFilePath;
+            : storageFilePath);
         this.persistChanges = persistChanges;
+        persistenceQueue = persistChanges
+            ? snapshotWriter is null
+                ? NotificationStorePersistenceQueue.ForPath(this.storageFilePath)
+                : new NotificationStorePersistenceQueue(this.storageFilePath, snapshotWriter)
+            : null;
+        WaitForPendingPersistence();
         TryLoad();
     }
 
@@ -235,10 +251,11 @@ public sealed class NotificationStore
                     TrimExcessLocked();
                 }
             }
+
+            PersistLocked();
         }
 
         Changed?.Invoke(this, EventArgs.Empty);
-        SaveIfEnabled();
     }
 
     private void HideMatchingNotifications(Func<StoredNotification, bool> matches)
@@ -260,12 +277,16 @@ public sealed class NotificationStore
                     mutated = true;
                 }
             }
+
+            if (mutated)
+            {
+                PersistLocked();
+            }
         }
 
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
         }
     }
 
@@ -278,13 +299,13 @@ public sealed class NotificationStore
             {
                 notifications[id] = existing with { IsRead = true };
                 mutated = true;
+                PersistLocked();
             }
         }
 
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
         }
     }
 
@@ -297,13 +318,13 @@ public sealed class NotificationStore
             {
                 notifications[id] = existing with { IsRead = false };
                 mutated = true;
+                PersistLocked();
             }
         }
 
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
         }
     }
 
@@ -316,13 +337,13 @@ public sealed class NotificationStore
             {
                 notifications[id] = existing with { IsDismissed = true, IsRead = true };
                 mutated = true;
+                PersistLocked();
             }
         }
 
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
         }
     }
 
@@ -354,13 +375,13 @@ public sealed class NotificationStore
             {
                 notifications[id] = existing with { IsDismissed = false };
                 mutated = true;
+                PersistLocked();
             }
         }
 
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
         }
     }
 
@@ -378,12 +399,16 @@ public sealed class NotificationStore
                     mutated = true;
                 }
             }
+
+            if (mutated)
+            {
+                PersistLocked();
+            }
         }
 
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
         }
     }
 
@@ -401,12 +426,16 @@ public sealed class NotificationStore
                     mutated = true;
                 }
             }
+
+            if (mutated)
+            {
+                PersistLocked();
+            }
         }
 
         if (mutated)
         {
             Changed?.Invoke(this, EventArgs.Empty);
-            SaveIfEnabled();
         }
     }
 
@@ -481,34 +510,38 @@ public sealed class NotificationStore
         return value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
     }
 
-    private void SaveIfEnabled()
+    public Task FlushAsync()
     {
-        if (persistChanges)
-        {
-            _ = SaveAsync();
-        }
+        return persistenceQueue?.FlushAsync() ?? Task.CompletedTask;
     }
 
-    private async Task SaveAsync()
+    private void PersistLocked()
     {
+        if (!persistChanges)
+        {
+            return;
+        }
+
+        var data = new NotificationStoreData(notifications.Values.ToList());
+        var json = JsonSerializer.Serialize(data, IndentedJsonSerializerOptions);
+        persistenceQueue!.Enqueue(json);
+    }
+
+    private void WaitForPendingPersistence()
+    {
+        if (persistenceQueue is null)
+        {
+            return;
+        }
+
         try
         {
-            var directory = Path.GetDirectoryName(storageFilePath)!;
-            Directory.CreateDirectory(directory);
-
-            List<StoredNotification> snapshot;
-            lock (syncRoot)
-            {
-                snapshot = notifications.Values.ToList();
-            }
-
-            var data = new NotificationStoreData(snapshot);
-            var json = JsonSerializer.Serialize(data, IndentedJsonSerializerOptions);
-            await File.WriteAllTextAsync(storageFilePath, json);
+            persistenceQueue.FlushAsync().GetAwaiter().GetResult();
         }
-        catch
+        catch (Exception ex)
         {
-            // Best-effort persistence — swallow IO errors.
+            DiagnosticLogger.Warn(
+                $"Notification history load coordination failed: {ex.GetType().Name}: {SafeDiagnosticText.ForLog(ex)}");
         }
     }
 

@@ -508,6 +508,12 @@ public partial class App : Application
     {
         try
         {
+            if (IsShutdownInProgress())
+            {
+                DiagnosticLogger.Info("Notification poller start skipped — shutdown is in progress");
+                return;
+            }
+
             if (notificationPoller is not null)
             {
                 DiagnosticLogger.Info("Notification poller start skipped — poller already active");
@@ -627,6 +633,11 @@ public partial class App : Application
         await notificationPollingSettingsChangeSemaphore.WaitAsync();
         try
         {
+            if (IsShutdownInProgress())
+            {
+                return;
+            }
+
             var controller = settingsController;
             if (controller is null)
             {
@@ -650,6 +661,11 @@ public partial class App : Application
 
             activeNotificationPollingConfig = nextConfig;
             if (settings.EndpointMode == EndpointMode.LocalOnly)
+            {
+                return;
+            }
+
+            if (IsShutdownInProgress())
             {
                 return;
             }
@@ -756,17 +772,66 @@ public partial class App : Application
 
     private void OnProcessExit(object? sender, EventArgs args)
     {
-        ShutdownTrayResources();
+        if (Interlocked.CompareExchange(ref isShuttingDown, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            ShutdownTrayResourcesCoreAsync(disposeUiResources: false).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Best-effort process-exit cleanup failed: {SafeDiagnosticText.ForLog(ex)}");
+        }
     }
 
-    private void RequestApplicationExit()
+    private async void RequestApplicationExit()
     {
+        var disposeUiResources = true;
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is not null && !dispatcher.HasThreadAccess)
+        {
+            if (dispatcher.TryEnqueue(RequestApplicationExit))
+            {
+                return;
+            }
+
+            disposeUiResources = false;
+            DiagnosticLogger.Warn(
+                "Application exit could not marshal cleanup to the UI thread; using non-UI shutdown fallback.");
+        }
+
         DiagnosticLogger.Info("Tray exit requested");
         shellController?.HandleExitRequested();
-        ShutdownTrayResources();
+
+        if (Interlocked.CompareExchange(ref isShuttingDown, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await ShutdownTrayResourcesCoreAsync(disposeUiResources);
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Application shutdown cleanup failed: {SafeDiagnosticText.ForLog(ex)}");
+        }
+
         DiagnosticLogger.Info("Application exit invoked");
-        Exit();
-        Environment.Exit(0);
+        try
+        {
+            if (disposeUiResources)
+            {
+                Exit();
+            }
+        }
+        finally
+        {
+            Environment.Exit(0);
+        }
     }
 
     private bool IsShutdownInProgress()
@@ -1625,42 +1690,98 @@ public partial class App : Application
         flyoutWindow?.SetShellStatusText(text);
     }
 
-    private void ShutdownTrayResources()
-    {
-        // Shared shutdown path for both tray-initiated exit and process-exit cleanup.
-        if (Interlocked.Exchange(ref isShuttingDown, 1) != 0)
-        {
-            return;
-        }
-
-        var dispatcher = uiDispatcherQueue;
-        if (dispatcher is not null && !dispatcher.HasThreadAccess)
-        {
-            if (dispatcher.TryEnqueue(ShutdownTrayResourcesCore))
-            {
-                return;
-            }
-
-            // Late process shutdown can prevent marshaled cleanup; force UI-thread disposal.
-            return;
-        }
-
-        ShutdownTrayResourcesCore();
-    }
-
-    private void ShutdownTrayResourcesCore()
+    private async Task ShutdownTrayResourcesCoreAsync(bool disposeUiResources)
     {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         promotedMainUiDiscoveryCts?.Cancel();
         promotedMainUiDiscoveryCts?.Dispose();
         promotedMainUiDiscoveryCts = null;
+
+        try
+        {
+            await notificationPollingSettingsChangeSemaphore.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                DiagnosticLogger.Info("Shutting down notification poller");
+                var pollerToDispose = notificationPoller;
+                notificationPoller = null;
+                if (pollerToDispose is not null)
+                {
+                    await pollerToDispose.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                notificationPollingSettingsChangeSemaphore.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Notification poller shutdown failed: {SafeDiagnosticText.ForLog(ex)}");
+        }
+
+        try
+        {
+            if (notificationStore is not null)
+            {
+                await notificationStore.FlushAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            DiagnosticLogger.Warn($"Notification history flush failed during shutdown: {SafeDiagnosticText.ForLog(ex)}");
+        }
+
+        try
+        {
+            if (disposeUiResources)
+            {
+                await DisposeTrayUiResourcesAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            httpClient?.Dispose();
+            httpClient = null;
+        }
+    }
+
+    private Task DisposeTrayUiResourcesAsync()
+    {
+        var dispatcher = uiDispatcherQueue;
+        if (dispatcher is null || dispatcher.HasThreadAccess)
+        {
+            DisposeTrayUiResourcesCore();
+            return Task.CompletedTask;
+        }
+
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(() =>
+        {
+            try
+            {
+                DisposeTrayUiResourcesCore();
+                completion.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                completion.TrySetException(ex);
+            }
+        }))
+        {
+            DiagnosticLogger.Warn("UI resource cleanup skipped: UI dispatcher unavailable during shutdown.");
+            completion.TrySetResult();
+        }
+
+        return completion.Task;
+    }
+
+    private void DisposeTrayUiResourcesCore()
+    {
         UnregisterDeviceInfoSyncEvents();
         deviceInfoSyncService?.Dispose();
         deviceInfoSyncService = null;
         windowsSessionInfoReader = null;
-        DiagnosticLogger.Info("Shutting down notification poller");
-        notificationPoller?.Dispose();
-        notificationPoller = null;
         backgroundResourceReleaseController?.Dispose();
         backgroundResourceReleaseController = null;
         ShortcutRecorderControl.AnyRecordingChanged -= OnShortcutRecorderRecordingChanged;
@@ -1689,8 +1810,6 @@ public partial class App : Application
         shortcutActionExecutor = null;
         trayIcon?.Dispose();
         trayIcon = null;
-        httpClient?.Dispose();
-        httpClient = null;
     }
 
     private void RegisterDeviceInfoSyncEvents()

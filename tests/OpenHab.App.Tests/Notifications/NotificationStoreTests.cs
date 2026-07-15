@@ -635,28 +635,130 @@ public sealed class NotificationStoreTests : IDisposable
         var original = CreateStore(persistChanges: true);
         var created = new DateTimeOffset(2026, 5, 7, 14, 0, 0, TimeSpan.Zero);
         original.AddOrUpdate("persist1", "Hello", created, title: "T", severity: "info");
+        await original.FlushAsync();
 
-        NotificationStore? loaded = null;
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline)
-        {
-            loaded = CreateStore();
-            if (loaded.IsSeen("persist1"))
-            {
-                break;
-            }
-
-            await Task.Delay(50);
-        }
-
-        Assert.NotNull(loaded);
-        Assert.True(loaded!.IsSeen("persist1"));
+        var loaded = CreateStore();
+        Assert.True(loaded.IsSeen("persist1"));
         var n = loaded.GetAll()[0];
         Assert.Equal("persist1", n.Id);
         Assert.Equal("Hello", n.Message);
         Assert.Equal("T", n.Title);
         Assert.Equal("info", n.Severity);
         Assert.Equal(created, n.Created);
+    }
+
+    [Fact]
+    public async Task FlushAsync_RapidAdds_PersistsCompleteFinalSnapshot()
+    {
+        var store = CreateStore(persistChanges: true);
+        var created = new DateTimeOffset(2026, 7, 15, 10, 0, 0, TimeSpan.Zero);
+
+        for (var index = 0; index < 25; index++)
+        {
+            store.AddOrUpdate($"rapid-{index}", $"Message {index}", created.AddMinutes(index));
+        }
+
+        await store.FlushAsync();
+
+        var loaded = CreateStore();
+        Assert.Equal(25, loaded.GetAll().Count);
+        Assert.All(Enumerable.Range(0, 25), index => Assert.True(loaded.IsSeen($"rapid-{index}")));
+    }
+
+    [Fact]
+    public async Task FlushAsync_RapidMixedMutations_PersistsFinalInMemoryState()
+    {
+        var store = CreateStore(persistChanges: true);
+        var created = new DateTimeOffset(2026, 7, 15, 11, 0, 0, TimeSpan.Zero);
+        store.AddOrUpdate("read", "Read", created);
+        store.AddOrUpdate("hidden", "Hidden", created.AddMinutes(1));
+        store.AddOrUpdate("reference-old", "Old", created.AddMinutes(2), referenceId: "shared-reference");
+        store.MarkRead("read");
+        store.MarkUnread("read");
+        store.MarkRead("read");
+        store.Hide("hidden");
+        store.Unhide("hidden");
+        store.Hide("hidden");
+        store.AddOrUpdate(
+            "reference-new",
+            "Final",
+            created.AddMinutes(3),
+            title: "Updated",
+            referenceId: "shared-reference");
+
+        var expected = store.GetAll().OrderBy(notification => notification.Id).ToList();
+        await store.FlushAsync();
+
+        var loaded = CreateStore();
+        Assert.Equal(expected, loaded.GetAll().OrderBy(notification => notification.Id).ToList());
+        Assert.False(loaded.IsSeen("reference-old"));
+        Assert.True(loaded.IsSeen("reference-new"));
+    }
+
+    [Fact]
+    public async Task FlushAsync_AtomicWrite_LeavesValidJsonAndNoTemporaryFile()
+    {
+        var store = CreateStore(persistChanges: true);
+        store.AddOrUpdate("atomic", "Complete", DateTimeOffset.UtcNow);
+
+        await store.FlushAsync();
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(storageFilePath));
+        Assert.Equal(JsonValueKind.Array, document.RootElement.GetProperty("Notifications").ValueKind);
+        Assert.Empty(Directory.EnumerateFiles(tempRoot, ".notifications.json.*.tmp"));
+        Assert.True(CreateStore().IsSeen("atomic"));
+    }
+
+    [Fact]
+    public async Task FlushAsync_BlockedWriter_IsGenerationBarrierAndCoalescesToLatestSnapshot()
+    {
+        var writer = new BlockingSnapshotWriter();
+        var store = new NotificationStore(storageFilePath, persistChanges: true, writer);
+        store.AddOrUpdate("first", "First", DateTimeOffset.UtcNow);
+        await writer.FirstWriteStarted;
+
+        for (var index = 0; index < 25; index++)
+        {
+            store.AddOrUpdate($"queued-{index}", $"Queued {index}", DateTimeOffset.UtcNow.AddMinutes(index));
+        }
+
+        var flushTask = store.FlushAsync();
+        Assert.False(flushTask.IsCompleted);
+
+        writer.ReleaseFirstWrite();
+        await flushTask;
+
+        Assert.Equal(2, writer.WriteCount);
+        var loaded = CreateStore();
+        Assert.Equal(26, loaded.GetAll().Count);
+        Assert.True(loaded.IsSeen("queued-24"));
+    }
+
+    [Fact]
+    public async Task FlushAsync_FailedWriteFaultsBarrierAndPreservesLastValidDestination()
+    {
+        Directory.CreateDirectory(tempRoot);
+        var existing = new[]
+        {
+            CreateStoredNotification("existing", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        };
+        await File.WriteAllTextAsync(
+            storageFilePath,
+            JsonSerializer.Serialize(new { Notifications = existing }));
+        var store = new NotificationStore(
+            storageFilePath,
+            persistChanges: true,
+            new FailingSnapshotWriter(new IOException("Injected write failure.")));
+        store.AddOrUpdate("new", "New", DateTimeOffset.UtcNow);
+
+        var error = await Assert.ThrowsAsync<IOException>(() => store.FlushAsync());
+
+        Assert.Equal("Injected write failure.", error.Message);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(storageFilePath));
+        Assert.Equal(JsonValueKind.Array, document.RootElement.GetProperty("Notifications").ValueKind);
+        var loaded = CreateStore();
+        Assert.True(loaded.IsSeen("existing"));
+        Assert.False(loaded.IsSeen("new"));
     }
 
     // ─────────────────────── GetAll ordering ───────────────────────
@@ -951,6 +1053,45 @@ public sealed class NotificationStoreTests : IDisposable
         Assert.Contains(store.GetNotifications(NotificationVisibilityFilter.Hidden, null), n => n.Id == seeded.Id);
         Assert.DoesNotContain(store.GetNotifications(NotificationVisibilityFilter.Visible, null), n => n.Id == seeded.Id);
         Assert.Contains(store.GetNotifications(NotificationVisibilityFilter.All, null), n => n.Id == seeded.Id);
+    }
+
+    private sealed class BlockingSnapshotWriter : INotificationSnapshotWriter
+    {
+        private readonly AtomicNotificationSnapshotWriter innerWriter = new();
+        private readonly TaskCompletionSource firstWriteStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource releaseFirstWrite =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int writeCount;
+
+        internal Task FirstWriteStarted => firstWriteStarted.Task;
+
+        internal int WriteCount => Volatile.Read(ref writeCount);
+
+        public async Task WriteAsync(string path, string snapshot)
+        {
+            var call = Interlocked.Increment(ref writeCount);
+            if (call == 1)
+            {
+                firstWriteStarted.TrySetResult();
+                await releaseFirstWrite.Task;
+            }
+
+            await innerWriter.WriteAsync(path, snapshot);
+        }
+
+        internal void ReleaseFirstWrite()
+        {
+            releaseFirstWrite.TrySetResult();
+        }
+    }
+
+    private sealed class FailingSnapshotWriter(Exception failure) : INotificationSnapshotWriter
+    {
+        public Task WriteAsync(string storageFilePath, string serializedSnapshot)
+        {
+            return Task.FromException(failure);
+        }
     }
 }
 
