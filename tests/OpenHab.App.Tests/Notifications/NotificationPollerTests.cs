@@ -250,6 +250,79 @@ public sealed class NotificationPollerTests
     }
 
     [Fact]
+    public async Task PollOnce_MoreThanCapacityPreSeenIds_DoesNotRedispatchPreviouslySeenNotification()
+    {
+        const string existingId = "push-seen-after-capacity";
+        var preSeenIds = Enumerable.Range(0, NotificationPoller.RecentIdCapacity)
+            .Select(index => $"historical-{index}")
+            .Append(existingId)
+            .ToArray();
+        using var poller = CreatePoller(
+            $$"""
+            [
+              {
+                "_id": "{{existingId}}",
+                "message": "Already delivered",
+                "created": "2026-05-12T10:00:00Z"
+              }
+            ]
+            """,
+            out var raised,
+            out var stored,
+            out _,
+            preSeenIds: preSeenIds);
+
+        await poller.PollOnceForTestingAsync(CancellationToken.None);
+        await poller.PollOnceForTestingAsync(CancellationToken.None);
+
+        Assert.Empty(raised);
+        Assert.Empty(stored);
+    }
+
+    [Fact]
+    public void RecentNotificationIdSet_EvictsOnlyOldestIdsAtCapacity()
+    {
+        var recentIds = new RecentNotificationIdSet(3, ["oldest", "middle", "newest"]);
+
+        Assert.True(recentIds.Add("latest"));
+
+        Assert.Equal(3, recentIds.Count);
+        Assert.False(recentIds.Contains("oldest"));
+        Assert.True(recentIds.Contains("middle"));
+        Assert.True(recentIds.Contains("newest"));
+        Assert.True(recentIds.Contains("latest"));
+    }
+
+    [Fact]
+    public void RecentNotificationIdSet_ExistingIdDoesNotGrowOrEvict()
+    {
+        var recentIds = new RecentNotificationIdSet(2, ["oldest", "newest"]);
+
+        Assert.False(recentIds.Add("newest"));
+
+        Assert.Equal(2, recentIds.Count);
+        Assert.True(recentIds.Contains("oldest"));
+        Assert.True(recentIds.Contains("newest"));
+    }
+
+    [Fact]
+    public void RecentNotificationIdSet_RepeatedCapacityCrossingsRetainNewestIds()
+    {
+        var recentIds = new RecentNotificationIdSet(3, ["id-0", "id-1", "id-2"]);
+
+        for (var index = 3; index < 10; index++)
+        {
+            Assert.True(recentIds.Add($"id-{index}"));
+            Assert.Equal(3, recentIds.Count);
+        }
+
+        Assert.False(recentIds.Contains("id-6"));
+        Assert.True(recentIds.Contains("id-7"));
+        Assert.True(recentIds.Contains("id-8"));
+        Assert.True(recentIds.Contains("id-9"));
+    }
+
+    [Fact]
     public async Task PollOnce_SkipsDismissedPushAndLogIds()
     {
         using var poller = CreatePoller(
@@ -422,7 +495,7 @@ public sealed class NotificationPollerTests
         out List<NormalizedCloudNotification> raised,
         out List<NormalizedCloudNotification> stored,
         out List<NotificationHideTarget> hidden,
-        IReadOnlySet<string>? preSeenIds = null,
+        IEnumerable<string>? preSeenIds = null,
         Func<string, bool>? isDismissed = null)
     {
         var localRaised = new List<NormalizedCloudNotification>();

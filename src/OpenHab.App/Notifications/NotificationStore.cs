@@ -104,6 +104,23 @@ public sealed class NotificationStore
         }
     }
 
+    public IReadOnlyList<string> GetRecentSeenUndismissedIds(int maxCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCount);
+
+        lock (syncRoot)
+        {
+            return notifications.Values
+                .Where(n => !n.IsDismissed)
+                .OrderBy(n => n.Created)
+                .ThenBy(n => n.ReceivedAt)
+                .ThenBy(n => n.Id, StringComparer.Ordinal)
+                .TakeLast(maxCount)
+                .Select(n => n.Id)
+                .ToList();
+        }
+    }
+
     public bool IsSeen(string notificationId)
     {
         lock (syncRoot)

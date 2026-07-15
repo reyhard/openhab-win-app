@@ -9,7 +9,7 @@ namespace OpenHab.Windows.Notifications;
 
 public sealed partial class NotificationPoller : IDisposable, IAsyncDisposable
 {
-    private const int MaxSeenIds = 200;
+    public const int RecentIdCapacity = 500;
 
     private readonly HttpClient httpClient;
     private readonly Uri cloudBaseUri;
@@ -17,7 +17,7 @@ public sealed partial class NotificationPoller : IDisposable, IAsyncDisposable
     private readonly string? basicUserName;
     private readonly string? basicPassword;
     private readonly TimeSpan pollInterval;
-    private readonly HashSet<string> seenIds = new();
+    private readonly RecentNotificationIdSet recentIds;
     private readonly DispatcherQueue? dispatcher;
     private readonly Func<string, bool>? isDismissedFunc;
     private readonly Action<NormalizedCloudNotification>? onNewNotification;
@@ -37,7 +37,7 @@ public sealed partial class NotificationPoller : IDisposable, IAsyncDisposable
         string? basicPassword = null,
         TimeSpan? pollInterval = null,
         DispatcherQueue? dispatcher = null,
-        IReadOnlySet<string>? preSeenIds = null,
+        IEnumerable<string>? preSeenIds = null,
         Func<string, bool>? isDismissedFunc = null,
         Action<NormalizedCloudNotification>? onNewNotification = null,
         Action<NotificationHideTarget>? onHideNotification = null)
@@ -57,12 +57,7 @@ public sealed partial class NotificationPoller : IDisposable, IAsyncDisposable
         this.isDismissedFunc = isDismissedFunc;
         this.onNewNotification = onNewNotification;
         this.onHideNotification = onHideNotification;
-
-        if (preSeenIds is not null)
-        {
-            foreach (var id in preSeenIds)
-                seenIds.Add(id);
-        }
+        recentIds = new RecentNotificationIdSet(RecentIdCapacity, preSeenIds);
     }
 
     public bool IsRunning => pollingTask is not null && !pollingTask.IsCompleted;
@@ -235,7 +230,7 @@ public sealed partial class NotificationPoller : IDisposable, IAsyncDisposable
         foreach (var notification in notifications.OrderBy(n => n.Created))
         {
             var normalized = CloudNotificationNormalizer.Normalize(notification);
-            if (!seenIds.Add(normalized.Id))
+            if (!recentIds.Add(normalized.Id))
             {
                 continue;
             }
@@ -273,11 +268,6 @@ public sealed partial class NotificationPoller : IDisposable, IAsyncDisposable
         }
 
         DiagnosticLogger.Info($"Polled {newCount} new notifications out of {notifications.Count} total");
-
-        if (seenIds.Count > MaxSeenIds)
-        {
-            seenIds.Clear();
-        }
     }
 
     private void RaiseNotification(NormalizedCloudNotification notification)

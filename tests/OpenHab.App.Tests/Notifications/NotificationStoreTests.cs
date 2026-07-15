@@ -37,6 +37,29 @@ public sealed class NotificationStoreTests : IDisposable
         return new NotificationStore(storageFilePath, persistChanges);
     }
 
+    private static StoredNotification CreateStoredNotification(
+        string id,
+        DateTimeOffset created,
+        DateTimeOffset receivedAt)
+    {
+        return new StoredNotification(
+            id,
+            id,
+            null,
+            null,
+            null,
+            created,
+            receivedAt,
+            false,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    }
+
     // ─────────────────────── AddOrUpdate ───────────────────────
 
     [Fact]
@@ -516,6 +539,68 @@ public sealed class NotificationStoreTests : IDisposable
         Assert.Contains("n1", ids);
         Assert.Contains("n3", ids);
         Assert.DoesNotContain("n2", ids);
+    }
+
+    [Fact]
+    public void GetRecentSeenUndismissedIds_RetainsNewestInOldestToNewestOrder()
+    {
+        var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        store.AddOrUpdate("oldest", "Oldest", baseTime);
+        store.AddOrUpdate("middle", "Middle", baseTime.AddMinutes(1));
+        store.AddOrUpdate("newest", "Newest", baseTime.AddMinutes(2));
+
+        var ids = store.GetRecentSeenUndismissedIds(2);
+
+        Assert.Equal(["middle", "newest"], ids);
+    }
+
+    [Fact]
+    public void GetRecentSeenUndismissedIds_ExcludesDismissedNotifications()
+    {
+        var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        store.AddOrUpdate("visible-old", "Visible old", baseTime);
+        store.AddOrUpdate("dismissed", "Dismissed", baseTime.AddMinutes(1));
+        store.AddOrUpdate("visible-new", "Visible new", baseTime.AddMinutes(2));
+        store.Dismiss("dismissed");
+
+        var ids = store.GetRecentSeenUndismissedIds(2);
+
+        Assert.Equal(["visible-old", "visible-new"], ids);
+    }
+
+    [Fact]
+    public void GetRecentSeenUndismissedIds_UsesCreatedReceivedAtAndIdTieBreakers()
+    {
+        var created = new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero);
+        var firstReceived = created.AddMinutes(1);
+        var secondReceived = created.AddMinutes(2);
+        Directory.CreateDirectory(Path.GetDirectoryName(storageFilePath)!);
+        var entries = new[]
+        {
+            CreateStoredNotification("id-c", created, firstReceived),
+            CreateStoredNotification("id-a", created, secondReceived),
+            CreateStoredNotification("id-b", created, secondReceived)
+        };
+        File.WriteAllText(
+            storageFilePath,
+            JsonSerializer.Serialize(new { Notifications = entries }));
+        var store = CreateStore();
+
+        var ids = store.GetRecentSeenUndismissedIds(3);
+
+        Assert.Equal(["id-c", "id-a", "id-b"], ids);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void GetRecentSeenUndismissedIds_RejectsNonPositiveLimit(int maxCount)
+    {
+        var store = CreateStore();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.GetRecentSeenUndismissedIds(maxCount));
     }
 
     // ─────────────────────── Trim ───────────────────────

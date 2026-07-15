@@ -561,7 +561,7 @@ public partial class App : Application
                 basicPassword: cloudCredentials?.Password,
                 pollInterval: TimeSpan.FromSeconds(settings.NotificationPollIntervalSeconds),
                 dispatcher: uiDispatcherQueue,
-                preSeenIds: notificationStore?.GetSeenUndismissedIds(),
+                preSeenIds: notificationStore?.GetRecentSeenUndismissedIds(NotificationPoller.RecentIdCapacity),
                 isDismissedFunc: id => notificationStore?.IsDismissed(id) ?? false,
                 onNewNotification: n =>
                 {
