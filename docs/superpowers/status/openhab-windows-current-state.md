@@ -1,6 +1,6 @@
 # openHAB Windows Current State
 
-Date: 2026-05-29
+Date: 2026-07-15
 
 ## Purpose
 
@@ -18,9 +18,14 @@ Read this file before implementation. Older dated status files remain useful as 
 - Connected sitemap homepage loading, subpage navigation, breadcrumbs, search descriptors, ButtonGrid dispatch, and event-stream widget updates route through `OpenHab.App.Runtime.SitemapRuntimeController`.
 - App settings are UI-independent, persisted by `OpenHab.App.Settings.AppSettingsController`, and include endpoint mode, sitemap/main window shell state, notification preferences, device info sync, shortcuts, and verbose diagnostics.
 - Cloud notifications support nested payload normalization, custom title/tag/reference id, app logo/hero image media resolution, toast buttons, command actions, URL/UI navigation actions, log-only notifications, and hide/remove semantics.
+- Cloud-notification deduplication is seeded from the newest 500 persisted undismissed notification IDs and evicts only the oldest retained ID at capacity; crossing the old 200-ID boundary no longer clears the complete seen set and redispatches historical notifications.
+- Notification-history mutations are serialized through one coalescing writer per normalized storage path, committed through same-directory atomic replacement, and exposed through a generation-aware `FlushAsync`; normal shutdown stops the poller before flushing the latest history snapshot.
+- Notification hero-image storage is process-owned and bounded to 64 files, 32 MiB total, and 30 days, with atomic cache writes, best-effort pruning, and invalidation when endpoint or credential profile inputs change.
 - Windows-specific functionality includes tray icon integration, startup task handling, notification activation, device-state sync readers, global hotkeys, and a radial shortcut command menu.
 - Diagnostics now use `SafeDiagnosticText` and `SensitiveTextRedactor` for privacy-safe logs and user-facing status text in the main runtime, event stream, notifications, and Windows status surfaces.
 - App-owned UI text now routes through localization resources with English and Polish resource sets. Appearance settings include a language selector with System language, English, and Polish options; explicit overrides are applied during startup through WinUI resource/culture override APIs, and the UI shows a restart-required notice when a changed language is not yet loaded.
+- Reviewed dynamic sitemap, navigation, Main UI, shortcut, voice-status, and voice-confirmation text now also routes through the English/Polish localization layer, including dynamic accessibility names.
+- Sitemap SSE connected, disconnected, and reconnecting transitions update and publish the app runtime snapshot only when observable state changes; explicit reconnect callers receive the real connection task so failures and cancellation remain observable.
 - Packaging exists through `src/OpenHab.Windows.Package/OpenHab.Windows.Package.wapproj` and `build-package.ps1`; official package identity, signing ownership, distribution, and support policy remain release decisions.
 - The sitemap flyout "Open main window" button opens the main window on the Main UI root page by default instead of restoring the last selected main-window page; tray context-menu open behavior remains separate.
 - Main window promoted Main UI page links stay materialized while the left sidebar is collapsed, so re-expanding the sidebar restores visible promoted pages when their chevron is still expanded.
@@ -37,9 +42,13 @@ Read this file before implementation. Older dated status files remain useful as 
 - Crowdin localization foundation has landed on `main`: `crowdin.yml`, translation ownership docs, English and Polish WinUI `.resw` resources, fallback `ITextLocalizer` coverage, localized package manifest/app chrome/runtime/status/settings strings, and regression tests for resource parity, placeholder parity, and representative hardcoded settings labels.
 - Language override support has landed on `main`: persisted app language setting, startup WinUI resource/culture override, Appearance language selector, explicit Polish override behavior, and restart-required messaging for non-live language changes.
 - Sitemap media cache policy is implemented: chart URLs are stable by default with explicit opt-in cache busting, icon payload caching is bounded, and sitemap media caches clear when endpoint or credential profile inputs change.
+- Notification resend reliability remediation is implemented: the poller uses a bounded FIFO recent-ID set aligned with the 500-entry store, and deterministic oldest-to-newest seed selection retains the newest undismissed history across restart.
+- Notification persistence reliability is implemented: immutable snapshots are coalesced and serialized per file, writes use atomic replacement, explicit flushes are generation barriers, and app shutdown waits for the poller before flushing history.
+- SSE state publication/reconnect task observation, reviewed dynamic English/Polish localization coverage, and bounded notification-media caching with profile invalidation are implemented.
 
 ## Current High-Priority Backlog
 
+- P0: Run and record the configured live notification smoke with more than 200 historical entries, two cloud poll intervals, one new notification, normal exit, restart, and two further poll intervals. Automated regressions cover 501 retained IDs and flush/reload behavior, but a real cloud/toast run is still required before closing the user-observed resend incident.
 - P0: Finalize release ownership decisions: official package identity, signing certificate ownership, Microsoft Store or other distribution ownership, support policy, and security response path.
 - P1: Run and record manual UI smoke checks for tray flyout, main window, Main UI WebView2 auth/navigation, notifications, settings, and shortcut command menu.
 - P1: Run and record manual memory/performance measurements for launch, flyout open/close, main window open/close, and background resource release. `docs/superpowers/verification/2026-05-14-performance-optimization-results.md` currently records build success but no manual measurements.
@@ -54,6 +63,23 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-07-15 notification reliability and review remediation on `main`:
+
+- Root cause addressed for the observed old-notification resend: the previous capacity rollover cleared the full in-memory seen-ID set. The poller now retains the newest 500 IDs and evicts only the oldest; regression coverage crosses the actual limit with 501 persisted IDs and performs repeated polls without redispatch.
+- Notification persistence now uses a serialized per-path writer, coalesced immutable snapshots, same-directory atomic replacement, generation-aware flush barriers, and poller-stop-before-flush shutdown ordering. Tests cover rapid and mixed mutations, flush/reload, temporary-file cleanup, failure recovery, and newer-write draining.
+- SSE runtime snapshots now publish connected/disconnected/reconnecting changes without redundant events, and reconnect failures/cancellation are observable through the returned task.
+- Dynamic Windows status, Main UI, voice, navigation, and accessibility text uses English/Polish resources; resource and placeholder parity plus reviewed-source literal regressions are covered.
+- Notification media caching is bounded to 64 files, 32 MiB, and 30 days, prunes oldest entries after age removal, falls back to text-only notifications on media failure, and clears on endpoint/auth profile change.
+- Passed: `dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`79/79`).
+- Passed: `dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`44/44`).
+- Passed: `dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`129/129`).
+- Passed: `dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` (`644/644`). Total direct tests: `896/896`.
+- Passed: App coverage collection with `--collect "XPlat Code Coverage" --settings coverage.runsettings` (`644/644`); `coverage.opencover.xml` contains `RecentNotificationIdSet`, `NotificationStorePersistenceQueue`, `NotificationMediaCache`, and the changed `SitemapRuntimeController` methods. No coverage exclusions were added.
+- Passed: `dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` (0 warnings, 0 errors).
+- Passed: `git diff --check` and `dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include <all remediation C# files>`.
+- Formatting caveat: the repository-wide unscoped formatter gate remains nonzero because of pre-existing unrelated whitespace debt, including `SitemapUiLogic.cs`, `RadialCommandMenuWindow.cs`, and `ShortcutRecorderControl.cs`; every C# file changed by this remediation passes the formatter.
+- Manual evidence pending: a configured openHAB/cloud/toast resend-and-restart smoke and Polish visual/truncation review were not run in this non-interactive verification session and remain listed in the high-priority backlog.
 
 2026-06-08 SonarQube MCP reported-issues remediation:
 
