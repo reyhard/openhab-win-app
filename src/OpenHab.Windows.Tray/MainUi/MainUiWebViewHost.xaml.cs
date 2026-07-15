@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Web.WebView2.Core;
+using OpenHab.App.Localization;
 using OpenHab.App.MainUi;
 using OpenHab.Core;
 
@@ -12,6 +13,7 @@ namespace OpenHab.Windows.Tray.MainUi;
 [ExcludeFromCodeCoverage(Justification = "WinUI/WebView host glue.")]
 public sealed partial class MainUiWebViewHost : UserControl
 {
+    private readonly ITextLocalizer text;
     private Uri? currentEndpoint;
     private Uri? currentBaseUri;
     private Uri? currentUri;
@@ -24,7 +26,13 @@ public sealed partial class MainUiWebViewHost : UserControl
     public event EventHandler<string>? CurrentRouteChanged;
 
     public MainUiWebViewHost()
+        : this(null)
     {
+    }
+
+    public MainUiWebViewHost(ITextLocalizer? text)
+    {
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
         InitializeComponent();
     }
 
@@ -107,7 +115,7 @@ public sealed partial class MainUiWebViewHost : UserControl
         catch (Exception ex)
         {
             DiagnosticLogger.Warn($"Main UI WebView initialization failed: {ex.GetType().Name}");
-            ShowError("Main UI could not be loaded. WebView2 may be unavailable.");
+            ShowError(text.Get("MainUi.Error.Unavailable"));
         }
     }
 
@@ -231,7 +239,7 @@ public sealed partial class MainUiWebViewHost : UserControl
         }
         else
         {
-            ShowError("Check the configured endpoint and credentials, then retry.");
+            ShowError(text.Get("MainUi.Error.CheckEndpointAndCredentials"));
         }
         navigationCompletion?.TrySetResult();
         navigationCompletion = null;

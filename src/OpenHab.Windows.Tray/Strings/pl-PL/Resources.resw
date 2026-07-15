@@ -922,4 +922,89 @@ Dodaj akcje, aby były dostępne w menu poleceń.</value>
   <data name="ShortcutInteractive.CommandSendFailed" xml:space="preserve">
     <value>Nie udało się wysłać polecenia.</value>
   </data>
+  <data name="Runtime.Sitemap.NoneDetected" xml:space="preserve">
+    <value>Nie wykryto żadnych map witryny</value>
+  </data>
+  <data name="Runtime.Sitemap.MultipleDetected" xml:space="preserve">
+    <value>Wykryto wiele map witryny — wybierz jedną</value>
+  </data>
+  <data name="MainWindow.Sitemap.Show" xml:space="preserve">
+    <value>Pokaż mapę witryny</value>
+  </data>
+  <data name="MainWindow.Sitemap.Hide" xml:space="preserve">
+    <value>Ukryj mapę witryny</value>
+  </data>
+  <data name="MainWindow.Navigation.Expand" xml:space="preserve">
+    <value>Rozwiń nawigację</value>
+  </data>
+  <data name="MainWindow.Navigation.Collapse" xml:space="preserve">
+    <value>Zwiń nawigację</value>
+  </data>
+  <data name="MainWindow.MainUiPages.Empty" xml:space="preserve">
+    <value>Brak promowanych stron</value>
+  </data>
+  <data name="MainWindow.MainUiPages.RefreshFailed" xml:space="preserve">
+    <value>Nie udało się odświeżyć stron. Wyświetlanie zapisanych łączy.</value>
+  </data>
+  <data name="MainUi.Error.Unavailable" xml:space="preserve">
+    <value>Nie udało się załadować Main UI. WebView2 może być niedostępny.</value>
+  </data>
+  <data name="MainUi.Error.CheckEndpointAndCredentials" xml:space="preserve">
+    <value>Sprawdź skonfigurowany punkt końcowy i dane logowania, a następnie spróbuj ponownie.</value>
+  </data>
+  <data name="MainUi_LoadingText.Text" xml:space="preserve">
+    <value>Ładowanie Main UI openHAB</value>
+  </data>
+  <data name="MainUi_ErrorTitleText.Text" xml:space="preserve">
+    <value>Nie udało się załadować Main UI</value>
+  </data>
+  <data name="MainUi_RetryButton.Content" xml:space="preserve">
+    <value>Ponów próbę</value>
+  </data>
+  <data name="MainUi_OpenInBrowserButton.Content" xml:space="preserve">
+    <value>Otwórz w przeglądarce</value>
+  </data>
+  <data name="Voice.Status.RequiresOnline" xml:space="preserve">
+    <value>Polecenia głosowe wymagają połączenia openHAB w trybie online.</value>
+  </data>
+  <data name="Voice.Status.InvalidAction" xml:space="preserve">
+    <value>Akcja polecenia głosowego jest nieprawidłowa.</value>
+  </data>
+  <data name="Voice.Status.ServiceUnavailable" xml:space="preserve">
+    <value>Usługa poleceń głosowych jest niedostępna.</value>
+  </data>
+  <data name="Voice.Status.Listening" xml:space="preserve">
+    <value>Nasłuchiwanie polecenia głosowego...</value>
+  </data>
+  <data name="Voice.Status.Canceled" xml:space="preserve">
+    <value>Polecenie głosowe anulowane.</value>
+  </data>
+  <data name="Voice.Status.OpeningWindowsSettings" xml:space="preserve">
+    <value>{0} Otwieranie ustawień systemu Windows...</value>
+    <comment>{0}: voice recognition status message.</comment>
+  </data>
+  <data name="Voice.Confirmation.Title" xml:space="preserve">
+    <value>Potwierdź polecenie głosowe</value>
+  </data>
+  <data name="Voice.Confirmation.TranscriptLabel" xml:space="preserve">
+    <value>Rozpoznane polecenie</value>
+  </data>
+  <data name="Voice.Confirmation.Send" xml:space="preserve">
+    <value>Wyślij</value>
+  </data>
+  <data name="Voice.Confirmation.Cancel" xml:space="preserve">
+    <value>Anuluj</value>
+  </data>
+  <data name="Voice.Confirmation.EmptyTranscript" xml:space="preserve">
+    <value>(pusto)</value>
+  </data>
+  <data name="Shortcuts.Status.Disconnected" xml:space="preserve">
+    <value>Nie można wykonać akcji bez połączenia.</value>
+  </data>
+  <data name="Shortcuts.Status.ClientUnavailable" xml:space="preserve">
+    <value>Klient jest niedostępny.</value>
+  </data>
+  <data name="Shortcuts.Status.SurfaceFailed" xml:space="preserve">
+    <value>Nie udało się otworzyć panelu polecenia.</value>
+  </data>
 </root>

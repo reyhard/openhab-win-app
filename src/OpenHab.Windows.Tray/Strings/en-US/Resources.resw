@@ -922,4 +922,89 @@ Add actions to make them available in the command menu.</value>
   <data name="ShortcutInteractive.CommandSendFailed" xml:space="preserve">
     <value>Command could not be sent.</value>
   </data>
+  <data name="Runtime.Sitemap.NoneDetected" xml:space="preserve">
+    <value>No sitemaps were detected</value>
+  </data>
+  <data name="Runtime.Sitemap.MultipleDetected" xml:space="preserve">
+    <value>Multiple sitemaps detected — choose one</value>
+  </data>
+  <data name="MainWindow.Sitemap.Show" xml:space="preserve">
+    <value>Show sitemap</value>
+  </data>
+  <data name="MainWindow.Sitemap.Hide" xml:space="preserve">
+    <value>Hide sitemap</value>
+  </data>
+  <data name="MainWindow.Navigation.Expand" xml:space="preserve">
+    <value>Expand navigation</value>
+  </data>
+  <data name="MainWindow.Navigation.Collapse" xml:space="preserve">
+    <value>Collapse navigation</value>
+  </data>
+  <data name="MainWindow.MainUiPages.Empty" xml:space="preserve">
+    <value>No promoted pages</value>
+  </data>
+  <data name="MainWindow.MainUiPages.RefreshFailed" xml:space="preserve">
+    <value>Could not refresh pages. Showing cached links.</value>
+  </data>
+  <data name="MainUi.Error.Unavailable" xml:space="preserve">
+    <value>Main UI could not be loaded. WebView2 may be unavailable.</value>
+  </data>
+  <data name="MainUi.Error.CheckEndpointAndCredentials" xml:space="preserve">
+    <value>Check the configured endpoint and credentials, then retry.</value>
+  </data>
+  <data name="MainUi_LoadingText.Text" xml:space="preserve">
+    <value>Loading openHAB Main UI</value>
+  </data>
+  <data name="MainUi_ErrorTitleText.Text" xml:space="preserve">
+    <value>Main UI could not be loaded</value>
+  </data>
+  <data name="MainUi_RetryButton.Content" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="MainUi_OpenInBrowserButton.Content" xml:space="preserve">
+    <value>Open in browser</value>
+  </data>
+  <data name="Voice.Status.RequiresOnline" xml:space="preserve">
+    <value>Voice commands require an online openHAB connection.</value>
+  </data>
+  <data name="Voice.Status.InvalidAction" xml:space="preserve">
+    <value>Voice command action is invalid.</value>
+  </data>
+  <data name="Voice.Status.ServiceUnavailable" xml:space="preserve">
+    <value>Voice command service is unavailable.</value>
+  </data>
+  <data name="Voice.Status.Listening" xml:space="preserve">
+    <value>Listening for voice command...</value>
+  </data>
+  <data name="Voice.Status.Canceled" xml:space="preserve">
+    <value>Voice command canceled.</value>
+  </data>
+  <data name="Voice.Status.OpeningWindowsSettings" xml:space="preserve">
+    <value>{0} Opening Windows Settings...</value>
+    <comment>{0}: voice recognition status message.</comment>
+  </data>
+  <data name="Voice.Confirmation.Title" xml:space="preserve">
+    <value>Confirm voice command</value>
+  </data>
+  <data name="Voice.Confirmation.TranscriptLabel" xml:space="preserve">
+    <value>Recognized command</value>
+  </data>
+  <data name="Voice.Confirmation.Send" xml:space="preserve">
+    <value>Send</value>
+  </data>
+  <data name="Voice.Confirmation.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Voice.Confirmation.EmptyTranscript" xml:space="preserve">
+    <value>(empty)</value>
+  </data>
+  <data name="Shortcuts.Status.Disconnected" xml:space="preserve">
+    <value>Cannot execute action while disconnected.</value>
+  </data>
+  <data name="Shortcuts.Status.ClientUnavailable" xml:space="preserve">
+    <value>Client is unavailable.</value>
+  </data>
+  <data name="Shortcuts.Status.SurfaceFailed" xml:space="preserve">
+    <value>Command surface could not be opened.</value>
+  </data>
 </root>

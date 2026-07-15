@@ -1013,7 +1013,7 @@ public partial class App : Application
             }
             else if (sitemaps.Count == 0)
             {
-                runtimeController!.SetBannerStatus("No sitemaps were detected");
+                runtimeController!.SetBannerStatus(textLocalizer.Get("Runtime.Sitemap.NoneDetected"));
                 settingsController.SetSitemapName(string.Empty);
             }
             else if (sitemaps.Count == 1)
@@ -1038,7 +1038,7 @@ public partial class App : Application
                 }
                 else
                 {
-                    runtimeController!.SetBannerStatus("Multiple sitemaps detected — choose one");
+                    runtimeController!.SetBannerStatus(textLocalizer.Get("Runtime.Sitemap.MultipleDetected"));
                     settingsController.SetSitemapName(string.Empty);
                 }
             }
@@ -1408,13 +1408,13 @@ public partial class App : Application
 
         if (runtimeController?.Current.ConnectionState != ConnectionState.Online)
         {
-            SetShellStatusText("Voice commands require an online openHAB connection.");
+            SetShellStatusText(textLocalizer.Get("Voice.Status.RequiresOnline"));
             return;
         }
 
         if (!ShortcutValidation.ValidateAction(action).IsValid || action.CommandType != ShortcutCommandType.Voice)
         {
-            SetShellStatusText("Voice command action is invalid.");
+            SetShellStatusText(textLocalizer.Get("Voice.Status.InvalidAction"));
             return;
         }
 
@@ -1422,7 +1422,7 @@ public partial class App : Application
         var executor = voiceCommandExecutor;
         if (recognizer is null || executor is null)
         {
-            SetShellStatusText("Voice command service is unavailable.");
+            SetShellStatusText(textLocalizer.Get("Voice.Status.ServiceUnavailable"));
             return;
         }
 
@@ -1432,7 +1432,7 @@ public partial class App : Application
 
         try
         {
-            SetShellStatusText("Listening for voice command...");
+            SetShellStatusText(textLocalizer.Get("Voice.Status.Listening"));
             BeginVoiceListeningFeedback(activationSurface);
             voiceFeedbackActive = true;
             var recognitionResult = await recognizer.RecognizeOnceAsync(cts.Token);
@@ -1453,7 +1453,9 @@ public partial class App : Application
             if (normalized.VoiceMode.RequireConfirmationBeforeSending)
             {
                 voiceConfirmationWindow?.Close();
-                var confirmationWindow = new VoiceCommandConfirmationWindow(recognitionResult.Text ?? string.Empty);
+                var confirmationWindow = new VoiceCommandConfirmationWindow(
+                    recognitionResult.Text ?? string.Empty,
+                    textLocalizer);
                 voiceConfirmationWindow = confirmationWindow;
                 confirmationWindow.Closed += (_, _) =>
                 {
@@ -1466,7 +1468,7 @@ public partial class App : Application
                 var approved = await confirmationWindow.WaitForDecisionAsync(cts.Token);
                 if (!approved)
                 {
-                    SetShellStatusText("Voice command canceled.");
+                    SetShellStatusText(textLocalizer.Get("Voice.Status.Canceled"));
                     return;
                 }
             }
@@ -1486,7 +1488,7 @@ public partial class App : Application
         }
         catch (OperationCanceledException)
         {
-            SetShellStatusText("Voice command canceled.");
+            SetShellStatusText(textLocalizer.Get("Voice.Status.Canceled"));
         }
         finally
         {
@@ -1592,7 +1594,7 @@ public partial class App : Application
             return;
         }
 
-        SetShellStatusText($"{recognitionResult.Message} Opening Windows Settings...");
+        SetShellStatusText(textLocalizer.Format("Voice.Status.OpeningWindowsSettings", recognitionResult.Message));
         try
         {
             var launched = await global::Windows.System.Launcher.LaunchUriAsync(settingsUri).AsTask().ConfigureAwait(true);
@@ -1611,14 +1613,14 @@ public partial class App : Application
     {
         if (runtimeController?.Current.ConnectionState != ConnectionState.Online)
         {
-            SetShellStatusText("Cannot execute action while disconnected.");
+            SetShellStatusText(textLocalizer.Get("Shortcuts.Status.Disconnected"));
             return;
         }
 
         var client = CreateActiveShortcutClient();
         if (client is null)
         {
-            SetShellStatusText("Client is unavailable.");
+            SetShellStatusText(textLocalizer.Get("Shortcuts.Status.ClientUnavailable"));
             return;
         }
 
@@ -1652,7 +1654,7 @@ public partial class App : Application
             window.Close();
             DiagnosticLogger.Warn(
                 $"Shortcut interactive surface failed: action='{action.Name}', error='{ex.GetType().Name}'");
-            SetShellStatusText("Command surface could not be opened.");
+            SetShellStatusText(textLocalizer.Get("Shortcuts.Status.SurfaceFailed"));
         }
     }
 

@@ -3,6 +3,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using OpenHab.App.Localization;
 using Windows.Graphics;
 using Windows.UI;
 
@@ -12,11 +13,13 @@ namespace OpenHab.Windows.Tray.Voice;
 public sealed class VoiceCommandConfirmationWindow : Window
 {
     private readonly TaskCompletionSource<bool> decisionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly ITextLocalizer text;
     private bool isClosing;
 
-    public VoiceCommandConfirmationWindow(string recognizedText)
+    public VoiceCommandConfirmationWindow(string recognizedText, ITextLocalizer? text = null)
     {
-        Title = "Confirm voice command";
+        this.text = text ?? DefaultEnglishTextLocalizer.Instance;
+        Title = this.text.Get("Voice.Confirmation.Title");
         Content = BuildContent(recognizedText);
         ConfigureWindow();
         Closed += OnClosed;
@@ -71,28 +74,30 @@ public sealed class VoiceCommandConfirmationWindow : Window
     {
         var transcript = new TextBlock
         {
-            Text = string.IsNullOrWhiteSpace(recognizedText) ? "(empty)" : recognizedText.Trim(),
+            Text = string.IsNullOrWhiteSpace(recognizedText)
+                ? text.Get("Voice.Confirmation.EmptyTranscript")
+                : recognizedText.Trim(),
             TextWrapping = TextWrapping.WrapWholeWords,
             MaxLines = 4
         };
 
         var sendButton = new Button
         {
-            Content = "Send",
+            Content = text.Get("Voice.Confirmation.Send"),
             MinWidth = 88
         };
         sendButton.Click += (_, _) => CompleteAndClose(true);
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = text.Get("Voice.Confirmation.Cancel"),
             MinWidth = 88
         };
         cancelButton.Click += (_, _) => CompleteAndClose(false);
 
         var title = new TextBlock
         {
-            Text = "Recognized command",
+            Text = text.Get("Voice.Confirmation.TranscriptLabel"),
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
         };
         Grid.SetRow(title, 0);

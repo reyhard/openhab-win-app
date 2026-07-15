@@ -14,7 +14,7 @@
                 <ProgressRing IsActive="True"
                               Width="36"
                               Height="36" />
-                <TextBlock Text="Loading openHAB Main UI"
+                <TextBlock x:Uid="MainUi_LoadingText"
                            Opacity="0.7" />
             </StackPanel>
         </Grid>
@@ -32,7 +32,7 @@
                 <FontIcon Glyph="&#xE783;"
                           FontSize="32" />
                 <TextBlock x:Name="ErrorTitleText"
-                           Text="Main UI could not be loaded"
+                           x:Uid="MainUi_ErrorTitleText"
                            FontSize="18"
                            FontWeight="SemiBold"
                            HorizontalAlignment="Center" />
@@ -43,9 +43,9 @@
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Center"
                             Spacing="8">
-                    <Button Content="Retry"
+                    <Button x:Uid="MainUi_RetryButton"
                             Click="RetryButton_Click" />
-                    <Button Content="Open in browser"
+                    <Button x:Uid="MainUi_OpenInBrowserButton"
                             Click="OpenInBrowserButton_Click" />
                 </StackPanel>
             </StackPanel>

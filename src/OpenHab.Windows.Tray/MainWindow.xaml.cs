@@ -447,8 +447,9 @@ public sealed partial class MainWindow : Window
         ToggleSitemapIcon.Foreground = state.IsSitemapVisible
             ? GetThemeBrush("AccentTextFillColorPrimaryBrush")
             : GetThemeBrush("TextFillColorPrimaryBrush");
-        ToolTipService.SetToolTip(ToggleSitemapButton, state.IsSitemapVisible ? "Hide sitemap" : "Show sitemap");
-        AutomationProperties.SetName(ToggleSitemapButton, state.IsSitemapVisible ? "Hide sitemap" : "Show sitemap");
+        var sitemapToggleText = text.Get(state.IsSitemapVisible ? "MainWindow.Sitemap.Hide" : "MainWindow.Sitemap.Show");
+        ToolTipService.SetToolTip(ToggleSitemapButton, sitemapToggleText);
+        AutomationProperties.SetName(ToggleSitemapButton, sitemapToggleText);
         if (settingsController.Current.MainWindowSitemapPaneVisible != state.IsSitemapVisible)
         {
             settingsController.SetMainWindowSitemapPaneVisible(state.IsSitemapVisible);
@@ -534,7 +535,7 @@ public sealed partial class MainWindow : Window
 
     private MainUiWebViewHost CreateMainUiHost()
     {
-        var host = new MainUiWebViewHost();
+        var host = new MainUiWebViewHost(text);
         host.CurrentRouteChanged += MainUiHost_CurrentRouteChanged;
         return host;
     }
@@ -712,7 +713,7 @@ public sealed partial class MainWindow : Window
         {
             MainUiPagesList.Children.Add(new TextBlock
             {
-                Text = "Could not refresh pages. Showing cached links.",
+                Text = text.Get("MainWindow.MainUiPages.RefreshFailed"),
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 8)
             });
@@ -725,7 +726,7 @@ public sealed partial class MainWindow : Window
         {
             MainUiPagesList.Children.Add(new TextBlock
             {
-                Text = "No promoted pages"
+                Text = text.Get("MainWindow.MainUiPages.Empty")
             });
         }
         else
@@ -1517,8 +1518,11 @@ public sealed partial class MainWindow : Window
         SidebarBrandPanel.Margin = metrics.BrandMargin;
         SidebarBrandPanel.MinHeight = metrics.BrandMinHeight;
         SidebarBrandPanel.HorizontalAlignment = HorizontalAlignment.Left;
-        ToolTipService.SetToolTip(SidebarCollapseButton, isCollapsedLayout ? "Expand navigation" : "Collapse navigation");
-        AutomationProperties.SetName(SidebarCollapseButton, isCollapsedLayout ? "Expand navigation" : "Collapse navigation");
+        var navigationToggleText = text.Get(isCollapsedLayout
+            ? "MainWindow.Navigation.Expand"
+            : "MainWindow.Navigation.Collapse");
+        ToolTipService.SetToolTip(SidebarCollapseButton, navigationToggleText);
+        AutomationProperties.SetName(SidebarCollapseButton, navigationToggleText);
     }
 
     private void UpdateMainUiPagesChrome(bool animate = false)
