@@ -13,7 +13,7 @@ public sealed class NotificationMediaResolver
     private readonly Func<AppSettings> getSettings;
     private readonly Func<TransportKind, string?> getApiToken;
     private readonly Func<TransportKind, CloudCredentials?> getCloudCredentials;
-    private readonly string cacheRootDirectory;
+    private readonly NotificationMediaCache cache;
     private readonly int maxBytes;
 
     public NotificationMediaResolver(
@@ -21,6 +21,7 @@ public sealed class NotificationMediaResolver
         Func<AppSettings> getSettings,
         Func<TransportKind, string?> getApiToken,
         Func<TransportKind, CloudCredentials?> getCloudCredentials,
+        NotificationMediaCache? cache = null,
         string? cacheRootDirectory = null,
         int maxBytes = 2 * 1024 * 1024)
     {
@@ -35,11 +36,12 @@ public sealed class NotificationMediaResolver
         this.getSettings = getSettings;
         this.getApiToken = getApiToken;
         this.getCloudCredentials = getCloudCredentials;
-        this.cacheRootDirectory = cacheRootDirectory
-            ?? Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "OpenHab.WinApp",
-                "NotificationMedia");
+        if (cache is not null && cacheRootDirectory is not null)
+        {
+            throw new ArgumentException("Specify either a notification media cache or a cache root directory, not both.");
+        }
+
+        this.cache = cache ?? new NotificationMediaCache(cacheRootDirectory);
         this.maxBytes = maxBytes;
     }
 
@@ -82,12 +84,18 @@ public sealed class NotificationMediaResolver
             }
 
             var extension = ResolveFileExtension(media.Value.mediaType);
-            var cachePath = BuildCachePath(fetchUri, extension);
-            Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
-            await File.WriteAllBytesAsync(cachePath, media.Value.data, cancellationToken);
+            var cacheKey = BuildCacheKey(fetchUri);
+            var cacheUri = await cache.StoreAsync(cacheKey, extension, media.Value.data, cancellationToken);
+            if (cacheUri is null)
+            {
+                DiagnosticLogger.Warn(
+                    $"Notification media cache unavailable: source='{ResolveSourceKind(trimmed)}', endpoint='{fetchUri.Host}', media='{media.Value.mediaType ?? "unknown"}', bytes={media.Value.data.Length}");
+                return null;
+            }
+
             DiagnosticLogger.Info(
                 $"Notification media cached: source='{ResolveSourceKind(trimmed)}', endpoint='{fetchUri.Host}', media='{media.Value.mediaType ?? "unknown"}', bytes={media.Value.data.Length}, extension='{extension}'");
-            return new Uri(cachePath);
+            return cacheUri;
         }
 
         return null;
@@ -253,10 +261,9 @@ public sealed class NotificationMediaResolver
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
     }
 
-    private string BuildCachePath(Uri fetchUri, string extension)
+    private static string BuildCacheKey(Uri fetchUri)
     {
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fetchUri.AbsoluteUri)));
-        return Path.Combine(cacheRootDirectory, $"{hash}{extension}");
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fetchUri.AbsoluteUri)));
     }
 
     private static string ResolveFileExtension(string? mediaType)

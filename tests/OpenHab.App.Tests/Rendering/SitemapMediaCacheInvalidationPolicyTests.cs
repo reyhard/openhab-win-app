@@ -108,4 +108,25 @@ public sealed class SitemapMediaCacheInvalidationPolicyTests
 
         Assert.False(SitemapMediaCacheInvalidationPolicy.ShouldClear(previous, current));
     }
+
+    [Fact]
+    public void AppReusesAndInvalidatesNotificationMediaCacheWithSitemapMediaCaches()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "src",
+            "OpenHab.Windows.Tray",
+            "App.xaml.cs"));
+
+        Assert.Contains("notificationMediaCache = new NotificationMediaCache();", source, StringComparison.Ordinal);
+        Assert.Contains("_ = notificationMediaCache.PruneAsync();", source, StringComparison.Ordinal);
+        Assert.Contains("cache: notificationMediaCache", source, StringComparison.Ordinal);
+        Assert.Contains("sitemapMediaCacheProfile = BuildSitemapMediaCacheProfile(settingsController);", source, StringComparison.Ordinal);
+        Assert.Contains("notificationMediaCache?.Clear();", source, StringComparison.Ordinal);
+    }
 }

@@ -60,6 +60,7 @@ public partial class App : Application
     private AppLanguage appliedAppLanguage = AppLanguage.System;
     private DispatcherQueue? uiDispatcherQueue;
     private HttpClient? httpClient;
+    private NotificationMediaCache? notificationMediaCache;
     private NotificationMediaResolver? notificationMediaResolver;
     private NotificationActionExecutor? notificationActionExecutor;
     private NotificationStore? notificationStore;
@@ -144,11 +145,15 @@ public partial class App : Application
         notificationStore = new NotificationStore();
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
+        notificationMediaCache = new NotificationMediaCache();
+        _ = notificationMediaCache.PruneAsync();
         notificationMediaResolver = new NotificationMediaResolver(
             httpClient,
             getSettings: () => this.settingsController?.Current ?? AppSettings.Default,
             getApiToken: kind => this.settingsController is null ? null : GetApiTokenSync(this.settingsController, kind),
-            getCloudCredentials: kind => this.settingsController is null ? null : GetCloudCredentialsSync(this.settingsController));
+            getCloudCredentials: kind => this.settingsController is null ? null : GetCloudCredentialsSync(this.settingsController),
+            cache: notificationMediaCache);
+        sitemapMediaCacheProfile = BuildSitemapMediaCacheProfile(settingsController);
         notificationActionExecutor = new NotificationActionExecutor(
             httpClient,
             getSettings: () => this.settingsController?.Current ?? AppSettings.Default,
@@ -1092,7 +1097,8 @@ public partial class App : Application
             && SitemapMediaCacheInvalidationPolicy.ShouldClear(previousProfile, currentProfile))
         {
             SitemapControlFactory.ClearSitemapMediaCaches();
-            DiagnosticLogger.Info("Sitemap media caches cleared after endpoint or credential settings changed.");
+            notificationMediaCache?.Clear();
+            DiagnosticLogger.Info("Sitemap and notification media caches cleared after endpoint or credential settings changed.");
         }
 
         sitemapMediaCacheProfile = currentProfile;
@@ -1994,7 +2000,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            DiagnosticLogger.Warn($"Notification media resolution failed: {ex.GetType().Name}: {ex.Message}");
+            DiagnosticLogger.Warn($"Notification media resolution failed: error='{ex.GetType().Name}'");
         }
 
         ToastService.Show(new ToastNotificationRequest(

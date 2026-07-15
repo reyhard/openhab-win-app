@@ -156,6 +156,19 @@ public sealed class NotificationMediaResolverTests : IDisposable
     }
 
     [Fact]
+    public async Task ResolveAsync_CacheFailureFallsBackToTextOnlyNotification()
+    {
+        var handler = new CaptureHandler(_ => ImageResponse("image/jpeg", [1, 2, 3]));
+        var cache = new NotificationMediaCache(tempRoot, maxFiles: 64, maxBytes: 2, maxAge: TimeSpan.FromDays(30));
+        var resolver = CreateResolver(handler, EndpointMode.LocalOnly, cache: cache);
+
+        var result = await resolver.ResolveAsync("/static/camera.jpg", CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Empty(Directory.EnumerateFiles(tempRoot));
+    }
+
+    [Fact]
     public async Task ResolveAsync_UnknownContentType_UsesBinExtension()
     {
         var handler = new CaptureHandler(_ => ImageResponse("application/octet-stream", [1, 2, 3]));
@@ -242,7 +255,8 @@ public sealed class NotificationMediaResolverTests : IDisposable
         CloudCredentials? cloudCredentials = null,
         Uri? localEndpoint = null,
         Uri? cloudEndpoint = null,
-        int maxBytes = 2 * 1024 * 1024)
+        int maxBytes = 2 * 1024 * 1024,
+        NotificationMediaCache? cache = null)
     {
         var client = new HttpClient(handler);
         return new NotificationMediaResolver(
@@ -255,7 +269,8 @@ public sealed class NotificationMediaResolverTests : IDisposable
             },
             getApiToken: kind => kind == TransportKind.Local ? localToken : null,
             getCloudCredentials: kind => kind == TransportKind.Cloud ? cloudCredentials : null,
-            cacheRootDirectory: tempRoot,
+            cache: cache,
+            cacheRootDirectory: cache is null ? tempRoot : null,
             maxBytes: maxBytes);
     }
 
