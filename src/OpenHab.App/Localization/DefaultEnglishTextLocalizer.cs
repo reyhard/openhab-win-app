@@ -207,6 +207,7 @@ public static class DefaultEnglishTextLocalizer
         ["Runtime.Connection.ConnectedViaCloud"] = "Connected via cloud ({0})",
         ["Runtime.Connection.ConnectedViaLocal"] = "Connected via local ({0})",
         ["Runtime.Connection.State"] = "Connection: {0}",
+        ["Runtime.LiveUpdates.Reconnecting"] = "Reconnecting to live updates...",
         ["Runtime.LiveUpdates.UnavailableRefreshManually"] = "Live updates unavailable. Refresh manually.",
         ["Runtime.MainUi.LoadError"] = "Error: Main UI could not be loaded.",
         ["Runtime.Error"] = "Error.",

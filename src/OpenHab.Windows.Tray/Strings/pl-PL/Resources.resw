@@ -773,6 +773,9 @@ Dodaj akcje, aby były dostępne w menu poleceń.</value>
     <value>Połączenie: {0}</value>
     <comment>{0}: connection state.</comment>
   </data>
+  <data name="Runtime.LiveUpdates.Reconnecting" xml:space="preserve">
+    <value>Ponowne łączenie z aktualizacjami na żywo...</value>
+  </data>
   <data name="Runtime.LiveUpdates.UnavailableRefreshManually" xml:space="preserve">
     <value>Aktualizacje na żywo są niedostępne. Odśwież ręcznie.</value>
   </data>

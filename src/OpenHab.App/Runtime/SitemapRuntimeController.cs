@@ -888,36 +888,54 @@ public sealed class SitemapRuntimeController
         SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task ReconnectSitemapEventStreamAsync(Uri localBaseUri, string sitemapName, string pageId, CancellationToken ct = default)
+    public Task ReconnectSitemapEventStreamAsync(Uri localBaseUri, string sitemapName, string pageId, CancellationToken ct = default)
     {
-        if (sitemapEventStreamClient is null || _subscriptionId is null) return;
+        if (sitemapEventStreamClient is null || _subscriptionId is null)
+        {
+            return Task.CompletedTask;
+        }
 
         DiagnosticLogger.Info($"Reconnecting sitemap event stream for page '{pageId}'");
         var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
-        _ = sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
+        return sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
     }
 
     private void OnConnectionStateChanged(object? sender, string state)
     {
         var source = ReferenceEquals(sender, sitemapEventStreamClient) ? "sitemap" : "unknown";
         DiagnosticLogger.Info($"SSE connection state changed source={source} state={state} threadId={Environment.CurrentManagedThreadId}");
-        Current = Current with
+        var nextConnectionState = state switch
         {
-            ConnectionState = state switch
+            "connected" => ConnectionState.Online,
+            "disconnected" => ConnectionState.Degraded,
+            _ => Current.ConnectionState
+        };
+        var nextStatusText = state switch
+        {
+            "connected" => Current.ActiveTransport switch
             {
-                "connected" => ConnectionState.Online,
-                "disconnected" => ConnectionState.Degraded,
-                _ => Current.ConnectionState
-            },
-            StatusText = state switch
-            {
-                "connected" => Current.StatusText,
-                "disconnected" => text.Get("Runtime.LiveUpdates.UnavailableRefreshManually"),
-                "reconnecting" => "Reconnecting to live updates...",
+                TransportKind.Cloud => text.Get("Runtime.Connection.ConnectedViaCloudSimple"),
+                TransportKind.Local => text.Get("Runtime.Connection.ConnectedViaLocalSimple"),
                 _ => Current.StatusText
             },
+            "disconnected" => text.Get("Runtime.LiveUpdates.UnavailableRefreshManually"),
+            "reconnecting" => text.Get("Runtime.LiveUpdates.Reconnecting"),
+            _ => Current.StatusText
+        };
+
+        if (nextConnectionState == Current.ConnectionState &&
+            string.Equals(nextStatusText, Current.StatusText, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Current = Current with
+        {
+            ConnectionState = nextConnectionState,
+            StatusText = nextStatusText,
             ChangedRowIndices = []
         };
+        SnapshotChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnWidgetEventReceived(object? sender, SitemapWidgetEvent e)

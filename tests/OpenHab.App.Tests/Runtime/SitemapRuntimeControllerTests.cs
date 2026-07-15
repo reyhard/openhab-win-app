@@ -924,6 +924,121 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Fact]
+    public async Task DisconnectedConnectionStatePublishesUpdatedSnapshot()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await eventClient.WaitUntilConnectStartedAsync();
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireConnectionState("disconnected");
+
+        var published = Assert.Single(snapshots);
+        Assert.Same(controller.Current, published);
+        Assert.Equal(ConnectionState.Degraded, published.ConnectionState);
+        Assert.Equal("Live updates unavailable. Refresh manually.", published.StatusText);
+    }
+
+    [Fact]
+    public async Task ReconnectingConnectionStatePublishesLocalizedStatus()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await eventClient.WaitUntilConnectStartedAsync();
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireConnectionState("reconnecting");
+
+        var published = Assert.Single(snapshots);
+        Assert.Equal(ConnectionState.Online, published.ConnectionState);
+        Assert.Equal("Reconnecting to live updates...", published.StatusText);
+    }
+
+    [Fact]
+    public async Task ConnectedConnectionStateRestoresOnlineAndPublishesSnapshot()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await eventClient.WaitUntilConnectStartedAsync();
+        eventClient.FireConnectionState("disconnected");
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireConnectionState("connected");
+
+        var published = Assert.Single(snapshots);
+        Assert.Equal(ConnectionState.Online, published.ConnectionState);
+        Assert.Equal("Connected via local.", published.StatusText);
+    }
+
+    [Fact]
+    public async Task RepeatedIdenticalConnectionStateDoesNotPublishRedundantSnapshot()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await eventClient.WaitUntilConnectStartedAsync();
+        var snapshotChanges = 0;
+        controller.SnapshotChanged += (_, _) => snapshotChanges++;
+
+        eventClient.FireConnectionState("disconnected");
+        eventClient.FireConnectionState("disconnected");
+
+        Assert.Equal(1, snapshotChanges);
+    }
+
+    [Fact]
+    public async Task ReconnectSitemapEventStreamObservesConnectFailure()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        var expected = new InvalidOperationException("reconnect failed");
+        eventClient.ConnectFailure = expected;
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => controller.ReconnectSitemapEventStreamAsync(
+                new Uri("http://localhost:8080"),
+                "default",
+                "home"));
+
+        Assert.Same(expected, thrown);
+        Assert.Equal(2, eventClient.ConnectCalls);
+    }
+
+    [Fact]
     public async Task SitemapEventStreamCancellationResetsAndPropagates()
     {
         var settings = CreateSettingsController();

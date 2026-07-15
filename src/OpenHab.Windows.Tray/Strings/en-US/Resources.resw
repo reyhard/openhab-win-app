@@ -773,6 +773,9 @@ Add actions to make them available in the command menu.</value>
     <value>Connection: {0}</value>
     <comment>{0}: connection state.</comment>
   </data>
+  <data name="Runtime.LiveUpdates.Reconnecting" xml:space="preserve">
+    <value>Reconnecting to live updates...</value>
+  </data>
   <data name="Runtime.LiveUpdates.UnavailableRefreshManually" xml:space="preserve">
     <value>Live updates unavailable. Refresh manually.</value>
   </data>

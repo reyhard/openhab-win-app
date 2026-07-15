@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using OpenHab.App.Localization;
 
 namespace OpenHab.App.Tests.Localization;
 
@@ -62,6 +63,18 @@ public sealed partial class LocalizationResourceTests
         {
             Assert.Contains(englishKey, polish.Keys);
         }
+    }
+
+    [Fact]
+    public void ReconnectingLiveUpdatesTextHasEnglishFallbackAndTranslatedResources()
+    {
+        const string key = "Runtime.LiveUpdates.Reconnecting";
+        var english = ReadResources(EnglishResourcesPath);
+        var polish = ReadResources(Path.Combine(StringsRootPath, "pl-PL", "Resources.resw"));
+
+        Assert.Equal("Reconnecting to live updates...", DefaultEnglishTextLocalizer.Instance.Get(key));
+        Assert.Equal("Reconnecting to live updates...", english[key]);
+        Assert.Equal("Ponowne łączenie z aktualizacjami na żywo...", polish[key]);
     }
 
     [Fact]
