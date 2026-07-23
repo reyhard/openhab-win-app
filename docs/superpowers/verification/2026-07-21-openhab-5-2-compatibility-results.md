@@ -106,6 +106,15 @@ Verification completed:
 | openHAB 5.2.0 local + Basic authentication | Pending: no disposable server was configured with Basic auth and synthetic sitemap/item. |
 | openHAB 5.2.0 through myopenHAB | Pending: no dedicated harmless item or authorized cloud access was configured; no personal endpoint was accessed. |
 
+### Task 7 review-fix evidence
+
+- RED: the expanded controlled integration rejected the prior implementation because it accepted a sitemap-list JSON object. GREEN: the list root now must be a JSON array before sitemap matching proceeds.
+- `-ExpectedVersionPrefix` now performs an explicit preflight only when supplied: `GET /rest/systeminfo` must contain an object `version` string. A missing/unusable value records `version-unavailable`; a nonmatching prefix records `version-mismatch`. No live version is claimed because the bounded disposable 5.2.0 system-info check did not become available.
+- The C# parser helper is built from its project sources before the bounded server operation begins and then invoked through that exact build output; the script no longer selects an arbitrary existing DLL. Build failure is reported as an actionable redacted helper failure.
+- Item-state polling creates a linked per-request cancellation token constrained by both its poll deadline and the enclosing operation token. A fake server that stalls the post-write GET is bounded with `TimeoutSeconds=2`; it returns exit 1 and records item-write/restore failure rather than hanging.
+- Controlled integration also verifies HTTP `Location` takes precedence over legacy body location and validates exact fake-only Bearer and Basic headers across REST/SSE requests while confirming their token, username, password, and Basic value do not appear in reports.
+- Passed: normal `dotnet restore tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj`, full `OpenHab.Core.Tests` (`138/138`), PowerShell syntax validation, invalid `ftp` invocation (exit 2), controlled integration suite (exit 0, 29 seconds), and `git diff --check`.
+
 ## Task 6 — Embedded Main UI host validation
 
 Date: 2026-07-23

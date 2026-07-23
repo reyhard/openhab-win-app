@@ -126,6 +126,7 @@ function New-CompatibilityResult {
         timestampUtc = [DateTime]::UtcNow.ToString('o', [Globalization.CultureInfo]::InvariantCulture)
         endpoint = $Endpoint
         authentication = $Authentication
+        serverVersion = $null
         sitemap = [ordered]@{ list = 'not-run'; homepage = 'not-run'; widgetIdsObserved = 0 }
         events = [ordered]@{ subscription = 'not-run'; stream = 'not-run'; matchingUpdateObserved = $false }
         items = [ordered]@{ read = 'not-run'; write = 'not-run'; restore = 'not-run' }
@@ -183,30 +184,39 @@ function Invoke-OpenHabRequest {
     finally { $request.Dispose() }
 }
 
-function Invoke-ProductionPayloadParser {
-    param([Parameter(Mandatory)][ValidateSet('sitemap', 'main-ui-pages')][string]$Mode, [Parameter(Mandatory)][string]$Payload)
-
+function Initialize-ProductionPayloadParser {
     $project = Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\OpenHab.CompatibilityProbe.csproj'
+    if (-not (Test-Path -LiteralPath $project -PathType Leaf)) { throw 'Production parser helper source is missing.' }
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = 'dotnet'
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    # Build from source before the network-operation budget begins; never trust a pre-existing bin output.
+    [void]$startInfo.ArgumentList.Add('build')
+    [void]$startInfo.ArgumentList.Add((Resolve-Path $project))
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    [void]$process.StandardOutput.ReadToEnd()
+    [void]$process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) { throw 'Production parser helper build failed; restore/build tools/OpenHab.CompatibilityProbe before retrying.' }
+    $toolPath = Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\bin\Debug\net10.0-windows10.0.19041.0\OpenHab.CompatibilityProbe.dll'
+    if (-not (Test-Path -LiteralPath $toolPath -PathType Leaf)) { throw 'Production parser helper build did not produce the expected executable.' }
+    return (Resolve-Path $toolPath)
+}
+
+function Invoke-ProductionPayloadParser {
+    param([Parameter(Mandatory)][ValidateSet('sitemap', 'main-ui-pages')][string]$Mode, [Parameter(Mandatory)][string]$Payload, [Parameter(Mandatory)][string]$ToolPath)
+
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = 'dotnet'
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardInput = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
-    $toolDll = @(
-        (Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\bin\Release\net10.0-windows10.0.19041.0\OpenHab.CompatibilityProbe.dll'),
-        (Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\bin\Debug\net10.0-windows10.0.19041.0\OpenHab.CompatibilityProbe.dll')
-    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-    if ($toolDll) {
-        [void]$startInfo.ArgumentList.Add((Resolve-Path $toolDll))
-    }
-    else {
-        [void]$startInfo.ArgumentList.Add('run')
-        [void]$startInfo.ArgumentList.Add('--no-restore')
-        [void]$startInfo.ArgumentList.Add('--project')
-        [void]$startInfo.ArgumentList.Add((Resolve-Path $project))
-        [void]$startInfo.ArgumentList.Add('--')
-    }
+    [void]$startInfo.ArgumentList.Add($ToolPath)
     [void]$startInfo.ArgumentList.Add($Mode)
     $process = [Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
@@ -216,7 +226,7 @@ function Invoke-ProductionPayloadParser {
     $output = $process.StandardOutput.ReadToEnd()
     [void]$process.StandardError.ReadToEnd()
     $process.WaitForExit()
-    if ($process.ExitCode -ne 0) { throw 'Production parser rejected the response.' }
+    if ($process.ExitCode -ne 0) { throw 'Production parser helper rejected the response.' }
     return $output | ConvertFrom-Json -ErrorAction Stop
 }
 
@@ -250,13 +260,21 @@ function Test-IsLoopbackEndpoint {
 }
 
 function Wait-ForItemState {
-    param($Client, [Uri]$Base, $Authorization, [string]$ItemName, [string]$ExpectedState, [int]$TimeoutSeconds)
+    param($Client, [Uri]$Base, $Authorization, [string]$ItemName, [string]$ExpectedState, [int]$TimeoutSeconds, [Parameter(Mandatory)][Threading.CancellationToken]$CancellationToken)
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
-        $response = Invoke-OpenHabRequest -Client $Client -Uri (New-OpenHabUri $Base "rest/items/$([Uri]::EscapeDataString($ItemName))") -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $Authorization -CancellationToken ([Threading.CancellationToken]::None)
+        $CancellationToken.ThrowIfCancellationRequested()
+        $remaining = $deadline - [DateTime]::UtcNow
+        if ($remaining -le [TimeSpan]::Zero) { return $false }
+        $requestCancellation = [Threading.CancellationTokenSource]::CreateLinkedTokenSource($CancellationToken)
+        try {
+            $requestCancellation.CancelAfter($remaining)
+            $response = Invoke-OpenHabRequest -Client $Client -Uri (New-OpenHabUri $Base "rest/items/$([Uri]::EscapeDataString($ItemName))") -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $Authorization -CancellationToken $requestCancellation.Token
+        }
+        finally { $requestCancellation.Dispose() }
         $item = $response.Body | ConvertFrom-Json -ErrorAction Stop
         if ($item.state -eq $ExpectedState) { return $true }
-        Start-Sleep -Milliseconds 250
+        if ($CancellationToken.WaitHandle.WaitOne(250)) { $CancellationToken.ThrowIfCancellationRequested() }
     } while ([DateTime]::UtcNow -lt $deadline)
     return $false
 }
@@ -294,6 +312,8 @@ try {
 
     $authentication = if (-not [string]::IsNullOrWhiteSpace($ApiToken)) { 'Bearer' } elseif (-not [string]::IsNullOrWhiteSpace($UserName)) { 'Basic' } else { 'None' }
     $result = New-CompatibilityResult -Endpoint (Get-RedactedUri $normalizedBaseUri) -Authentication $authentication
+    $currentStep = 'helper'
+    $parserToolPath = Initialize-ProductionPayloadParser
     $authorization = New-OpenHabAuthorizationHeader -Token $ApiToken -BasicUserName $UserName -BasicPassword $Password
     $handler = [System.Net.Http.HttpClientHandler]::new()
     if ($AllowUntrustedCertificateForLocalTestOnly) {
@@ -304,15 +324,34 @@ try {
     $client.Timeout = [Threading.Timeout]::InfiniteTimeSpan
     $timeoutCancellation = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds($TimeoutSeconds))
     try {
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedVersionPrefix)) {
+            $currentStep = 'version-unavailable'
+            $systemInfo = Invoke-OpenHabRequest -Client $client -Uri (New-OpenHabUri $normalizedBaseUri 'rest/systeminfo') -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $authorization -CancellationToken $timeoutCancellation.Token
+            $systemInfoDocument = [Text.Json.JsonDocument]::Parse($systemInfo.Body)
+            try {
+                $versionElement = [Text.Json.JsonElement]::new()
+                if ($systemInfoDocument.RootElement.ValueKind -ne [Text.Json.JsonValueKind]::Object -or -not $systemInfoDocument.RootElement.TryGetProperty('version', [ref]$versionElement) -or $versionElement.ValueKind -ne [Text.Json.JsonValueKind]::String -or [string]::IsNullOrWhiteSpace($versionElement.GetString())) { throw 'Version unavailable.' }
+                $serverVersion = $versionElement.GetString()
+            }
+            finally { $systemInfoDocument.Dispose() }
+            $result.serverVersion = $serverVersion
+            if (-not $serverVersion.StartsWith($ExpectedVersionPrefix, [StringComparison]::OrdinalIgnoreCase)) { $currentStep = 'version-mismatch'; throw 'Version prefix mismatch.' }
+        }
+
         $currentStep = 'sitemap-list'
         $listResponse = Invoke-OpenHabRequest -Client $client -Uri (New-OpenHabUri $normalizedBaseUri 'rest/sitemaps') -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $authorization -CancellationToken $timeoutCancellation.Token
+        $listDocument = [Text.Json.JsonDocument]::Parse($listResponse.Body)
+        try {
+            if ($listDocument.RootElement.ValueKind -ne [Text.Json.JsonValueKind]::Array) { throw 'Sitemap list response must be a JSON array.' }
+        }
+        finally { $listDocument.Dispose() }
         $sitemaps = @($listResponse.Body | ConvertFrom-Json -ErrorAction Stop)
         if (-not @($sitemaps | Where-Object { $_.name -eq $SitemapName })) { throw 'Configured sitemap was not found.' }
         $result.sitemap.list = 'passed'
 
         $currentStep = 'sitemap-homepage'
         $sitemapResponse = Invoke-OpenHabRequest -Client $client -Uri (New-OpenHabUri $normalizedBaseUri "rest/sitemaps/$([Uri]::EscapeDataString($SitemapName))") -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $authorization -CancellationToken $timeoutCancellation.Token
-        $sitemapSummary = Invoke-ProductionPayloadParser -Mode sitemap -Payload $sitemapResponse.Body
+        $sitemapSummary = Invoke-ProductionPayloadParser -Mode sitemap -Payload $sitemapResponse.Body -ToolPath $parserToolPath
         if ($sitemapSummary.WidgetCount -lt 1 -or $sitemapSummary.WidgetIdsObserved -lt 1) { throw 'Sitemap did not expose widgets with server widget IDs.' }
         $result.sitemap.homepage = 'passed'
         $result.sitemap.widgetIdsObserved = [int]$sitemapSummary.WidgetIdsObserved
@@ -349,7 +388,7 @@ try {
             $restoreRequired = $true
             $currentStep = 'item-write'
             [void](Invoke-OpenHabRequest -Client $client -Uri $itemUri -Method ([System.Net.Http.HttpMethod]::Post) -Authorization $authorization -Body $targetState -Accept 'text/plain' -CancellationToken $timeoutCancellation.Token)
-            if (-not (Wait-ForItemState -Client $client -Base $normalizedBaseUri -Authorization $authorization -ItemName $WritableItemName -ExpectedState $targetState -TimeoutSeconds $TimeoutSeconds)) { throw 'Writable item did not reach the requested state before timeout.' }
+            if (-not (Wait-ForItemState -Client $client -Base $normalizedBaseUri -Authorization $authorization -ItemName $WritableItemName -ExpectedState $targetState -TimeoutSeconds $TimeoutSeconds -CancellationToken $timeoutCancellation.Token)) { throw 'Writable item did not reach the requested state before timeout.' }
             $result.items.write = 'passed'
             $frame = Read-SseFrame -Session $sseSession -TimeoutSeconds 2
             if ($null -ne $frame -and $frame.Contains($WritableItemName)) { $result.events.matchingUpdateObserved = $true }
@@ -357,7 +396,7 @@ try {
 
         $currentStep = 'main-ui-pages'
         $mainUiResponse = Invoke-OpenHabRequest -Client $client -Uri (New-OpenHabUri $normalizedBaseUri 'rest/ui/components/ui:page') -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $authorization -CancellationToken $timeoutCancellation.Token
-        [void](Invoke-ProductionPayloadParser -Mode main-ui-pages -Payload $mainUiResponse.Body)
+        [void](Invoke-ProductionPayloadParser -Mode main-ui-pages -Payload $mainUiResponse.Body -ToolPath $parserToolPath)
         $result.mainUiPages = 'passed'
     }
     finally { $timeoutCancellation.Dispose() }
@@ -373,7 +412,7 @@ finally {
             try {
                 $restoreUri = New-OpenHabUri $normalizedBaseUri "rest/items/$([Uri]::EscapeDataString($WritableItemName))"
                 [void](Invoke-OpenHabRequest -Client $client -Uri $restoreUri -Method ([System.Net.Http.HttpMethod]::Post) -Authorization $authorization -Body $originalState -Accept 'text/plain' -CancellationToken $restoreCancellation.Token)
-                if (-not (Wait-ForItemState -Client $client -Base $normalizedBaseUri -Authorization $authorization -ItemName $WritableItemName -ExpectedState $originalState -TimeoutSeconds $TimeoutSeconds)) { throw 'Restore timeout.' }
+                if (-not (Wait-ForItemState -Client $client -Base $normalizedBaseUri -Authorization $authorization -ItemName $WritableItemName -ExpectedState $originalState -TimeoutSeconds $TimeoutSeconds -CancellationToken $restoreCancellation.Token)) { throw 'Restore timeout.' }
                 $result.items.restore = 'passed'
             }
             finally { $restoreCancellation.Dispose() }
