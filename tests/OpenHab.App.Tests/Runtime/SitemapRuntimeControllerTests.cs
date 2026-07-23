@@ -796,6 +796,38 @@ public sealed class SitemapRuntimeControllerTests
             """;
     }
 
+    private static string HomepageWithMixedWidgetIdsJson()
+    {
+        return """
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  { "type": "Switch", "widgetId": "identified", "label": "Identified [OFF]", "item": { "name": "Shared_Widget", "state": "OFF" } },
+                  { "type": "Switch", "label": "Legacy [OFF]", "item": { "name": "Shared_Widget", "state": "OFF" } }
+                ]
+              }
+            }
+            """;
+    }
+
+    private static string HomepageWithDuplicateWidgetIdsJson()
+    {
+        return """
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  { "type": "Switch", "widgetId": "2:001100", "label": "First [OFF]", "item": { "name": "First_Widget", "state": "OFF" } },
+                  { "type": "Switch", "widgetId": "2:001100", "label": "Second [OFF]", "item": { "name": "Second_Widget", "state": "OFF" } }
+                ]
+              }
+            }
+            """;
+    }
+
     private static string FormattedSwitchJson(string displayState, string rawItemState)
     {
         return $$"""
@@ -1487,6 +1519,116 @@ public sealed class SitemapRuntimeControllerTests
         Assert.Equal("ON", controller.Current.Descriptor!.Rows[0].State);
     }
 
+    [Fact]
+    public async Task ContextlessWidgetEventWithoutStreamContextDoesNotMutateCurrentPage()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        eventClient.FireWidgetEvent(WidgetEvent("w1", "LivingRoom_Light", "ON", pageId: string.Empty) with { SitemapName = string.Empty });
+
+        Assert.Equal("OFF", controller.Current.Descriptor!.Rows[0].State);
+    }
+
+    [Fact]
+    public async Task ContextlessWidgetEventFromCurrentStreamUpdatesCurrentPage()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageJson("OFF"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        await eventClient.WaitUntilConnectStartedAsync();
+
+        eventClient.FireContextlessWidgetEventFromConnection(0, WidgetEvent("w1", "LivingRoom_Light", "ON", string.Empty) with { SitemapName = string.Empty });
+
+        Assert.Equal("ON", controller.Current.Descriptor!.Rows[0].State);
+    }
+
+    [Fact]
+    public async Task ContextlessWidgetEventFromPreviousStreamDoesNotMutateCurrentPage()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithOpaqueChildPageJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        await eventClient.WaitUntilConnectStartedAsync();
+        Assert.True(await controller.NavigateToChildAsync(0));
+
+        eventClient.FireContextlessWidgetEventFromConnection(0, WidgetEvent("home:widget", "Shared_Item", "ON", string.Empty) with { SitemapName = string.Empty });
+
+        Assert.Equal("OFF", controller.Current.Descriptor!.Rows[0].State);
+    }
+
+    [Fact]
+    public async Task BlankWidgetIdEventOnMixedIdPageUpdatesOnlyBlankIdRows()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithMixedWidgetIdsJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        eventClient.FireWidgetEvent(WidgetEvent(string.Empty, "Shared_Widget", "ON", "home"));
+
+        Assert.Equal([1], controller.Current.ChangedRowIndices);
+        Assert.Equal("OFF", controller.Current.Descriptor!.Rows[0].State);
+        Assert.Equal("ON", controller.Current.Descriptor.Rows[1].State);
+    }
+
+    [Fact]
+    public async Task DuplicateWidgetIdEventDoesNotChooseAnArbitraryRow()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithDuplicateWidgetIdsJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        eventClient.FireWidgetEvent(WidgetEvent("2:001100", "Second_Widget", "ON", "home"));
+
+        Assert.Empty(controller.Current.ChangedRowIndices);
+        Assert.All(controller.Current.Descriptor!.Rows, row => Assert.Equal("OFF", row.State));
+    }
+
+    [Fact]
+    public async Task SitemapEventStreamStartDistinguishesOrdinalPageIds()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "Page");
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "page");
+
+        Assert.Equal(2, eventClient.ConnectCalls);
+    }
+
     [Theory]
     [InlineData("UNLOCKED", "OFF", "ON", "LOCKED", true)]
     [InlineData("LOCKED", "ON", "OFF", "UNLOCKED", false)]
@@ -1733,6 +1875,16 @@ public sealed partial class FakeEventStreamClient : IOpenHabEventStreamClient
     public void FireWidgetEvent(SitemapWidgetEvent e)
     {
         WidgetEventReceived?.Invoke(this, e);
+    }
+
+    public void FireContextlessWidgetEventFromConnection(int connectionIndex, SitemapWidgetEvent e)
+    {
+        var query = System.Web.HttpUtility.ParseQueryString(ConnectUris[connectionIndex].Query);
+        FireWidgetEvent(e with
+        {
+            SitemapName = query["sitemap"] ?? string.Empty,
+            PageId = query["pageid"] ?? string.Empty
+        });
     }
 
     public void FireConnectionState(string state)

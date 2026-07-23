@@ -729,4 +729,27 @@ public sealed class OpenHabEventStreamClientTests
         await Task.Delay(50);
         Assert.Equal(1, handler.CallCount);
     }
+
+    [Theory]
+    [InlineData("1:0")]
+    [InlineData("floor/main")]
+    [InlineData("page with spaces")]
+    public async Task ContextlessWidgetEventUsesDecodedSitemapRequestContext(string pageId)
+    {
+        var handler = new FakeHttpMessageHandler("data: {\"widgetId\":\"2:001100\",\"item\":{\"name\":\"Mode\",\"state\":\"ON\"}}");
+        using var client = new OpenHabEventStreamClient(
+            new HttpClient(handler),
+            initialBackoff: TimeSpan.FromSeconds(5),
+            maxBackoff: TimeSpan.FromSeconds(5));
+        var received = new TaskCompletionSource<SitemapWidgetEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.WidgetEventReceived += (_, widgetEvent) => received.TrySetResult(widgetEvent);
+
+        var requestUri = new Uri(
+            $"https://openhab.test/rest/sitemaps/events/abc123?sitemap=default&pageid={Uri.EscapeDataString(pageId)}");
+        await client.ConnectAsync(requestUri);
+
+        var widgetEvent = await received.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal("default", widgetEvent.SitemapName);
+        Assert.Equal(pageId, widgetEvent.PageId);
+    }
 }

@@ -33,7 +33,9 @@ public sealed class SitemapRuntimeController
     private readonly Stack<NormalizedSitemapPage> backStack = new();
     private Dictionary<string, int>? itemIndexMap;
     private Dictionary<string, List<int>>? itemIndicesMap;
+    private Dictionary<string, List<int>>? blankWidgetIdItemIndicesMap;
     private Dictionary<string, int>? widgetIdMap;
+    private HashSet<string>? ambiguousWidgetIds;
     private string? _subscriptionId;
     private int _widgetRefreshQueued;
     private int _widgetRefreshRunning;
@@ -1063,7 +1065,20 @@ public sealed class SitemapRuntimeController
         // item-name match for an event whose opaque ID does not occur on this page.
         if (!string.IsNullOrEmpty(e.WidgetId) && widgetIdMap is { Count: > 0 })
         {
-            return widgetIdMap.TryGetValue(e.WidgetId, out var widIndex) ? [widIndex] : [];
+            // Duplicate opaque IDs cannot identify one row safely, so they are ignored.
+            return ambiguousWidgetIds is null || !ambiguousWidgetIds.Contains(e.WidgetId)
+                ? widgetIdMap.TryGetValue(e.WidgetId, out var widIndex) ? [widIndex] : []
+                : [];
+        }
+
+        // On a mixed page, legacy blank-ID events may only target rows that also have
+        // no identifier. Identified rows remain protected from item-name ambiguity.
+        if (string.IsNullOrEmpty(e.WidgetId) && widgetIdMap is { Count: > 0 })
+        {
+            return !string.IsNullOrEmpty(e.ItemName) && blankWidgetIdItemIndicesMap is not null &&
+                   blankWidgetIdItemIndicesMap.TryGetValue(e.ItemName, out var blankIndices)
+                ? blankIndices
+                : [];
         }
 
         // For duplicate ON/OFF rows (same item, different visibility rules), update all matches.
@@ -1090,18 +1105,29 @@ public sealed class SitemapRuntimeController
             return false;
         }
 
-        return (string.IsNullOrEmpty(e.SitemapName) ||
-                string.Equals(e.SitemapName, settingsController.Current.SitemapName, StringComparison.Ordinal)) &&
-               (string.IsNullOrEmpty(e.PageId) ||
-                string.Equals(e.PageId, currentPage.Id, StringComparison.Ordinal));
+        return !string.IsNullOrEmpty(e.SitemapName) &&
+               !string.IsNullOrEmpty(e.PageId) &&
+               string.Equals(e.SitemapName, settingsController.Current.SitemapName, StringComparison.Ordinal) &&
+               string.Equals(e.PageId, currentPage.Id, StringComparison.Ordinal);
     }
 
     private void BuildItemIndexMap()
     {
-        if (currentPage is null) { itemIndexMap = null; itemIndicesMap = null; widgetIdMap = null; return; }
+        if (currentPage is null)
+        {
+            itemIndexMap = null;
+            itemIndicesMap = null;
+            blankWidgetIdItemIndicesMap = null;
+            widgetIdMap = null;
+            ambiguousWidgetIds = null;
+            return;
+        }
+
         itemIndexMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         itemIndicesMap = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        blankWidgetIdItemIndicesMap = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         widgetIdMap = new Dictionary<string, int>(StringComparer.Ordinal);
+        ambiguousWidgetIds = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < currentPage.Widgets.Count; i++)
         {
             var itemName = currentPage.Widgets[i].ItemName;
@@ -1115,11 +1141,24 @@ public sealed class SitemapRuntimeController
                 }
 
                 bucket.Add(i);
+
+                if (string.IsNullOrEmpty(currentPage.Widgets[i].WidgetId))
+                {
+                    if (!blankWidgetIdItemIndicesMap.TryGetValue(itemName, out var blankBucket))
+                    {
+                        blankBucket = new List<int>();
+                        blankWidgetIdItemIndicesMap[itemName] = blankBucket;
+                    }
+
+                    blankBucket.Add(i);
+                }
             }
 
             var widgetId = currentPage.Widgets[i].WidgetId;
-            if (!string.IsNullOrEmpty(widgetId))
-                widgetIdMap[widgetId] = i;
+            if (!string.IsNullOrEmpty(widgetId) && !widgetIdMap.TryAdd(widgetId, i))
+            {
+                ambiguousWidgetIds.Add(widgetId);
+            }
         }
     }
 

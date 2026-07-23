@@ -114,7 +114,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                     if (parsed is SitemapWidgetEvent widgetEvent)
                     {
                         DiagnosticLogger.Verbose("SSE sitemap widget event received.");
-                        WidgetEventReceived?.Invoke(this, widgetEvent);
+                        WidgetEventReceived?.Invoke(this, ApplySitemapRequestContext(widgetEvent, sseUri));
                     }
                     else
                     {
@@ -222,6 +222,25 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
             request.Headers.Authorization = new AuthenticationHeaderValue("Basic", base64);
         }
+    }
+
+    private static SitemapWidgetEvent ApplySitemapRequestContext(SitemapWidgetEvent widgetEvent, Uri sseUri)
+    {
+        if (!string.IsNullOrEmpty(widgetEvent.SitemapName) && !string.IsNullOrEmpty(widgetEvent.PageId))
+        {
+            return widgetEvent;
+        }
+
+        var query = System.Web.HttpUtility.ParseQueryString(sseUri.Query);
+        return widgetEvent with
+        {
+            SitemapName = string.IsNullOrEmpty(widgetEvent.SitemapName)
+                ? query["sitemap"] ?? string.Empty
+                : widgetEvent.SitemapName,
+            PageId = string.IsNullOrEmpty(widgetEvent.PageId)
+                ? query["pageid"] ?? string.Empty
+                : widgetEvent.PageId
+        };
     }
 
     public async Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
