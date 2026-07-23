@@ -1,0 +1,349 @@
+{
+  "widgetId": "1_06",
+  "visibility": true,
+  "labelSource": "SITEMAP_WIDGET",
+  "unit": "",
+  "widgets": [
+    {
+      "widgetId": "1_060",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 0",
+      "row": 1,
+      "column": 1,
+      "command": "BUTTON_0",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_061",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 1",
+      "row": 1,
+      "column": 2,
+      "command": "BUTTON_1",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_062",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 2",
+      "row": 1,
+      "column": 3,
+      "command": "BUTTON_2",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_063",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 3",
+      "row": 1,
+      "column": 4,
+      "command": "BUTTON_3",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_064",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 4",
+      "row": 2,
+      "column": 1,
+      "command": "BUTTON_4",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_065",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 5",
+      "row": 2,
+      "column": 2,
+      "command": "BUTTON_5",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_066",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 6",
+      "row": 2,
+      "column": 3,
+      "command": "BUTTON_6",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_067",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 7",
+      "row": 2,
+      "column": 4,
+      "command": "BUTTON_7",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_068",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 8",
+      "row": 3,
+      "column": 1,
+      "command": "BUTTON_8",
+      "stateless": true
+    },
+    {
+      "widgetId": "1_069",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 9",
+      "row": 3,
+      "column": 2,
+      "command": "BUTTON_9",
+      "stateless": true
+    },
+    {
+      "widgetId": "2_000610",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 10",
+      "row": 3,
+      "column": 3,
+      "command": "BUTTON_10",
+      "stateless": true
+    },
+    {
+      "widgetId": "2_000611",
+      "visibility": true,
+      "labelSource": "SITEMAP_WIDGET",
+      "item": {
+        "link": "https://openhab.test/rest/items/Compatibility_Mode",
+        "state": "NULL",
+        "stateDescription": {
+          "pattern": "%s",
+          "readOnly": false,
+          "options": []
+        },
+        "type": "String",
+        "name": "Compatibility_Mode",
+        "label": "Compatibility Mode",
+        "category": "settings",
+        "tags": [],
+        "groupNames": []
+      },
+      "widgets": [],
+      "mappings": [],
+      "type": "Button",
+      "label": "Button 11",
+      "row": 3,
+      "column": 4,
+      "command": "BUTTON_11",
+      "stateless": true
+    }
+  ],
+  "mappings": [],
+  "type": "Buttongrid",
+  "label": "Button grid",
+  "icon": "buttongrid",
+  "staticIcon": false
+}

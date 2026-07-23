@@ -1,0 +1,82 @@
+[
+  {
+    "link": "https://openhab.test/rest/items/Compatibility_Text",
+    "state": "NULL",
+    "stateDescription": {
+      "pattern": "%s",
+      "readOnly": false,
+      "options": []
+    },
+    "editable": false,
+    "type": "String",
+    "name": "Compatibility_Text",
+    "label": "Compatibility Text",
+    "category": "text",
+    "tags": [],
+    "groupNames": []
+  },
+  {
+    "link": "https://openhab.test/rest/items/Compatibility_Switch",
+    "state": "NULL",
+    "stateDescription": {
+      "pattern": "%s",
+      "readOnly": false,
+      "options": []
+    },
+    "editable": false,
+    "type": "Switch",
+    "name": "Compatibility_Switch",
+    "label": "Compatibility Switch",
+    "category": "switch",
+    "tags": [],
+    "groupNames": []
+  },
+  {
+    "link": "https://openhab.test/rest/items/Compatibility_Number",
+    "state": "NULL",
+    "stateDescription": {
+      "pattern": "%.1f",
+      "readOnly": false,
+      "options": []
+    },
+    "editable": false,
+    "type": "Number",
+    "name": "Compatibility_Number",
+    "label": "Compatibility Number",
+    "category": "temperature",
+    "tags": [],
+    "groupNames": []
+  },
+  {
+    "link": "https://openhab.test/rest/items/Compatibility_Mode",
+    "state": "NULL",
+    "stateDescription": {
+      "pattern": "%s",
+      "readOnly": false,
+      "options": []
+    },
+    "editable": false,
+    "type": "String",
+    "name": "Compatibility_Mode",
+    "label": "Compatibility Mode",
+    "category": "settings",
+    "tags": [],
+    "groupNames": []
+  },
+  {
+    "link": "https://openhab.test/rest/items/Compatibility_Dimmer",
+    "state": "NULL",
+    "stateDescription": {
+      "pattern": "%.0f %%",
+      "readOnly": false,
+      "options": []
+    },
+    "editable": false,
+    "type": "Dimmer",
+    "name": "Compatibility_Dimmer",
+    "label": "Compatibility Dimmer",
+    "category": "lightbulb",
+    "tags": [],
+    "groupNames": []
+  }
+]

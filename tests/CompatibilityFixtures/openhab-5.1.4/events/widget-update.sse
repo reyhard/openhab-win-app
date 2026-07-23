@@ -1,0 +1,14 @@
+event: event
+data: {"widgetId":"0001","label":"Unmapped switch [ON]","labelSource":"SITEMAP_WIDGET","icon":"switch","reloadIcon":true,"visibility":true,"item":{"state":"ON","stateDescription":{"pattern":"%s","readOnly":false,"options":[]},"lastState":"OFF","lastStateUpdate":1784795856896,"lastStateChange":1784795856896,"type":"Switch","name":"Compatibility_Switch","label":"Compatibility Switch","category":"switch","tags":[],"groupNames":[]},"descriptionChanged":false,"sitemapName":"compatibility","pageId":"compatibility"}
+
+event: event
+data: {"widgetId":"0009","label":"Colored text [-]","labelSource":"SITEMAP_WIDGET","icon":"text","reloadIcon":true,"labelcolor":"green","valuecolor":"blue","iconcolor":"orange","visibility":true,"item":{"state":"NULL","stateDescription":{"pattern":"%s","readOnly":false,"options":[]},"type":"String","name":"Compatibility_Text","label":"Compatibility Text","category":"text","tags":[],"groupNames":[]},"descriptionChanged":false,"sitemapName":"compatibility","pageId":"compatibility"}
+
+event: event
+data: {"widgetId":"0002","label":"Mapped switch [ON]","labelSource":"SITEMAP_WIDGET","icon":"switch","reloadIcon":true,"visibility":true,"item":{"state":"ON","stateDescription":{"pattern":"%s","readOnly":false,"options":[]},"lastState":"OFF","lastStateUpdate":1784795856896,"lastStateChange":1784795856896,"type":"Switch","name":"Compatibility_Switch","label":"Compatibility Switch","category":"switch","tags":[],"groupNames":[]},"descriptionChanged":false,"sitemapName":"compatibility","pageId":"compatibility"}
+
+event: event
+data: {"widgetId":"0008","label":"Visible text [-]","labelSource":"SITEMAP_WIDGET","icon":"text","reloadIcon":true,"visibility":true,"item":{"state":"NULL","stateDescription":{"pattern":"%s","readOnly":false,"options":[]},"type":"String","name":"Compatibility_Text","label":"Compatibility Text","category":"text","tags":[],"groupNames":[]},"descriptionChanged":false,"sitemapName":"compatibility","pageId":"compatibility"}
+
+event: event
+data: {"TYPE":"ALIVE","sitemapName":"compatibility","pageId":"compatibility"}

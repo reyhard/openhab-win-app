@@ -1,0 +1,13 @@
+[
+  {
+    "name": "compatibility",
+    "label": "Compatibility",
+    "link": "https://openhab.test/rest/sitemaps/compatibility",
+    "homepage": {
+      "link": "https://openhab.test/rest/sitemaps/compatibility/compatibility",
+      "leaf": false,
+      "timeout": false,
+      "widgets": []
+    }
+  }
+]

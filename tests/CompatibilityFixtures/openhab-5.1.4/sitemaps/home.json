@@ -1,0 +1,540 @@
+{
+  "name": "compatibility",
+  "label": "Compatibility",
+  "link": "https://openhab.test/rest/sitemaps/compatibility",
+  "homepage": {
+    "id": "compatibility",
+    "title": "Compatibility",
+    "link": "https://openhab.test/rest/sitemaps/compatibility/compatibility",
+    "leaf": false,
+    "timeout": false,
+    "widgets": [
+      {
+        "widgetId": "00",
+        "type": "Frame",
+        "visibility": true,
+        "label": "Controls",
+        "labelSource": "SITEMAP_WIDGET",
+        "icon": "frame",
+        "staticIcon": false,
+        "unit": "",
+        "mappings": [],
+        "widgets": [
+          {
+            "widgetId": "0000",
+            "type": "Text",
+            "visibility": true,
+            "label": "Synthetic text [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "text",
+            "staticIcon": false,
+            "pattern": "%s",
+            "unit": "",
+            "mappings": [],
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Text",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%s",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "String",
+              "name": "Compatibility_Text",
+              "label": "Compatibility Text",
+              "category": "text",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0001",
+            "type": "Switch",
+            "visibility": true,
+            "label": "Unmapped switch [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "switch",
+            "staticIcon": false,
+            "pattern": "%s",
+            "unit": "",
+            "mappings": [],
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Switch",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%s",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "Switch",
+              "name": "Compatibility_Switch",
+              "label": "Compatibility Switch",
+              "category": "switch",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0002",
+            "type": "Switch",
+            "visibility": true,
+            "label": "Mapped switch [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "switch",
+            "staticIcon": false,
+            "pattern": "%s",
+            "unit": "",
+            "mappings": [
+              {
+                "command": "ON",
+                "label": "Enabled"
+              },
+              {
+                "command": "OFF",
+                "label": "Disabled"
+              }
+            ],
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Switch",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%s",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "Switch",
+              "name": "Compatibility_Switch",
+              "label": "Compatibility Switch",
+              "category": "switch",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0003",
+            "type": "Selection",
+            "visibility": true,
+            "label": "Selection [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "settings",
+            "staticIcon": false,
+            "pattern": "%s",
+            "unit": "",
+            "mappings": [
+              {
+                "command": "AUTO",
+                "label": "Automatic"
+              },
+              {
+                "command": "MANUAL",
+                "label": "Manual"
+              }
+            ],
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Mode",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%s",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "String",
+              "name": "Compatibility_Mode",
+              "label": "Compatibility Mode",
+              "category": "settings",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0004",
+            "type": "Slider",
+            "visibility": true,
+            "label": "Slider [- %]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "lightbulb",
+            "staticIcon": false,
+            "pattern": "%.0f %%",
+            "unit": "",
+            "mappings": [],
+            "switchSupport": false,
+            "releaseOnly": false,
+            "minValue": 0,
+            "maxValue": 100,
+            "step": 5,
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Dimmer",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%.0f %%",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "Dimmer",
+              "name": "Compatibility_Dimmer",
+              "label": "Compatibility Dimmer",
+              "category": "lightbulb",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0005",
+            "type": "Setpoint",
+            "visibility": true,
+            "label": "Setpoint [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "temperature",
+            "staticIcon": false,
+            "pattern": "%.1f",
+            "unit": "",
+            "mappings": [],
+            "minValue": 0,
+            "maxValue": 100,
+            "step": 1,
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Number",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%.1f",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "Number",
+              "name": "Compatibility_Number",
+              "label": "Compatibility Number",
+              "category": "temperature",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0006",
+            "type": "Buttongrid",
+            "visibility": true,
+            "label": "Button grid [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "settings",
+            "staticIcon": false,
+            "pattern": "%s",
+            "unit": "",
+            "mappings": [
+              {
+                "row": 1,
+                "column": 1,
+                "command": "BUTTON_0",
+                "label": "Button 0"
+              },
+              {
+                "row": 1,
+                "column": 2,
+                "command": "BUTTON_1",
+                "label": "Button 1"
+              },
+              {
+                "row": 1,
+                "column": 3,
+                "command": "BUTTON_2",
+                "label": "Button 2"
+              },
+              {
+                "row": 1,
+                "column": 4,
+                "command": "BUTTON_3",
+                "label": "Button 3"
+              },
+              {
+                "row": 2,
+                "column": 1,
+                "command": "BUTTON_4",
+                "label": "Button 4"
+              },
+              {
+                "row": 2,
+                "column": 2,
+                "command": "BUTTON_5",
+                "label": "Button 5"
+              },
+              {
+                "row": 2,
+                "column": 3,
+                "command": "BUTTON_6",
+                "label": "Button 6"
+              },
+              {
+                "row": 2,
+                "column": 4,
+                "command": "BUTTON_7",
+                "label": "Button 7"
+              },
+              {
+                "row": 3,
+                "column": 1,
+                "command": "BUTTON_8",
+                "label": "Button 8"
+              },
+              {
+                "row": 3,
+                "column": 2,
+                "command": "BUTTON_9",
+                "label": "Button 9"
+              },
+              {
+                "row": 3,
+                "column": 3,
+                "command": "BUTTON_10",
+                "label": "Button 10"
+              },
+              {
+                "row": 3,
+                "column": 4,
+                "command": "BUTTON_11",
+                "label": "Button 11"
+              }
+            ],
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Mode",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%s",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "String",
+              "name": "Compatibility_Mode",
+              "label": "Compatibility Mode",
+              "category": "settings",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0007",
+            "type": "Input",
+            "visibility": true,
+            "label": "Input [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "text",
+            "staticIcon": false,
+            "pattern": "%s",
+            "unit": "",
+            "mappings": [],
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Text",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%s",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "String",
+              "name": "Compatibility_Text",
+              "label": "Compatibility Text",
+              "category": "text",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0009",
+            "type": "Text",
+            "visibility": true,
+            "label": "Colored text [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "text",
+            "staticIcon": false,
+            "pattern": "%s",
+            "unit": "",
+            "mappings": [],
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Text",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%s",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "String",
+              "name": "Compatibility_Text",
+              "label": "Compatibility Text",
+              "category": "text",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          }
+        ]
+      },
+      {
+        "widgetId": "01",
+        "type": "Frame",
+        "visibility": true,
+        "label": "Media",
+        "labelSource": "SITEMAP_WIDGET",
+        "icon": "frame",
+        "staticIcon": false,
+        "unit": "",
+        "mappings": [],
+        "widgets": [
+          {
+            "widgetId": "0100",
+            "type": "Chart",
+            "visibility": true,
+            "label": "Chart [-]",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "temperature",
+            "staticIcon": false,
+            "pattern": "%.1f",
+            "unit": "",
+            "mappings": [],
+            "refresh": 10000,
+            "period": "h",
+            "item": {
+              "link": "https://openhab.test/rest/items/Compatibility_Number",
+              "state": "NULL",
+              "stateDescription": {
+                "pattern": "%.1f",
+                "readOnly": false,
+                "options": []
+              },
+              "type": "Number",
+              "name": "Compatibility_Number",
+              "label": "Compatibility Number",
+              "category": "temperature",
+              "tags": [],
+              "groupNames": []
+            },
+            "widgets": []
+          },
+          {
+            "widgetId": "0101",
+            "type": "Image",
+            "visibility": true,
+            "label": "Image",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "image",
+            "staticIcon": false,
+            "unit": "",
+            "mappings": [],
+            "url": "https://openhab.test/proxy?sitemap=compatibility&widgetId=0101",
+            "widgets": []
+          },
+          {
+            "widgetId": "0102",
+            "type": "Video",
+            "visibility": true,
+            "label": "Video",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "video",
+            "staticIcon": false,
+            "unit": "",
+            "mappings": [],
+            "url": "https://openhab.test/proxy?sitemap=compatibility&widgetId=0102",
+            "widgets": []
+          },
+          {
+            "widgetId": "0103",
+            "type": "Webview",
+            "visibility": true,
+            "label": "Webview",
+            "labelSource": "SITEMAP_WIDGET",
+            "icon": "webview",
+            "staticIcon": false,
+            "unit": "",
+            "mappings": [],
+            "height": 0,
+            "url": "https://example.invalid/compatibility-webview",
+            "widgets": []
+          }
+        ]
+      },
+      {
+        "widgetId": "02",
+        "type": "Text",
+        "visibility": true,
+        "label": "Nested linked page [-]",
+        "labelSource": "SITEMAP_WIDGET",
+        "icon": "text",
+        "staticIcon": false,
+        "pattern": "%s",
+        "unit": "",
+        "mappings": [],
+        "item": {
+          "link": "https://openhab.test/rest/items/Compatibility_Text",
+          "state": "NULL",
+          "stateDescription": {
+            "pattern": "%s",
+            "readOnly": false,
+            "options": []
+          },
+          "type": "String",
+          "name": "Compatibility_Text",
+          "label": "Compatibility Text",
+          "category": "text",
+          "tags": [],
+          "groupNames": []
+        },
+        "linkedPage": {
+          "id": "02",
+          "title": "Nested linked page [-]",
+          "icon": "text",
+          "link": "https://openhab.test/rest/sitemaps/compatibility/02",
+          "leaf": false,
+          "timeout": false,
+          "widgets": [
+            {
+              "widgetId": "0200",
+              "type": "Frame",
+              "visibility": true,
+              "label": "Nested frame",
+              "labelSource": "SITEMAP_WIDGET",
+              "icon": "frame",
+              "staticIcon": false,
+              "unit": "",
+              "mappings": [],
+              "widgets": [
+                {
+                  "widgetId": "020000",
+                  "type": "Text",
+                  "visibility": true,
+                  "label": "Nested text [-]",
+                  "labelSource": "SITEMAP_WIDGET",
+                  "icon": "text",
+                  "staticIcon": false,
+                  "pattern": "%s",
+                  "unit": "",
+                  "mappings": [],
+                  "item": {
+                    "link": "https://openhab.test/rest/items/Compatibility_Text",
+                    "state": "NULL",
+                    "stateDescription": {
+                      "pattern": "%s",
+                      "readOnly": false,
+                      "options": []
+                    },
+                    "type": "String",
+                    "name": "Compatibility_Text",
+                    "label": "Compatibility Text",
+                    "category": "text",
+                    "tags": [],
+                    "groupNames": []
+                  },
+                  "widgets": []
+                }
+              ]
+            }
+          ]
+        },
+        "widgets": []
+      }
+    ]
+  }
+}
