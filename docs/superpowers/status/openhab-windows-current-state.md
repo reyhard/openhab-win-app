@@ -6,6 +6,8 @@ Date: 2026-07-23
 
 Read this file before implementation. Older dated status files remain useful as historical evidence, but this page summarizes the current product shape, release blockers, and verification gates.
 
+Treat this page as the source of truth for current shipped behavior, backlog priority, release blockers, and verification evidence.
+
 ## Shipped Product Shape
 
 - Windows 11 tray app with compact flyout and larger main window.
