@@ -72,3 +72,33 @@ Use these fixtures for parser, normalizer, runtime event matching, and transport
 - Fixtures are logically equivalent and use the same synthetic sitemap/item configuration.
 - The 5.2 fixture contains nested Buttons and variable-width IDs; the 5.1 fixture retains the legacy representation.
 - JSON, SSE framing, ButtonGrid contract assertions, sanitization scan, and `git diff --check` are required final checks for this task.
+
+## Task 6 — Embedded Main UI host validation
+
+Date: 2026-07-23
+
+App commit: `3bd11326a1fe0b75d3848fbf1a7915f9b027bf97`
+
+openHAB version: `5.2.0` (`openhab/openhab:5.2.0`, image `sha256:450d2175af9f3ddf0720ed3efd4b1cac2bb2445b76c202c8dedeb7f7b2fdf8a9`)
+
+### Safe local evidence
+
+One isolated disposable container, `openhab-task6-webview-520`, was started with no configuration mounts, credentials, or access to the configured personal instance. It listened only on `http://127.0.0.1:18082` and was stopped and removed after the check.
+
+| Check | Endpoint/authentication | Result | Limitation |
+| --- | --- | --- | --- |
+| Main UI server root | Local `http://127.0.0.1:18082/`; unauthenticated | `HTTP 200`, `Content-Type: text/html`, document title `openHAB`; a subsequent server request completed in 157 ms. | This is an HTTP-server probe, not an embedded WebView2 load or a navigation-time measurement. |
+| Main UI page discovery | Local `http://127.0.0.1:18082/rest/ui/components/ui:page`; unauthenticated | `HTTP 200`, `application/json`, body `[]`; an empty component collection is handled by the existing discovery pipeline. | The default disposable server had no configured/promoted or file-backed pages. |
+| Lower-layer Main UI and shell contracts | `OpenHab.App.Tests`; no server credentials | Passed: `66/66` using `dotnet test tests\\OpenHab.App.Tests\\OpenHab.App.Tests.csproj --no-restore --filter "FullyQualifiedName~MainUi|FullyQualifiedName~MainWindowShellController|FullyQualifiedName~MainWindowShellAnimationPlanner" --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`. The covered contracts include URL sanitization/same-origin rules, promoted-page discovery/planning, route synchronization, and sitemap-pane preservation during Main UI page selection. | These unit tests do not instantiate the WinUI/WebView2 control. |
+
+### Host review
+
+`MainUiWebViewHost` uses the existing generic same-origin request/auth handling, route tracking, retry surface, and `window.open` policy: same-origin new windows stay in the host; external `http`/`https` URLs are delegated to the system browser; unsupported schemes are rejected. `MainWindow` maintains shell route synchronization and retains the native sitemap pane while Main UI is selected. No route-specific Chat, log, voice, persistence, settings, YAML, or file-backed-page code was found or added.
+
+No production change is justified: no embedded-host failure was reproduced, and the server-side additions are intended to remain normal same-origin Main UI content.
+
+### Pending manual evidence — not claimed
+
+- No packaged/tray or WinUI app was launched, and no WebView2 control was instantiated. The in-app browser surface was unavailable in this session; a normal-browser check would not establish embedded-host behaviour.
+- 5.1.4 Main UI, 5.2.0 myopenHAB, Basic authentication, API-token authentication, invalid-credential retry, reverse-proxy path-prefix navigation, managed/file-backed/read-only pages, Chat, logs, voice permission, popup policy, external-browser handoff, back navigation, hide/show route coherence, Main UI/native-sitemap live coexistence, token/session lifecycle, and profile-switch cookie isolation remain manual validation items.
+- No diagnostics, screenshot, or recording is attached because no embedded app session occurred. The disposable server had no credentials, cloud endpoint, pages, Chat/log/voice configuration, or sitemap configuration.
