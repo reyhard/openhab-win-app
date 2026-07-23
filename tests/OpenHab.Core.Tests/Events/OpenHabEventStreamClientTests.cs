@@ -344,6 +344,27 @@ public sealed class OpenHabEventStreamClientTests
     }
 
     [Fact]
+    public async Task WidgetEventDoesNotLogPayloadWhenVerboseDiagnosticsEnabled()
+    {
+        var capturedLines = new ConcurrentQueue<string>();
+        using var capture = DiagnosticLogger.BeginLogCapture(true, capturedLines.Enqueue);
+        var privateValue = Guid.NewGuid().ToString("N");
+        var sseLine = $"data: {{\"widgetId\":\"{privateValue}\",\"label\":\"{privateValue}\",\"item\":{{\"name\":\"{privateValue}\",\"state\":\"{privateValue}\"}}}}";
+        var handler = new FakeHttpMessageHandler(sseLine);
+        using var client = new OpenHabEventStreamClient(
+            new HttpClient(handler),
+            initialBackoff: TimeSpan.FromSeconds(5),
+            maxBackoff: TimeSpan.FromSeconds(5));
+        var eventReceived = new TaskCompletionSource<SitemapWidgetEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.WidgetEventReceived += (_, widgetEvent) => eventReceived.TrySetResult(widgetEvent);
+
+        await client.ConnectAsync(new Uri("https://openhab.test/rest/sitemaps/events/abc123"));
+        await eventReceived.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.DoesNotContain(capturedLines, line => line.Contains(privateValue, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task BeginLogCapture_DisposedInnerScopeDoesNotLeakIntoChildAsyncFlow()
     {
         var outerLines = new ConcurrentQueue<string>();
@@ -487,5 +508,302 @@ public sealed class OpenHabEventStreamClientTests
             await Task.Delay(25);
         }
         Assert.False(client.IsConnected);
+    }
+
+    [Theory]
+    [InlineData("/rest/sitemaps/events/abc123")]
+    [InlineData("https://openhab.test/rest/sitemaps/events/abc123")]
+    [InlineData("https://openhab.test/rest/sitemaps/events/abc123?x=1#f")]
+    [InlineData("/openhab/rest/sitemaps/events/abc123?x=1#f")]
+    [InlineData("https://proxy.test/openhab/rest/sitemaps/events/abc123?x=1#f")]
+    public async Task SubscribeUsesStandardLocationHeaderBeforeLegacyResponseBody(string location)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.Created)
+        {
+            Content = new StringContent("{\"context\":{\"headers\":{\"Location\":[\"/rest/sitemaps/events/legacy\"]}}}")
+        };
+        response.Headers.Location = new Uri(location, UriKind.RelativeOrAbsolute);
+        var handler = new QueueHandler(response);
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler));
+
+        var subscriptionId = await client.SubscribeToSitemapEventsAsync(new Uri("https://openhab.test/"));
+
+        Assert.Equal("abc123", subscriptionId);
+    }
+
+    [Fact]
+    public async Task SubscribeReadsLegacyResponseBody()
+    {
+        var fixturePath = Path.Combine(
+            AppContext.BaseDirectory,
+            "CompatibilityFixtures",
+            "openhab-5.1.4",
+            "events",
+            "subscription-response.json");
+        var handler = new QueueHandler(new HttpResponseMessage(HttpStatusCode.Created)
+        {
+            Content = new StringContent(File.ReadAllText(fixturePath))
+        });
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler));
+
+        var subscriptionId = await client.SubscribeToSitemapEventsAsync(new Uri("https://openhab.test/"));
+
+        Assert.Equal("5937207b-c13a-441c-8baf-bf248685316b", subscriptionId);
+    }
+
+    [Theory]
+    [InlineData("https://proxy.test/openhab")]
+    [InlineData("https://proxy.test/openhab/")]
+    public async Task SubscribeToSitemapEventsPreservesReverseProxyBasePath(string baseUriText)
+    {
+        Uri? capturedRequestUri = null;
+        var handler = new DelegateHandler((request, _, _) =>
+        {
+            capturedRequestUri = request.RequestUri;
+            var response = new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent("{}")
+            };
+            response.Headers.Location = new Uri("/rest/sitemaps/events/abc123", UriKind.Relative);
+            return Task.FromResult(response);
+        });
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler));
+
+        await client.SubscribeToSitemapEventsAsync(new Uri(baseUriText));
+
+        Assert.NotNull(capturedRequestUri);
+        Assert.Equal(
+            "https://proxy.test/openhab/rest/sitemaps/events/subscribe",
+            capturedRequestUri.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task ConnectAsyncDoesNotLogUriUserInfo()
+    {
+        var capturedLines = new ConcurrentQueue<string>();
+        using var capture = DiagnosticLogger.BeginLogCapture(true, capturedLines.Enqueue);
+        var userMarker = $"user{Guid.NewGuid():N}";
+        var passwordMarker = $"password{Guid.NewGuid():N}";
+        var handler = new DelegateHandler((_, _, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new BlockingReadStream())
+            }));
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler));
+
+        await client.ConnectAsync(
+            new Uri($"https://{userMarker}:{passwordMarker}@proxy.test/openhab/rest/sitemaps/events/abc123"));
+
+        Assert.DoesNotContain(capturedLines, line => line.Contains(userMarker, StringComparison.Ordinal));
+        Assert.DoesNotContain(capturedLines, line => line.Contains(passwordMarker, StringComparison.Ordinal));
+        Assert.Contains(capturedLines, line =>
+            line.Contains("https://proxy.test/openhab/rest/sitemaps/events/abc123", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("{\"context\":{\"headers\":{\"Location\":[\"\"]}}}")]
+    [InlineData("{\"context\":{\"headers\":{\"Location\":[\"/\"]}}}")]
+    [InlineData("{\"context\":{\"headers\":{\"Location\":[\"https://openhab.test/\"]}}}")]
+    [InlineData("{\"context\":{\"headers\":{\"Location\":[\"not-a-location\"]}}}")]
+    public void ParseSubscriptionIdReturnsNullForUnusableLegacyLocations(string responseBody)
+    {
+        Assert.Null(SitemapEventParser.ParseSubscriptionId(responseBody));
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("https://openhab.test/")]
+    [InlineData("not-a-location")]
+    [InlineData("/wrong/sitemaps/events/abc123")]
+    [InlineData("https://proxy.test/wrong/sitemaps/events/abc123?x=1#f")]
+    [InlineData("/openhab/rest/sitemaps/events/abc123/unexpected")]
+    public void ResolveSubscriptionIdDoesNotUseLegacyBodyWhenLocationHeaderIsUnusable(string location)
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.Created);
+        response.Headers.Location = new Uri(location, UriKind.RelativeOrAbsolute);
+
+        var subscriptionId = OpenHabEventStreamClient.ResolveSubscriptionId(
+            response,
+            "{\"context\":{\"headers\":{\"Location\":[\"/rest/sitemaps/events/legacy\"]}}}");
+
+        Assert.Null(subscriptionId);
+    }
+
+    [Fact]
+    public void ResolveSubscriptionIdDoesNotUseLegacyBodyWhenLocationHeaderIsBlank()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.Created);
+        response.Headers.TryAddWithoutValidation("Location", " ");
+
+        var subscriptionId = OpenHabEventStreamClient.ResolveSubscriptionId(
+            response,
+            "{\"context\":{\"headers\":{\"Location\":[\"/rest/sitemaps/events/legacy\"]}}}");
+
+        Assert.Null(subscriptionId);
+    }
+
+    [Fact]
+    public async Task SubscribeAppliesBearerTokenToSubscriptionAndStream()
+    {
+        var authorizations = new List<string?>();
+        var sync = new Lock();
+        var handler = new DelegateHandler((request, _, callCount) =>
+        {
+            lock (sync)
+            {
+                authorizations.Add(request.Headers.Authorization?.ToString());
+            }
+
+            if (callCount == 1)
+            {
+                var subscribeResponse = new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = new StringContent("{}")
+                };
+                subscribeResponse.Headers.Location = new Uri("/rest/sitemaps/events/abc123", UriKind.Relative);
+                return Task.FromResult(subscribeResponse);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new BlockingReadStream())
+            });
+        });
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler), apiToken: "test-token");
+
+        var subscriptionId = await client.SubscribeToSitemapEventsAsync(new Uri("https://openhab.test/"));
+        await client.ConnectAsync(new Uri($"https://openhab.test/rest/sitemaps/events/{subscriptionId}"));
+
+        lock (sync)
+        {
+            Assert.Equal(["Bearer test-token", "Bearer test-token"], authorizations);
+        }
+    }
+
+    [Fact]
+    public async Task SubscribeAppliesBasicAuthenticationToSubscriptionAndStream()
+    {
+        var authorizations = new List<string?>();
+        var sync = new Lock();
+        var handler = new DelegateHandler((request, _, callCount) =>
+        {
+            lock (sync)
+            {
+                authorizations.Add(request.Headers.Authorization?.ToString());
+            }
+
+            if (callCount == 1)
+            {
+                var subscribeResponse = new HttpResponseMessage(HttpStatusCode.Created)
+                {
+                    Content = new StringContent("{}")
+                };
+                subscribeResponse.Headers.Location = new Uri("/rest/sitemaps/events/abc123", UriKind.Relative);
+                return Task.FromResult(subscribeResponse);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new BlockingReadStream())
+            });
+        });
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler), basicUserName: "user", basicPassword: "password");
+
+        var subscriptionId = await client.SubscribeToSitemapEventsAsync(new Uri("https://openhab.test/"));
+        await client.ConnectAsync(new Uri($"https://openhab.test/rest/sitemaps/events/{subscriptionId}"));
+
+        lock (sync)
+        {
+            Assert.Equal(["Basic dXNlcjpwYXNzd29yZA==", "Basic dXNlcjpwYXNzd29yZA=="], authorizations);
+        }
+    }
+
+    [Fact]
+    public async Task ConnectAsyncForbiddenFirstConnectionFailureDoesNotRetryInBackground()
+    {
+        var handler = new QueueHandler(
+            new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = new StringContent("forbidden")
+            },
+            new HttpResponseMessage(HttpStatusCode.Forbidden)
+            {
+                Content = new StringContent("forbidden")
+            });
+        using var client = new OpenHabEventStreamClient(
+            new HttpClient(handler),
+            initialBackoff: TimeSpan.FromMilliseconds(10),
+            maxBackoff: TimeSpan.FromMilliseconds(10));
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => client.ConnectAsync(new Uri("http://localhost:8080/rest/events")));
+
+        await Task.Delay(100);
+
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task MalformedSitemapDataDoesNotLogRawPayloadWhenVerboseDiagnosticsDisabled()
+    {
+        var capturedLines = new ConcurrentQueue<string>();
+        using var capture = DiagnosticLogger.BeginLogCapture(false, capturedLines.Enqueue);
+        var privateValue = Guid.NewGuid().ToString("N");
+        var handler = new FakeHttpMessageHandler($"data: {{\"widgetId\":\"{privateValue}");
+        using var client = new OpenHabEventStreamClient(
+            new HttpClient(handler),
+            initialBackoff: TimeSpan.FromSeconds(5),
+            maxBackoff: TimeSpan.FromSeconds(5));
+
+        await client.ConnectAsync(new Uri("https://openhab.test/rest/sitemaps/events/abc123"));
+        await Task.Delay(50);
+
+        Assert.DoesNotContain(capturedLines, line => line.Contains(privateValue, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ConnectAsyncCancellationStopsPendingInitialRequestWithoutReconnect()
+    {
+        var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pendingResponse = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new DelegateHandler((_, cancellationToken, _) =>
+        {
+            requestStarted.TrySetResult();
+            return pendingResponse.Task.WaitAsync(cancellationToken);
+        });
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler));
+        using var cancellation = new CancellationTokenSource();
+
+        var connectTask = client.ConnectAsync(new Uri("https://openhab.test/rest/sitemaps/events/abc123"), cancellation.Token);
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connectTask);
+
+        await Task.Delay(50);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Theory]
+    [InlineData("1:0")]
+    [InlineData("floor/main")]
+    [InlineData("page with spaces")]
+    public async Task ContextlessWidgetEventUsesDecodedSitemapRequestContext(string pageId)
+    {
+        var handler = new FakeHttpMessageHandler("data: {\"widgetId\":\"2:001100\",\"item\":{\"name\":\"Mode\",\"state\":\"ON\"}}");
+        using var client = new OpenHabEventStreamClient(
+            new HttpClient(handler),
+            initialBackoff: TimeSpan.FromSeconds(5),
+            maxBackoff: TimeSpan.FromSeconds(5));
+        var received = new TaskCompletionSource<SitemapWidgetEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.WidgetEventReceived += (_, widgetEvent) => received.TrySetResult(widgetEvent);
+
+        var requestUri = new Uri(
+            $"https://openhab.test/rest/sitemaps/events/abc123?sitemap=default&pageid={Uri.EscapeDataString(pageId)}");
+        await client.ConnectAsync(requestUri);
+
+        var widgetEvent = await received.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal("default", widgetEvent.SitemapName);
+        Assert.Equal(pageId, widgetEvent.PageId);
     }
 }

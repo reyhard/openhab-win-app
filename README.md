@@ -17,6 +17,15 @@ This repository contains an unofficial Windows companion app for openHAB. The cu
 
 For setup and feature usage, see the [App Guide](docs/app-guide.md).
 
+## openHAB compatibility
+
+Automated contract coverage has been run against these server releases:
+
+- openHAB 5.1.4
+- openHAB 5.2.0
+
+The main window embeds the server-provided openHAB Main UI. Features supplied by that UI, such as Chat, logging, voice, persistence, or editing pages, remain server features; this app does not provide native implementations of them. Live authenticated, myopenHAB, and embedded-WebView certification remains in progress; see the compatibility verification record for the exact evidence and limitations.
+
 ## Code Analysis
 The app project is using SonarQube hosted by SonarCloud to analyse the code for issues and code quality.
 

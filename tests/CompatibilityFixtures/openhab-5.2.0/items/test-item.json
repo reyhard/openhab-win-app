@@ -1,0 +1,19 @@
+{
+  "link": "https://openhab.test/rest/items/Compatibility_Switch",
+  "state": "ON",
+  "stateDescription": {
+    "pattern": "%s",
+    "readOnly": false,
+    "options": []
+  },
+  "lastState": "OFF",
+  "lastStateUpdate": 1784795792124,
+  "lastStateChange": 1784795792124,
+  "editable": false,
+  "type": "Switch",
+  "name": "Compatibility_Switch",
+  "label": "Compatibility Switch",
+  "category": "switch",
+  "tags": [],
+  "groupNames": []
+}

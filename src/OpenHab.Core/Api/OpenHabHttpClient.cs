@@ -153,7 +153,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
             var label = element.TryGetProperty("label", out var labelProp) && labelProp.ValueKind == JsonValueKind.String
                 ? labelProp.GetString() ?? name
                 : name;
-            results.Add(new SitemapInfo(name, label));
+            results.Add(new SitemapInfo(name, string.IsNullOrWhiteSpace(label) ? name : label));
         }
 
         return results;
@@ -212,13 +212,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
 
     private Uri BuildUri(string relativePath)
     {
-        var baseBuilder = new UriBuilder(_baseUri);
-        if (!baseBuilder.Path.EndsWith('/'))
-        {
-            baseBuilder.Path += "/";
-        }
-
-        return new Uri(baseBuilder.Uri, relativePath.TrimStart('/'));
+        return OpenHabEndpointUri.Combine(_baseUri, relativePath);
     }
 
     private void ApplyAuth(HttpRequestMessage request)
@@ -269,6 +263,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         var safeBody = SensitiveTextRedactor.Redact(body);
-        throw new OpenHabRequestException(response.StatusCode, $"openHAB request failed with {(int)response.StatusCode} {response.ReasonPhrase}: {safeBody}");
+        var safeReasonPhrase = SensitiveTextRedactor.Redact(response.ReasonPhrase);
+        throw new OpenHabRequestException(response.StatusCode, $"openHAB request failed with {(int)response.StatusCode} {safeReasonPhrase}: {safeBody}");
     }
 }

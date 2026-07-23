@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using OpenHab.Core.Api;
 
 namespace OpenHab.Core.Events;
 
@@ -78,7 +79,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             try
             {
                 NotifyConnectionStateChanged("connecting");
-                DiagnosticLogger.Info($"SSE event stream connecting to {sseUri}");
+                DiagnosticLogger.Info($"SSE event stream connecting to {SafeDiagnosticText.ForLog(sseUri)}");
 
                 using var request = new HttpRequestMessage(HttpMethod.Get, sseUri);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
@@ -106,15 +107,15 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         break;
                     }
 
-                    // Log every non-empty line only when verbose diagnostics are enabled.
+                    // Preserve frame-level visibility without logging server-provided payload content.
                     if (!string.IsNullOrWhiteSpace(line) && !line.StartsWith(':') && !line.StartsWith("event:"))
-                        DiagnosticLogger.Verbose($"SSE raw: {SafeDiagnosticText.ForLog(line, 200)}");
+                        DiagnosticLogger.Verbose("SSE data frame received.");
 
                     var parsed = SitemapEventParser.ParseLine(line);
                     if (parsed is SitemapWidgetEvent widgetEvent)
                     {
-                        DiagnosticLogger.Verbose($"SSE widget event: id={widgetEvent.WidgetId} vis={widgetEvent.Visibility} item={widgetEvent.ItemName} state={widgetEvent.ItemState}");
-                        WidgetEventReceived?.Invoke(this, widgetEvent);
+                        DiagnosticLogger.Verbose("SSE sitemap widget event received.");
+                        WidgetEventReceived?.Invoke(this, ApplySitemapRequestContext(widgetEvent, sseUri));
                     }
                     else
                     {
@@ -122,12 +123,12 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         var evt = SseMessageParser.ParseLine(line);
                         if (evt is not null)
                         {
-                            DiagnosticLogger.Verbose($"SSE raw event: {evt.GetType().Name} topic={evt.Topic}");
+                            DiagnosticLogger.Verbose("SSE non-widget event received.");
                             EventReceived?.Invoke(this, evt);
                         }
                         else if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))
                         {
-                            DiagnosticLogger.Warn($"SSE unparsed data line: {SafeDiagnosticText.ForLog(line, 200)}");
+                            DiagnosticLogger.Warn("SSE unparsed data line.");
                         }
                     }
                 }
@@ -224,9 +225,28 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         }
     }
 
+    private static SitemapWidgetEvent ApplySitemapRequestContext(SitemapWidgetEvent widgetEvent, Uri sseUri)
+    {
+        if (!string.IsNullOrEmpty(widgetEvent.SitemapName) && !string.IsNullOrEmpty(widgetEvent.PageId))
+        {
+            return widgetEvent;
+        }
+
+        var query = System.Web.HttpUtility.ParseQueryString(sseUri.Query);
+        return widgetEvent with
+        {
+            SitemapName = string.IsNullOrEmpty(widgetEvent.SitemapName)
+                ? query["sitemap"] ?? string.Empty
+                : widgetEvent.SitemapName,
+            PageId = string.IsNullOrEmpty(widgetEvent.PageId)
+                ? query["pageid"] ?? string.Empty
+                : widgetEvent.PageId
+        };
+    }
+
     public async Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
-        var subscribeUri = new Uri(baseUri, "rest/sitemaps/events/subscribe");
+        var subscribeUri = OpenHabEndpointUri.Combine(baseUri, "rest/sitemaps/events/subscribe");
         using var request = new HttpRequestMessage(HttpMethod.Post, subscribeUri);
         ApplyAuth(request);
 
@@ -234,6 +254,16 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return SitemapEventParser.ParseSubscriptionId(body);
+        return ResolveSubscriptionId(response, body);
+    }
+
+    internal static string? ResolveSubscriptionId(HttpResponseMessage response, string? responseBody)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        if (response.Headers.Location is not null)
+            return SitemapEventParser.ExtractSubscriptionId(response.Headers.Location.OriginalString);
+
+        return responseBody is null ? null : SitemapEventParser.ParseSubscriptionId(responseBody);
     }
 }

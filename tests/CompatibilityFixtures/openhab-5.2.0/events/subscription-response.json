@@ -1,0 +1,23 @@
+{
+  "status": "CREATED",
+  "context": {
+    "headers": {
+      "Location": [
+        "https://openhab.test/rest/sitemaps/events/1a1a1bbb-f4b4-415d-86c8-9c71c52f8746"
+      ]
+    },
+    "committingOutputStream": {
+      "bufferSize": 0,
+      "directWrite": true,
+      "isCommitted": false,
+      "isClosed": false
+    },
+    "entityAnnotations": [],
+    "entityStream": {
+      "bufferSize": 0,
+      "directWrite": true,
+      "isCommitted": false,
+      "isClosed": false
+    }
+  }
+}

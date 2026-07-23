@@ -13,9 +13,11 @@ public static partial class SensitiveTextRedactor
 
         var redacted = value;
         redacted = AuthorizationHeaderPattern().Replace(redacted, "$1 [redacted]");
+        redacted = BearerCredentialPattern().Replace(redacted, "$1 [redacted]");
         redacted = BasicCredentialPattern().Replace(redacted, "$1 [redacted]");
         redacted = JsonSecretPattern().Replace(redacted, "$1[redacted]");
         redacted = QuerySecretPattern().Replace(redacted, "$1=[redacted]");
+        redacted = LabeledOpenHabTokenPattern().Replace(redacted, "$1 [redacted]");
         redacted = UrlCredentialPattern().Replace(redacted, "$1[redacted]@");
 
         if (redacted.Length > maxLength)
@@ -29,6 +31,9 @@ public static partial class SensitiveTextRedactor
     [GeneratedRegex(@"(?i)\b(authorization\s*:\s*(?:bearer|basic))\s+[A-Za-z0-9._~+/=-]+")]
     private static partial Regex AuthorizationHeaderPattern();
 
+    [GeneratedRegex(@"(?i)\b(bearer)\s+[A-Za-z0-9._~+/=-]+")]
+    private static partial Regex BearerCredentialPattern();
+
     [GeneratedRegex(@"(?i)\b(basic)\s+[A-Za-z0-9._~+/=-]+")]
     private static partial Regex BasicCredentialPattern();
 
@@ -37,6 +42,9 @@ public static partial class SensitiveTextRedactor
 
     [GeneratedRegex(@"(?i)\b(password|passwd|token|secret|authorization|apikey|api_key)=([^&\s]+)")]
     private static partial Regex QuerySecretPattern();
+
+    [GeneratedRegex(@"(?i)\b(token)\s+(oh\.[A-Za-z0-9._~+/=-]+)")]
+    private static partial Regex LabeledOpenHabTokenPattern();
 
     [GeneratedRegex(@"(?i)(https?://)[^/\s:@]+:[^/\s@]+@")]
     private static partial Regex UrlCredentialPattern();

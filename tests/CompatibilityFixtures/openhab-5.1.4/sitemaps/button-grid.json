@@ -1,0 +1,101 @@
+{
+  "widgetId": "0006",
+  "type": "Buttongrid",
+  "visibility": true,
+  "label": "Button grid [-]",
+  "labelSource": "SITEMAP_WIDGET",
+  "icon": "settings",
+  "staticIcon": false,
+  "pattern": "%s",
+  "unit": "",
+  "mappings": [
+    {
+      "row": 1,
+      "column": 1,
+      "command": "BUTTON_0",
+      "label": "Button 0"
+    },
+    {
+      "row": 1,
+      "column": 2,
+      "command": "BUTTON_1",
+      "label": "Button 1"
+    },
+    {
+      "row": 1,
+      "column": 3,
+      "command": "BUTTON_2",
+      "label": "Button 2"
+    },
+    {
+      "row": 1,
+      "column": 4,
+      "command": "BUTTON_3",
+      "label": "Button 3"
+    },
+    {
+      "row": 2,
+      "column": 1,
+      "command": "BUTTON_4",
+      "label": "Button 4"
+    },
+    {
+      "row": 2,
+      "column": 2,
+      "command": "BUTTON_5",
+      "label": "Button 5"
+    },
+    {
+      "row": 2,
+      "column": 3,
+      "command": "BUTTON_6",
+      "label": "Button 6"
+    },
+    {
+      "row": 2,
+      "column": 4,
+      "command": "BUTTON_7",
+      "label": "Button 7"
+    },
+    {
+      "row": 3,
+      "column": 1,
+      "command": "BUTTON_8",
+      "label": "Button 8"
+    },
+    {
+      "row": 3,
+      "column": 2,
+      "command": "BUTTON_9",
+      "label": "Button 9"
+    },
+    {
+      "row": 3,
+      "column": 3,
+      "command": "BUTTON_10",
+      "label": "Button 10"
+    },
+    {
+      "row": 3,
+      "column": 4,
+      "command": "BUTTON_11",
+      "label": "Button 11"
+    }
+  ],
+  "item": {
+    "link": "https://openhab.test/rest/items/Compatibility_Mode",
+    "state": "NULL",
+    "stateDescription": {
+      "pattern": "%s",
+      "readOnly": false,
+      "options": []
+    },
+    "type": "String",
+    "name": "Compatibility_Mode",
+    "label": "Compatibility Mode",
+    "category": "settings",
+    "tags": [],
+    "groupNames": []
+  },
+  "widgets": []
+}

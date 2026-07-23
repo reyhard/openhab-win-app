@@ -1,10 +1,12 @@
 # openHAB Windows Current State
 
-Date: 2026-07-15
+Date: 2026-07-23
 
 ## Purpose
 
 Read this file before implementation. Older dated status files remain useful as historical evidence, but this page summarizes the current product shape, release blockers, and verification gates.
+
+Treat this page as the source of truth for current shipped behavior, backlog priority, release blockers, and verification evidence.
 
 ## Shipped Product Shape
 
@@ -32,6 +34,9 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Recently Completed Remediation
 
+- openHAB 5.1.4/5.2.0 compatibility work added sanitized genuine contract captures, parser/client/SSE/runtime regressions, opaque variable-width sitemap identifier preservation, nested 5.2 ButtonGrid normalization while retaining legacy ButtonGrid support, and hardened sitemap subscription location/SSE handling.
+- The embedded Main UI host was reviewed against a disposable default openHAB 5.2.0 HTTP server and lower-layer contracts. This is not an embedded WebView2/manual certification and does not make Chat, logs, voice, persistence, or editing native app features.
+
 - Plan A governance shell exists: `README.md`, `CONTRIBUTING.md`, `NOTICE`, `SECURITY.md`, and `.github/workflows/ci.yml`.
 - Plan B privacy hardening is implemented: request failures, runtime status, SSE/event logging, notification logging, and Windows status text now use safe diagnostic text/redaction paths.
 - `OpenHab.App.Tests` no longer requires VSTest blame-hang for normal clean exit after disabling Windows App SDK bootstrap initialization on the tray project reference used by App tests.
@@ -48,6 +53,9 @@ Read this file before implementation. Older dated status files remain useful as 
 
 ## Current High-Priority Backlog
 
+- P0: Complete and record the openHAB 5.2 live compatibility matrix: 5.1.4 local plus API token; 5.2.0 local plus API token; 5.2.0 local plus Basic authentication; and 5.2.0 through myopenHAB. Use an explicit dedicated reversible test Item only, and verify restoration.
+- P0: Complete the embedded WebView2/manual Main UI matrix: authentication/session behavior, promoted and file-backed/read-only pages, Chat/log/voice routes, navigation, and native-sitemap coexistence. The current 5.2 evidence is source inspection, lower-layer tests, and a disposable root HTTP check only.
+
 - P0: Run and record the configured live notification smoke with more than 200 historical entries, two cloud poll intervals, one new notification, normal exit, restart, and two further poll intervals. Automated regressions cover 501 retained IDs and flush/reload behavior, but a real cloud/toast run is still required before closing the user-observed resend incident.
 - P0: Finalize release ownership decisions: official package identity, signing certificate ownership, Microsoft Store or other distribution ownership, support policy, and security response path.
 - P1: Run and record manual UI smoke checks for tray flyout, main window, Main UI WebView2 auth/navigation, notifications, settings, and shortcut command menu.
@@ -63,6 +71,14 @@ Read this file before implementation. Older dated status files remain useful as 
 - If Release build fails because files cannot be copied or overwritten while the app is running from Visual Studio or from a previous local run, try a Debug build or close the running app before diagnosing code changes.
 
 ## Latest Verification Evidence
+
+2026-07-23 openHAB 5.2 compatibility worktree `feature/openhab-5.2-compatibility`, compatibility code at `b1fd1660ae34bf8883dac24be3e7ef1edd251975`:
+
+- Sanitized captures from disposable official openHAB 5.1.4 and 5.2.0 images are covered by automated parser/client/SSE/runtime tests. They cover legacy and nested ButtonGrid shapes, empty arrays, and opaque variable-width widget identifiers.
+- Historical final-review direct-suite evidence at `6b0b796b741abfa568a7813918575e08e0abfc96`: Core `141/141`, Sitemaps `50/50`, Rendering `129/129`, and App `663/663` (total `983/983`). The current mounted-Location follow-up adds five Core theory cases and freshly passed Core `146/146`; the other direct projects were not rerun for this isolated Core/probe change, so `983/983` is retained as labeled baseline evidence rather than presented as a fresh aggregate.
+- Historical final-review tray Release build passed with `0` warnings and `0` errors. The current follow-up passed `git diff --check` and scoped formatting. Repository-wide `dotnet format --verify-no-changes` remains blocked by pre-existing whitespace debt outside compatibility files; the compatibility-changed C# files pass scoped formatting.
+- The probe’s PowerShell syntax and FTP invalid-URI exit-2 checks passed. Its controlled loopback fake integration now verifies strict header/body subscription Location handling, mounted `/openhab` Location routing, event-only SSE timeout, header precedence, a timed-out post-write parser helper with successful explicit-item restoration, and redacted failure output. No live/personal endpoint was accessed.
+- Compatibility release recommendation: **not ready**. Authenticated local/API-token/Basic and myopenHAB probes, full live sitemap evidence, embedded WebView2/manual UI evidence, package/release ownership gates, and existing product release blockers remain open. No version, package identity, manifest, or signing changes were made.
 
 2026-07-15 notification reliability and review remediation on `main`:
 
