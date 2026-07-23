@@ -855,7 +855,9 @@ public sealed class SitemapRuntimeController
 
     private long? PrepareSitemapEventStreamStart(string sitemapName, string pageId)
     {
-        if (_sitemapEventStreamStarted && _sitemapEventStreamSitemapName == sitemapName && _sitemapEventStreamPageId == pageId)
+        if (_sitemapEventStreamStarted &&
+            string.Equals(_sitemapEventStreamSitemapName, sitemapName, StringComparison.Ordinal) &&
+            string.Equals(_sitemapEventStreamPageId, pageId, StringComparison.Ordinal))
         {
             return null;
         }
@@ -941,6 +943,13 @@ public sealed class SitemapRuntimeController
     private void OnWidgetEventReceived(object? sender, SitemapWidgetEvent e)
     {
         DiagnosticLogger.Info($"SSE widget event: id={e.WidgetId} item={e.ItemName} state={e.ItemState} vis={e.Visibility}");
+        if (!IsCurrentSitemapWidgetEvent(e))
+        {
+            DiagnosticLogger.Info(
+                $"Ignoring sitemap widget event outside active context: sitemap={e.SitemapName} page={e.PageId}");
+            return;
+        }
+
         Interlocked.Increment(ref _sitemapStateVersion);
         ApplyWidgetEvent(e);
 
@@ -1050,10 +1059,11 @@ public sealed class SitemapRuntimeController
 
     private List<int> ResolveTargetWidgetIndices(SitemapWidgetEvent e)
     {
-        // Prefer direct widget id mapping when present and found.
-        if (!string.IsNullOrEmpty(e.WidgetId) && widgetIdMap is not null && widgetIdMap.TryGetValue(e.WidgetId, out var widIndex))
+        // A populated ID map makes widget IDs authoritative. Do not fall back to an
+        // item-name match for an event whose opaque ID does not occur on this page.
+        if (!string.IsNullOrEmpty(e.WidgetId) && widgetIdMap is { Count: > 0 })
         {
-            return [widIndex];
+            return widgetIdMap.TryGetValue(e.WidgetId, out var widIndex) ? [widIndex] : [];
         }
 
         // For duplicate ON/OFF rows (same item, different visibility rules), update all matches.
@@ -1071,6 +1081,19 @@ public sealed class SitemapRuntimeController
         }
 
         return [];
+    }
+
+    private bool IsCurrentSitemapWidgetEvent(SitemapWidgetEvent e)
+    {
+        if (currentPage is null)
+        {
+            return false;
+        }
+
+        return (string.IsNullOrEmpty(e.SitemapName) ||
+                string.Equals(e.SitemapName, settingsController.Current.SitemapName, StringComparison.Ordinal)) &&
+               (string.IsNullOrEmpty(e.PageId) ||
+                string.Equals(e.PageId, currentPage.Id, StringComparison.Ordinal));
     }
 
     private void BuildItemIndexMap()

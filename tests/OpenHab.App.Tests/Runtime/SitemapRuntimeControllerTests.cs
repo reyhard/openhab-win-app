@@ -699,6 +699,103 @@ public sealed class SitemapRuntimeControllerTests
             """;
     }
 
+    private static SitemapWidgetEvent WidgetEvent(string widgetId, string itemName, string state, string pageId)
+    {
+        return new SitemapWidgetEvent(
+            WidgetId: widgetId,
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: itemName,
+            ItemState: state,
+            SitemapName: "default",
+            PageId: pageId,
+            DescriptionChanged: false);
+    }
+
+    private static string HomepageWithOpaqueWidgetIdsJson()
+    {
+        return """
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  { "type": "Switch", "widgetId": "1:010", "label": "Prefix [OFF]", "item": { "name": "Prefix_Widget", "state": "OFF" } },
+                  { "type": "Switch", "widgetId": "2:0010", "label": "Similar [OFF]", "item": { "name": "Similar_Widget", "state": "OFF" } },
+                  { "type": "Switch", "widgetId": "2:001100", "label": "Wide [OFF]", "item": { "name": "Wide_Widget", "state": "OFF" } }
+                ]
+              }
+            }
+            """;
+    }
+
+    private static string HomepageWithNestedButtonsJson()
+    {
+        return """
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  {
+                    "type": "Buttongrid",
+                    "widgetId": "2:0011",
+                    "label": "Mode [OFF]",
+                    "item": { "name": "Mode_Grid", "state": "OFF" },
+                    "widgets": [
+                      { "type": "Button", "widgetId": "2:001100", "label": "First [OFF]", "item": { "name": "Button_Mode", "state": "OFF" } },
+                      { "type": "Button", "widgetId": "2:001101", "label": "Second [OFF]", "item": { "name": "Button_Mode", "state": "OFF" } }
+                    ]
+                  }
+                ]
+              }
+            }
+            """;
+    }
+
+    private static string HomepageWithOpaqueChildPageJson()
+    {
+        return """
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  {
+                    "type": "Group",
+                    "widgetId": "home:group",
+                    "label": "Child",
+                    "linkedPage": {
+                      "id": "floor/main",
+                      "title": "Child",
+                      "widgets": [
+                        { "type": "Switch", "widgetId": "child:widget", "label": "Child switch [OFF]", "item": { "name": "Shared_Item", "state": "OFF" } }
+                      ]
+                    }
+                  },
+                  { "type": "Switch", "widgetId": "home:widget", "label": "Home switch [OFF]", "item": { "name": "Shared_Item", "state": "OFF" } }
+                ]
+              }
+            }
+            """;
+    }
+
+    private static string HomepageWithLegacyWidgetIdJson()
+    {
+        return """
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  { "type": "Switch", "widgetId": "000100", "label": "Legacy [OFF]", "item": { "name": "Legacy_Widget", "state": "OFF" } }
+                ]
+              }
+            }
+            """;
+    }
+
     private static string FormattedSwitchJson(string displayState, string rawItemState)
     {
         return $$"""
@@ -1038,6 +1135,26 @@ public sealed class SitemapRuntimeControllerTests
         Assert.Equal(2, eventClient.ConnectCalls);
     }
 
+    [Theory]
+    [InlineData("1:0")]
+    [InlineData("2:0011")]
+    [InlineData("floor/main")]
+    [InlineData("page with spaces")]
+    public async Task ReconnectPreservesAndEscapesOpaquePageId(string pageId)
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        await controller.ReconnectSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", pageId);
+
+        var reconnectUri = eventClient.ConnectUris.Last();
+        var query = System.Web.HttpUtility.ParseQueryString(reconnectUri.Query);
+        Assert.Equal(pageId, query["pageid"]);
+    }
+
     [Fact]
     public async Task SitemapEventStreamCancellationResetsAndPropagates()
     {
@@ -1234,6 +1351,140 @@ public sealed class SitemapRuntimeControllerTests
 
         // Hallway_Temperature should be unchanged
         Assert.Equal("21.4 C", controller.Current.Descriptor!.Rows[1].State);
+    }
+
+    [Fact]
+    public async Task OpenHab52VariableWidthWidgetEventUpdatesMatchingRow()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithOpaqueWidgetIdsJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireWidgetEvent(WidgetEvent("2:001100", "Wide_Widget", "ON", "home"));
+
+        var snapshot = Assert.Single(snapshots);
+        Assert.Equal([2], snapshot.ChangedRowIndices);
+        Assert.Equal("OFF", snapshot.Descriptor!.Rows[0].State);
+        Assert.Equal("OFF", snapshot.Descriptor.Rows[1].State);
+        Assert.Equal("ON", snapshot.Descriptor.Rows[2].State);
+    }
+
+    [Fact]
+    public async Task OpenHab52WidgetEventDoesNotMatchSimilarSuffix()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithOpaqueWidgetIdsJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireWidgetEvent(WidgetEvent("2:0010", "Similar_Widget", "ON", "home"));
+
+        var snapshot = Assert.Single(snapshots);
+        Assert.Equal([1], snapshot.ChangedRowIndices);
+        Assert.Equal("OFF", snapshot.Descriptor!.Rows[0].State);
+        Assert.Equal("ON", snapshot.Descriptor.Rows[1].State);
+        Assert.Equal("OFF", snapshot.Descriptor.Rows[2].State);
+    }
+
+    [Fact]
+    public async Task OpenHab52NestedButtonEventUpdatesOnlyMatchingButton()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithNestedButtonsJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireWidgetEvent(WidgetEvent("2:001100", "Button_Mode", "ON", "home"));
+
+        var snapshot = Assert.Single(snapshots);
+        Assert.Equal([1], snapshot.ChangedRowIndices);
+        Assert.Equal("OFF", snapshot.Descriptor!.Rows[0].State);
+        Assert.Equal("ON", snapshot.Descriptor.Rows[1].State);
+        Assert.Equal("OFF", snapshot.Descriptor.Rows[2].State);
+    }
+
+    [Fact]
+    public async Task WidgetEventFromPreviousPageDoesNotMutateCurrentPage()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithOpaqueChildPageJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        Assert.True(await controller.NavigateToChildAsync(0));
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireWidgetEvent(WidgetEvent("home:widget", "Shared_Item", "ON", "home"));
+
+        Assert.Empty(snapshots);
+        Assert.Equal("OFF", controller.Current.Descriptor!.Rows[0].State);
+    }
+
+    [Fact]
+    public async Task WidgetEventWithKnownNonMatchingIdDoesNotFallbackToItemName()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithOpaqueWidgetIdsJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+        var snapshots = new List<SitemapRuntimeSnapshot>();
+        controller.SnapshotChanged += (_, _) => snapshots.Add(controller.Current);
+
+        eventClient.FireWidgetEvent(WidgetEvent("not:an:existing:widget", "Wide_Widget", "ON", "home"));
+
+        Assert.Empty(snapshots);
+        Assert.Equal("OFF", controller.Current.Descriptor!.Rows[2].State);
+    }
+
+    [Fact]
+    public async Task LegacyWidgetIdStillUpdatesMatchingRow()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(HomepageWithLegacyWidgetIdJson());
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        eventClient.FireWidgetEvent(WidgetEvent("000100", "Legacy_Widget", "ON", "home"));
+
+        Assert.Equal(FirstRowChanged, controller.Current.ChangedRowIndices);
+        Assert.Equal("ON", controller.Current.Descriptor!.Rows[0].State);
     }
 
     [Theory]
@@ -1463,6 +1714,7 @@ public sealed partial class FakeEventStreamClient : IOpenHabEventStreamClient
     public int SubscribeCalls { get; private set; }
     public int ConnectCalls { get; private set; }
     public int DisposeCount { get; private set; }
+    public List<Uri> ConnectUris { get; } = new();
     public bool BlockSubscribeSynchronously { get; set; }
     public bool BlockSubscribeAsynchronously { get; set; }
     public Queue<TaskCompletionSource> ConnectBlocks { get; } = new();
@@ -1491,6 +1743,7 @@ public sealed partial class FakeEventStreamClient : IOpenHabEventStreamClient
     public async Task ConnectAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
         ConnectCalls++;
+        ConnectUris.Add(baseUri);
         var connectStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         connectStartedSignals.Add(connectStarted);
         connectStarted.TrySetResult();
