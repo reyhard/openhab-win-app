@@ -77,14 +77,15 @@ function Resolve-SubscriptionId {
     [CmdletBinding()]
     param(
         [string[]]$LocationHeader,
-        [string]$ResponseBody
+        [string]$ResponseBody,
+        [switch]$LocationHeaderPresent
     )
 
     $locations = [Collections.Generic.List[string]]::new()
     foreach ($location in @($LocationHeader)) {
         if (-not [string]::IsNullOrWhiteSpace($location)) { $locations.Add($location) }
     }
-    if ($locations.Count -eq 0 -and -not [string]::IsNullOrWhiteSpace($ResponseBody)) {
+    if (-not $LocationHeaderPresent -and -not [string]::IsNullOrWhiteSpace($ResponseBody)) {
         try {
             $body = $ResponseBody | ConvertFrom-Json -ErrorAction Stop
             $candidates = [Collections.Generic.List[object]]::new()
@@ -112,11 +113,12 @@ function Resolve-SubscriptionId {
         $parsed = $null
         if ([Uri]::TryCreate($location, [UriKind]::Absolute, [ref]$parsed)) { $path = $parsed.AbsolutePath }
         $segments = @($path.Trim('/').Split('/', [StringSplitOptions]::RemoveEmptyEntries))
-        if ($segments.Count -eq 4 -and
-            [string]::Equals($segments[0], 'rest', [StringComparison]::Ordinal) -and
-            [string]::Equals($segments[1], 'sitemaps', [StringComparison]::Ordinal) -and
-            [string]::Equals($segments[2], 'events', [StringComparison]::Ordinal)) {
-            $candidate = [Uri]::UnescapeDataString($segments[3])
+        $firstExpectedSegment = $segments.Count - 4
+        if ($segments.Count -ge 4 -and
+            [string]::Equals($segments[$firstExpectedSegment], 'rest', [StringComparison]::Ordinal) -and
+            [string]::Equals($segments[$firstExpectedSegment + 1], 'sitemaps', [StringComparison]::Ordinal) -and
+            [string]::Equals($segments[$firstExpectedSegment + 2], 'events', [StringComparison]::Ordinal)) {
+            $candidate = [Uri]::UnescapeDataString($segments[$firstExpectedSegment + 3])
             if (-not [string]::IsNullOrWhiteSpace($candidate)) { return $candidate }
         }
     }
@@ -445,8 +447,9 @@ try {
 
         $currentStep = 'event-subscription'
         $subscriptionResponse = Invoke-OpenHabRequest -Client $client -Uri (New-OpenHabUri $normalizedBaseUri 'rest/sitemaps/events/subscribe') -Method ([System.Net.Http.HttpMethod]::Post) -Authorization $authorization -CancellationToken $timeoutCancellation.Token
-        $location = if ($subscriptionResponse.Headers.ContainsKey('Location')) { [string[]]$subscriptionResponse.Headers['Location'] } else { @() }
-        $subscriptionId = Resolve-SubscriptionId -LocationHeader $location -ResponseBody $subscriptionResponse.Body
+        $locationHeaderPresent = $subscriptionResponse.Headers.ContainsKey('Location')
+        $location = if ($locationHeaderPresent) { [string[]]$subscriptionResponse.Headers['Location'] } else { @() }
+        $subscriptionId = Resolve-SubscriptionId -LocationHeader $location -ResponseBody $subscriptionResponse.Body -LocationHeaderPresent:$locationHeaderPresent
         if ([string]::IsNullOrWhiteSpace($subscriptionId)) { throw 'Subscription did not provide a location.' }
         $result.events.subscription = 'passed'
 

@@ -89,7 +89,8 @@ public static class SitemapEventParser
         }
 
         var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length < 3 ||
+        if (segments.Length < 4 ||
+            !string.Equals(segments[^4], "rest", StringComparison.Ordinal) ||
             !string.Equals(segments[^3], "sitemaps", StringComparison.Ordinal) ||
             !string.Equals(segments[^2], "events", StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(segments[^1]))

@@ -514,6 +514,8 @@ public sealed class OpenHabEventStreamClientTests
     [InlineData("/rest/sitemaps/events/abc123")]
     [InlineData("https://openhab.test/rest/sitemaps/events/abc123")]
     [InlineData("https://openhab.test/rest/sitemaps/events/abc123?x=1#f")]
+    [InlineData("/openhab/rest/sitemaps/events/abc123?x=1#f")]
+    [InlineData("https://proxy.test/openhab/rest/sitemaps/events/abc123?x=1#f")]
     public async Task SubscribeUsesStandardLocationHeaderBeforeLegacyResponseBody(string location)
     {
         var response = new HttpResponseMessage(HttpStatusCode.Created)
@@ -612,6 +614,9 @@ public sealed class OpenHabEventStreamClientTests
     [InlineData("/")]
     [InlineData("https://openhab.test/")]
     [InlineData("not-a-location")]
+    [InlineData("/wrong/sitemaps/events/abc123")]
+    [InlineData("https://proxy.test/wrong/sitemaps/events/abc123?x=1#f")]
+    [InlineData("/openhab/rest/sitemaps/events/abc123/unexpected")]
     public void ResolveSubscriptionIdDoesNotUseLegacyBodyWhenLocationHeaderIsUnusable(string location)
     {
         using var response = new HttpResponseMessage(HttpStatusCode.Created);

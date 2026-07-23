@@ -6,6 +6,7 @@ param(
     [string]$Version = '5.2.0',
     [switch]$UseLocationHeader,
     [switch]$MalformedSubscriptionLocation,
+    [switch]$ProxyPath,
     [switch]$RequireFakeBearer,
     [switch]$RequireFakeBasic,
     [switch]$StallItemReadAfterWrite,
@@ -17,6 +18,7 @@ $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
 $listener.Start()
 $state = if ($FailRestore) { 'ON' } else { 'OFF' }
 $writeObserved = $false
+$routePrefix = if ($ProxyPath) { '/openhab' } else { '' }
 
 function Send-Response($Writer, [int]$StatusCode, [string]$ContentType = $null, [string]$Body = '', [hashtable]$AdditionalHeaders = @{}) {
     $reason = if ($StatusCode -eq 200) { 'OK' } elseif ($StatusCode -eq 204) { 'No Content' } elseif ($StatusCode -eq 401) { 'Unauthorized' } elseif ($StatusCode -eq 404) { 'Not Found' } else { 'Internal Server Error' }
@@ -68,6 +70,13 @@ try {
                 $body = -join $characters
             }
             $path = $target.Split('?')[0]
+            if ($ProxyPath) {
+                if (-not $path.StartsWith("$routePrefix/", [StringComparison]::Ordinal)) {
+                    Send-Response $stream 404
+                    continue
+                }
+                $path = $path.Substring($routePrefix.Length)
+            }
             if ($method -eq 'GET' -and $path -eq '/rest/sitemaps') {
                 if ($SitemapListObject) { Send-Response $stream 200 'application/json' '{"name":"compatibility","label":"Compatibility"}' }
                 else { Send-Response $stream 200 'application/json' '[{"name":"compatibility","label":"Compatibility"}]' }
@@ -80,8 +89,8 @@ try {
                 Send-Response $stream 200 'application/json' '{"homepage":{"id":"compatibility","widgets":[{"type":"Switch","label":"Compatibility","widgetId":"2_000611","item":{"name":"Compatibility_Switch","state":"OFF"}}]}}'
             }
             elseif ($method -eq 'POST' -and $path -eq '/rest/sitemaps/events/subscribe') {
-                $headerLocation = if ($MalformedSubscriptionLocation) { '/rest/invalid/header-subscription' } else { '/rest/sitemaps/events/header-subscription' }
-                $bodyLocation = if ($MalformedSubscriptionLocation -and -not $UseLocationHeader) { '/rest/invalid/probe-subscription' } else { '/rest/sitemaps/events/probe-subscription' }
+                $headerLocation = if ($MalformedSubscriptionLocation) { "${routePrefix}/wrong/sitemaps/events/header-subscription" } else { "${routePrefix}/rest/sitemaps/events/header-subscription" }
+                $bodyLocation = if ($MalformedSubscriptionLocation -and -not $UseLocationHeader) { "${routePrefix}/wrong/sitemaps/events/probe-subscription" } else { "${routePrefix}/rest/sitemaps/events/probe-subscription" }
                 $subscriptionHeaders = if ($UseLocationHeader) { @{ Location = $headerLocation } } else { @{} }
                 $subscriptionBody = @{ context = @{ headers = @{ Location = @($bodyLocation) } } } | ConvertTo-Json -Compress
                 Send-Response $stream 200 'application/json' $subscriptionBody $subscriptionHeaders

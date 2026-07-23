@@ -114,6 +114,13 @@ try {
     }
     finally { Stop-FakeServer $fake }
 
+    $fake = Start-FakeServer @('-UseLocationHeader', '-ProxyPath')
+    try {
+        if ((Invoke-Probe @{ BaseUri = "http://127.0.0.1:$port/openhab"; SkipWriteProbe = $true; TimeoutSeconds = 5 }) -ne 0) { throw 'Proxy-prefixed subscription location must succeed.' }
+        if ((Read-Report).events.stream -ne 'passed') { throw 'Proxy-prefixed subscription route was not used.' }
+    }
+    finally { Stop-FakeServer $fake }
+
     foreach ($malformedLocationCase in @(@(), @('-UseLocationHeader'))) {
         $fake = Start-FakeServer ($malformedLocationCase + '-MalformedSubscriptionLocation')
         try {
