@@ -15,6 +15,12 @@ This guide describes how to configure and use the app. It is written for users o
 - A reachable openHAB server.
 - Optional: a myopenHAB account for cloud access and cloud notifications.
 
+## openHAB Compatibility
+
+The app has automated parser, client, SSE, runtime, and fixture coverage for openHAB 5.1.4 and 5.2.0. This establishes compatibility with the captured sitemap and REST contracts; it is not a completed live certification matrix. In particular, authenticated local servers, myopenHAB, and a real embedded-WebView2 session still require recorded validation.
+
+The embedded Main UI shows pages and features provided by your server. Chat, logs, voice, persistence, and editing features shown there are not separate native Windows-app features.
+
 ## Connection Setup
 
 Open the app settings and configure the endpoints you want the app to use.
@@ -55,6 +61,16 @@ For openHAB REST authentication details, see the [openHAB REST API documentation
 For myopenHAB access, enter your cloud endpoint, username or email address, and password in the app settings.
 
 Cloud credentials are used for cloud endpoint access and cloud notification polling. If you choose Local only mode, new cloud notifications are not available.
+
+### Authentication Compatibility
+
+The REST and sitemap event-stream client has automated coverage for API-token (Bearer) and Basic authentication. Configure the local API token as above; use cloud credentials for myopenHAB. Do not place credentials in an endpoint URL or diagnostics report.
+
+### Live Compatibility Probe (contributors)
+
+Contributors can use `scripts/Test-OpenHabServerCompatibility.ps1` to record a redacted, repeatable compatibility probe for one endpoint. It checks the sitemap list and homepage, SSE subscription/stream, Item read, Main UI page discovery, and optionally one controlled write.
+
+Only pass `-WritableItemName` for an explicit dedicated, reversible test Item. The probe keeps the original state only in memory and attempts to restore it in `finally`; if restoration fails, treat the result as a failed run and inspect the server before any repeat. Use `-SkipWriteProbe` when no dedicated writable Item is available. Reports intentionally omit credentials, authorization headers, raw payloads, Item states, and exception stacks. Before sharing diagnostics, still remove private Item names, notification text, and server information.
 
 ## Tray Flyout And Main Window
 

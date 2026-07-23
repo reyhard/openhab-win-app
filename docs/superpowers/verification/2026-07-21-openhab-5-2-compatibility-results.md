@@ -1,146 +1,86 @@
 # openHAB 5.2 Compatibility Verification
 
 Date: 2026-07-23
+Compatibility commit: `3607006f4403d12d3b37f804bc20e575d09dd7d1`
 
-## Baseline
+This record distinguishes automated contract coverage from live and manual certification. It does not authorize a release.
 
-The pre-capture baseline was supplied with this task from base commit `7a5bdb07ab2966866fb070d6e261472c2db4d19d` on .NET SDK `10.0.204`:
+## Automated results
 
-| Command | Result |
+Environment: Windows `10.0.26200` (win-x64), .NET SDK `10.0.204` (`e7aa4b537d`). Fresh checks were serialized with `-m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`.
+
+The direct tests, coverage, Release build, and formatter checks below were run at `ebee350cf12eab68d82f347e660843c3d16ebf9d`; the current compatibility head differs only by the offline probe-helper policy commit `3607006f4403d12d3b37f804bc20e575d09dd7d1`. The controlled fake integration was rerun fresh at `3607006`.
+
+| Project | Result | Test duration | Command elapsed |
+| --- | --- | ---: | ---: |
+| `OpenHab.Core.Tests` | 138 passed, 0 failed, 0 skipped | 934 ms | 14.015 s |
+| `OpenHab.Sitemaps.Tests` | 50 passed, 0 failed, 0 skipped | 76 ms | 5.739 s |
+| `OpenHab.Rendering.Tests` | 129 passed, 0 failed, 0 skipped | 87 ms | 8.796 s |
+| `OpenHab.App.Tests` | 660 passed, 0 failed, 0 skipped | 1 s | 57.448 s |
+
+Total: `977` passed, `0` failed, `0` skipped. The supplied Task 1 baseline at `7a5bdb07ab2966866fb070d6e261472c2db4d19d` did not retain per-command durations; none are inferred here.
+
+Fresh coverage runs used `coverage.runsettings` without changing thresholds or exclusions. The generated OpenCover reports contain `OpenHabSitemapJsonParser`, `SitemapEventParser`, `OpenHabEventStreamClient`, `OpenHabHttpClient`, and `SitemapRuntimeController`.
+
+`dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore -p:UseSharedCompilation=false` passed in 46.511 s with 0 warnings and 0 errors.
+
+## Fixture results
+
+Date: 2026-07-23. Capture commit: `0d7ae6606e73997c71882aca17ed7abb553a963b`.
+
+Sanitized genuine captures were made from disposable official openHAB `5.1.4` and `5.2.0` containers, then the containers were removed. Both fixture sets parse through the automated tests. The 5.1.4 capture preserves the legacy ButtonGrid representation; the 5.2.0 capture preserves nested Button widgets, empty arrays, and opaque variable-width widget identifiers. SSE fixtures cover real `event:`/`data:` framing. Fixture payloads and test reports are sanitized; no personal endpoint was accessed.
+
+The client/SSE/runtime tests also cover legacy and standard subscription locations, Location-header precedence, valid SSE `data:` spacing, authenticated request construction, valid `200`/`202`/`204` success statuses, exact context-aware event matching, and non-verbose server-payload diagnostics.
+
+## Live 5.1.4 results
+
+Date: 2026-07-23. The disposable default 5.1.4 image was contacted only on loopback. The repeatable probe reached REST but safely stopped at `sitemap-list` because no synthetic sitemap or dedicated writable Item was configured. It is not a successful live/authenticated certification result.
+
+## Live 5.2.0 results
+
+Date: 2026-07-23. The disposable default 5.2.0 image was contacted only on loopback and likewise safely stopped at `sitemap-list`. A separate disposable root HTTP check returned `200 text/html`, and Main UI page discovery returned `200 application/json` with `[]`; these are server HTTP observations, not a WebView2 or authenticated certification result.
+
+## Main UI manual smoke
+
+Date: 2026-07-23. Pending. No packaged/tray/WinUI app or embedded WebView2 control was launched. Lower-layer Main UI/shell tests passed `66/66` earlier in the compatibility work, and source inspection found generic same-origin hosting without route-specific additions. Promoted managed pages, file-backed/read-only pages, Chat/log/voice routes, authentication/retry, session/profile isolation, navigation, and sitemap coexistence have not been manually certified.
+
+Server-provided Main UI features are not native Windows-app features. In particular, this result does not claim a native Chat, MCP, voice, logs, persistence, or editing implementation.
+
+## Authentication matrix
+
+Date: 2026-07-23. API-token and Basic authentication have automated REST and SSE construction/contract coverage. No live authenticated endpoint was used.
+
+| Matrix cell | Live result |
 | --- | --- |
-| `OpenHab.Core.Tests` | 79/79 passed |
-| `OpenHab.Sitemaps.Tests` | 44/44 passed |
-| `OpenHab.Rendering.Tests` | 129/129 passed |
-| `OpenHab.App.Tests` | 644/644 passed |
-| Tray Release build | 0 warnings, 0 errors |
+| openHAB 5.1.4 local + API token | Pending |
+| openHAB 5.2.0 local + API token | Pending |
+| openHAB 5.2.0 local + Basic authentication | Pending |
+| openHAB 5.2.0 through myopenHAB | Pending |
 
-The handoff did not retain per-command durations. No source or project-file changes are included in this fixture-only task.
+The repeatable probe requires an explicit endpoint and never commands an Item unless `-WritableItemName` is supplied. Use only a dedicated reversible test Item; the script retains the original state in memory and restores it in `finally`. A restoration failure is a failed probe. Probe reports redact credentials, authorization headers, raw payloads, states, and exception stacks.
 
-## Test server configuration
+Probe checks on this commit: both PowerShell scripts parsed without syntax errors, `ftp://invalid` returned exit code `2`, and the controlled loopback fake integration passed freshly in 30.614 seconds. The fake suite covers successful write/restore, forced restoration failure, sitemap-list shape rejection, version preflight, Bearer and Basic request headers without report leakage, and bounded stalled reads. It is a controlled test double, not a live server certification result.
 
-Two isolated, disposable local Docker containers were run from the official images:
+## Packaging result
 
-| Release | Image digest | Local endpoint | Sitemap ButtonGrid definition |
-| --- | --- | --- | --- |
-| 5.1.4 | `sha256:d583a280a8a8cdbff5bcebe5bd7d04a7839769350a7e54f600b4aaa26162392f` | `http://127.0.0.1:18081` | Deprecated legacy `buttons` definition |
-| 5.2.0 | `sha256:450d2175af9f3ddf0720ed3efd4b1cac2bb2445b76c202c8dedeb7f7b2fdf8a9` | `http://127.0.0.1:18082` | Nested `Button` widgets |
+Date: 2026-07-23. Package gate: not required and not run. This task changed documentation only; it did not change package, manifest, dependency, startup, notification activation, identity, signing, or version files. No version bump, release metadata, package identity, or signing change was made.
 
-Both servers used the same synthetic `compatibility` sitemap containing frames, text, mapped/unmapped switches, selection, slider, setpoint, a 12-button grid, a linked page, chart, image, video, webview, input, visibility, and label/value/icon color rules. They contained only `Compatibility_Switch`, `Compatibility_Dimmer`, `Compatibility_Number`, `Compatibility_Mode`, and `Compatibility_Text`. No authentication was configured: this was an unauthenticated local transport capture, not the configured personal openHAB instance.
+## Formatting and repository checks
 
-The two containers were removed after capture. The official images were retained in the local Docker cache; no unrelated container or configured personal instance was inspected or changed.
+Date: 2026-07-23. `git diff --check` passed (52 ms) before documentation edits. Repository-wide `dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes` exited `2` after 28.773 s because of existing whitespace debt in `SitemapUiLogic.cs`, `ShortcutActionExecutor.cs`, `RadialCommandMenuWindow.cs`, and `ShortcutRecorderControl.cs`. These files are outside the compatibility change set. The compatibility-changed C# files passed scoped format verification (24.311 s). Documentation changes add no C# formatting scope.
 
-## Captured endpoint matrix
+## Known limitations
 
-Every listed endpoint was requested from each running release. JSON endpoints returned `HTTP/1.1 200 OK`, `Content-Type: application/json`, and `Vary: Accept-Encoding, User-Agent`; the subscription response was JSON `200 OK`; the page-bound SSE endpoint was `200 OK`, `Content-Type: text/event-stream`. Subscription metadata included a response-body `context.headers.Location` array. The fixture paths contain sanitized bodies; response URLs use `https://openhab.test`.
+- The authenticated local/API-token/Basic, myopenHAB, and full live sitemap probe matrix is pending.
+- The embedded WebView2/manual Main UI matrix is pending; default disposable HTTP checks and lower-layer tests are not substitutes.
+- Controlled fake-probe coverage does not substitute for a configured live server matrix.
+- Product-wide manual UI, performance, accessibility, package ownership/signing/distribution, and notification resend smoke gates listed in the current-state document remain open.
+- The fake probe’s Location-precedence path accepts either subscription id in its test assertion, although implementation unit/spec review verified the production client chooses the HTTP Location header first.
 
-| Method | Relative endpoint | Fixture |
-| --- | --- | --- |
-| GET | `/rest/sitemaps` | `sitemaps/list.json` |
-| GET | `/rest/sitemaps/compatibility` | `sitemaps/home.json` and the extracted `sitemaps/button-grid.json` |
-| GET | `/rest/items` | `items/list.json` |
-| GET | `/rest/items/Compatibility_Switch` | `items/test-item.json` |
-| GET | `/rest/ui/components/ui:page` | `main-ui/pages.json` |
-| POST | `/rest/sitemaps/events/subscribe` | `events/subscription-response.json` |
-| GET | `/rest/sitemaps/events/{subscriptionId}?sitemap=compatibility&pageid=compatibility` | `events/widget-update.sse` |
+## Release recommendation
 
-The synthetic test servers had no Main UI page components configured, so both captured `main-ui/pages.json` bodies are genuine empty arrays; the empty arrays are intentionally retained.
+- [ ] Ready
+- [ ] Ready with documented limitations
+- [x] Not ready
 
-## Observed 5.1.4 vs 5.2.0 differences
-
-- 5.1.4 represents the 12-button grid as one `Buttongrid` with 12 legacy `mappings` and no child widgets. Its captured ID is `0006`.
-- 5.2.0 represents the grid as a `Buttongrid` with 12 nested `Button` widgets and an empty `mappings` array. It uses variable-width opaque IDs, including `2_000610` and `2_000611` for buttons 10 and 11.
-- 5.2.0 also emits `forceAsItem: false` on the captured Chart widget and has a different JSON field order. These fixtures preserve both release shapes rather than normalizing them.
-- Both releases retained empty `widgets` and `mappings` arrays where returned, and both emitted real `event:`/`data:` SSE framing after the synthetic switch changed state.
-
-## Upstream change references
-
-- Variable-width sitemap IDs: [openhab/openhab-core#5466](https://github.com/openhab/openhab-core/pull/5466).
-- Sitemap DTO compatibility and empty arrays: [openhab/openhab-core#5593](https://github.com/openhab/openhab-core/pull/5593).
-- Sitemap OpenAPI schema renaming: [openhab/openhab-core#5523](https://github.com/openhab/openhab-core/pull/5523).
-
-## Sanitization review
-
-All fixture JSON parsed successfully. Each SSE fixture contains `event: event` and `data:` frames for `Compatibility_Switch`. A repository scan found no `127.0.0.1`, `localhost`, bearer/basic credentials, passwords, tokens, or email-like strings in `tests/CompatibilityFixtures`. No real server, username, credential, private label, or private URL was used. `https://openhab.test` is the sanitized server origin and `https://example.invalid/...` media URLs are synthetic.
-
-## Pending implementation tasks
-
-Use these fixtures for parser, normalizer, runtime event matching, and transport tests. Do not add server-version branches; preserve widget IDs as opaque strings and normalize legacy and nested ButtonGrid shapes at the sitemap parser boundary.
-
-## Final results
-
-- Both versions were captured from running instances.
-- Fixtures are logically equivalent and use the same synthetic sitemap/item configuration.
-- The 5.2 fixture contains nested Buttons and variable-width IDs; the 5.1 fixture retains the legacy representation.
-- JSON, SSE framing, ButtonGrid contract assertions, sanitization scan, and `git diff --check` are required final checks for this task.
-
-## Task 7 — Repeatable live compatibility probe
-
-Date: 2026-07-23
-
-`scripts/Test-OpenHabServerCompatibility.ps1` validates one explicit server endpoint and produces a redacted JSON report. It normalizes HTTP(S) reverse-proxy base paths, rejects URI user-info and conflicting authentication, builds one shared Bearer/Basic authorization header without serializing it, verifies sitemap and Main UI payloads through the production C# sitemap parser/client, accepts subscription locations from HTTP headers or legacy bodies, and bounds/cancels the SSE request. A write is possible only for `-WritableItemName`; OnOff state is captured only in memory and restored in `finally`. Report values never contain a raw item state, response body, authorization header, credential, or exception stack.
-
-The focused helper is `tools/OpenHab.CompatibilityProbe`. Build it once before a fresh-script run when no `bin` output exists:
-
-```powershell
-dotnet restore tools\OpenHab.CompatibilityProbe\OpenHab.CompatibilityProbe.csproj --ignore-failed-sources
-dotnet build tools\OpenHab.CompatibilityProbe\OpenHab.CompatibilityProbe.csproj --no-restore
-```
-
-Verification completed:
-
-| Check | Result |
-| --- | --- |
-| C# production-payload validator RED/GREEN | RED: linked helper did not exist (`CS2001`); GREEN: `ProductionPayloadValidatorTests` 2/2 passed. |
-| PowerShell syntax | Passed for the probe and controlled fake-server integration scripts. |
-| Invalid invocation | `ftp://invalid` returned exit code 2. |
-| Controlled loopback fake | Passed success case and forced restoration failure. The latter returned exit 1, emitted a prominent generic warning, and recorded `items.restore: failed` plus `restore` in the redacted report. |
-| 5.1.4 local image | Official cached image `sha256:d583a280a8a8cdbff5bcebe5bd7d04a7839769350a7e54f600b4aaa26162392f` ran only as disposable `openhab-task7-live-514` on loopback port 18151. REST reached the server; the expected `compatibility` sitemap was absent, so the probe safely stopped at `sitemap-list`. Container removed. |
-| 5.2.0 local image | Official cached image `sha256:450d2175af9f3ddf0720ed3efd4b1cac2bb2445b76c202c8dedeb7f7b2fdf8a9` ran only as disposable `openhab-task7-live-520` on loopback port 18152. REST reached the server; the expected `compatibility` sitemap was absent, so the probe safely stopped at `sitemap-list`. Container removed. |
-
-### Pending live matrix
-
-| Matrix cell | Status |
-| --- | --- |
-| openHAB 5.1.4 local + API token | Pending: no disposable server was configured with a token and synthetic sitemap/item. |
-| openHAB 5.2.0 local + API token | Pending: no disposable server was configured with a token and synthetic sitemap/item. |
-| openHAB 5.2.0 local + Basic authentication | Pending: no disposable server was configured with Basic auth and synthetic sitemap/item. |
-| openHAB 5.2.0 through myopenHAB | Pending: no dedicated harmless item or authorized cloud access was configured; no personal endpoint was accessed. |
-
-### Task 7 review-fix evidence
-
-- RED: the expanded controlled integration rejected the prior implementation because it accepted a sitemap-list JSON object. GREEN: the list root now must be a JSON array before sitemap matching proceeds.
-- `-ExpectedVersionPrefix` now performs an explicit preflight only when supplied: `GET /rest/systeminfo` must contain an object `version` string. A missing/unusable value records `version-unavailable`; a nonmatching prefix records `version-mismatch`. No live version is claimed because the bounded disposable 5.2.0 system-info check did not become available.
-- The C# parser helper is built from its project sources before the bounded server operation begins and then invoked through that exact build output; the script no longer selects an arbitrary existing DLL. Build failure is reported as an actionable redacted helper failure.
-- Item-state polling creates a linked per-request cancellation token constrained by both its poll deadline and the enclosing operation token. A fake server that stalls the post-write GET is bounded with `TimeoutSeconds=2`; it returns exit 1 and records item-write/restore failure rather than hanging.
-- Controlled integration also verifies HTTP `Location` takes precedence over legacy body location and validates exact fake-only Bearer and Basic headers across REST/SSE requests while confirming their token, username, password, and Basic value do not appear in reports.
-- Passed: normal `dotnet restore tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj`, full `OpenHab.Core.Tests` (`138/138`), PowerShell syntax validation, invalid `ftp` invocation (exit 2), controlled integration suite (exit 0, 29 seconds), and `git diff --check`.
-
-## Task 6 — Embedded Main UI host validation
-
-Date: 2026-07-23
-
-App commit: `3bd11326a1fe0b75d3848fbf1a7915f9b027bf97`
-
-openHAB version: `5.2.0` (`openhab/openhab:5.2.0`, image `sha256:450d2175af9f3ddf0720ed3efd4b1cac2bb2445b76c202c8dedeb7f7b2fdf8a9`)
-
-### Safe local evidence
-
-One isolated disposable container, `openhab-task6-webview-520`, was started with no configuration mounts, credentials, or access to the configured personal instance. It listened only on `http://127.0.0.1:18082` and was stopped and removed after the check.
-
-| Check | Endpoint/authentication | Result | Limitation |
-| --- | --- | --- | --- |
-| Main UI server root | Local `http://127.0.0.1:18082/`; unauthenticated | `HTTP 200`, `Content-Type: text/html`, document title `openHAB`; a subsequent server request completed in 157 ms. | This is an HTTP-server probe, not an embedded WebView2 load or a navigation-time measurement. |
-| Main UI page discovery | Local `http://127.0.0.1:18082/rest/ui/components/ui:page`; unauthenticated | `HTTP 200`, `application/json`, body `[]`; an empty component collection is handled by the existing discovery pipeline. | The default disposable server had no configured/promoted or file-backed pages. |
-| Lower-layer Main UI and shell contracts | `OpenHab.App.Tests`; no server credentials | Passed: `66/66` using `dotnet test tests\\OpenHab.App.Tests\\OpenHab.App.Tests.csproj --no-restore --filter "FullyQualifiedName~MainUi|FullyQualifiedName~MainWindowShellController|FullyQualifiedName~MainWindowShellAnimationPlanner" --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`. The covered contracts include URL sanitization/same-origin rules, promoted-page discovery/planning, route synchronization, and sitemap-pane preservation during Main UI page selection. | These unit tests do not instantiate the WinUI/WebView2 control. |
-
-### Host review
-
-`MainUiWebViewHost` uses the existing generic same-origin request/auth handling, route tracking, retry surface, and `window.open` policy: same-origin new windows stay in the host; external `http`/`https` URLs are delegated to the system browser; unsupported schemes are rejected. `MainWindow` maintains shell route synchronization and retains the native sitemap pane while Main UI is selected. No route-specific Chat, log, voice, persistence, settings, YAML, or file-backed-page code was found or added.
-
-No production change is justified: no embedded-host failure was reproduced, and the server-side additions are intended to remain normal same-origin Main UI content.
-
-### Pending manual evidence — not claimed
-
-- No packaged/tray or WinUI app was launched, and no WebView2 control was instantiated. The in-app browser surface was unavailable in this session; a normal-browser check would not establish embedded-host behaviour.
-- 5.1.4 Main UI, 5.2.0 myopenHAB, Basic authentication, API-token authentication, invalid-credential retry, reverse-proxy path-prefix navigation, managed/file-backed/read-only pages, Chat, logs, voice permission, popup policy, external-browser handoff, back navigation, hide/show route coherence, Main UI/native-sitemap live coexistence, token/session lifecycle, and profile-switch cookie isolation remain manual validation items.
-- No diagnostics, screenshot, or recording is attached because no embedded app session occurred. The disposable server had no credentials, cloud endpoint, pages, Chat/log/voice configuration, or sitemap configuration.
+The automated compatibility contract evidence is green, but mandatory live/authentication/myopenHAB and embedded-WebView/manual certification are incomplete. Existing product release blockers also remain. Do not publish a compatibility release or change release metadata until these gates have recorded evidence.
