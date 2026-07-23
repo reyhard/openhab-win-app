@@ -72,12 +72,12 @@ Treat this page as the source of truth for current shipped behavior, backlog pri
 
 ## Latest Verification Evidence
 
-2026-07-23 openHAB 5.2 compatibility worktree `feature/openhab-5.2-compatibility` at `3607006f4403d12d3b37f804bc20e575d09dd7d1`:
+2026-07-23 openHAB 5.2 compatibility worktree `feature/openhab-5.2-compatibility` at `6b0b796b741abfa568a7813918575e08e0abfc96`:
 
 - Sanitized captures from disposable official openHAB 5.1.4 and 5.2.0 images are covered by automated parser/client/SSE/runtime tests. They cover legacy and nested ButtonGrid shapes, empty arrays, and opaque variable-width widget identifiers.
-- Passed serialized direct tests: Core `138/138`, Sitemaps `50/50`, Rendering `129/129`, App `660/660` (total `977/977`). Fresh OpenCover reports include `OpenHabSitemapJsonParser`, `SitemapEventParser`, `OpenHabEventStreamClient`, `OpenHabHttpClient`, and `SitemapRuntimeController`; no coverage thresholds or exclusions changed.
+- Passed serialized direct tests: Core `141/141`, Sitemaps `50/50`, Rendering `129/129`, App `663/663` (total `983/983`). Existing OpenCover reports include `OpenHabSitemapJsonParser`, `SitemapEventParser`, `OpenHabEventStreamClient`, `OpenHabHttpClient`, and `SitemapRuntimeController`; no coverage thresholds or exclusions changed.
 - Passed tray Release build: `0` warnings, `0` errors. `git diff --check` passed. Repository-wide `dotnet format --verify-no-changes` remains blocked by pre-existing whitespace debt outside compatibility files; the compatibility-changed C# files pass scoped formatting.
-- The probe’s PowerShell syntax and invalid-URI checks passed, and its controlled loopback fake integration passed after the helper’s offline restore policy was corrected. No live/personal endpoint was accessed.
+- The probe’s PowerShell syntax and FTP invalid-URI exit-2 checks passed. Its controlled loopback fake integration verifies strict header/body subscription Location handling, event-only SSE timeout, header precedence, a timed-out post-write parser helper with successful explicit-item restoration, and redacted failure output. No live/personal endpoint was accessed.
 - Compatibility release recommendation: **not ready**. Authenticated local/API-token/Basic and myopenHAB probes, full live sitemap evidence, embedded WebView2/manual UI evidence, package/release ownership gates, and existing product release blockers remain open. No version, package identity, manifest, or signing changes were made.
 
 2026-07-15 notification reliability and review remediation on `main`:
