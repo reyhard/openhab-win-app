@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([switch]$UseExistingHelperBuild)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -7,6 +7,8 @@ $repoRoot = Split-Path $PSScriptRoot -Parent | Split-Path -Parent
 $probe = Join-Path $repoRoot 'scripts\Test-OpenHabServerCompatibility.ps1'
 $server = Join-Path $PSScriptRoot 'FakeOpenHabCompatibilityServer.ps1'
 $stalledParser = Join-Path $PSScriptRoot 'StalledCompatibilityParser.ps1'
+$helperProjectDirectory = Join-Path $repoRoot 'tools\OpenHab.CompatibilityProbe'
+$helperExecutable = Join-Path $helperProjectDirectory 'bin\Debug\net10.0-windows10.0.19041.0\OpenHab.CompatibilityProbe.dll'
 $port = 18991
 $report = Join-Path ([IO.Path]::GetTempPath()) 'openhab-compatibility-probe-integration.json'
 
@@ -44,6 +46,15 @@ function Invoke-ProbeWithOutput([hashtable]$Options) {
 
 function Read-Report { Get-Content -LiteralPath $report -Raw | ConvertFrom-Json }
 
+function Remove-CompatibilityHelperBuildOutputs {
+    foreach ($path in @(
+        (Join-Path $helperProjectDirectory 'bin'),
+        (Join-Path $helperProjectDirectory 'obj')
+    )) {
+        if (Test-Path -LiteralPath $path -PathType Container) { Remove-Item -LiteralPath $path -Recurse -Force }
+    }
+}
+
 function Get-FakeItemState {
     $client = [Net.Http.HttpClient]::new()
     try {
@@ -58,9 +69,11 @@ function Get-FakeItemState {
 }
 
 try {
+    if (-not $UseExistingHelperBuild) { Remove-CompatibilityHelperBuildOutputs }
     $fake = Start-FakeServer
     try {
         if ((Invoke-Probe @{ WritableItemName = 'Compatibility_Switch'; TimeoutSeconds = 10 }) -ne 0) { throw 'Expected successful probe.' }
+        if (-not (Test-Path -LiteralPath $helperExecutable -PathType Leaf)) { throw 'Cold helper build did not produce the expected executable.' }
         $result = Read-Report
         if ($result.failures.Count -ne 0 -or $result.items.restore -ne 'passed' -or $result.sitemap.widgetIdsObserved -ne 1) { throw 'Successful report did not contain expected results.' }
         if ((Get-Content $report -Raw) -match 'Compatibility_Switch|Authorization|OFF') { throw 'Report exposed private request or state data.' }
