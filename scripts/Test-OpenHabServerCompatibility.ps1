@@ -187,21 +187,33 @@ function Invoke-OpenHabRequest {
 function Initialize-ProductionPayloadParser {
     $project = Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\OpenHab.CompatibilityProbe.csproj'
     if (-not (Test-Path -LiteralPath $project -PathType Leaf)) { throw 'Production parser helper source is missing.' }
-    $startInfo = [Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = 'dotnet'
-    $startInfo.UseShellExecute = $false
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    # Build from source before the network-operation budget begins; never trust a pre-existing bin output.
-    [void]$startInfo.ArgumentList.Add('build')
-    [void]$startInfo.ArgumentList.Add((Resolve-Path $project))
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo = $startInfo
-    [void]$process.Start()
-    [void]$process.StandardOutput.ReadToEnd()
-    [void]$process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-    if ($process.ExitCode -ne 0) { throw 'Production parser helper build failed; restore/build tools/OpenHab.CompatibilityProbe before retrying.' }
+    $resolvedProject = Resolve-Path $project
+    $assets = Join-Path (Split-Path $resolvedProject -Parent) 'obj\project.assets.json'
+    $commands = [Collections.Generic.List[object[]]]::new()
+    if (-not (Test-Path -LiteralPath $assets -PathType Leaf)) {
+        # A fresh checkout must restore explicitly. Existing assets avoid unnecessary NuGet metadata access.
+        $commands.Add(@('restore', $resolvedProject))
+    }
+    $commands.Add(@('build', $resolvedProject, '--no-restore'))
+
+    foreach ($arguments in $commands) {
+        $startInfo = [Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = 'dotnet'
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        foreach ($argument in $arguments) { [void]$startInfo.ArgumentList.Add([string]$argument) }
+        $process = [Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        [void]$process.Start()
+        [void]$process.StandardOutput.ReadToEnd()
+        [void]$process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            if ($arguments[0] -eq 'restore') { throw 'Production parser helper restore failed; make NuGet restore available and retry.' }
+            throw 'Production parser helper build failed using current sources; run dotnet restore tools/OpenHab.CompatibilityProbe and retry.'
+        }
+    }
     $toolPath = Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\bin\Debug\net10.0-windows10.0.19041.0\OpenHab.CompatibilityProbe.dll'
     if (-not (Test-Path -LiteralPath $toolPath -PathType Leaf)) { throw 'Production parser helper build did not produce the expected executable.' }
     return (Resolve-Path $toolPath)
