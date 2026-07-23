@@ -26,4 +26,8 @@
     <Compile Include="..\TestSupport\**\*.cs" LinkBase="TestSupport" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\CompatibilityFixtures\**\*" Link="CompatibilityFixtures\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

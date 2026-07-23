@@ -72,6 +72,79 @@ public sealed class OpenHabHttpClientMainUiPageTests
         Assert.Empty(pages);
     }
 
+    [Theory]
+    [InlineData("openhab-5.1.4")]
+    [InlineData("openhab-5.2.0")]
+    public async Task GetMainUiPagesCompatibilityFixturesPreserveAppFacingModels(string version)
+    {
+        var handler = new CapturingHandler
+        {
+            ResponseBody = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "CompatibilityFixtures", version, "main-ui", "pages.json"))
+        };
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var pages = await client.GetMainUiPageComponentsAsync(CancellationToken.None);
+
+        Assert.Empty(pages);
+    }
+
+    [Fact]
+    public async Task GetMainUiPagesIgnoresOpenHab52ManagementMetadata()
+    {
+        // Synthetic certification data: the genuine captured 5.2 page list is empty.
+        var handler = new CapturingHandler
+        {
+            ResponseBody = """
+            [
+              {
+                "uid": "file-backed-page",
+                "component": "oh-layout-page",
+                "config": { "label": "Read-only page", "sidebar": true, "order": 5, "icon": "f7:doc" },
+                "managed": false,
+                "editable": false,
+                "source": "pages/file-backed-page.yaml"
+              }
+            ]
+            """
+        };
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var page = Assert.Single(await client.GetMainUiPageComponentsAsync(CancellationToken.None));
+
+        Assert.Equal("file-backed-page", page.Uid);
+        Assert.Equal("oh-layout-page", page.Component);
+        Assert.Equal("Read-only page", page.GetConfigString("label"));
+        Assert.True(page.GetConfigBoolean("sidebar"));
+        Assert.Equal(5, page.GetConfigInt32("order"));
+        Assert.Equal("f7:doc", page.GetConfigString("icon"));
+    }
+
+    [Fact]
+    public async Task GetMainUiPagesIncludesFileBackedReadOnlyPage()
+    {
+        // Synthetic certification data: the genuine captured 5.2 page list is empty.
+        var handler = new CapturingHandler
+        {
+            ResponseBody = """
+            [
+              {
+                "uid": "file-backed-page",
+                "component": "oh-layout-page",
+                "config": {},
+                "managed": false,
+                "editable": false,
+                "source": "pages/file-backed-page.yaml"
+              }
+            ]
+            """
+        };
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
+
+        var page = Assert.Single(await client.GetMainUiPageComponentsAsync(CancellationToken.None));
+
+        Assert.Equal("file-backed-page", page.Uid);
+    }
+
     [Fact]
     public async Task GetMainUiPageComponentsAsync_ThrowsFormatExceptionForNonArrayRoot()
     {
