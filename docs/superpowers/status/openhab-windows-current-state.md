@@ -72,12 +72,13 @@ Treat this page as the source of truth for current shipped behavior, backlog pri
 
 ## Latest Verification Evidence
 
-2026-07-23 openHAB 5.2 compatibility worktree `feature/openhab-5.2-compatibility`, compatibility code at `b1fd1660ae34bf8883dac24be3e7ef1edd251975`:
+2026-07-23 openHAB 5.2 compatibility worktree `feature/openhab-5.2-compatibility`, compatibility code at `48181d00c4efdc5cac52910154e7267240e5843b`:
 
 - Sanitized captures from disposable official openHAB 5.1.4 and 5.2.0 images are covered by automated parser/client/SSE/runtime tests. They cover legacy and nested ButtonGrid shapes, empty arrays, and opaque variable-width widget identifiers.
 - Historical final-review direct-suite evidence at `6b0b796b741abfa568a7813918575e08e0abfc96`: Core `141/141`, Sitemaps `50/50`, Rendering `129/129`, and App `663/663` (total `983/983`). The current mounted-Location follow-up adds five Core theory cases and freshly passed Core `146/146`; the other direct projects were not rerun for this isolated Core/probe change, so `983/983` is retained as labeled baseline evidence rather than presented as a fresh aggregate.
 - Historical final-review tray Release build passed with `0` warnings and `0` errors. The current follow-up passed `git diff --check` and scoped formatting. Repository-wide `dotnet format --verify-no-changes` remains blocked by pre-existing whitespace debt outside compatibility files; the compatibility-changed C# files pass scoped formatting.
 - The probe’s PowerShell syntax and FTP invalid-URI exit-2 checks passed. Its controlled loopback fake integration now verifies strict header/body subscription Location handling, mounted `/openhab` Location routing, event-only SSE timeout, header precedence, a timed-out post-write parser helper with successful explicit-item restoration, and redacted failure output. No live/personal endpoint was accessed.
+- Fresh-checkout helper regression: the default controlled integration removes only `tools/OpenHab.CompatibilityProbe` generated `bin` and `obj` output, then succeeds with `TimeoutSeconds=10` in 44.1 seconds; its warm-helper mode succeeds in 43.6 seconds. The helper restore/build has a separate bounded 120-second setup allowance before any server request or item write. The post-write stalled-validator case remains bounded by the user timeout (2 seconds) and proves successful restoration plus redacted output.
 - Compatibility release recommendation: **not ready**. Authenticated local/API-token/Basic and myopenHAB probes, full live sitemap evidence, embedded WebView2/manual UI evidence, package/release ownership gates, and existing product release blockers remain open. No version, package identity, manifest, or signing changes were made.
 
 2026-07-15 notification reliability and review remediation on `main`:

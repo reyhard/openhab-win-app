@@ -19,6 +19,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+# Helper setup completes before any server request or reversible item write. Keep it bounded,
+# but allow a cold restore/build without borrowing the runtime timeout that protects restoration.
+$ProductionPayloadParserSetupTimeoutSeconds = 120
+
 function Normalize-OpenHabBaseUri {
     [CmdletBinding()]
     param([string]$Value)
@@ -272,8 +276,6 @@ function New-ProductionPayloadParserTool {
 }
 
 function Initialize-ProductionPayloadParser {
-    param([Parameter(Mandatory)][int]$TimeoutSeconds)
-
     if (-not [string]::IsNullOrWhiteSpace($ParserToolPath)) {
         if (-not (Test-Path -LiteralPath $ParserToolPath -PathType Leaf)) { throw 'Configured production parser helper is missing.' }
         return New-ProductionPayloadParserTool -ToolPath ([string](Resolve-Path -LiteralPath $ParserToolPath))
@@ -291,7 +293,7 @@ function Initialize-ProductionPayloadParser {
     $commands.Add(@('build', $resolvedProject, '--no-restore'))
 
     foreach ($arguments in $commands) {
-        $helperResult = Invoke-HelperProcess -FileName 'dotnet' -CommandArguments $arguments -TimeoutSeconds $TimeoutSeconds -CancellationToken ([Threading.CancellationToken]::None) -Description 'Production parser helper build'
+        $helperResult = Invoke-HelperProcess -FileName 'dotnet' -CommandArguments $arguments -TimeoutSeconds $ProductionPayloadParserSetupTimeoutSeconds -CancellationToken ([Threading.CancellationToken]::None) -Description 'Production parser helper build'
         if ($helperResult.ExitCode -ne 0) {
             if ($arguments[0] -eq 'restore') { throw 'Production parser helper restore failed; make NuGet restore available and retry.' }
             throw 'Production parser helper build failed using current sources; run dotnet restore tools/OpenHab.CompatibilityProbe and retry.'
@@ -402,7 +404,7 @@ try {
     $authentication = if (-not [string]::IsNullOrWhiteSpace($ApiToken)) { 'Bearer' } elseif (-not [string]::IsNullOrWhiteSpace($UserName)) { 'Basic' } else { 'None' }
     $result = New-CompatibilityResult -Endpoint (Get-RedactedUri $normalizedBaseUri) -Authentication $authentication
     $currentStep = 'helper'
-    $parserTool = Initialize-ProductionPayloadParser -TimeoutSeconds $TimeoutSeconds
+    $parserTool = Initialize-ProductionPayloadParser
     $authorization = New-OpenHabAuthorizationHeader -Token $ApiToken -BasicUserName $UserName -BasicPassword $Password
     $handler = [System.Net.Http.HttpClientHandler]::new()
     if ($AllowUntrustedCertificateForLocalTestOnly) {
