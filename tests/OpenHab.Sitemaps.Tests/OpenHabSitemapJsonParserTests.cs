@@ -1,3 +1,4 @@
+using System.Text.Json;
 using OpenHab.Sitemaps.Models;
 using OpenHab.Sitemaps.Parsing;
 
@@ -549,6 +550,18 @@ public sealed class OpenHabSitemapJsonParserTests
         Assert.Equal(12, fixtureButtons.Select(widget => widget.WidgetId).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(fixtureButtons, widget => widget.WidgetId == "2_000610");
         Assert.Contains(fixtureButtons, widget => widget.WidgetId == "2_000611");
+
+        var genuineButton = Assert.Single(fixtureButtons, widget => widget.WidgetId == "2_000610");
+        Assert.Equal(SitemapWidgetType.Button, genuineButton.Type);
+        Assert.Equal("2_000610", genuineButton.WidgetId);
+        Assert.Equal(3, genuineButton.Row);
+        Assert.Equal(3, genuineButton.Column);
+        Assert.Equal("BUTTON_10", genuineButton.Command);
+        Assert.Null(genuineButton.ReleaseCommand);
+        Assert.Equal("Button 10", genuineButton.Label);
+        Assert.Null(genuineButton.Icon);
+        Assert.Equal("Compatibility_Mode", genuineButton.ItemName);
+        Assert.Equal("NULL", genuineButton.RawItemState);
     }
 
     [Fact]
@@ -566,9 +579,39 @@ public sealed class OpenHabSitemapJsonParserTests
         Assert.Equal("Compatibility_Mode", legacyGrid.ItemName);
         Assert.Equal("NULL", legacyGrid.RawItemState);
         Assert.DoesNotContain(legacyPage.Widgets, widget => widget.Type == SitemapWidgetType.Button);
+        Assert.Equal("settings", legacyGrid.Icon);
+        Assert.Equal("buttongrid", currentGrid.Icon);
+        var legacyButtons = ButtonGridControls(legacyGrid, legacyPage.Widgets);
+        var nestedButtons = ButtonGridControls(currentGrid, currentPage.Widgets);
+        Assert.Equal(legacyButtons.Select(control => control.Action), nestedButtons.Select(control => control.Action));
+        Assert.All(legacyButtons, button =>
+        {
+            Assert.Null(button.Row);
+            Assert.Null(button.Column);
+            Assert.Null(button.ReleaseCommand);
+            Assert.Null(button.Icon);
+            Assert.Null(button.Stateless);
+        });
+
+        var legacyFixtureLayout = LegacyButtonGridFixtureLayout();
+
+        // Legacy SitemapMapping deliberately carries only ordered command/label pairs, not
+        // button metadata. Its declaration order must remain equivalent to source positions.
         Assert.Equal(
-            ButtonGridControls(legacyGrid, legacyPage.Widgets),
-            ButtonGridControls(currentGrid, currentPage.Widgets));
+            legacyGrid.Mappings.Select(mapping => new ComparableButtonGridAction(legacyGrid.ItemName, mapping.Command, mapping.Label)),
+            legacyFixtureLayout.Select(control => control.Action));
+        Assert.Equal(
+            legacyFixtureLayout,
+            nestedButtons
+                .OrderBy(control => control.Row)
+                .ThenBy(control => control.Column)
+                .Select(control => new ButtonGridFixtureLayout(control.Action, control.Row!.Value, control.Column!.Value)));
+        Assert.All(nestedButtons, button =>
+        {
+            Assert.Null(button.ReleaseCommand);
+            Assert.Null(button.Icon);
+            Assert.True(button.Stateless);
+        });
     }
 
     [Fact]
@@ -615,13 +658,39 @@ public sealed class OpenHabSitemapJsonParserTests
         var legacyControls = ComparableControls(legacy);
         var currentControls = ComparableControls(current);
         var sharedCurrentControls = currentControls.Where(legacyControls.Contains).ToArray();
+        var legacyOnlyControls = legacyControls.Except(currentControls).ToArray();
         var currentOnlyControls = currentControls.Except(legacyControls).ToArray();
 
         Assert.Equal(legacyControls, sharedCurrentControls);
-        var currentOnly = Assert.Single(currentOnlyControls);
-        Assert.Equal(SitemapWidgetType.Text, currentOnly.Type);
-        Assert.Equal("Visible text", currentOnly.Label);
-        Assert.Equal("Compatibility_Text", currentOnly.ItemName);
+        Assert.Empty(legacyOnlyControls);
+        Assert.Equal(
+            [new ComparableWidget(
+                SitemapWidgetType.Text,
+                "Visible text",
+                "Compatibility_Text",
+                string.Empty,
+                IsVisible: true,
+                Row: null,
+                Column: null,
+                Command: null,
+                ReleaseCommand: null,
+                Stateless: null,
+                Icon: "text")],
+            currentOnlyControls);
+
+        var fixtureOnlyWidget = Assert.Single(current.Widgets, widget => widget.Label == "Visible text");
+        Assert.Equal("-", fixtureOnlyWidget.State);
+        Assert.Equal("NULL", fixtureOnlyWidget.RawItemState);
+        Assert.Empty(fixtureOnlyWidget.Mappings);
+
+        // Item state is live server data, so it is asserted per capture rather than included
+        // in the static control-equivalence projection.
+        var legacySwitch = Assert.Single(legacy.Widgets, widget => widget.Label == "Unmapped switch");
+        var currentSwitch = Assert.Single(current.Widgets, widget => widget.Label == "Unmapped switch");
+        Assert.Equal("-", legacySwitch.State);
+        Assert.Equal("NULL", legacySwitch.RawItemState);
+        Assert.Equal("ON", currentSwitch.State);
+        Assert.Equal("ON", currentSwitch.RawItemState);
     }
 
     private static IReadOnlyList<ComparableWidget> ComparableControls(SitemapPage page)
@@ -642,10 +711,13 @@ public sealed class OpenHabSitemapJsonParserTests
                     widget.Label,
                     null,
                     MappingSignature(ButtonGridControls(widget, page.Widgets)),
+                    widget.IsVisible,
                     widget.Row,
                     widget.Column,
                     widget.Command,
-                    widget.ReleaseCommand));
+                    widget.ReleaseCommand,
+                    widget.Stateless,
+                    Icon: null));
                 continue;
             }
 
@@ -654,10 +726,13 @@ public sealed class OpenHabSitemapJsonParserTests
                 widget.Label,
                 widget.ItemName,
                 MappingSignature(widget.Mappings.Select(mapping => (mapping.Command, mapping.Label))),
+                widget.IsVisible,
                 widget.Row,
                 widget.Column,
                 widget.Command,
-                widget.ReleaseCommand));
+                widget.ReleaseCommand,
+                widget.Stateless,
+                widget.Icon));
         }
 
         return controls;
@@ -670,7 +745,13 @@ public sealed class OpenHabSitemapJsonParserTests
         if (buttonGrid.Mappings.Count > 0)
         {
             return buttonGrid.Mappings
-                .Select(mapping => new ComparableButtonGridControl(buttonGrid.ItemName, mapping.Command, mapping.Label))
+                .Select(mapping => new ComparableButtonGridControl(
+                    new ComparableButtonGridAction(buttonGrid.ItemName, mapping.Command, mapping.Label),
+                    Row: null,
+                    Column: null,
+                    ReleaseCommand: null,
+                    Icon: null,
+                    Stateless: null))
                 .ToArray();
         }
 
@@ -693,14 +774,34 @@ public sealed class OpenHabSitemapJsonParserTests
             .Skip(gridIndex + 1)
             .TakeWhile(widget => widget.Type == SitemapWidgetType.Button)
             .Select(button => new ComparableButtonGridControl(
-                button.ItemName ?? buttonGrid.ItemName,
-                button.Command ?? string.Empty,
-                button.Label))
+                new ComparableButtonGridAction(button.ItemName ?? buttonGrid.ItemName, button.Command ?? string.Empty, button.Label),
+                button.Row,
+                button.Column,
+                button.ReleaseCommand,
+                button.Icon,
+                button.Stateless))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<ButtonGridFixtureLayout> LegacyButtonGridFixtureLayout()
+    {
+        using var document = JsonDocument.Parse(
+            CompatibilityFixture.ReadText("openhab-5.1.4", "sitemaps", "button-grid.json"));
+        var itemName = document.RootElement.GetProperty("item").GetProperty("name").GetString();
+        return document.RootElement.GetProperty("mappings")
+            .EnumerateArray()
+            .Select(mapping => new ButtonGridFixtureLayout(
+                new ComparableButtonGridAction(
+                    itemName,
+                    mapping.GetProperty("command").GetString() ?? string.Empty,
+                    mapping.GetProperty("label").GetString() ?? string.Empty),
+                mapping.GetProperty("row").GetInt32(),
+                mapping.GetProperty("column").GetInt32()))
             .ToArray();
     }
 
     private static string MappingSignature(IEnumerable<ComparableButtonGridControl> mappings) =>
-        string.Join("\u001e", mappings.Select(mapping => $"{mapping.ItemName}\u001f{mapping.Command}\u001f{mapping.Label}"));
+        string.Join("\u001e", mappings.Select(mapping => $"{mapping.Action.ItemName}\u001f{mapping.Action.Command}\u001f{mapping.Action.Label}"));
 
     private static string MappingSignature(IEnumerable<(string Command, string Label)> mappings) =>
         string.Join("\u001e", mappings.Select(mapping => $"{mapping.Command}\u001f{mapping.Label}"));
@@ -710,10 +811,23 @@ public sealed class OpenHabSitemapJsonParserTests
         string Label,
         string? ItemName,
         string MappingSignature,
+        bool IsVisible,
         int? Row,
         int? Column,
         string? Command,
-        string? ReleaseCommand);
+        string? ReleaseCommand,
+        bool? Stateless,
+        string? Icon);
 
-    private sealed record ComparableButtonGridControl(string? ItemName, string Command, string Label);
+    private sealed record ComparableButtonGridControl(
+        ComparableButtonGridAction Action,
+        int? Row,
+        int? Column,
+        string? ReleaseCommand,
+        string? Icon,
+        bool? Stateless);
+
+    private sealed record ComparableButtonGridAction(string? ItemName, string Command, string Label);
+
+    private sealed record ButtonGridFixtureLayout(ComparableButtonGridAction Action, int Row, int Column);
 }
