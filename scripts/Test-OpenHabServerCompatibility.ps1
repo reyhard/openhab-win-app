@@ -8,6 +8,8 @@ param(
     [string]$Password,
     [string]$OutputPath = ".\artifacts\openhab-server-compatibility.json",
     [string]$ExpectedVersionPrefix,
+    [Parameter(DontShow = $true)]
+    [string]$ParserToolPath,
     [ValidateRange(1, 300)]
     [int]$TimeoutSeconds = 20,
     [switch]$SkipWriteProbe,
@@ -106,12 +108,15 @@ function Resolve-SubscriptionId {
     }
 
     foreach ($location in $locations) {
-        $path = $location
+        $path = ($location -split '[?#]', 2)[0]
         $parsed = $null
         if ([Uri]::TryCreate($location, [UriKind]::Absolute, [ref]$parsed)) { $path = $parsed.AbsolutePath }
         $segments = @($path.Trim('/').Split('/', [StringSplitOptions]::RemoveEmptyEntries))
-        if ($segments.Count -gt 0) {
-            $candidate = [Uri]::UnescapeDataString($segments[$segments.Count - 1])
+        if ($segments.Count -eq 4 -and
+            [string]::Equals($segments[0], 'rest', [StringComparison]::Ordinal) -and
+            [string]::Equals($segments[1], 'sitemaps', [StringComparison]::Ordinal) -and
+            [string]::Equals($segments[2], 'events', [StringComparison]::Ordinal)) {
+            $candidate = [Uri]::UnescapeDataString($segments[3])
             if (-not [string]::IsNullOrWhiteSpace($candidate)) { return $candidate }
         }
     }
@@ -184,7 +189,94 @@ function Invoke-OpenHabRequest {
     finally { $request.Dispose() }
 }
 
+function Stop-HelperProcess {
+    param($Process)
+
+    if ($null -eq $Process -or $Process.HasExited) { return }
+    try { $Process.Kill($true) }
+    catch { }
+    try { [void]$Process.WaitForExit(2000) }
+    catch { }
+}
+
+function Invoke-HelperProcess {
+    param(
+        [Parameter(Mandatory)][string]$FileName,
+        [Parameter(Mandatory)][string[]]$CommandArguments,
+        [string]$InputPayload,
+        [switch]$WriteInput,
+        [Parameter(Mandatory)][int]$TimeoutSeconds,
+        [Parameter(Mandatory)][Threading.CancellationToken]$CancellationToken,
+        [Parameter(Mandatory)][string]$Description
+    )
+
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $FileName
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardInput = $WriteInput
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $CommandArguments) { [void]$startInfo.ArgumentList.Add([string]$argument) }
+
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $helperCancellation = [Threading.CancellationTokenSource]::CreateLinkedTokenSource($CancellationToken)
+    $stdoutTask = $null
+    $stderrTask = $null
+    try {
+        $helperCancellation.CancelAfter([TimeSpan]::FromSeconds($TimeoutSeconds))
+        if (-not $process.Start()) { throw "$Description could not be started." }
+
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if ($WriteInput) {
+            try {
+                [void]$process.StandardInput.WriteAsync($InputPayload).WaitAsync($helperCancellation.Token).GetAwaiter().GetResult()
+            }
+            finally {
+                $process.StandardInput.Close()
+            }
+        }
+
+        [void]$process.WaitForExitAsync($helperCancellation.Token).GetAwaiter().GetResult()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        [void]$stderrTask.GetAwaiter().GetResult()
+        return [pscustomobject]@{ ExitCode = $process.ExitCode; StandardOutput = $stdout }
+    }
+    catch [OperationCanceledException] {
+        Stop-HelperProcess $process
+        throw [TimeoutException]::new("$Description timed out or was canceled after $TimeoutSeconds seconds and was stopped.")
+    }
+    finally {
+        if ($null -ne $stdoutTask -or $null -ne $stderrTask) {
+            Stop-HelperProcess $process
+        }
+        $process.Dispose()
+        $helperCancellation.Dispose()
+    }
+}
+
+function New-ProductionPayloadParserTool {
+    param([Parameter(Mandatory)][string]$ToolPath)
+
+    $extension = [IO.Path]::GetExtension($ToolPath)
+    if ($extension -eq '.ps1') {
+        return [pscustomobject]@{ FileName = 'pwsh'; PrefixArguments = @('-NoProfile', '-File', $ToolPath) }
+    }
+    if ($extension -eq '.dll') {
+        return [pscustomobject]@{ FileName = 'dotnet'; PrefixArguments = @($ToolPath) }
+    }
+    throw 'ParserToolPath must point to a .dll or .ps1 helper.'
+}
+
 function Initialize-ProductionPayloadParser {
+    param([Parameter(Mandatory)][int]$TimeoutSeconds)
+
+    if (-not [string]::IsNullOrWhiteSpace($ParserToolPath)) {
+        if (-not (Test-Path -LiteralPath $ParserToolPath -PathType Leaf)) { throw 'Configured production parser helper is missing.' }
+        return New-ProductionPayloadParserTool -ToolPath ([string](Resolve-Path -LiteralPath $ParserToolPath))
+    }
+
     $project = Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\OpenHab.CompatibilityProbe.csproj'
     if (-not (Test-Path -LiteralPath $project -PathType Leaf)) { throw 'Production parser helper source is missing.' }
     $resolvedProject = Resolve-Path $project
@@ -197,49 +289,32 @@ function Initialize-ProductionPayloadParser {
     $commands.Add(@('build', $resolvedProject, '--no-restore'))
 
     foreach ($arguments in $commands) {
-        $startInfo = [Diagnostics.ProcessStartInfo]::new()
-        $startInfo.FileName = 'dotnet'
-        $startInfo.UseShellExecute = $false
-        $startInfo.RedirectStandardOutput = $true
-        $startInfo.RedirectStandardError = $true
-        foreach ($argument in $arguments) { [void]$startInfo.ArgumentList.Add([string]$argument) }
-        $process = [Diagnostics.Process]::new()
-        $process.StartInfo = $startInfo
-        [void]$process.Start()
-        [void]$process.StandardOutput.ReadToEnd()
-        [void]$process.StandardError.ReadToEnd()
-        $process.WaitForExit()
-        if ($process.ExitCode -ne 0) {
+        $helperResult = Invoke-HelperProcess -FileName 'dotnet' -CommandArguments $arguments -TimeoutSeconds $TimeoutSeconds -CancellationToken ([Threading.CancellationToken]::None) -Description 'Production parser helper build'
+        if ($helperResult.ExitCode -ne 0) {
             if ($arguments[0] -eq 'restore') { throw 'Production parser helper restore failed; make NuGet restore available and retry.' }
             throw 'Production parser helper build failed using current sources; run dotnet restore tools/OpenHab.CompatibilityProbe and retry.'
         }
     }
     $toolPath = Join-Path $PSScriptRoot '..\tools\OpenHab.CompatibilityProbe\bin\Debug\net10.0-windows10.0.19041.0\OpenHab.CompatibilityProbe.dll'
     if (-not (Test-Path -LiteralPath $toolPath -PathType Leaf)) { throw 'Production parser helper build did not produce the expected executable.' }
-    return (Resolve-Path $toolPath)
+    return New-ProductionPayloadParserTool -ToolPath ([string](Resolve-Path $toolPath))
 }
 
 function Invoke-ProductionPayloadParser {
-    param([Parameter(Mandatory)][ValidateSet('sitemap', 'main-ui-pages')][string]$Mode, [Parameter(Mandatory)][string]$Payload, [Parameter(Mandatory)][string]$ToolPath)
+    param(
+        [Parameter(Mandatory)][ValidateSet('sitemap', 'main-ui-pages')][string]$Mode,
+        [Parameter(Mandatory)][string]$Payload,
+        [Parameter(Mandatory)]$ParserTool,
+        [Parameter(Mandatory)][int]$TimeoutSeconds,
+        [Parameter(Mandatory)][Threading.CancellationToken]$CancellationToken
+    )
 
-    $startInfo = [Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = 'dotnet'
-    $startInfo.UseShellExecute = $false
-    $startInfo.RedirectStandardInput = $true
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
-    [void]$startInfo.ArgumentList.Add($ToolPath)
-    [void]$startInfo.ArgumentList.Add($Mode)
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo = $startInfo
-    [void]$process.Start()
-    $process.StandardInput.Write($Payload)
-    $process.StandardInput.Close()
-    $output = $process.StandardOutput.ReadToEnd()
-    [void]$process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-    if ($process.ExitCode -ne 0) { throw 'Production parser helper rejected the response.' }
-    return $output | ConvertFrom-Json -ErrorAction Stop
+    $arguments = [Collections.Generic.List[string]]::new()
+    foreach ($argument in $ParserTool.PrefixArguments) { $arguments.Add([string]$argument) }
+    $arguments.Add($Mode)
+    $helperResult = Invoke-HelperProcess -FileName $ParserTool.FileName -CommandArguments $arguments.ToArray() -InputPayload $Payload -WriteInput -TimeoutSeconds $TimeoutSeconds -CancellationToken $CancellationToken -Description 'Production parser helper validation'
+    if ($helperResult.ExitCode -ne 0) { throw 'Production parser helper rejected the response.' }
+    return $helperResult.StandardOutput | ConvertFrom-Json -ErrorAction Stop
 }
 
 function Read-SseFrame {
@@ -251,7 +326,7 @@ function Read-SseFrame {
             try { $line = $Session.Reader.ReadLineAsync($readCancellation.Token).AsTask().GetAwaiter().GetResult() }
             catch [OperationCanceledException] { return $null }
             if ($null -eq $line) { return $null }
-            if ($line.StartsWith(':') -or $line.StartsWith('event:') -or $line.StartsWith('data:')) { return $line }
+            if ($line.StartsWith(':') -or $line.StartsWith('data:')) { return $line }
         }
     }
     finally { $readCancellation.Dispose() }
@@ -325,7 +400,7 @@ try {
     $authentication = if (-not [string]::IsNullOrWhiteSpace($ApiToken)) { 'Bearer' } elseif (-not [string]::IsNullOrWhiteSpace($UserName)) { 'Basic' } else { 'None' }
     $result = New-CompatibilityResult -Endpoint (Get-RedactedUri $normalizedBaseUri) -Authentication $authentication
     $currentStep = 'helper'
-    $parserToolPath = Initialize-ProductionPayloadParser
+    $parserTool = Initialize-ProductionPayloadParser -TimeoutSeconds $TimeoutSeconds
     $authorization = New-OpenHabAuthorizationHeader -Token $ApiToken -BasicUserName $UserName -BasicPassword $Password
     $handler = [System.Net.Http.HttpClientHandler]::new()
     if ($AllowUntrustedCertificateForLocalTestOnly) {
@@ -363,7 +438,7 @@ try {
 
         $currentStep = 'sitemap-homepage'
         $sitemapResponse = Invoke-OpenHabRequest -Client $client -Uri (New-OpenHabUri $normalizedBaseUri "rest/sitemaps/$([Uri]::EscapeDataString($SitemapName))") -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $authorization -CancellationToken $timeoutCancellation.Token
-        $sitemapSummary = Invoke-ProductionPayloadParser -Mode sitemap -Payload $sitemapResponse.Body -ToolPath $parserToolPath
+        $sitemapSummary = Invoke-ProductionPayloadParser -Mode sitemap -Payload $sitemapResponse.Body -ParserTool $parserTool -TimeoutSeconds $TimeoutSeconds -CancellationToken $timeoutCancellation.Token
         if ($sitemapSummary.WidgetCount -lt 1 -or $sitemapSummary.WidgetIdsObserved -lt 1) { throw 'Sitemap did not expose widgets with server widget IDs.' }
         $result.sitemap.homepage = 'passed'
         $result.sitemap.widgetIdsObserved = [int]$sitemapSummary.WidgetIdsObserved
@@ -408,14 +483,22 @@ try {
 
         $currentStep = 'main-ui-pages'
         $mainUiResponse = Invoke-OpenHabRequest -Client $client -Uri (New-OpenHabUri $normalizedBaseUri 'rest/ui/components/ui:page') -Method ([System.Net.Http.HttpMethod]::Get) -Authorization $authorization -CancellationToken $timeoutCancellation.Token
-        [void](Invoke-ProductionPayloadParser -Mode main-ui-pages -Payload $mainUiResponse.Body -ToolPath $parserToolPath)
+        [void](Invoke-ProductionPayloadParser -Mode main-ui-pages -Payload $mainUiResponse.Body -ParserTool $parserTool -TimeoutSeconds $TimeoutSeconds -CancellationToken $timeoutCancellation.Token)
         $result.mainUiPages = 'passed'
     }
     finally { $timeoutCancellation.Dispose() }
 }
 catch {
     if ($result) { Add-CompatibilityFailure -Result $result -Code $currentStep }
-    [Console]::Error.WriteLine('Compatibility probe failed. See the redacted report for completed checks.')
+    if ($_.Exception -is [TimeoutException]) {
+        [Console]::Error.WriteLine("Compatibility probe failed: $($_.Exception.Message)")
+    }
+    elseif ($_.Exception -is [OperationCanceledException]) {
+        [Console]::Error.WriteLine("Compatibility probe timed out or was canceled during $currentStep. See the redacted report for completed checks.")
+    }
+    else {
+        [Console]::Error.WriteLine('Compatibility probe failed. See the redacted report for completed checks.')
+    }
 }
 finally {
     if ($restoreRequired -and $client -and $originalState) {

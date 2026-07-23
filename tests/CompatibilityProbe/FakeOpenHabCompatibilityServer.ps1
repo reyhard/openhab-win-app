@@ -5,9 +5,11 @@ param(
     [switch]$OmitVersion,
     [string]$Version = '5.2.0',
     [switch]$UseLocationHeader,
+    [switch]$MalformedSubscriptionLocation,
     [switch]$RequireFakeBearer,
     [switch]$RequireFakeBasic,
-    [switch]$StallItemReadAfterWrite
+    [switch]$StallItemReadAfterWrite,
+    [switch]$EventOnlySseStall
 )
 
 Set-StrictMode -Version Latest
@@ -26,6 +28,16 @@ function Send-Response($Writer, [int]$StatusCode, [string]$ContentType = $null, 
     $Writer.Write($headerBytes, 0, $headerBytes.Length)
     if ($bytes.Length -gt 0) { $Writer.Write($bytes, 0, $bytes.Length) }
     $Writer.Flush()
+}
+
+function Send-EventOnlyFrameThenStall($Writer) {
+    $headers = "HTTP/1.1 200 OK`r`nConnection: keep-alive`r`nContent-Type: text/event-stream`r`n`r`n"
+    $headerBytes = [Text.Encoding]::ASCII.GetBytes($headers)
+    $frameBytes = [Text.Encoding]::UTF8.GetBytes("event: message`n`n")
+    $Writer.Write($headerBytes, 0, $headerBytes.Length)
+    $Writer.Write($frameBytes, 0, $frameBytes.Length)
+    $Writer.Flush()
+    Start-Sleep -Seconds 30
 }
 
 try {
@@ -68,11 +80,15 @@ try {
                 Send-Response $stream 200 'application/json' '{"homepage":{"id":"compatibility","widgets":[{"type":"Switch","label":"Compatibility","widgetId":"2_000611","item":{"name":"Compatibility_Switch","state":"OFF"}}]}}'
             }
             elseif ($method -eq 'POST' -and $path -eq '/rest/sitemaps/events/subscribe') {
-                $subscriptionHeaders = if ($UseLocationHeader) { @{ Location = '/rest/sitemaps/events/header-subscription' } } else { @{} }
-                Send-Response $stream 200 'application/json' '{"context":{"headers":{"Location":["/rest/sitemaps/events/probe-subscription"]}}}' $subscriptionHeaders
+                $headerLocation = if ($MalformedSubscriptionLocation) { '/rest/invalid/header-subscription' } else { '/rest/sitemaps/events/header-subscription' }
+                $bodyLocation = if ($MalformedSubscriptionLocation -and -not $UseLocationHeader) { '/rest/invalid/probe-subscription' } else { '/rest/sitemaps/events/probe-subscription' }
+                $subscriptionHeaders = if ($UseLocationHeader) { @{ Location = $headerLocation } } else { @{} }
+                $subscriptionBody = @{ context = @{ headers = @{ Location = @($bodyLocation) } } } | ConvertTo-Json -Compress
+                Send-Response $stream 200 'application/json' $subscriptionBody $subscriptionHeaders
             }
-            elseif ($method -eq 'GET' -and $path -in @('/rest/sitemaps/events/probe-subscription', '/rest/sitemaps/events/header-subscription')) {
-                Send-Response $stream 200 'text/event-stream' ": heartbeat`n`n"
+            elseif ($method -eq 'GET' -and (($UseLocationHeader -and $path -eq '/rest/sitemaps/events/header-subscription') -or (-not $UseLocationHeader -and $path -eq '/rest/sitemaps/events/probe-subscription'))) {
+                if ($EventOnlySseStall) { Send-EventOnlyFrameThenStall $stream }
+                else { Send-Response $stream 200 'text/event-stream' ": heartbeat`n`n" }
             }
             elseif ($method -eq 'GET' -and $path -eq '/rest/items/Compatibility_Switch') {
                 if ($StallItemReadAfterWrite -and $writeObserved) { Start-Sleep -Seconds 30 }
