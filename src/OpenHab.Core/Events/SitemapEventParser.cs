@@ -8,9 +8,13 @@ public static class SitemapEventParser
     {
         if (string.IsNullOrWhiteSpace(line)) return null;
         if (line.StartsWith(':')) return null;
-        if (!line.StartsWith("data: ", StringComparison.Ordinal)) return null;
+        if (!line.StartsWith("data:", StringComparison.Ordinal)) return null;
 
-        var json = line.Substring(6);
+        var json = line["data:".Length..];
+        if (json.StartsWith(' '))
+        {
+            json = json[1..];
+        }
 
         try
         {
@@ -62,12 +66,7 @@ public static class SitemapEventParser
                 location.ValueKind == JsonValueKind.Array &&
                 location.GetArrayLength() > 0)
             {
-                var url = location[0].GetString();
-                if (url is not null)
-                {
-                    var lastSlash = url.LastIndexOf('/');
-                    return lastSlash >= 0 ? url.Substring(lastSlash + 1) : url;
-                }
+                return ExtractSubscriptionId(location[0].GetString());
             }
         }
         catch (JsonException)
@@ -76,6 +75,29 @@ public static class SitemapEventParser
         }
 
         return null;
+    }
+
+    internal static string? ExtractSubscriptionId(string? location)
+    {
+        if (string.IsNullOrWhiteSpace(location))
+            return null;
+
+        var path = location.Split(['?', '#'], 2)[0];
+        if (Uri.TryCreate(path, UriKind.Absolute, out var absoluteUri))
+        {
+            path = absoluteUri.AbsolutePath;
+        }
+
+        var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length < 3 ||
+            !string.Equals(segments[^3], "sitemaps", StringComparison.Ordinal) ||
+            !string.Equals(segments[^2], "events", StringComparison.Ordinal) ||
+            string.IsNullOrWhiteSpace(segments[^1]))
+        {
+            return null;
+        }
+
+        return segments[^1];
     }
 
     private static string GetStringOrDefault(JsonElement element, string propertyName)

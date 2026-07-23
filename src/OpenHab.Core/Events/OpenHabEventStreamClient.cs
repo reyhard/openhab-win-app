@@ -127,7 +127,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         }
                         else if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))
                         {
-                            DiagnosticLogger.Warn($"SSE unparsed data line: {SafeDiagnosticText.ForLog(line, 200)}");
+                            DiagnosticLogger.Warn("SSE unparsed data line.");
                         }
                     }
                 }
@@ -234,6 +234,16 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        return SitemapEventParser.ParseSubscriptionId(body);
+        return ResolveSubscriptionId(response, body);
+    }
+
+    internal static string? ResolveSubscriptionId(HttpResponseMessage response, string? responseBody)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+
+        if (response.Headers.Location is not null)
+            return SitemapEventParser.ExtractSubscriptionId(response.Headers.Location.OriginalString);
+
+        return responseBody is null ? null : SitemapEventParser.ParseSubscriptionId(responseBody);
     }
 }
