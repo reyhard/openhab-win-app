@@ -106,14 +106,14 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         break;
                     }
 
-                    // Log every non-empty line only when verbose diagnostics are enabled.
+                    // Preserve frame-level visibility without logging server-provided payload content.
                     if (!string.IsNullOrWhiteSpace(line) && !line.StartsWith(':') && !line.StartsWith("event:"))
-                        DiagnosticLogger.Verbose($"SSE raw: {SafeDiagnosticText.ForLog(line, 200)}");
+                        DiagnosticLogger.Verbose("SSE data frame received.");
 
                     var parsed = SitemapEventParser.ParseLine(line);
                     if (parsed is SitemapWidgetEvent widgetEvent)
                     {
-                        DiagnosticLogger.Verbose($"SSE widget event: id={widgetEvent.WidgetId} vis={widgetEvent.Visibility} item={widgetEvent.ItemName} state={widgetEvent.ItemState}");
+                        DiagnosticLogger.Verbose("SSE sitemap widget event received.");
                         WidgetEventReceived?.Invoke(this, widgetEvent);
                     }
                     else
@@ -122,7 +122,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
                         var evt = SseMessageParser.ParseLine(line);
                         if (evt is not null)
                         {
-                            DiagnosticLogger.Verbose($"SSE raw event: {evt.GetType().Name} topic={evt.Topic}");
+                            DiagnosticLogger.Verbose("SSE non-widget event received.");
                             EventReceived?.Invoke(this, evt);
                         }
                         else if (!string.IsNullOrWhiteSpace(line) && line.StartsWith("data:"))

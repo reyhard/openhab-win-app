@@ -344,6 +344,27 @@ public sealed class OpenHabEventStreamClientTests
     }
 
     [Fact]
+    public async Task WidgetEventDoesNotLogPayloadWhenVerboseDiagnosticsEnabled()
+    {
+        var capturedLines = new ConcurrentQueue<string>();
+        using var capture = DiagnosticLogger.BeginLogCapture(true, capturedLines.Enqueue);
+        var privateValue = Guid.NewGuid().ToString("N");
+        var sseLine = $"data: {{\"widgetId\":\"{privateValue}\",\"label\":\"{privateValue}\",\"item\":{{\"name\":\"{privateValue}\",\"state\":\"{privateValue}\"}}}}";
+        var handler = new FakeHttpMessageHandler(sseLine);
+        using var client = new OpenHabEventStreamClient(
+            new HttpClient(handler),
+            initialBackoff: TimeSpan.FromSeconds(5),
+            maxBackoff: TimeSpan.FromSeconds(5));
+        var eventReceived = new TaskCompletionSource<SitemapWidgetEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.WidgetEventReceived += (_, widgetEvent) => eventReceived.TrySetResult(widgetEvent);
+
+        await client.ConnectAsync(new Uri("https://openhab.test/rest/sitemaps/events/abc123"));
+        await eventReceived.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.DoesNotContain(capturedLines, line => line.Contains(privateValue, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task BeginLogCapture_DisposedInnerScopeDoesNotLeakIntoChildAsyncFlow()
     {
         var outerLines = new ConcurrentQueue<string>();
