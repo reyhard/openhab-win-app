@@ -377,6 +377,37 @@ public sealed class OpenHabHttpClientTests
     }
 
     [Fact]
+    public async Task FailedRequestRedactsStandaloneBearerReasonPhrase()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.BadGateway)
+        {
+            ReasonPhrase = "upstream Bearer oh.secret.token"
+        });
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("https://openhab.test"));
+
+        var error = await Assert.ThrowsAsync<OpenHabRequestException>(() => client.GetSitemapJsonAsync("compatibility", CancellationToken.None));
+
+        Assert.Equal(HttpStatusCode.BadGateway, error.StatusCode);
+        Assert.Contains("502", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("oh.secret.token", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Bearer [redacted]", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task FailedRequestPreservesHarmlessReasonPhraseText()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.BadGateway)
+        {
+            ReasonPhrase = "token endpoint unavailable"
+        });
+        var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("https://openhab.test"));
+
+        var error = await Assert.ThrowsAsync<OpenHabRequestException>(() => client.GetSitemapJsonAsync("compatibility", CancellationToken.None));
+
+        Assert.Contains("token endpoint unavailable", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task SendCommandHonorsCanceledToken()
     {
         var handler = new FakeHttpMessageHandler();
