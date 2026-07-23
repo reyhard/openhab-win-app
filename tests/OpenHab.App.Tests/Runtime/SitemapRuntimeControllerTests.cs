@@ -6,8 +6,10 @@ using OpenHab.Core.Events;
 using OpenHab.Core.Profiles;
 using OpenHab.Rendering;
 using OpenHab.Rendering.Descriptors;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
+using OpenHab.Core;
 
 namespace OpenHab.App.Tests.Runtime;
 
@@ -1168,6 +1170,56 @@ public sealed class SitemapRuntimeControllerTests
     }
 
     [Theory]
+    [InlineData("https://proxy.test/openhab")]
+    [InlineData("https://proxy.test/openhab/")]
+    public async Task StartAndReconnectSitemapEventStreamPreserveReverseProxyBasePath(string endpointText)
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default-sitemap");
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+        var endpoint = new Uri(endpointText);
+        const string sitemapName = "default-sitemap";
+        const string pageId = "page with spaces";
+
+        await controller.StartSitemapEventStreamAsync(endpoint, sitemapName, pageId);
+        await controller.ReconnectSitemapEventStreamAsync(endpoint, sitemapName, pageId);
+
+        var expectedSseUri =
+            "https://proxy.test/openhab/rest/sitemaps/events/fake-subscription-id?sitemap=default-sitemap&pageid=page%20with%20spaces";
+        Assert.Equal(endpoint.AbsoluteUri, Assert.Single(eventClient.SubscribeUris).AbsoluteUri);
+        Assert.Equal(expectedSseUri, eventClient.ConnectUris[0].AbsoluteUri);
+        Assert.Equal(expectedSseUri, eventClient.ConnectUris[1].AbsoluteUri);
+
+        var query = System.Web.HttpUtility.ParseQueryString(eventClient.ConnectUris[0].Query);
+        Assert.Equal(sitemapName, query["sitemap"]);
+        Assert.Equal(pageId, query["pageid"]);
+    }
+
+    [Fact]
+    public async Task StartSitemapEventStreamDoesNotLogUriUserInfo()
+    {
+        var capturedLines = new ConcurrentQueue<string>();
+        using var capture = DiagnosticLogger.BeginLogCapture(true, capturedLines.Enqueue);
+        var userMarker = $"user{Guid.NewGuid():N}";
+        var passwordMarker = $"password{Guid.NewGuid():N}";
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, new FakeOpenHabClient(), new FakeOpenHabClient(), eventClient);
+
+        await controller.StartSitemapEventStreamAsync(
+            new Uri($"https://{userMarker}:{passwordMarker}@proxy.test/openhab"),
+            "default",
+            "home");
+
+        Assert.DoesNotContain(capturedLines, line => line.Contains(userMarker, StringComparison.Ordinal));
+        Assert.DoesNotContain(capturedLines, line => line.Contains(passwordMarker, StringComparison.Ordinal));
+        Assert.Contains(capturedLines, line =>
+            line.Contains("https://proxy.test/openhab", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("1:0")]
     [InlineData("2:0011")]
     [InlineData("floor/main")]
@@ -1857,6 +1909,7 @@ public sealed partial class FakeEventStreamClient : IOpenHabEventStreamClient
     public int ConnectCalls { get; private set; }
     public int DisposeCount { get; private set; }
     public List<Uri> ConnectUris { get; } = new();
+    public List<Uri> SubscribeUris { get; } = new();
     public bool BlockSubscribeSynchronously { get; set; }
     public bool BlockSubscribeAsynchronously { get; set; }
     public Queue<TaskCompletionSource> ConnectBlocks { get; } = new();
@@ -1949,6 +2002,7 @@ public sealed partial class FakeEventStreamClient : IOpenHabEventStreamClient
     public async Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
         SubscribeCalls++;
+        SubscribeUris.Add(baseUri);
         if (BlockSubscribeSynchronously)
         {
             subscribeBlock.Wait(cancellationToken);

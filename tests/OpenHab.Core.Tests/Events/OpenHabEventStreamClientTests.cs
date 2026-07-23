@@ -550,6 +550,55 @@ public sealed class OpenHabEventStreamClientTests
     }
 
     [Theory]
+    [InlineData("https://proxy.test/openhab")]
+    [InlineData("https://proxy.test/openhab/")]
+    public async Task SubscribeToSitemapEventsPreservesReverseProxyBasePath(string baseUriText)
+    {
+        Uri? capturedRequestUri = null;
+        var handler = new DelegateHandler((request, _, _) =>
+        {
+            capturedRequestUri = request.RequestUri;
+            var response = new HttpResponseMessage(HttpStatusCode.Created)
+            {
+                Content = new StringContent("{}")
+            };
+            response.Headers.Location = new Uri("/rest/sitemaps/events/abc123", UriKind.Relative);
+            return Task.FromResult(response);
+        });
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler));
+
+        await client.SubscribeToSitemapEventsAsync(new Uri(baseUriText));
+
+        Assert.NotNull(capturedRequestUri);
+        Assert.Equal(
+            "https://proxy.test/openhab/rest/sitemaps/events/subscribe",
+            capturedRequestUri.AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task ConnectAsyncDoesNotLogUriUserInfo()
+    {
+        var capturedLines = new ConcurrentQueue<string>();
+        using var capture = DiagnosticLogger.BeginLogCapture(true, capturedLines.Enqueue);
+        var userMarker = $"user{Guid.NewGuid():N}";
+        var passwordMarker = $"password{Guid.NewGuid():N}";
+        var handler = new DelegateHandler((_, _, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(new BlockingReadStream())
+            }));
+        using var client = new OpenHabEventStreamClient(new HttpClient(handler));
+
+        await client.ConnectAsync(
+            new Uri($"https://{userMarker}:{passwordMarker}@proxy.test/openhab/rest/sitemaps/events/abc123"));
+
+        Assert.DoesNotContain(capturedLines, line => line.Contains(userMarker, StringComparison.Ordinal));
+        Assert.DoesNotContain(capturedLines, line => line.Contains(passwordMarker, StringComparison.Ordinal));
+        Assert.Contains(capturedLines, line =>
+            line.Contains("https://proxy.test/openhab/rest/sitemaps/events/abc123", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("{\"context\":{\"headers\":{\"Location\":[\"\"]}}}")]
     [InlineData("{\"context\":{\"headers\":{\"Location\":[\"/\"]}}}")]
     [InlineData("{\"context\":{\"headers\":{\"Location\":[\"https://openhab.test/\"]}}}")]

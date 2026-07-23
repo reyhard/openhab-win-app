@@ -752,7 +752,7 @@ public sealed class SitemapRuntimeController
 
         try
         {
-            DiagnosticLogger.Info($"Starting sitemap event stream to {localBaseUri} for sitemap '{sitemapName}' page '{pageId}'");
+            DiagnosticLogger.Info($"Starting sitemap event stream to {SafeDiagnosticText.ForLog(localBaseUri)} for sitemap '{sitemapName}' page '{pageId}'");
 
             var subscriptionId = await sitemapEventStreamClient.SubscribeToSitemapEventsAsync(localBaseUri, ct);
             if (!IsCurrentSitemapEventStreamAttempt(attempt))
@@ -780,7 +780,7 @@ public sealed class SitemapRuntimeController
 
             _subscriptionId = subscriptionId;
             DiagnosticLogger.Info($"Sitemap event subscription created: {_subscriptionId}");
-            var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
+            var sseUrl = OpenHabEndpointUri.Combine(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
 
             if (!IsCurrentSitemapEventStreamAttempt(attempt))
             {
@@ -900,7 +900,7 @@ public sealed class SitemapRuntimeController
         }
 
         DiagnosticLogger.Info($"Reconnecting sitemap event stream for page '{pageId}'");
-        var sseUrl = new Uri(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
+        var sseUrl = OpenHabEndpointUri.Combine(localBaseUri, $"rest/sitemaps/events/{_subscriptionId}?sitemap={Uri.EscapeDataString(sitemapName)}&pageid={Uri.EscapeDataString(pageId)}");
         return sitemapEventStreamClient.ConnectAsync(sseUrl, ct);
     }
 

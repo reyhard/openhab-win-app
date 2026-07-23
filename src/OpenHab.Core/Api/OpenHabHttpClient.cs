@@ -212,13 +212,7 @@ public sealed class OpenHabHttpClient : IOpenHabClient
 
     private Uri BuildUri(string relativePath)
     {
-        var baseBuilder = new UriBuilder(_baseUri);
-        if (!baseBuilder.Path.EndsWith('/'))
-        {
-            baseBuilder.Path += "/";
-        }
-
-        return new Uri(baseBuilder.Uri, relativePath.TrimStart('/'));
+        return OpenHabEndpointUri.Combine(_baseUri, relativePath);
     }
 
     private void ApplyAuth(HttpRequestMessage request)

@@ -15,6 +15,18 @@ public static class SafeDiagnosticText
         return ForLog($"{exception.GetType().Name}: {exception.Message}", maxLength);
     }
 
+    public static string ForLog(Uri uri, int maxLength = 240)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+
+        var builder = new UriBuilder(uri)
+        {
+            UserName = string.Empty,
+            Password = string.Empty
+        };
+        return ForLog(builder.Uri.AbsoluteUri, maxLength);
+    }
+
     public static string ForUserStatus(Exception exception, string prefix)
     {
         ArgumentNullException.ThrowIfNull(exception);

@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text;
+using OpenHab.Core.Api;
 
 namespace OpenHab.Core.Events;
 
@@ -78,7 +79,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
             try
             {
                 NotifyConnectionStateChanged("connecting");
-                DiagnosticLogger.Info($"SSE event stream connecting to {sseUri}");
+                DiagnosticLogger.Info($"SSE event stream connecting to {SafeDiagnosticText.ForLog(sseUri)}");
 
                 using var request = new HttpRequestMessage(HttpMethod.Get, sseUri);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
@@ -245,7 +246,7 @@ public sealed class OpenHabEventStreamClient : IOpenHabEventStreamClient
 
     public async Task<string?> SubscribeToSitemapEventsAsync(Uri baseUri, CancellationToken cancellationToken = default)
     {
-        var subscribeUri = new Uri(baseUri, "rest/sitemaps/events/subscribe");
+        var subscribeUri = OpenHabEndpointUri.Combine(baseUri, "rest/sitemaps/events/subscribe");
         using var request = new HttpRequestMessage(HttpMethod.Post, subscribeUri);
         ApplyAuth(request);
 
