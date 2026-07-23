@@ -73,6 +73,39 @@ Use these fixtures for parser, normalizer, runtime event matching, and transport
 - The 5.2 fixture contains nested Buttons and variable-width IDs; the 5.1 fixture retains the legacy representation.
 - JSON, SSE framing, ButtonGrid contract assertions, sanitization scan, and `git diff --check` are required final checks for this task.
 
+## Task 7 — Repeatable live compatibility probe
+
+Date: 2026-07-23
+
+`scripts/Test-OpenHabServerCompatibility.ps1` validates one explicit server endpoint and produces a redacted JSON report. It normalizes HTTP(S) reverse-proxy base paths, rejects URI user-info and conflicting authentication, builds one shared Bearer/Basic authorization header without serializing it, verifies sitemap and Main UI payloads through the production C# sitemap parser/client, accepts subscription locations from HTTP headers or legacy bodies, and bounds/cancels the SSE request. A write is possible only for `-WritableItemName`; OnOff state is captured only in memory and restored in `finally`. Report values never contain a raw item state, response body, authorization header, credential, or exception stack.
+
+The focused helper is `tools/OpenHab.CompatibilityProbe`. Build it once before a fresh-script run when no `bin` output exists:
+
+```powershell
+dotnet restore tools\OpenHab.CompatibilityProbe\OpenHab.CompatibilityProbe.csproj --ignore-failed-sources
+dotnet build tools\OpenHab.CompatibilityProbe\OpenHab.CompatibilityProbe.csproj --no-restore
+```
+
+Verification completed:
+
+| Check | Result |
+| --- | --- |
+| C# production-payload validator RED/GREEN | RED: linked helper did not exist (`CS2001`); GREEN: `ProductionPayloadValidatorTests` 2/2 passed. |
+| PowerShell syntax | Passed for the probe and controlled fake-server integration scripts. |
+| Invalid invocation | `ftp://invalid` returned exit code 2. |
+| Controlled loopback fake | Passed success case and forced restoration failure. The latter returned exit 1, emitted a prominent generic warning, and recorded `items.restore: failed` plus `restore` in the redacted report. |
+| 5.1.4 local image | Official cached image `sha256:d583a280a8a8cdbff5bcebe5bd7d04a7839769350a7e54f600b4aaa26162392f` ran only as disposable `openhab-task7-live-514` on loopback port 18151. REST reached the server; the expected `compatibility` sitemap was absent, so the probe safely stopped at `sitemap-list`. Container removed. |
+| 5.2.0 local image | Official cached image `sha256:450d2175af9f3ddf0720ed3efd4b1cac2bb2445b76c202c8dedeb7f7b2fdf8a9` ran only as disposable `openhab-task7-live-520` on loopback port 18152. REST reached the server; the expected `compatibility` sitemap was absent, so the probe safely stopped at `sitemap-list`. Container removed. |
+
+### Pending live matrix
+
+| Matrix cell | Status |
+| --- | --- |
+| openHAB 5.1.4 local + API token | Pending: no disposable server was configured with a token and synthetic sitemap/item. |
+| openHAB 5.2.0 local + API token | Pending: no disposable server was configured with a token and synthetic sitemap/item. |
+| openHAB 5.2.0 local + Basic authentication | Pending: no disposable server was configured with Basic auth and synthetic sitemap/item. |
+| openHAB 5.2.0 through myopenHAB | Pending: no dedicated harmless item or authorized cloud access was configured; no personal endpoint was accessed. |
+
 ## Task 6 — Embedded Main UI host validation
 
 Date: 2026-07-23

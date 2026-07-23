@@ -20,6 +20,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenHab.Core\OpenHab.Core.csproj" />
+    <ProjectReference Include="..\..\src\OpenHab.Sitemaps\OpenHab.Sitemaps.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\tools\OpenHab.CompatibilityProbe\ProductionPayloadValidator.cs" Link="Compatibility\ProductionPayloadValidator.cs" />
   </ItemGroup>
 
   <ItemGroup>
