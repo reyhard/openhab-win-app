@@ -470,7 +470,7 @@ public partial class App : Application
         {
             try
             {
-                await Task.Delay(75);
+                await Task.Delay(75, CancellationToken.None);
 
                 if (IsShutdownInProgress() || shellController?.Current.PendingRefresh != true)
                 {
@@ -494,7 +494,7 @@ public partial class App : Application
             {
                 Interlocked.Exchange(ref isPendingRefreshRetryScheduled, 0);
             }
-        });
+        }, CancellationToken.None);
     }
 
     private static async Task InitializeAsync(AppSettingsController settingsController)
@@ -635,7 +635,7 @@ public partial class App : Application
 
     private async Task HandleNotificationPollingSettingsChangedAsync()
     {
-        await notificationPollingSettingsChangeSemaphore.WaitAsync();
+        await notificationPollingSettingsChangeSemaphore.WaitAsync(CancellationToken.None);
         try
         {
             if (IsShutdownInProgress())
@@ -847,7 +847,7 @@ public partial class App : Application
 
     private async Task ApplyShellStateAsync()
     {
-        await shellApplySemaphore.WaitAsync();
+        await shellApplySemaphore.WaitAsync(CancellationToken.None);
         try
         {
             if (shellController is null)
@@ -993,7 +993,7 @@ public partial class App : Application
 
         try
         {
-            var sitemaps = await runtimeController!.LoadSitemapListAsync();
+            var sitemaps = await runtimeController!.LoadSitemapListAsync(CancellationToken.None);
             discoveredSitemaps = sitemaps.ToArray();
             _ = uiDispatcherQueue?.TryEnqueue(() =>
             {
@@ -1597,7 +1597,7 @@ public partial class App : Application
         SetShellStatusText(textLocalizer.Format("Voice.Status.OpeningWindowsSettings", recognitionResult.Message));
         try
         {
-            var launched = await global::Windows.System.Launcher.LaunchUriAsync(settingsUri).AsTask().ConfigureAwait(true);
+            var launched = await global::Windows.System.Launcher.LaunchUriAsync(settingsUri).AsTask(CancellationToken.None).ConfigureAwait(true);
             if (!launched)
             {
                 DiagnosticLogger.Warn($"Voice recognition settings launch was not accepted: uri='{settingsUri}'");
@@ -1701,8 +1701,11 @@ public partial class App : Application
     private async Task ShutdownTrayResourcesCoreAsync(bool disposeUiResources)
     {
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
-        promotedMainUiDiscoveryCts?.Cancel();
-        promotedMainUiDiscoveryCts?.Dispose();
+        if (promotedMainUiDiscoveryCts is { } discoveryCts)
+        {
+            await discoveryCts.CancelAsync().ConfigureAwait(false);
+            discoveryCts.Dispose();
+        }
         promotedMainUiDiscoveryCts = null;
 
         try

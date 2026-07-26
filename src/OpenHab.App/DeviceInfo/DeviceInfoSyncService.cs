@@ -217,7 +217,7 @@ public sealed partial class DeviceInfoSyncService : IDisposable
     {
         try
         {
-            await TriggerSyncAsync();
+            await TriggerSyncAsync(serviceCancellation.Token);
         }
         catch (OperationCanceledException)
         {

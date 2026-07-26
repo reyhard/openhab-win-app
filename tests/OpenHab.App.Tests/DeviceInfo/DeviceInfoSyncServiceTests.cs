@@ -192,6 +192,24 @@ public sealed class DeviceInfoSyncServiceTests
         Assert.Empty(client.StatesSet);
     }
 
+    [Fact]
+    public void TimerSyncPropagatesTheServiceCancellationToken()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "src",
+            "OpenHab.App",
+            "DeviceInfo",
+            "DeviceInfoSyncService.cs"));
+
+        Assert.Contains("await TriggerSyncAsync(serviceCancellation.Token)", source, StringComparison.Ordinal);
+    }
+
     private sealed class FakeSnapshotSource(DeviceStateSnapshot snapshot) : IDeviceStateSnapshotSource
     {
         public Task<DeviceStateSnapshot> CaptureAsync(CancellationToken cancellationToken)

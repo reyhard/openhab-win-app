@@ -146,4 +146,26 @@ public sealed class SitemapMediaCacheInvalidationPolicyTests
 
         Assert.Contains("await notificationPollingSettingsChangeSemaphore.WaitAsync(CancellationToken.None)", source, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void AppExplicitlySelectsCancellationForLifecycleOperations()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "src",
+            "OpenHab.Windows.Tray",
+            "App.xaml.cs"));
+
+        Assert.Contains("await Task.Delay(75, CancellationToken.None)", source, StringComparison.Ordinal);
+        Assert.Contains("await notificationPollingSettingsChangeSemaphore.WaitAsync(CancellationToken.None)", source, StringComparison.Ordinal);
+        Assert.Contains("await shellApplySemaphore.WaitAsync(CancellationToken.None)", source, StringComparison.Ordinal);
+        Assert.Contains("await runtimeController!.LoadSitemapListAsync(CancellationToken.None)", source, StringComparison.Ordinal);
+        Assert.Contains("global::Windows.System.Launcher.LaunchUriAsync(settingsUri).AsTask(CancellationToken.None)", source, StringComparison.Ordinal);
+        Assert.Contains("await discoveryCts.CancelAsync().ConfigureAwait(false)", source, StringComparison.Ordinal);
+    }
 }
