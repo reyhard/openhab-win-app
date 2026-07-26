@@ -12,6 +12,16 @@ $helperExecutable = Join-Path $helperProjectDirectory 'bin\Debug\net10.0-windows
 $port = 18991
 $report = Join-Path ([IO.Path]::GetTempPath()) 'openhab-compatibility-probe-integration.json'
 
+function Assert-HelperProcessCleanupIsIntentional {
+    $source = Get-Content -LiteralPath $probe -Raw
+    $functionStart = $source.IndexOf('function Stop-HelperProcess')
+    $functionEnd = $source.IndexOf('function Invoke-HelperProcess')
+    if ($functionStart -lt 0 -or $functionEnd -le $functionStart) { throw 'Could not locate helper-process cleanup function.' }
+
+    $cleanupFunction = $source.Substring($functionStart, $functionEnd - $functionStart)
+    if ($cleanupFunction -match 'catch\s*\{\s*\}') { throw 'Helper-process cleanup must handle expected shutdown races explicitly.' }
+}
+
 function Start-FakeServer([string[]]$Options = @()) {
     $arguments = @('-NoProfile', '-File', $server, '-Port', $port) + $Options
     $process = Start-Process -FilePath 'pwsh' -ArgumentList $arguments -PassThru -WindowStyle Hidden
@@ -69,6 +79,7 @@ function Get-FakeItemState {
 }
 
 try {
+    Assert-HelperProcessCleanupIsIntentional
     if (-not $UseExistingHelperBuild) { Remove-CompatibilityHelperBuildOutputs }
     $fake = Start-FakeServer
     try {

@@ -77,6 +77,47 @@ function New-OpenHabAuthorizationHeader {
     return $null
 }
 
+function Add-SubscriptionLocation {
+    param([Parameter(Mandatory)]$Locations, $Candidate)
+
+    foreach ($value in @($Candidate)) {
+        if ($value -is [string] -and -not [string]::IsNullOrWhiteSpace($value)) { $Locations.Add($value) }
+    }
+}
+
+function Add-SubscriptionLocationsFromResponseBody {
+    param([Parameter(Mandatory)]$Locations, [Parameter(Mandatory)][string]$ResponseBody)
+
+    try {
+        $body = $ResponseBody | ConvertFrom-Json -ErrorAction Stop
+        if ($body.PSObject.Properties['context'] -and $body.context.PSObject.Properties['headers']) {
+            foreach ($name in @('Location', 'location')) { Add-SubscriptionLocation $Locations $body.context.headers.$name }
+        }
+        foreach ($name in @('location', 'Location')) { Add-SubscriptionLocation $Locations $body.$name }
+    }
+    catch {
+        if ($ResponseBody.TrimStart().StartsWith('/')) { $Locations.Add($ResponseBody.Trim()) }
+    }
+}
+
+function Get-SubscriptionIdFromLocation {
+    param([Parameter(Mandatory)][string]$Location)
+
+    $path = ($Location -split '[?#]', 2)[0]
+    $parsed = $null
+    if ([Uri]::TryCreate($Location, [UriKind]::Absolute, [ref]$parsed)) { $path = $parsed.AbsolutePath }
+    $segments = @($path.Trim('/').Split('/', [StringSplitOptions]::RemoveEmptyEntries))
+    $firstExpectedSegment = $segments.Count - 4
+    if ($segments.Count -lt 4 -or
+        -not [string]::Equals($segments[$firstExpectedSegment], 'rest', [StringComparison]::Ordinal) -or
+        -not [string]::Equals($segments[$firstExpectedSegment + 1], 'sitemaps', [StringComparison]::Ordinal) -or
+        -not [string]::Equals($segments[$firstExpectedSegment + 2], 'events', [StringComparison]::Ordinal)) { return $null }
+
+    $candidate = [Uri]::UnescapeDataString($segments[$firstExpectedSegment + 3])
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) { return $candidate }
+    return $null
+}
+
 function Resolve-SubscriptionId {
     [CmdletBinding()]
     param(
@@ -86,45 +127,14 @@ function Resolve-SubscriptionId {
     )
 
     $locations = [Collections.Generic.List[string]]::new()
-    foreach ($location in @($LocationHeader)) {
-        if (-not [string]::IsNullOrWhiteSpace($location)) { $locations.Add($location) }
-    }
+    foreach ($location in @($LocationHeader)) { Add-SubscriptionLocation $locations $location }
     if (-not $LocationHeaderPresent -and -not [string]::IsNullOrWhiteSpace($ResponseBody)) {
-        try {
-            $body = $ResponseBody | ConvertFrom-Json -ErrorAction Stop
-            $candidates = [Collections.Generic.List[object]]::new()
-            if ($body.PSObject.Properties['context'] -and $body.context.PSObject.Properties['headers']) {
-                foreach ($name in @('Location', 'location')) {
-                    if ($body.context.headers.PSObject.Properties[$name]) { $candidates.Add($body.context.headers.$name) }
-                }
-            }
-            foreach ($name in @('location', 'Location')) {
-                if ($body.PSObject.Properties[$name]) { $candidates.Add($body.$name) }
-            }
-            foreach ($candidate in $candidates) {
-                foreach ($value in @($candidate)) {
-                    if ($value -is [string] -and -not [string]::IsNullOrWhiteSpace($value)) { $locations.Add($value) }
-                }
-            }
-        }
-        catch {
-            if ($ResponseBody.TrimStart().StartsWith('/')) { $locations.Add($ResponseBody.Trim()) }
-        }
+        Add-SubscriptionLocationsFromResponseBody $locations $ResponseBody
     }
 
     foreach ($location in $locations) {
-        $path = ($location -split '[?#]', 2)[0]
-        $parsed = $null
-        if ([Uri]::TryCreate($location, [UriKind]::Absolute, [ref]$parsed)) { $path = $parsed.AbsolutePath }
-        $segments = @($path.Trim('/').Split('/', [StringSplitOptions]::RemoveEmptyEntries))
-        $firstExpectedSegment = $segments.Count - 4
-        if ($segments.Count -ge 4 -and
-            [string]::Equals($segments[$firstExpectedSegment], 'rest', [StringComparison]::Ordinal) -and
-            [string]::Equals($segments[$firstExpectedSegment + 1], 'sitemaps', [StringComparison]::Ordinal) -and
-            [string]::Equals($segments[$firstExpectedSegment + 2], 'events', [StringComparison]::Ordinal)) {
-            $candidate = [Uri]::UnescapeDataString($segments[$firstExpectedSegment + 3])
-            if (-not [string]::IsNullOrWhiteSpace($candidate)) { return $candidate }
-        }
+        $subscriptionId = Get-SubscriptionIdFromLocation $location
+        if ($subscriptionId) { return $subscriptionId }
     }
     return $null
 }
@@ -200,9 +210,9 @@ function Stop-HelperProcess {
 
     if ($null -eq $Process -or $Process.HasExited) { return }
     try { $Process.Kill($true) }
-    catch { }
+    catch [InvalidOperationException] { return }
     try { [void]$Process.WaitForExit(2000) }
-    catch { }
+    catch [InvalidOperationException] { return }
 }
 
 function Invoke-HelperProcess {

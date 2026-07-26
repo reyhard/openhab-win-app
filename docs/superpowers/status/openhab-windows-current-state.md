@@ -34,6 +34,7 @@ Treat this page as the source of truth for current shipped behavior, backlog pri
 
 ## Recently Completed Remediation
 
+- 2026-07-26 local Sonar remediation: compatibility-probe helper shutdown catches now explicitly handle only expected process-state races, and sitemap event subscription-location parsing was split into focused helpers to reduce reported cognitive complexity. `pwsh -NoProfile -File tests\CompatibilityProbe\Test-OpenHabServerCompatibility.Integration.ps1 -UseExistingHelperBuild` passed; remote Sonar re-analysis remains pending CI.
 - openHAB 5.1.4/5.2.0 compatibility work added sanitized genuine contract captures, parser/client/SSE/runtime regressions, opaque variable-width sitemap identifier preservation, nested 5.2 ButtonGrid normalization while retaining legacy ButtonGrid support, and hardened sitemap subscription location/SSE handling.
 - The embedded Main UI host was reviewed against a disposable default openHAB 5.2.0 HTTP server and lower-layer contracts. This is not an embedded WebView2/manual certification and does not make Chat, logs, voice, persistence, or editing native app features.
 
