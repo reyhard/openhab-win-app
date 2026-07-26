@@ -124,9 +124,26 @@ public sealed class SitemapMediaCacheInvalidationPolicyTests
             "App.xaml.cs"));
 
         Assert.Contains("notificationMediaCache = new NotificationMediaCache();", source, StringComparison.Ordinal);
-        Assert.Contains("_ = notificationMediaCache.PruneAsync();", source, StringComparison.Ordinal);
+        Assert.Contains("_ = notificationMediaCache.PruneAsync(CancellationToken.None);", source, StringComparison.Ordinal);
         Assert.Contains("cache: notificationMediaCache", source, StringComparison.Ordinal);
         Assert.Contains("sitemapMediaCacheProfile = BuildSitemapMediaCacheProfile(settingsController);", source, StringComparison.Ordinal);
         Assert.Contains("notificationMediaCache?.Clear();", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppExplicitlyOptsOutOfCancellationWhileShuttingDownNotificationResources()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "src",
+            "OpenHab.Windows.Tray",
+            "App.xaml.cs"));
+
+        Assert.Contains("await notificationPollingSettingsChangeSemaphore.WaitAsync(CancellationToken.None)", source, StringComparison.Ordinal);
     }
 }

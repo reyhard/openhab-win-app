@@ -146,7 +146,7 @@ public partial class App : Application
         var renderController = new SitemapRenderController(settingsController);
         httpClient = new HttpClient();
         notificationMediaCache = new NotificationMediaCache();
-        _ = notificationMediaCache.PruneAsync();
+        _ = notificationMediaCache.PruneAsync(CancellationToken.None);
         notificationMediaResolver = new NotificationMediaResolver(
             httpClient,
             getSettings: () => this.settingsController?.Current ?? AppSettings.Default,
@@ -1707,7 +1707,7 @@ public partial class App : Application
 
         try
         {
-            await notificationPollingSettingsChangeSemaphore.WaitAsync().ConfigureAwait(false);
+            await notificationPollingSettingsChangeSemaphore.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
                 DiagnosticLogger.Info("Shutting down notification poller");

@@ -17,6 +17,10 @@ public sealed class OpenHabHttpClientTests
         var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
 
         await client.SendCommandAsync("Compatibility_Switch", "ON", CancellationToken.None);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("http://openhab:8080/rest/items/Compatibility_Switch", request.RequestUri!.ToString());
     }
 
     [Fact]
@@ -60,6 +64,10 @@ public sealed class OpenHabHttpClientTests
         var client = new OpenHabHttpClient(new HttpClient(handler), new Uri("http://openhab:8080"));
 
         await client.SetItemStateAsync("Compatibility_Switch", "OFF", CancellationToken.None);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(HttpMethod.Put, request.Method);
+        Assert.Equal("http://openhab:8080/rest/items/Compatibility_Switch/state", request.RequestUri!.ToString());
     }
 
     [Fact]
