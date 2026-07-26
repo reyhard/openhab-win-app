@@ -1705,7 +1705,7 @@ public partial class App : Application
         {
             try
             {
-                await CancellationTokenSourceShutdown.CancelAndDisposeAsync(
+                await CancellationTokenSourceShutdown.CancelAsync(
                     discoveryCts,
                     ex => DiagnosticLogger.Warn(
                         $"Promoted Main UI discovery cancellation failed during shutdown: {SafeDiagnosticText.ForLog(ex)}"))
@@ -1713,6 +1713,7 @@ public partial class App : Application
             }
             finally
             {
+                promotedMainUiDiscoveryCts.Dispose();
                 promotedMainUiDiscoveryCts = null;
             }
         }

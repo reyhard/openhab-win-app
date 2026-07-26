@@ -2,7 +2,7 @@ namespace OpenHab.App.Tray;
 
 public static class CancellationTokenSourceShutdown
 {
-    public static async Task CancelAndDisposeAsync(
+    public static async Task CancelAsync(
         CancellationTokenSource source,
         Action<Exception> onCancellationFailure)
     {
@@ -16,10 +16,6 @@ public static class CancellationTokenSourceShutdown
         catch (Exception ex)
         {
             onCancellationFailure(ex);
-        }
-        finally
-        {
-            source.Dispose();
         }
     }
 }

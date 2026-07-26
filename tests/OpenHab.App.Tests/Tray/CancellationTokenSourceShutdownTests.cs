@@ -5,18 +5,19 @@ namespace OpenHab.App.Tests.Tray;
 public sealed class CancellationTokenSourceShutdownTests
 {
     [Fact]
-    public async Task CancelAndDisposeAsync_WhenCallbackThrowsReportsFailureAndCompletes()
+    public async Task CancelAsync_WhenCallbackThrowsReportsFailureAndLeavesDisposalToOwner()
     {
-        var source = new CancellationTokenSource();
+        using var source = new CancellationTokenSource();
         using var registration = source.Token.Register(
             () => throw new InvalidOperationException("Cancellation callback failed."));
         Exception? reportedFailure = null;
 
-        await CancellationTokenSourceShutdown.CancelAndDisposeAsync(
+        await CancellationTokenSourceShutdown.CancelAsync(
             source,
             failure => reportedFailure = failure);
 
         Assert.IsType<AggregateException>(reportedFailure);
-        Assert.Throws<ObjectDisposedException>(() => _ = source.Token);
+        Assert.True(source.IsCancellationRequested);
+        _ = source.Token;
     }
 }

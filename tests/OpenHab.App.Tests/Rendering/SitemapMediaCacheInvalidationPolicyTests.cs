@@ -167,7 +167,7 @@ public sealed class SitemapMediaCacheInvalidationPolicyTests
         Assert.Contains("await runtimeController!.LoadSitemapListAsync(CancellationToken.None)", source, StringComparison.Ordinal);
         Assert.Contains("global::Windows.System.Launcher.LaunchUriAsync(settingsUri).AsTask(CancellationToken.None)", source, StringComparison.Ordinal);
         Assert.Contains(
-            "await CancellationTokenSourceShutdown.CancelAndDisposeAsync(\n                    discoveryCts,",
+            "await CancellationTokenSourceShutdown.CancelAsync(\n                    discoveryCts,",
             source,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -175,7 +175,7 @@ public sealed class SitemapMediaCacheInvalidationPolicyTests
             source,
             StringComparison.Ordinal);
         Assert.Contains(
-            "finally\n            {\n                promotedMainUiDiscoveryCts = null;",
+            "finally\n            {\n                promotedMainUiDiscoveryCts.Dispose();\n                promotedMainUiDiscoveryCts = null;",
             source,
             StringComparison.Ordinal);
     }
