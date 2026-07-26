@@ -1703,10 +1703,19 @@ public partial class App : Application
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         if (promotedMainUiDiscoveryCts is { } discoveryCts)
         {
-            await discoveryCts.CancelAsync().ConfigureAwait(false);
-            discoveryCts.Dispose();
+            try
+            {
+                await CancellationTokenSourceShutdown.CancelAndDisposeAsync(
+                    discoveryCts,
+                    ex => DiagnosticLogger.Warn(
+                        $"Promoted Main UI discovery cancellation failed during shutdown: {SafeDiagnosticText.ForLog(ex)}"))
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                promotedMainUiDiscoveryCts = null;
+            }
         }
-        promotedMainUiDiscoveryCts = null;
 
         try
         {

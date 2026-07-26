@@ -121,7 +121,7 @@ public sealed class SitemapMediaCacheInvalidationPolicyTests
             "..",
             "src",
             "OpenHab.Windows.Tray",
-            "App.xaml.cs"));
+            "App.xaml.cs")).ReplaceLineEndings("\n");
 
         Assert.Contains("notificationMediaCache = new NotificationMediaCache();", source, StringComparison.Ordinal);
         Assert.Contains("_ = notificationMediaCache.PruneAsync(CancellationToken.None);", source, StringComparison.Ordinal);
@@ -159,13 +159,24 @@ public sealed class SitemapMediaCacheInvalidationPolicyTests
             "..",
             "src",
             "OpenHab.Windows.Tray",
-            "App.xaml.cs"));
+            "App.xaml.cs")).ReplaceLineEndings("\n");
 
         Assert.Contains("await Task.Delay(75, CancellationToken.None)", source, StringComparison.Ordinal);
         Assert.Contains("await notificationPollingSettingsChangeSemaphore.WaitAsync(CancellationToken.None)", source, StringComparison.Ordinal);
         Assert.Contains("await shellApplySemaphore.WaitAsync(CancellationToken.None)", source, StringComparison.Ordinal);
         Assert.Contains("await runtimeController!.LoadSitemapListAsync(CancellationToken.None)", source, StringComparison.Ordinal);
         Assert.Contains("global::Windows.System.Launcher.LaunchUriAsync(settingsUri).AsTask(CancellationToken.None)", source, StringComparison.Ordinal);
-        Assert.Contains("await discoveryCts.CancelAsync().ConfigureAwait(false)", source, StringComparison.Ordinal);
+        Assert.Contains(
+            "await CancellationTokenSourceShutdown.CancelAndDisposeAsync(\n                    discoveryCts,",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Promoted Main UI discovery cancellation failed during shutdown:",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "finally\n            {\n                promotedMainUiDiscoveryCts = null;",
+            source,
+            StringComparison.Ordinal);
     }
 }
