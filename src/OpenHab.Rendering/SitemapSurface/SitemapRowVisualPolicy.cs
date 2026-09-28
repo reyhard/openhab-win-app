@@ -4,10 +4,23 @@ using OpenHab.Rendering.Descriptors;
 
 namespace OpenHab.Rendering.SitemapSurface;
 
+public enum SitemapMappedSwitchButtonPlacement
+{
+    InlineControl,
+    SeparateRow
+}
+
 public static partial class SitemapRowVisualPolicy
 {
     private const double WebviewDefaultHeight = 300d;
     private const double SitemapRowHeight = 40d;
+
+    /// <summary>
+    /// Longest mapping-button label that is still placed next to the state value. Longer labels
+    /// (or multiple mappings) fall back to a separate button row to avoid truncation on narrow
+    /// surfaces.
+    /// </summary>
+    public const int MappedSwitchInlineButtonMaxLabelLength = 18;
 
     [GeneratedRegex(@"[-+]?\d+([.,]\d+)?", RegexOptions.Compiled)]
     private static partial Regex FirstNumberRegexFactory();
@@ -59,6 +72,31 @@ public static partial class SitemapRowVisualPolicy
         return string.Create(
             CultureInfo.InvariantCulture,
             $"key:{BuildRowIdentityKey(row)}|control:{row.Control}|action:{row.Action}|label:{row.Label}|icon:{row.IconName ?? string.Empty}|command:{row.Command ?? string.Empty}|release:{row.ReleaseCommand ?? string.Empty}{mediaSource}");
+    }
+
+    public static bool ShouldShowMappedSwitchState(SitemapRowDescriptor row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return row.Control == RenderControlKind.MappedSwitch && !string.IsNullOrEmpty(row.State);
+    }
+
+    public static SitemapMappedSwitchButtonPlacement ResolveMappedSwitchButtonPlacement(SitemapRowDescriptor row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        if (row.Control != RenderControlKind.MappedSwitch || row.SelectionOptions.Count != 1)
+        {
+            return SitemapMappedSwitchButtonPlacement.SeparateRow;
+        }
+
+        var label = row.SelectionOptions[0].Label;
+        if (string.IsNullOrWhiteSpace(label) || label.Trim().Length > MappedSwitchInlineButtonMaxLabelLength)
+        {
+            return SitemapMappedSwitchButtonPlacement.SeparateRow;
+        }
+
+        return SitemapMappedSwitchButtonPlacement.InlineControl;
     }
 
     public static string FormatSliderStateText(string? template, double value)

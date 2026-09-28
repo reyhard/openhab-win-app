@@ -80,6 +80,7 @@ public enum RenderControlKind
     Selection,
     Button,
     ButtonGrid,
+    MappedSwitch,
     Image,
     Webview,
     Mapview,

@@ -62,8 +62,7 @@ internal static class SitemapRowMapper
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)
     {
         if (string.IsNullOrEmpty(state) || mappings.Count == 0) return state;
-        var match = mappings.FirstOrDefault(m =>
-            string.Equals(m.Command, state, StringComparison.OrdinalIgnoreCase));
+        var match = mappings.FirstOrDefault(m => SitemapUiLogic.SelectionValueMatches(m.Command, state));
         return match is not null && !string.IsNullOrWhiteSpace(match.Label) ? match.Label : state;
     }
 
@@ -76,7 +75,7 @@ internal static class SitemapRowMapper
 
         return widget.Type switch
         {
-            SitemapWidgetType.Switch when widget.Mappings.Count > 0 => RenderControlKind.ButtonGrid,
+            SitemapWidgetType.Switch when widget.Mappings.Count > 0 => RenderControlKind.MappedSwitch,
             SitemapWidgetType.Switch => RenderControlKind.Toggle,
             SitemapWidgetType.Setpoint => RenderControlKind.Setpoint,
             SitemapWidgetType.Slider or SitemapWidgetType.Colortemperaturepicker => RenderControlKind.Slider,
@@ -106,7 +105,7 @@ internal static class SitemapRowMapper
             return RenderActionKind.Navigate;
         }
 
-        if (control is RenderControlKind.Toggle or RenderControlKind.Setpoint or RenderControlKind.Slider or RenderControlKind.Selection or RenderControlKind.ButtonGrid or RenderControlKind.Input)
+        if (control is RenderControlKind.Toggle or RenderControlKind.Setpoint or RenderControlKind.Slider or RenderControlKind.Selection or RenderControlKind.ButtonGrid or RenderControlKind.MappedSwitch or RenderControlKind.Input)
         {
             return RenderActionKind.SendCommand;
         }

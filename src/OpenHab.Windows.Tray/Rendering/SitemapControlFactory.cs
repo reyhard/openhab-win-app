@@ -164,6 +164,7 @@ public static partial class SitemapControlFactory
             RenderControlKind.Input => CreateInput(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Button => CreateButton(row, sendCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.ButtonGrid => CreateButtonGrid(row, sendCommand, sendButtonGridCommand, baseUri, useWindowsIcons, iconAuth),
+            RenderControlKind.MappedSwitch => CreateButtonGrid(row, sendCommand, sendButtonGridCommand, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Image => CreateImage(row, baseUri, useWindowsIcons, iconAuth),
             RenderControlKind.Webview => CreateWebview(row, baseUri),
             RenderControlKind.Mapview => CreateMapview(row, baseUri),
@@ -2094,6 +2095,22 @@ public static partial class SitemapControlFactory
         return WrapWithBorder(grid);
     }
 
+    private static void AddMappedSwitchStateText(RowLayout layout, SitemapRowDescriptor row, bool inlineButtons)
+    {
+        // A mapped Switch shows its current formatted state alongside the mapping buttons,
+        // matching Basic UI. A Buttongrid render control has no state value to display.
+        if (!SitemapRowVisualPolicy.ShouldShowMappedSwitchState(row))
+        {
+            return;
+        }
+
+        var stateText = CreateStateTextBlock(row.State!, row.ValueColor);
+        stateText.Margin = new Thickness(0, 0, 8, 0);
+        Grid.SetColumn(stateText, layout.ValueColumn);
+        Grid.SetColumnSpan(stateText, inlineButtons ? 1 : 2);
+        layout.Grid.Children.Add(stateText);
+    }
+
     private static Border CreateButtonGrid(
         SitemapRowDescriptor row,
         Func<string, Task>? sendCommand,
@@ -2102,9 +2119,23 @@ public static partial class SitemapControlFactory
         bool useWindowsIcons = false,
         IconAuthContext? iconAuth = null)
     {
+        var inlineButtons = SitemapRowVisualPolicy.ResolveMappedSwitchButtonPlacement(row)
+            == SitemapMappedSwitchButtonPlacement.InlineControl;
+
         var container = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 };
         var layout = CreateRowLayout(row.Label, baseUri, row.IconName, row.RawState ?? row.State, row.LabelColor, row.IconColor, useWindowsIcons, iconAuth);
+        AddMappedSwitchStateText(layout, row, inlineButtons);
         container.Children.Add(layout.Grid);
+
+        if (inlineButtons)
+        {
+            layout.Grid.ColumnDefinitions[layout.ControlColumn].Width = GridLength.Auto;
+            var button = CreateMappingButton(row.SelectionOptions[0], sendCommand, sendButtonGridCommand);
+            Grid.SetColumn(button, layout.ControlColumn);
+            layout.Grid.Children.Add(button);
+            return WrapWithBorder(container);
+        }
+
         var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
         var hasExplicitCoordinates = row.SelectionOptions.Any(o => o.Row.HasValue || o.Column.HasValue);
         var maxColumn = hasExplicitCoordinates
@@ -2122,67 +2153,78 @@ public static partial class SitemapControlFactory
             var rowIndex = option.Row.HasValue && option.Row.Value > 0 ? option.Row.Value - 1 : fallbackIndex / maxColumn;
             var colIndex = option.Column.HasValue && option.Column.Value > 0 ? option.Column.Value - 1 : fallbackIndex % maxColumn;
             fallbackIndex++;
-            var button = new Button
-            {
-                Content = option.Label,
-                IsEnabled = sendCommand is not null || sendButtonGridCommand is not null,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            ApplyButtonGridColors(button, option.IsActive, isHovered: false, isPressed: false);
-
-            button.PointerEntered += (_, _) => ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: false);
-            button.PointerExited += (_, _) => ApplyButtonGridColors(button, option.IsActive, isHovered: false, isPressed: false);
-
-            button.PointerPressed += (_, _) =>
-            {
-                ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: true);
-            };
-
-            button.PointerReleased += (_, _) =>
-            {
-                ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: false);
-            };
-            button.Click += async (_, _) =>
-            {
-                var releaseCommand = option.ReleaseCommand;
-                var clickCommand = option.ClickCommand ?? option.Command;
-                var hasReleaseCommand = !string.IsNullOrWhiteSpace(releaseCommand)
-                                        && !string.Equals(releaseCommand, "NULL", StringComparison.OrdinalIgnoreCase);
-                var hasClickCommand = !string.IsNullOrWhiteSpace(clickCommand)
-                                      && !string.Equals(clickCommand, "NULL", StringComparison.OrdinalIgnoreCase);
-
-                if (sendButtonGridCommand is not null)
-                {
-                    if (hasReleaseCommand)
-                    {
-                        await sendButtonGridCommand(option, true);
-                    }
-                    else if (hasClickCommand)
-                    {
-                        await sendButtonGridCommand(option, false);
-                    }
-
-                    return;
-                }
-
-                if (sendCommand is not null)
-                {
-                    if (hasReleaseCommand)
-                    {
-                        await sendCommand(releaseCommand!);
-                    }
-                    else if (hasClickCommand)
-                    {
-                        await sendCommand(clickCommand!);
-                    }
-                }
-            };
+            var button = CreateMappingButton(option, sendCommand, sendButtonGridCommand);
             Grid.SetRow(button, rowIndex);
             Grid.SetColumn(button, colIndex);
             grid.Children.Add(button);
         }
+
         container.Children.Add(grid);
         return WrapWithBorder(container);
+    }
+
+    private static Button CreateMappingButton(
+        SitemapMapOption option,
+        Func<string, Task>? sendCommand,
+        Func<SitemapMapOption, bool, Task>? sendButtonGridCommand)
+    {
+        var button = new Button
+        {
+            Content = option.Label,
+            IsEnabled = sendCommand is not null || sendButtonGridCommand is not null,
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        ApplyButtonGridColors(button, option.IsActive, isHovered: false, isPressed: false);
+
+        button.PointerEntered += (_, _) => ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: false);
+        button.PointerExited += (_, _) => ApplyButtonGridColors(button, option.IsActive, isHovered: false, isPressed: false);
+
+        button.PointerPressed += (_, _) =>
+        {
+            ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: true);
+        };
+
+        button.PointerReleased += (_, _) =>
+        {
+            ApplyButtonGridColors(button, option.IsActive, isHovered: true, isPressed: false);
+        };
+        button.Click += async (_, _) =>
+        {
+            var releaseCommand = option.ReleaseCommand;
+            var clickCommand = option.ClickCommand ?? option.Command;
+            var hasReleaseCommand = !string.IsNullOrWhiteSpace(releaseCommand)
+                                    && !string.Equals(releaseCommand, "NULL", StringComparison.OrdinalIgnoreCase);
+            var hasClickCommand = !string.IsNullOrWhiteSpace(clickCommand)
+                                  && !string.Equals(clickCommand, "NULL", StringComparison.OrdinalIgnoreCase);
+
+            if (sendButtonGridCommand is not null)
+            {
+                if (hasReleaseCommand)
+                {
+                    await sendButtonGridCommand(option, true);
+                }
+                else if (hasClickCommand)
+                {
+                    await sendButtonGridCommand(option, false);
+                }
+
+                return;
+            }
+
+            if (sendCommand is not null)
+            {
+                if (hasReleaseCommand)
+                {
+                    await sendCommand(releaseCommand!);
+                }
+                else if (hasClickCommand)
+                {
+                    await sendCommand(clickCommand!);
+                }
+            }
+        };
+
+        return button;
     }
 
     private static void ApplyButtonGridColors(Button button, bool isActive, bool isHovered, bool isPressed)

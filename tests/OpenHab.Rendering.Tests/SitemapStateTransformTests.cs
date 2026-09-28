@@ -73,7 +73,7 @@ public sealed class SitemapStateTransformTests
     }
 
     [Fact]
-    public void ToRow_MappedSwitch_UsesButtonGridAndPreservesRawStateAndMappedDisplay()
+    public void ToRow_MappedSwitch_UsesMappedSwitchControlAndPreservesRawStateAndMappedDisplay()
     {
         var page = new NormalizedSitemapPage("root", "Home", [
             new NormalizedSitemapWidget(
@@ -91,13 +91,67 @@ public sealed class SitemapStateTransformTests
         var descriptor = new Windows11SitemapSkin().Render(page);
         var row = Assert.Single(descriptor.Rows);
 
-        Assert.Equal(RenderControlKind.ButtonGrid, row.Control);
+        Assert.Equal(RenderControlKind.MappedSwitch, row.Control);
         Assert.Equal(RenderActionKind.SendCommand, row.Action);
         Assert.Equal(2, row.SelectionOptions.Count);
         Assert.Contains(row.SelectionOptions, option => option.Command == "ON" && option.Label == "An" && option.IsActive);
         Assert.Contains(row.SelectionOptions, option => option.Command == "OFF" && option.Label == "Aus" && !option.IsActive);
         Assert.Equal("An", row.State);
         Assert.Equal("ON", row.RawState);
+    }
+
+    [Fact]
+    public void ToRow_MappedSwitch_PreservesFormattedNumericStateForDisplay()
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Pozostało w zbiorniku",
+                SitemapWidgetType.Switch,
+                "PlantWatering_02_RemainingVolume",
+                "4870 ml",
+                [new SitemapMapping("5000", "Zbiornik pełny")],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                "water")
+        ]);
+
+        var descriptor = new Windows11SitemapSkin().Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.MappedSwitch, row.Control);
+        Assert.Equal(RenderActionKind.SendCommand, row.Action);
+        Assert.Equal("4870 ml", row.State);
+        Assert.Equal("4870 ml", row.RawState);
+        Assert.Equal("water", row.IconName);
+        var option = Assert.Single(row.SelectionOptions);
+        Assert.Equal("5000", option.Command);
+        Assert.Equal("Zbiornik pełny", option.Label);
+        Assert.False(option.IsActive);
+    }
+
+    [Fact]
+    public void ToRow_MappedSwitch_MatchesMappingCommandWithWhitespaceAndNumericDifference()
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Volume",
+                SitemapWidgetType.Switch,
+                "PlantWatering_02_RemainingVolume",
+                "5000.0",
+                [new SitemapMapping(" 5000 ", "Zbiornik pełny")],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [])
+        ]);
+
+        var descriptor = new Windows11SitemapSkin().Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal("Zbiornik pełny", row.State);
+        Assert.True(row.SelectionOptions[0].IsActive);
     }
 
     [Fact]

@@ -185,7 +185,7 @@ public sealed class SitemapSurfaceRenderer(
                 || existing.Tag is not RenderedRowTag tag
                 || tag.RowIndex != visualRow.RowIndex
                 || !string.Equals(tag.RowKey, SitemapControlFactory.BuildRowIdentityKey(visualRow.Row), StringComparison.Ordinal)
-                || visualRow.Row.Control == RenderControlKind.ButtonGrid
+                || AlwaysRebuilds(visualRow.Row.Control)
                 || ShouldRebuild(existing, visualRow.Row, visualRow.RowIndex))
             {
                 var replacement = CreateRowElement(visualRow.RowIndex, visualRow.Row, snapshot, context);
@@ -216,7 +216,7 @@ public sealed class SitemapSurfaceRenderer(
                 ? SitemapRowPlanner.BuildMergedButtonGridRow(index, rows)
                 : rows[index];
 
-            if (rows[index].Control == RenderControlKind.ButtonGrid || ShouldRebuild(existing, row, index))
+            if (AlwaysRebuilds(rows[index].Control) || ShouldRebuild(existing, row, index))
             {
                 var replacement = CreateRowElement(index, row, snapshot, context);
                 SitemapControlFactory.SetVisibility(replacement, row.IsVisible);
@@ -268,7 +268,7 @@ public sealed class SitemapSurfaceRenderer(
             if (existingByKey.TryGetValue(rowKey, out var bucket) && bucket.Count > 0)
             {
                 var existing = bucket.Dequeue().Element;
-                if (row.Control == RenderControlKind.ButtonGrid || ShouldRebuild(existing, row, visualRow.RowIndex))
+                if (AlwaysRebuilds(row.Control) || ShouldRebuild(existing, row, visualRow.RowIndex))
                 {
                     existing = CreateRowElement(visualRow.RowIndex, row, snapshot, context);
                     SitemapControlFactory.SetVisibility(existing, row.IsVisible);
@@ -446,4 +446,9 @@ public sealed class SitemapSurfaceRenderer(
                    SitemapControlFactory.BuildRowVisualStateKey(row, rowIndex),
                    StringComparison.Ordinal);
     }
+
+    // Button grids and mapped switches rebuild on every refresh so mapping-button
+    // active state and the displayed mapped-switch state always track the snapshot.
+    private static bool AlwaysRebuilds(RenderControlKind control) =>
+        control is RenderControlKind.ButtonGrid or RenderControlKind.MappedSwitch;
 }

@@ -997,7 +997,11 @@ public sealed class SitemapRuntimeController
                         ClearOptimisticSwitchState(widget.ItemName);
                     }
 
-                    var displayState = SitemapSwitchStateResolver.ResolveEventDisplayState(widget.State, e.ItemState);
+                    var displayState = SitemapSwitchStateResolver.ResolveEventDisplayState(
+                        widget.State,
+                        widget.StatePattern,
+                        e.ItemState,
+                        widget.Mappings);
                     if (!string.Equals(widget.State, displayState, StringComparison.Ordinal) ||
                         !string.Equals(widget.RawItemState, e.ItemState, StringComparison.Ordinal))
                     {
@@ -1615,7 +1619,7 @@ public sealed class SitemapRuntimeController
         }
 
         var optimistic = new OptimisticSwitchState(
-            SitemapSwitchStateResolver.ResolveEventDisplayState(widget.State, command),
+            SitemapSwitchStateResolver.ResolveEventDisplayState(widget.State, widget.StatePattern, command, widget.Mappings),
             command,
             utcNow().Add(OptimisticSwitchStateHold));
         lock (optimisticSwitchStatesSync)

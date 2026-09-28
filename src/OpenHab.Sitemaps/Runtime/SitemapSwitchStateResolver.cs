@@ -1,3 +1,5 @@
+using OpenHab.Sitemaps.Models;
+
 namespace OpenHab.Sitemaps.Runtime;
 
 public static class SitemapSwitchStateResolver
@@ -8,7 +10,18 @@ public static class SitemapSwitchStateResolver
         return isOn ? "OFF" : "ON";
     }
 
-    public static string ResolveEventDisplayState(string? currentDisplayState, string rawItemState)
+    /// <summary>
+    /// Resolves the state text to show for an incoming raw item state. SSE events carry only the
+    /// raw value, not the sitemap widget pattern that produced the fetched label, so the pattern
+    /// captured from the REST sitemap metadata is applied when it is available and supported.
+    /// Mapping commands are left raw so the renderer can substitute the mapping label, formatted
+    /// lock states stay LOCKED/UNLOCKED, and unsupported patterns fall back to the raw value.
+    /// </summary>
+    public static string ResolveEventDisplayState(
+        string? currentDisplayState,
+        string? statePattern,
+        string rawItemState,
+        IReadOnlyList<SitemapMapping>? mappings = null)
     {
         if (IsLockDisplayState(currentDisplayState))
         {
@@ -23,7 +36,12 @@ public static class SitemapSwitchStateResolver
             }
         }
 
-        return rawItemState;
+        if (MatchesMappingCommand(rawItemState, mappings))
+        {
+            return rawItemState;
+        }
+
+        return OpenHabStatePatternFormatter.TryFormat(statePattern, rawItemState) ?? rawItemState;
     }
 
     public static bool? TryResolveIsOn(string? state)
@@ -47,6 +65,24 @@ public static class SitemapSwitchStateResolver
         }
 
         return null;
+    }
+
+    private static bool MatchesMappingCommand(string rawItemState, IReadOnlyList<SitemapMapping>? mappings)
+    {
+        if (mappings is null || mappings.Count == 0 || string.IsNullOrWhiteSpace(rawItemState))
+        {
+            return false;
+        }
+
+        foreach (var mapping in mappings)
+        {
+            if (SitemapValueMatcher.Matches(mapping.Command, rawItemState))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsLockDisplayState(string? state) =>

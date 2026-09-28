@@ -175,11 +175,31 @@ public sealed class SitemapRowPlannerTests
         Assert.Equal(-1, rowIndex);
     }
 
+    [Fact]
+    public void VisualRowsDoNotMergeFollowingButtonsIntoMappedSwitch()
+    {
+        var rows = new[]
+        {
+            MappedSwitch("Volume", [new SitemapMapOption("5000", "Full")]),
+            Button("Orphan", "ORPHAN", visible: true),
+            Text("Temperature")
+        };
+
+        var visualRows = SitemapRowPlanner.BuildVisualRows(rows);
+
+        Assert.Equal([0, 2], visualRows.Select(row => row.RowIndex).ToArray());
+        var option = Assert.Single(visualRows[0].Row.SelectionOptions);
+        Assert.Equal("5000", option.Command);
+    }
+
     private static SitemapRowDescriptor Text(string label, string? widgetId = null) =>
         new(label, null, RenderControlKind.Text, RenderActionKind.None, RenderDensity.Compact, [], WidgetId: widgetId);
 
     private static SitemapRowDescriptor Toggle(string label, string itemName) =>
         new(label, "OFF", RenderControlKind.Toggle, RenderActionKind.SendCommand, RenderDensity.Compact, [], ItemName: itemName);
+
+    private static SitemapRowDescriptor MappedSwitch(string label, IReadOnlyList<SitemapMapOption> options) =>
+        new(label, "4870 ml", RenderControlKind.MappedSwitch, RenderActionKind.SendCommand, RenderDensity.Compact, options);
 
     private static SitemapRowDescriptor Grid(string label) =>
         new(label, null, RenderControlKind.ButtonGrid, RenderActionKind.SendCommand, RenderDensity.Compact, []);

@@ -855,6 +855,35 @@ public sealed class SitemapRuntimeControllerTests
             """;
     }
 
+    private static string MappedNumberSwitchJson(string displayState, string rawItemState)
+    {
+        return $$"""
+            {
+              "homepage": {
+                "id": "home",
+                "title": "Home",
+                "widgets": [
+                  {
+                    "type": "Switch",
+                    "widgetId": "plant-watering-volume",
+                    "label": "Pozostało w zbiorniku [{{displayState}}]",
+                    "pattern": "%.0f ml",
+                    "icon": "water",
+                    "mappings": [
+                      { "command": "5000", "label": "Zbiornik pełny" }
+                    ],
+                    "item": {
+                      "name": "PlantWatering_02_RemainingVolume",
+                      "state": "{{rawItemState}}"
+                    },
+                    "visibility": true
+                  }
+                ]
+              }
+            }
+            """;
+    }
+
     private static string HomepageWithChildJson()
     {
         return """
@@ -1718,6 +1747,129 @@ public sealed class SitemapRuntimeControllerTests
         Assert.Equal(expectedDisplayState, row.State);
         Assert.Equal(expectedDisplayState, visualState.DisplayText);
         Assert.Equal(expectedIsOn, visualState.IsOn);
+    }
+
+    [Fact]
+    public async Task WidgetEventForMappedNumericSwitchPreservesFormattedState()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(MappedNumberSwitchJson("4870 ml", "4870"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        var initial = controller.Current.Descriptor!.Rows[0];
+        Assert.Equal(RenderControlKind.MappedSwitch, initial.Control);
+        Assert.Equal("4870 ml", initial.State);
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "plant-watering-volume",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "PlantWatering_02_RemainingVolume",
+            ItemState: "4860",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        var row = controller.Current.Descriptor!.Rows[0];
+        Assert.Equal(RenderControlKind.MappedSwitch, row.Control);
+        Assert.Equal("4860 ml", row.State);
+        Assert.Equal("4860 ml", row.RawState);
+        Assert.Equal("4860", row.RawItemState);
+        Assert.Equal("5000", row.SelectionOptions[0].Command);
+        Assert.Equal("Zbiornik pełny", row.SelectionOptions[0].Label);
+    }
+
+    [Fact]
+    public async Task WidgetEventForMappedNumericSwitchRoundsUsingServerPattern()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(MappedNumberSwitchJson("4870 ml", "4870.4"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "plant-watering-volume",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "PlantWatering_02_RemainingVolume",
+            ItemState: "4860.2",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        var row = controller.Current.Descriptor!.Rows[0];
+        Assert.Equal(RenderControlKind.MappedSwitch, row.Control);
+        Assert.Equal("4860 ml", row.State);
+        Assert.Equal("4860.2", row.RawItemState);
+    }
+
+    [Fact]
+    public async Task WidgetEventForMappedNumericSwitchMatchingMappingShowsMappingLabel()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(MappedNumberSwitchJson("4870 ml", "4870"));
+        var eventClient = new FakeEventStreamClient();
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient(), eventClient);
+
+        await controller.LoadAsync();
+        await controller.StartSitemapEventStreamAsync(new Uri("http://localhost:8080"), "default", "home");
+
+        eventClient.FireWidgetEvent(new SitemapWidgetEvent(
+            WidgetId: "plant-watering-volume",
+            Label: null,
+            Icon: null,
+            Visibility: true,
+            ItemName: "PlantWatering_02_RemainingVolume",
+            ItemState: "5000",
+            SitemapName: "default",
+            PageId: "home",
+            DescriptionChanged: false));
+
+        var row = controller.Current.Descriptor!.Rows[0];
+        Assert.Equal(RenderControlKind.MappedSwitch, row.Control);
+        Assert.Equal("Zbiornik pełny", row.State);
+        Assert.Equal("5000", row.RawItemState);
+        Assert.True(row.SelectionOptions[0].IsActive);
+    }
+
+    [Fact]
+    public async Task MappedSwitchRowCommandSendsMappingCommandToItem()
+    {
+        var settings = CreateSettingsController();
+        settings.SetSitemapName("default");
+
+        var localClient = new FakeOpenHabClient();
+        localClient.EnqueueSitemapJson(MappedNumberSwitchJson("4870 ml", "4870"));
+        localClient.EnqueueSitemapJson(MappedNumberSwitchJson("5000 ml", "5000"));
+        var controller = CreateRuntimeController(settings, localClient, new FakeOpenHabClient());
+
+        await controller.LoadAsync();
+        var row = controller.Current.Descriptor!.Rows[0];
+
+        var sent = await controller.SendCommandForRowKeyAsync(SitemapUiLogic.BuildRowIdentityKey(row), "5000");
+
+        Assert.True(sent);
+        var command = Assert.Single(localClient.CommandsSent);
+        Assert.Equal("PlantWatering_02_RemainingVolume", command.ItemName);
+        Assert.Equal("5000", command.Command);
     }
 
     [Fact]

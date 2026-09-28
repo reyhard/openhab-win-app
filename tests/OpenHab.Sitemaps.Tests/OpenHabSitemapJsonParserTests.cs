@@ -121,6 +121,46 @@ public sealed class OpenHabSitemapJsonParserTests
     }
 
     [Fact]
+    public void ParseHomepageKeepsFormattedNumericStateAndMappingsForMappedSwitch()
+    {
+        const string json = """
+            {
+              "homepage": {
+                "id": "home",
+                "widgets": [
+                  {
+                    "type": "Switch",
+                    "label": "Pozostało w zbiorniku [4870 ml]",
+                    "pattern": "%.0f ml",
+                    "icon": "water",
+                    "mappings": [
+                      { "command": "5000", "label": "Zbiornik pełny" }
+                    ],
+                    "item": {
+                      "name": "PlantWatering_02_RemainingVolume",
+                      "state": "4870"
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+
+        var parsed = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        var widget = Assert.Single(parsed.Widgets);
+        Assert.Equal(SitemapWidgetType.Switch, widget.Type);
+        Assert.Equal("Pozostało w zbiorniku", widget.Label);
+        Assert.Equal("4870 ml", widget.State);
+        Assert.Equal("4870", widget.RawItemState);
+        Assert.Equal("%.0f ml", widget.StatePattern);
+        Assert.Equal("water", widget.Icon);
+        var mapping = Assert.Single(widget.Mappings);
+        Assert.Equal("5000", mapping.Command);
+        Assert.Equal("Zbiornik pełny", mapping.Label);
+    }
+
+    [Fact]
     public void ParseHomepageUsesPageLabelWhenTitleIsMissing()
     {
         const string json = """

@@ -107,6 +107,62 @@ public sealed class SitemapRowVisualPolicyTests
     }
 
     [Fact]
+    public void ShouldShowMappedSwitchState_ReturnsTrueOnlyForMappedSwitchWithState()
+    {
+        var mapped = Row(RenderControlKind.MappedSwitch, "4870 ml", [new SitemapMapOption("5000", "Zbiornik pełny")]);
+        var mappedWithoutState = Row(RenderControlKind.MappedSwitch, null, [new SitemapMapOption("5000", "Zbiornik pełny")]);
+        var toggle = Row(RenderControlKind.Toggle, "ON", []);
+
+        Assert.True(SitemapRowVisualPolicy.ShouldShowMappedSwitchState(mapped));
+        Assert.False(SitemapRowVisualPolicy.ShouldShowMappedSwitchState(mappedWithoutState));
+        Assert.False(SitemapRowVisualPolicy.ShouldShowMappedSwitchState(toggle));
+    }
+
+    [Fact]
+    public void ResolveMappedSwitchButtonPlacement_PlacesSingleShortMappingInlineWithState()
+    {
+        var row = Row(RenderControlKind.MappedSwitch, "4870 ml", [new SitemapMapOption("5000", "Zbiornik pełny")]);
+
+        Assert.Equal(
+            SitemapMappedSwitchButtonPlacement.InlineControl,
+            SitemapRowVisualPolicy.ResolveMappedSwitchButtonPlacement(row));
+    }
+
+    [Fact]
+    public void ResolveMappedSwitchButtonPlacement_UsesSeparateRowForMultipleMappings()
+    {
+        var row = Row(
+            RenderControlKind.MappedSwitch,
+            "ON",
+            [new SitemapMapOption("ON", "An"), new SitemapMapOption("OFF", "Aus")]);
+
+        Assert.Equal(
+            SitemapMappedSwitchButtonPlacement.SeparateRow,
+            SitemapRowVisualPolicy.ResolveMappedSwitchButtonPlacement(row));
+    }
+
+    [Fact]
+    public void ResolveMappedSwitchButtonPlacement_UsesSeparateRowForLongButtonLabel()
+    {
+        var longLabel = new string('a', SitemapRowVisualPolicy.MappedSwitchInlineButtonMaxLabelLength + 1);
+        var row = Row(RenderControlKind.MappedSwitch, "ON", [new SitemapMapOption("ON", longLabel)]);
+
+        Assert.Equal(
+            SitemapMappedSwitchButtonPlacement.SeparateRow,
+            SitemapRowVisualPolicy.ResolveMappedSwitchButtonPlacement(row));
+    }
+
+    [Fact]
+    public void ResolveMappedSwitchButtonPlacement_UsesSeparateRowForButtongrid()
+    {
+        var row = Row(RenderControlKind.ButtonGrid, null, [new SitemapMapOption("A", "A")]);
+
+        Assert.Equal(
+            SitemapMappedSwitchButtonPlacement.SeparateRow,
+            SitemapRowVisualPolicy.ResolveMappedSwitchButtonPlacement(row));
+    }
+
+    [Fact]
     public void TryResolveRowIndex_UsesPolicyIdentityKey()
     {
         var rows = new[]
@@ -135,4 +191,10 @@ public sealed class SitemapRowVisualPolicyTests
         Assert.True(found);
         Assert.Equal(0, rowIndex);
     }
+
+    private static SitemapRowDescriptor Row(
+        RenderControlKind control,
+        string? state,
+        IReadOnlyList<SitemapMapOption> options) =>
+        new("Row", state, control, RenderActionKind.SendCommand, RenderDensity.Comfortable, options);
 }

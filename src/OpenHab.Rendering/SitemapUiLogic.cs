@@ -226,21 +226,7 @@ public static class SitemapUiLogic
 
     public static bool SelectionValueMatches(string? left, string? right)
     {
-        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
-        {
-            return false;
-        }
-
-        var l = left.Trim();
-        var r = right.Trim();
-        if (string.Equals(l, r, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var leftIsNumber = double.TryParse(l, NumberStyles.Float, CultureInfo.InvariantCulture, out var leftNumber);
-        var rightIsNumber = double.TryParse(r, NumberStyles.Float, CultureInfo.InvariantCulture, out var rightNumber);
-        return leftIsNumber && rightIsNumber && Math.Abs(leftNumber - rightNumber) < 0.0001;
+        return SitemapValueMatcher.Matches(left, right);
     }
 
     private static string? FirstNonBlank(params string?[] values)

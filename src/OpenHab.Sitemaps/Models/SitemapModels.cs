@@ -29,7 +29,8 @@ public sealed record SitemapWidget(
     string? Service = null,
     SitemapInputHint InputHint = SitemapInputHint.Auto,
     int? HeightRows = null,
-    string? Encoding = null);
+    string? Encoding = null,
+    string? StatePattern = null);
 
 public sealed record NormalizedSitemapPage(string Id, string Label, IReadOnlyList<NormalizedSitemapWidget> Widgets);
 
@@ -63,7 +64,8 @@ public sealed record NormalizedSitemapWidget(
     string? Service = null,
     SitemapInputHint InputHint = SitemapInputHint.Auto,
     int? HeightRows = null,
-    string? Encoding = null);
+    string? Encoding = null,
+    string? StatePattern = null);
 
 public sealed record SitemapMapping(string Command, string Label);
 

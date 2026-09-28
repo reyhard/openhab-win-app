@@ -87,6 +87,7 @@ public static class SitemapNormalizer
             Service: widget.Service,
             InputHint: widget.InputHint,
             HeightRows: widget.HeightRows,
-            Encoding: widget.Encoding);
+            Encoding: widget.Encoding,
+            StatePattern: widget.StatePattern);
     }
 }
