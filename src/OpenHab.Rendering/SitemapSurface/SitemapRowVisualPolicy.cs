@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using OpenHab.Rendering.Descriptors;
+using OpenHab.Sitemaps.Runtime;
 
 namespace OpenHab.Rendering.SitemapSurface;
 
@@ -14,6 +15,7 @@ public static partial class SitemapRowVisualPolicy
 {
     private const double WebviewDefaultHeight = 300d;
     private const double SitemapRowHeight = 40d;
+    private const int MaxSliderDecimals = 4;
 
     /// <summary>
     /// Longest mapping-button label that is still placed next to the state value. Longer labels
@@ -99,16 +101,115 @@ public static partial class SitemapRowVisualPolicy
         return SitemapMappedSwitchButtonPlacement.InlineControl;
     }
 
-    public static string FormatSliderStateText(string? template, double value)
+    public static string FormatSliderStateText(
+        string? template,
+        double value,
+        double? step = null,
+        string? statePattern = null)
     {
-        var numeric = value.ToString("F0", CultureInfo.InvariantCulture);
-        return FormatNumericStateText(template, numeric);
+        if (TryFormatSliderStateWithPattern(statePattern, value) is { } patternText)
+        {
+            return patternText;
+        }
+
+        var decimals = ResolveSliderStateDecimals(template, step, value);
+        return FormatNumericStateText(template, FormatSliderNumber(value, decimals));
+    }
+
+    /// <summary>
+    /// Formats the numeric command sent for a slider value. Display metadata (state pattern,
+    /// template decimals) is intentionally ignored here; the step decides how much precision
+    /// the item expects, so a 0.5-step temperature sends "21.5" while a Dimmer sends "22".
+    /// </summary>
+    public static string FormatSliderCommand(double value, double? step = null)
+    {
+        var decimals = Math.Max(ResolveStepDecimals(step), ResolveValueDecimals(value));
+        return TrimTrailingZeros(FormatSliderNumber(value, decimals));
     }
 
     public static string FormatSetpointStateText(string? template, double value)
     {
         var numeric = value.ToString("0.########", CultureInfo.InvariantCulture);
         return FormatNumericStateText(template, numeric);
+    }
+
+    private static string? TryFormatSliderStateWithPattern(string? statePattern, double value)
+    {
+        if (string.IsNullOrWhiteSpace(statePattern))
+        {
+            return null;
+        }
+
+        var rawValue = value.ToString("0.############", CultureInfo.InvariantCulture);
+        return OpenHabStatePatternFormatter.TryFormat(statePattern, rawValue);
+    }
+
+    private static int ResolveSliderStateDecimals(string? template, double? step, double value)
+    {
+        var decimals = Math.Max(ResolveStepDecimals(step), ResolveValueDecimals(value));
+        decimals = Math.Max(decimals, ResolveTemplateDecimals(template));
+        return Math.Min(decimals, MaxSliderDecimals);
+    }
+
+    private static int ResolveStepDecimals(double? step)
+    {
+        return step is > 0d ? ResolveValueDecimals(step.Value) : 0;
+    }
+
+    private static int ResolveTemplateDecimals(string? template)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return 0;
+        }
+
+        var match = FirstNumberRegex.Match(template);
+        if (!match.Success)
+        {
+            return 0;
+        }
+
+        var token = match.Value;
+        var separatorIndex = token.IndexOfAny(['.', ',']);
+        return separatorIndex < 0 ? 0 : token.Length - separatorIndex - 1;
+    }
+
+    private static int ResolveValueDecimals(double value)
+    {
+        var magnitude = Math.Abs(value);
+        if (IsCloseToInteger(magnitude, tolerance: 1e-9))
+        {
+            return 0;
+        }
+
+        for (var decimals = 1; decimals < MaxSliderDecimals; decimals++)
+        {
+            if (IsCloseToInteger(magnitude * Math.Pow(10, decimals), tolerance: 1e-6))
+            {
+                return decimals;
+            }
+        }
+
+        return MaxSliderDecimals;
+    }
+
+    private static bool IsCloseToInteger(double value, double tolerance) =>
+        Math.Abs(value - Math.Round(value)) <= tolerance;
+
+    private static string FormatSliderNumber(double value, int decimals)
+    {
+        var rounded = Math.Round(value, decimals, MidpointRounding.AwayFromZero);
+        return rounded.ToString("F" + decimals.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    }
+
+    private static string TrimTrailingZeros(string numeric)
+    {
+        if (!numeric.Contains('.'))
+        {
+            return numeric;
+        }
+
+        return numeric.TrimEnd('0').TrimEnd('.');
     }
 
     private static string FormatNumericStateText(string? template, string numeric)

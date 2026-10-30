@@ -213,9 +213,18 @@ public static partial class SitemapControlFactory
 
             case RenderControlKind.Slider:
                 var slider = FindVisualChild<Slider>(inner);
-                if (slider is not null && double.TryParse(rawState, NumberStyles.Any, CultureInfo.InvariantCulture, out var val))
+                var sliderState = slider?.Tag as SliderCommandState;
+                if (slider is not null && TryParseNumericState(rawState, out var rawValue))
                 {
-                    var sliderState = slider.Tag as SliderCommandState;
+                    // The local drag owns the knob and label until the pointer is released;
+                    // echoing server state mid-drag would fight the pointer.
+                    if (sliderState?.IsDragging == true)
+                    {
+                        break;
+                    }
+
+                    var val = Math.Clamp(rawValue, slider.Minimum, slider.Maximum);
+
                     sliderState?.SuppressValueChanged = true;
 
                     slider.Value = val;
@@ -229,7 +238,7 @@ public static partial class SitemapControlFactory
                     else
                     {
                         var currentStateText = FindStateTextBlockText(inner);
-                        UpdateStateTextBlock(inner, FormatSliderStateText(currentStateText, val));
+                        UpdateStateTextBlock(inner, FormatSliderStateText(currentStateText, val, updated.Step, updated.StatePattern));
                     }
                 }
                 else
@@ -1260,7 +1269,7 @@ public static partial class SitemapControlFactory
                     return;
                 }
 
-                var releaseValue = slider.Value.ToString("F0", CultureInfo.InvariantCulture);
+                var releaseValue = SitemapRowVisualPolicy.FormatSliderCommand(slider.Value, row.Step);
                 await SendIfChangedAsync(releaseValue);
             }
 
@@ -1271,14 +1280,14 @@ public static partial class SitemapControlFactory
                     return;
                 }
 
-                var newValue = args.NewValue.ToString("F0", CultureInfo.InvariantCulture);
+                var newValue = SitemapRowVisualPolicy.FormatSliderCommand(args.NewValue, row.Step);
                 if (isColorTemperature)
                 {
                     UpdateColorPreview(grid, ResolveColorTemperaturePreview(args.NewValue, min, max));
                 }
                 else if (stateBlock is not null)
                 {
-                    stateBlock.Text = FormatSliderStateText(stateBlock.Text, args.NewValue);
+                    stateBlock.Text = FormatSliderStateText(stateBlock.Text, args.NewValue, row.Step, row.StatePattern);
                 }
 
                 if (row.SliderUpdateOnMove)
@@ -2057,9 +2066,9 @@ public static partial class SitemapControlFactory
         });
     }
 
-    private static string FormatSliderStateText(string? template, double value)
+    private static string FormatSliderStateText(string? template, double value, double? step, string? statePattern)
     {
-        return SitemapRowVisualPolicy.FormatSliderStateText(template, value);
+        return SitemapRowVisualPolicy.FormatSliderStateText(template, value, step, statePattern);
     }
 
     private static Border CreateButton(

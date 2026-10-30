@@ -69,6 +69,58 @@ public sealed class SitemapRowVisualPolicyTests
     }
 
     [Theory]
+    [InlineData("%.1f °C", 21.5, "21.5 °C")]
+    [InlineData("%.1f °C", 22d, "22.0 °C")]
+    [InlineData("%.0f ml", 4870.4, "4870 ml")]
+    [InlineData("%.2f A", 1.234, "1.23 A")]
+    public void FormatSliderStateText_UsesStatePatternForDisplayPrecision(string statePattern, double value, string expected)
+    {
+        Assert.Equal(
+            expected,
+            SitemapRowVisualPolicy.FormatSliderStateText(template: null, value, step: null, statePattern));
+    }
+
+    [Theory]
+    [InlineData("22.0 °C", 21.5, 0.5, "21.5 °C")]
+    [InlineData("22.0 °C", 22d, null, "22.0 °C")]
+    [InlineData(null, 21.5, 0.5, "21.5")]
+    [InlineData("42 %%", 12d, 1d, "12 %%")]
+    [InlineData("12", 21.5, 0d, "21.5")]
+    public void FormatSliderStateText_FallsBackToStepAndTemplatePrecision(
+        string? template,
+        double value,
+        double? step,
+        string expected)
+    {
+        Assert.Equal(expected, SitemapRowVisualPolicy.FormatSliderStateText(template, value, step));
+    }
+
+    [Theory]
+    [InlineData("%d", "22.0 °C", 21.5, 0.5, "21.5 °C")]
+    [InlineData(null, "22.0 °C", 21.5, 0.5, "21.5 °C")]
+    public void FormatSliderStateText_FallsBackWhenPatternRejectsFractionalValue(
+        string? statePattern,
+        string? template,
+        double value,
+        double? step,
+        string expected)
+    {
+        Assert.Equal(expected, SitemapRowVisualPolicy.FormatSliderStateText(template, value, step, statePattern));
+    }
+
+    [Theory]
+    [InlineData(21.5, 0.5, "21.5")]
+    [InlineData(22d, 0.5, "22")]
+    [InlineData(21.5, null, "21.5")]
+    [InlineData(42d, 1d, "42")]
+    [InlineData(42.0000000001, 1d, "42")]
+    [InlineData(0.30000000000000004, 0.1, "0.3")]
+    public void FormatSliderCommand_PreservesFractionalStepValues(double value, double? step, string expected)
+    {
+        Assert.Equal(expected, SitemapRowVisualPolicy.FormatSliderCommand(value, step));
+    }
+
+    [Theory]
     [InlineData("21.5 °C", 22.25, "22.25 °C")]
     [InlineData(null, 4.5, "4.5")]
     public void FormatSetpointStateText_PreservesFractionalValues(string? template, double value, string expected)

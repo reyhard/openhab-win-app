@@ -56,7 +56,8 @@ internal static class SitemapRowMapper
             InputHint: inputHint,
             WidgetId: widget.WidgetId,
             HeightRows: widget.HeightRows,
-            Encoding: widget.Encoding);
+            Encoding: widget.Encoding,
+            StatePattern: widget.StatePattern);
     }
 
     private static string? TransformState(string? state, IReadOnlyList<SitemapMapping> mappings)

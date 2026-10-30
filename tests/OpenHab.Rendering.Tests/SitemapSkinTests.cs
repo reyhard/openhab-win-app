@@ -44,6 +44,37 @@ public sealed class SitemapSkinTests
     [Theory]
     [InlineData(typeof(BasicSitemapSkin))]
     [InlineData(typeof(Windows11SitemapSkin))]
+    public void SliderRowCarriesStatePatternForDisplayFormatting(Type skinType)
+    {
+        var page = new NormalizedSitemapPage("root", "Home", [
+            new NormalizedSitemapWidget(
+                "Bedroom",
+                SitemapWidgetType.Slider,
+                "Bedroom_Temperature",
+                "21.5 °C",
+                [],
+                false,
+                false,
+                SitemapFallbackKind.None,
+                [],
+                MinValue: 5,
+                MaxValue: 30,
+                Step: 0.5,
+                StatePattern: "%.1f °C")
+        ]);
+        var skin = (ISitemapSkin)Activator.CreateInstance(skinType)!;
+
+        var descriptor = skin.Render(page);
+        var row = Assert.Single(descriptor.Rows);
+
+        Assert.Equal(RenderControlKind.Slider, row.Control);
+        Assert.Equal(0.5, row.Step);
+        Assert.Equal("%.1f °C", row.StatePattern);
+    }
+
+    [Theory]
+    [InlineData(typeof(BasicSitemapSkin))]
+    [InlineData(typeof(Windows11SitemapSkin))]
     public void InputMapsToInputControlWithSendCommand(Type skinType)
     {
         var page = new NormalizedSitemapPage("root", "Home", [
