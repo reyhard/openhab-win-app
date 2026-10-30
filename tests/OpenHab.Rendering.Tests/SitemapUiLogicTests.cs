@@ -354,6 +354,133 @@ public sealed class SitemapUiLogicTests
         Assert.Equal(75d, brightness);
     }
 
+    [Theory]
+    [InlineData("-10,150,-5", 0d, 100d, 0d)]
+    [InlineData("400,20,110", 360d, 20d, 100d)]
+    public void TryParseOpenHabColorState_ClampsComponentsToValidRange(
+        string raw,
+        double expectedHue,
+        double expectedSaturation,
+        double expectedBrightness)
+    {
+        var parsed = SitemapUiLogic.TryParseOpenHabColorState(
+            raw,
+            out var hue,
+            out var saturation,
+            out var brightness);
+
+        Assert.True(parsed);
+        Assert.Equal(expectedHue, hue);
+        Assert.Equal(expectedSaturation, saturation);
+        Assert.Equal(expectedBrightness, brightness);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("120")]
+    [InlineData("120,50")]
+    [InlineData("abc,50,50")]
+    [InlineData("120,abc,50")]
+    [InlineData("120,50,abc")]
+    public void TryParseOpenHabColorState_RejectsMalformedInput(string? raw)
+    {
+        var parsed = SitemapUiLogic.TryParseOpenHabColorState(
+            raw,
+            out _,
+            out _,
+            out _);
+
+        Assert.False(parsed);
+    }
+
+    [Theory]
+    [InlineData("0,100,100", 255, 0, 0)]
+    [InlineData("60,100,100", 255, 255, 0)]
+    [InlineData("120,100,100", 0, 255, 0)]
+    [InlineData("180,100,100", 0, 255, 255)]
+    [InlineData("240,100,100", 0, 0, 255)]
+    [InlineData("300,100,100", 255, 0, 255)]
+    [InlineData("360,100,100", 255, 0, 0)]
+    [InlineData("120,0,50", 128, 128, 128)]
+    public void TryResolveOpenHabColor_ConvertsHsbTripletToOpaqueColor(
+        string raw,
+        int expectedR,
+        int expectedG,
+        int expectedB)
+    {
+        var resolved = SitemapUiLogic.TryResolveOpenHabColor(raw, out var color);
+
+        Assert.True(resolved);
+        Assert.Equal(new SitemapColor((byte)255, (byte)expectedR, (byte)expectedG, (byte)expectedB), color);
+    }
+
+    [Theory]
+    [InlineData(255, 255, 0, 0, "0,100,100")]
+    [InlineData(255, 255, 255, 0, "60,100,100")]
+    [InlineData(255, 0, 255, 0, "120,100,100")]
+    [InlineData(255, 0, 255, 255, "180,100,100")]
+    [InlineData(255, 0, 0, 255, "240,100,100")]
+    [InlineData(255, 255, 0, 255, "300,100,100")]
+    [InlineData(255, 0, 0, 0, "0,0,0")]
+    [InlineData(255, 255, 255, 255, "0,0,100")]
+    public void BuildOpenHabColorCommand_ConvertsColorToHsbCommand(
+        int a,
+        int r,
+        int g,
+        int b,
+        string expectedCommand)
+    {
+        var command = SitemapUiLogic.BuildOpenHabColorCommand(new SitemapColor((byte)a, (byte)r, (byte)g, (byte)b));
+
+        Assert.Equal(expectedCommand, command);
+    }
+
+    [Theory]
+    [InlineData(" #abc ", 255, 170, 187, 204)]
+    [InlineData("#123456", 255, 18, 52, 86)]
+    [InlineData("#80123456", 128, 18, 52, 86)]
+    [InlineData("ReD", 255, 255, 0, 0)]
+    public void TryResolveOpenHabColor_AcceptsHexAndNamedColors(
+        string raw,
+        int expectedA,
+        int expectedR,
+        int expectedG,
+        int expectedB)
+    {
+        var resolved = SitemapUiLogic.TryResolveOpenHabColor(raw, out var color);
+
+        Assert.True(resolved);
+        Assert.Equal(new SitemapColor((byte)expectedA, (byte)expectedR, (byte)expectedG, (byte)expectedB), color);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("#12")]
+    [InlineData("#gggggg")]
+    [InlineData("chartreuse")]
+    public void TryResolveOpenHabColor_RejectsUnsupportedColorText(string? raw)
+    {
+        var resolved = SitemapUiLogic.TryResolveOpenHabColor(raw, out _);
+
+        Assert.False(resolved);
+    }
+
+    [Theory]
+    [InlineData("#00FF00", "120,100,100")]
+    [InlineData("  not-a-color  ", "not-a-color")]
+    [InlineData(null, null)]
+    [InlineData("   ", null)]
+    public void NormalizeInputByHint_ColorInput_ProducesCommandOrPreservesTrimmedText(string? raw, string? expected)
+    {
+        var normalized = SitemapUiLogic.NormalizeInputByHint(raw, SitemapInputHint.Color);
+
+        Assert.Equal(expected, normalized);
+    }
+
     [Fact]
     public void ResolveColorTemperaturePreview_ReturnsWarmerColorForLowerValues()
     {
