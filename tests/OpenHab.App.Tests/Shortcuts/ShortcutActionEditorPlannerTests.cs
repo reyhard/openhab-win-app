@@ -138,6 +138,123 @@ public sealed class ShortcutActionEditorPlannerTests
             third => Assert.Equal("a2", third.Id));
     }
 
+    [Fact]
+    public void DraftEqualsActionReturnsTrueForUnchangedDraft()
+    {
+        var saved = SavedShortcut();
+        var draft = ShortcutActionEditorPlanner.CreateDraft(saved);
+
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(draft, saved));
+    }
+
+    [Fact]
+    public void DraftEqualsActionIgnoresSurroundingWhitespaceInEditableText()
+    {
+        var saved = SavedShortcut();
+        var draft = ShortcutActionEditorPlanner.CreateDraft(saved) with
+        {
+            Name = "  Kitchen Light  ",
+            IconId = "\tlightbulb ",
+            TargetItem = " Kitchen_Light\t",
+            CommandValue = "  ON  "
+        };
+
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(draft, saved));
+    }
+
+    [Fact]
+    public void DraftEqualsActionTreatsUnsetCommandValuesAsEqual()
+    {
+        var saved = SavedShortcut() with { CommandValue = null };
+        var draft = ShortcutActionEditorPlanner.CreateDraft(saved);
+
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(draft, saved));
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(draft with { CommandValue = string.Empty }, saved));
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(draft with { CommandValue = "   " }, saved));
+    }
+
+    [Fact]
+    public void DraftEqualsActionComparesBindingsByFormattedValue()
+    {
+        var saved = SavedShortcut();
+        var draft = ShortcutActionEditorPlanner.CreateDraft(saved);
+
+        var reorderedAndDuplicated = new ShortcutBinding(
+            [ShortcutModifier.Alt, ShortcutModifier.Ctrl, ShortcutModifier.Ctrl],
+            "k");
+        Assert.Equal(
+            ShortcutBindingFormatter.Format(saved.GlobalShortcut),
+            ShortcutBindingFormatter.Format(reorderedAndDuplicated));
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(draft with { GlobalShortcut = reorderedAndDuplicated }, saved));
+
+        Assert.False(ShortcutActionEditorPlanner.DraftEqualsAction(
+            draft with { GlobalShortcut = new ShortcutBinding([ShortcutModifier.Ctrl, ShortcutModifier.Alt], "J") },
+            saved));
+        Assert.False(ShortcutActionEditorPlanner.DraftEqualsAction(draft with { GlobalShortcut = null }, saved));
+
+        var unassigned = saved with { GlobalShortcut = null };
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(
+            ShortcutActionEditorPlanner.CreateDraft(unassigned) with { GlobalShortcut = null },
+            unassigned));
+    }
+
+    [Fact]
+    public void DraftEqualsActionDetectsEachChangedFieldIndependently()
+    {
+        var saved = SavedShortcut();
+        var unchanged = ShortcutActionEditorPlanner.CreateDraft(saved);
+        // Listed in the same order as the production comparison so every case proves its
+        // field is checked after all earlier fields matched, rather than masked by &&.
+        (string Field, ShortcutActionEditorDraft Draft)[] changes =
+        [
+            ("name", unchanged with { Name = "Kitchen Light 2" }),
+            ("icon", unchanged with { IconId = "switch" }),
+            ("menu visibility", unchanged with { ShowInCommandMenu = false }),
+            ("binding", unchanged with { GlobalShortcut = new ShortcutBinding([ShortcutModifier.Shift], "K") }),
+            ("target item", unchanged with { TargetItem = "Hall_Light" }),
+            ("command type", unchanged with { CommandType = ShortcutCommandType.Toggle }),
+            ("command value", unchanged with { CommandValue = "OFF" })
+        ];
+
+        foreach (var (field, changedDraft) in changes)
+        {
+            Assert.False(
+                ShortcutActionEditorPlanner.DraftEqualsAction(changedDraft, saved),
+                $"Expected a changed {field} to make the draft unequal to the saved action.");
+        }
+    }
+
+    [Fact]
+    public void DraftEqualsActionComparesNameWithOrdinalCaseSensitivity()
+    {
+        var saved = SavedShortcut();
+        var draft = ShortcutActionEditorPlanner.CreateDraft(saved) with { Name = "kitchen light" };
+
+        Assert.False(ShortcutActionEditorPlanner.DraftEqualsAction(draft, saved));
+    }
+
+    [Fact]
+    public void DraftEqualsActionIgnoresDraftIdentity()
+    {
+        var saved = SavedShortcut();
+        var draft = ShortcutActionEditorPlanner.CreateDraft(saved) with { Id = "another-id" };
+
+        Assert.True(ShortcutActionEditorPlanner.DraftEqualsAction(draft, saved));
+    }
+
+    private static ShortcutAction SavedShortcut()
+    {
+        return new ShortcutAction(
+            "action-1",
+            "Kitchen Light",
+            "lightbulb",
+            ShowInCommandMenu: true,
+            GlobalShortcut: new ShortcutBinding([ShortcutModifier.Ctrl, ShortcutModifier.Alt], "K"),
+            TargetItem: "Kitchen_Light",
+            CommandType: ShortcutCommandType.SendCommand,
+            CommandValue: "ON");
+    }
+
     private static ShortcutAction Action(string id, string name)
     {
         return new ShortcutAction(id, name, "custom", true, null, "Item", ShortcutCommandType.Toggle, null);
