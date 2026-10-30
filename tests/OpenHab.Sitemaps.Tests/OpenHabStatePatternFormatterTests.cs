@@ -16,6 +16,15 @@ public sealed class OpenHabStatePatternFormatterTests
     [InlineData("temp %.1f °C", "21.46", "temp 21.5 °C")]
     [InlineData("%5.1f", "3.2", "  3.2")]
     [InlineData("%-5s|", "ab", "ab   |")]
+    [InlineData("%+06.1f", "3.2", "+003.2")]
+    [InlineData("%06.1f", "-3.2", "-003.2")]
+    [InlineData("%06.1f", "3.2", "0003.2")]
+    [InlineData("% 5d", "42", "   42")]
+    [InlineData("%-5d", "42", "42   ")]
+    [InlineData("%+d", "-42", "-42")]
+    [InlineData("%f", "1.25", "1.250000")]
+    [InlineData("%% %d %%", "42", "% 42 %")]
+    [InlineData("%+5s", "ab", "   ab")]
     public void TryFormat_FormatsSupportedPatterns(string pattern, string rawState, string expected)
     {
         Assert.Equal(expected, OpenHabStatePatternFormatter.TryFormat(pattern, rawState));
@@ -28,7 +37,17 @@ public sealed class OpenHabStatePatternFormatterTests
     [InlineData("no conversion", "1")]
     [InlineData("", "1")]
     [InlineData(null, "1")]
-    public void TryFormat_ReturnsNullForUnsupportedOrInvalidInput(string? pattern, string rawState)
+    [InlineData("%d", null)]
+    [InlineData("%d", "")]
+    [InlineData("%", "42")]
+    [InlineData("%5", "42")]
+    [InlineData("%.f", "42")]
+    [InlineData("%q", "42")]
+    [InlineData("%d %s", "42")]
+    [InlineData("%d %", "42")]
+    [InlineData("%d", "not-a-number")]
+    [InlineData("%f", "not-a-number")]
+    public void TryFormat_ReturnsNullForUnsupportedOrInvalidInput(string? pattern, string? rawState)
     {
         Assert.Null(OpenHabStatePatternFormatter.TryFormat(pattern, rawState));
     }
