@@ -2162,3 +2162,64 @@ The user explicitly approved excluding these non-.NET scripts from Sonar coverag
   ```
 
   Expected: both checks pass. Review the diff for the two scoped files and retained Task 19 assertions. Do not edit status or verification reports, add exclusions, or commit as part of this task.
+
+---
+
+### Task 21: Cover Notification Media Cache Boundary and Pruning Decisions
+
+**Files:**
+- Modify: `tests/OpenHab.App.Tests/Notifications/NotificationMediaCacheTests.cs`.
+- Inspect only: `src/OpenHab.App/Notifications/NotificationMediaCache.cs`.
+
+**Scope and decision:** Verified analysis `2026-10-30T21:20:52+0000` of pushed `2325b774949218044d0bfbc1457473e2b6d1b573` reports gate OK, overall coverage 86.4% (line 89.6%, branch 80.2%), 5,736 lines to cover, 596 uncovered lines and 584 uncovered conditions; new code is 93.11%, with 1,856 lines, 81 uncovered lines and 115 uncovered conditions. Tasks 19/20 are confirmed: `SseMessageParser.cs` is 54/54 lines and 46/46 conditions. The gate is already green.
+
+`NotificationMediaCache.cs` has 13 uncovered lines and 10 uncovered conditions (86.2% line / 80.8% branch). Existing tests exercise ordinary count, byte and age eviction, traversal, locked-file best effort and successful temporary cleanup, but omit meaningful boundaries and pruning decisions. The existing temporary directory and injected clock support deterministic behavioral tests without production hooks. Not all reported misses are necessarily reachable: enumeration/inspection races and some defensive path checks should not be forced through flaky OS behavior. `ShortcutWindowsMapper.cs` has 17 uncovered lines / 38 conditions, but Task 8 already addressed its pure branches and several remaining fallbacks are normalized away or redundant. `SitemapRuntimeController.cs` has 195 / 179 across many asynchronous clusters and needs a separately selected bounded behavior. Neither is included here. No coverage increase or gate outcome is promised.
+
+- [ ] **Step 1: Capture a focused baseline**
+
+  Before editing, collect the existing cache tests with a fresh GUID directory; retain the report path and repeat the identical command with a new GUID afterward. Do not delete existing results.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-NotificationMediaCacheCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~NotificationMediaCacheTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm `NotificationMediaCache.cs` appears in the report; use the same configuration, filter and settings for both runs.
+
+- [ ] **Step 2: Add bounded observable cache cases**
+
+  Extend the existing tests using isolated temporary roots and the existing injected clock, with fixed whole-second UTC timestamps; no sleeps, reflection, filesystem injection or new production test hooks. Assert public results and on-disk contents:
+
+  - Constructor rejects zero and negative `maxFiles`, `maxBytes` and `maxAge` with `ArgumentOutOfRangeException`; positive limits are accepted. An oversized payload returns null without creating a cache file; a payload exactly at the byte limit is stored with its exact bytes. Verify an existing file remains unchanged after an oversized attempt.
+  - With an explicit clock and `PruneAsync`, create entries just older than, exactly at, and newer than the age threshold; assert only the older entry is removed. On a missing root, `PruneAsync` and `Clear` leave it absent.
+  - Create equal-timestamp files exceeding the count limit before calling `PruneAsync`; assert the ordinal-ignore-case path tie-break deletes the alphabetically first and keeps the other. Separately set the clock backward before storing a new file so it sorts oldest while capacity is exceeded: assert the newly stored file remains and the older existing file is removed, with exact retained bytes.
+  - Store the same key using extensions with and without a leading dot; assert the same normalized local path, replacement bytes and no temporary artifacts. For `.` and `..` keys and an extension containing a path separator, assert null and no file outside the root. Do not assume the defensive root-prefix rejection can be reached independently of filename validation.
+  - Use a regular file as the cache root to deterministically make directory creation fail; assert `StoreAsync` returns null, the blocker remains unchanged, and after removing that test-owned blocker a subsequent store succeeds. For an already-cancelled token with an otherwise valid payload, assert cancellation is observable and no file is written. Do not depend on access-control configuration or nondeterministic filesystem races.
+
+  These cases test current behavior; retain only distinct meaningful cases and avoid claiming each maps to a particular Sonar condition without local point evidence. No production changes or exclusions are in scope absent a real correctness finding; if found, preserve evidence and stop for separate correctness planning.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially:
+
+  ```powershell
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~NotificationMediaCacheTests -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`, reporting the known DesktopBridge import limitation separately from test failures. No tray or package build is required for test-only changes.
+
+- [ ] **Step 4: Compare focused coverage and check formatting**
+
+  Repeat Step 1 in a new GUID directory. Resolve the target source file ID in each report's module and compare covered/total sequence and branch points, source lines and per-method points for the constructor, `StoreAsync`, `PruneAsync`, `Clear`, `ResolveCachePath` and `PruneCore`; report baseline, post and unchanged relevant points. Focused OpenCover is not Sonar project-wide or new-code coverage; only a later server analysis establishes actual impact. Leave generated reports untracked.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.App.Tests\Notifications\NotificationMediaCacheTests.cs
+  git diff --check
+  ```
+
+  Expected: tests and checks pass. Review the scoped diff; do not edit status or verification reports, add exclusions or production changes absent a separately considered correctness finding, or commit as part of this task.
