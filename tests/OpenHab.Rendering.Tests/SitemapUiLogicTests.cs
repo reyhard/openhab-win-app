@@ -1,3 +1,4 @@
+using System.Globalization;
 using OpenHab.Rendering;
 using OpenHab.Rendering.Descriptors;
 using OpenHab.Sitemaps.Models;
@@ -479,6 +480,79 @@ public sealed class SitemapUiLogicTests
         var normalized = SitemapUiLogic.NormalizeInputByHint(raw, SitemapInputHint.Color);
 
         Assert.Equal(expected, normalized);
+    }
+
+    [Theory]
+    [InlineData("  2024-02-29  ", "2024-02-29")]
+    [InlineData("2024-02-29T12:34:56", "2024-02-29")]
+    public void NormalizeInputByHint_DateInput_ProducesIsoDate(string raw, string expected)
+    {
+        var normalized = SitemapUiLogic.NormalizeInputByHint(raw, SitemapInputHint.Date);
+
+        Assert.Equal(expected, normalized);
+    }
+
+    [Fact]
+    public void NormalizeInputByHint_TimeInput_AppendsSecondsToIsoTime()
+    {
+        var normalized = SitemapUiLogic.NormalizeInputByHint("  12:34  ", SitemapInputHint.Time);
+
+        Assert.Equal("12:34:00", normalized);
+    }
+
+    [Theory]
+    [InlineData("2024-02-29T12:34:56", "2024-02-29T12:34:56")]
+    [InlineData("2024-02-29T12:34:56.789", "2024-02-29T12:34:56")]
+    public void NormalizeInputByHint_DateTimeInput_ProducesIsoDateTimeWithoutFractionalSeconds(
+        string raw,
+        string expected)
+    {
+        var normalized = SitemapUiLogic.NormalizeInputByHint(raw, SitemapInputHint.DateTime);
+
+        Assert.Equal(expected, normalized);
+    }
+
+    [Fact]
+    public void NormalizeInputByHint_DateInput_ParsesCurrentCultureFallback()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("pl-PL");
+
+            var normalized = SitemapUiLogic.NormalizeInputByHint("29.02.2024", SitemapInputHint.Date);
+
+            Assert.Equal("2024-02-29", normalized);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    [Theory]
+    [InlineData(SitemapInputHint.Date, "  not-a-date  ", "not-a-date")]
+    [InlineData(SitemapInputHint.Time, "  not-a-time  ", "not-a-time")]
+    [InlineData(SitemapInputHint.DateTime, "  not-a-datetime  ", "not-a-datetime")]
+    public void NormalizeInputByHint_UnparsableTemporalInput_FallsBackToTrimmedText(
+        SitemapInputHint hint,
+        string raw,
+        string expected)
+    {
+        var normalized = SitemapUiLogic.NormalizeInputByHint(raw, hint);
+
+        Assert.Equal(expected, normalized);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void NormalizeInputByHint_TemporalHints_ReturnNullForBlankInput(string? raw)
+    {
+        Assert.Null(SitemapUiLogic.NormalizeInputByHint(raw, SitemapInputHint.Date));
+        Assert.Null(SitemapUiLogic.NormalizeInputByHint(raw, SitemapInputHint.Time));
+        Assert.Null(SitemapUiLogic.NormalizeInputByHint(raw, SitemapInputHint.DateTime));
     }
 
     [Fact]
