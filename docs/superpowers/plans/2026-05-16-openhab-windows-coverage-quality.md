@@ -2112,3 +2112,53 @@ The user explicitly approved excluding these non-.NET scripts from Sonar coverag
   ```
 
   Expected: tests and checks pass. Do not edit status or verification reports, add production changes or exclusions absent a separately considered correctness finding, or commit as part of planning.
+
+---
+
+### Task 20: Harden SSE Parser Against Wrong JSON Kinds
+
+**Files:**
+- Modify: `src/OpenHab.Core/Events/SseMessageParser.cs`.
+- Modify: `tests/OpenHab.Core.Tests/Events/SseMessageParserTests.cs`.
+
+**Scope and decision:** Task 19 review surfaced a correctness finding, not a coverage-driven behavior change: `TryGetProperty` on a non-object root and `GetString` on a wrong-typed envelope field can throw `InvalidOperationException`, which the existing `JsonException` catch does not handle. A malformed or hostile server event could therefore fault parsing rather than be ignored. This also applies to the parsed nested payload root. Reject non-object outer and nested roots and wrong-typed `topic`, `type`, and `payload` values by returning null without throwing, while preserving all existing valid behavior. No coverage or quality-gate outcome is promised.
+
+- [ ] **Step 1: Add failing regression tests first**
+
+  Extend `SseMessageParserTests` through the public `ParseLine` API. Assert null without exceptions for outer roots `[]`, `null`, and a JSON string; also exercise those roots as serialized nested payload strings inside otherwise valid envelopes. For each of `topic`, `type`, and `payload`, independently substitute a JSON number, boolean, array, and object while keeping the other fields valid, and assert null. Use synthetic data only. Preserve every existing Task 19 test and its assertions; update the now-obsolete explanatory comment when the fix lands, without weakening or deleting tests. Retain malformed outer and nested JSON tests that actually reach `JsonDocument.Parse` and exercise the genuine `JsonException` path.
+
+- [ ] **Step 2: Capture the red state**
+
+  Before changing production code, run:
+
+  ```powershell
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --filter FullyQualifiedName~SseMessageParserTests --logger "console;verbosity=normal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  Expected: new wrong-kind cases fail with `InvalidOperationException`. Capture the exact test names, exception messages and relevant stack frames from this run as red evidence; distinguish any build or environment failure from the expected parser failure. Do not include real server payloads or sensitive data in evidence.
+
+- [ ] **Step 3: Implement the smallest fix and show green**
+
+  In the parser, guard both roots before property access and guard envelope string access using explicit `ValueKind` checks or a small safe string-access helper. Preserve existing null, missing-field, valid event, payload-value and malformed JSON behavior; keep the existing genuine `JsonException` handling. Avoid a broad catch that swallows unrelated exceptions. Do not log payloads, endpoints, credentials, or other sensitive data; do not change logging or SSE stream ownership. No unrelated refactors or coverage exclusions are in scope.
+
+  Repeat the Step 2 focused command. Expected: all existing and new `SseMessageParserTests` pass, including the malformed JSON cases; record the green result alongside the red evidence.
+
+- [ ] **Step 4: Run direct logic verification sequentially**
+
+  ```powershell
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  Expected: all four projects pass. If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`; report the known DesktopBridge `.wapproj` import limitation separately from test failures.
+
+- [ ] **Step 5: Check formatting and scope**
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include src\OpenHab.Core\Events\SseMessageParser.cs tests\OpenHab.Core.Tests\Events\SseMessageParserTests.cs
+  git diff --check
+  ```
+
+  Expected: both checks pass. Review the diff for the two scoped files and retained Task 19 assertions. Do not edit status or verification reports, add exclusions, or commit as part of this task.
