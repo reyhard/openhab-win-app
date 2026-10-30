@@ -1393,3 +1393,52 @@ git commit -m "Record coverage improvement verification"
   ```
 
   Expected: the commit contains test changes only. Do not add coverage exclusions, production-source changes, generated coverage reports, or current-status updates.
+
+---
+
+### Task 9: Cover Shortcut Editor Unsaved-Change Decisions
+
+**Files:**
+- Modify: `tests/OpenHab.App.Tests/Shortcuts/ShortcutActionEditorPlannerTests.cs`
+- Inspect only: `src/OpenHab.App/Shortcuts/ShortcutActionEditorPlanner.cs` and `src/OpenHab.App/Shortcuts/ShortcutBindingFormatter.cs`
+
+**Scope and decision:** The 2026-10-30 post-`d1e4698` Sonar analysis reports overall coverage `78.2%` and new-code coverage `73.3%` against an `80%` gate; the shortcut editor planner has `85.5%` line and `34.6%` branch coverage. Its existing tests cover creation, upsert, removal and movement, but none directly cover `DraftEqualsAction`, which determines whether edited shortcut settings differ from the saved action. This bounded, deterministic user-facing decision is preferable to mechanically exercising mapper enum fallbacks, testing static sample data, or expanding the already-large runtime suite. Coverage improvement and gate passage are not guaranteed.
+
+- [ ] **Step 1: Add a focused comparison cohort**
+
+  Extend the existing test class using a saved action with nonempty name, icon, target and command value, a supported command type, a visible-menu flag, and a non-null binding. Construct drafts with `CreateDraft` and assert:
+
+  - An unchanged draft equals its saved action; leading/trailing whitespace in the draft name, icon, target and command value is ignored. A null draft command value equals a saved null command value, and an empty draft value equals saved null.
+  - Equivalent shortcut bindings with reordered/duplicate modifiers compare equal when their formatted binding is equal; a genuinely different binding, and null versus a non-null binding, compare unequal. Check the formatter's actual normalization contract when selecting the inputs.
+  - Change exactly one field at a time: name, icon, menu visibility, binding, target item, command type, or command value. Each independently returns false while all earlier fields remain equal, so short-circuiting cannot mask a comparison. Also assert text comparison remains ordinal/case-sensitive with a case-only name change.
+  - Changing only the draft ID does not change equality, since this method compares editable values, not identity.
+
+  Assert public results, not private implementation details. Do not add coverage exclusions, reflection, or production changes. If an expected contract fails, preserve the failure and stop for a separate correctness decision rather than altering the behavior to raise coverage.
+
+- [ ] **Step 2: Run focused and direct logic gates**
+
+  Run sequentially:
+
+  ```powershell
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~ShortcutActionEditorPlannerTests --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  Expected: all pass against existing behavior; this test-only cohort is not expected to start red. If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` and report the known DesktopBridge import limitation separately if encountered. No tray or package build is required for test-only changes.
+
+- [ ] **Step 3: Inspect coverage and formatting**
+
+  Use a fresh, task-specific results directory without deleting pre-existing results:
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-ShortcutEditorCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~ShortcutActionEditorPlannerTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.App.Tests\Shortcuts\ShortcutActionEditorPlannerTests.cs
+  git diff --check -- tests\OpenHab.App.Tests\Shortcuts\ShortcutActionEditorPlannerTests.cs
+  ```
+
+  Expected: tests and checks pass; inspect the fresh OpenCover report's `ShortcutActionEditorPlanner.cs` sequence and branch points, particularly `DraftEqualsAction`, against a comparable focused pre-change report. Local focused reports are not project-wide Sonar metrics. If no relevant branches improve, inspect the report and test inputs before accepting the cohort; retain tests only when they assert meaningful distinct behavior. Do not claim the Sonar gate is fixed without a subsequent server analysis of the pushed revision. Leave generated reports untracked and out of the commit.
