@@ -1895,3 +1895,100 @@ The user explicitly approved excluding these non-.NET scripts from Sonar coverag
   ```
 
   Expected: the commit contains only those two files. Do not change `coverage.runsettings`, production code, tests, workflows beyond the exclusion value, the current-state status page, or other verification evidence as part of this task.
+
+---
+
+### Task 16: Repair SonarCloud Failure Diagnostics PowerShell Syntax
+
+**Files:**
+- Modify: `.github/workflows/sonarcloud.yml` only.
+
+**Scope and evidence:** The failure-only `Explain failed SonarCloud quality gate` step has an unterminated regex string at line 211, introduced by `cbab6e2`. It cannot affect a green run, but its script fails to parse when diagnostics are needed. Analysis `2026-10-30T20:25:29+0000` of `32d4eca9ae028cf4350627d66b1905fa76c6d5e8` is GREEN; this repair is independent of coverage and must not alter the hardened workflow, exclusions, gate behavior, or secrets handling.
+
+- [ ] **Step 1: Fix the condition only**
+
+  Replace the malformed condition with exactly:
+
+  ```powershell
+  if ($env:SONAR_PULL_REQUEST -match '^\d+$') {
+  ```
+
+  Review `git diff -- .github/workflows/sonarcloud.yml` to confirm this is the only workflow change relative to the starting revision. Do not change coverage configuration or other diagnostics logic.
+
+- [ ] **Step 2: Parse the actual diagnostics block and check whitespace**
+
+  Extract the named step's `run:` block from the workflow without executing it, then parse it using the PowerShell AST parser:
+
+  ```powershell
+  $workflow = Get-Content .github\workflows\sonarcloud.yml -Raw
+  $match = [regex]::Match($workflow, '(?ms)^      - name: Explain failed SonarCloud quality gate\r?\n.*?^        run: \|\r?\n(?<script>.*?)(?=^      - name: |\z)')
+  if (-not $match.Success) { throw 'Diagnostics run block not found.' }
+  $script = $match.Groups['script'].Value
+  $tokens = $null
+  $errors = $null
+  [System.Management.Automation.Language.Parser]::ParseInput($script, [ref]$tokens, [ref]$errors) | Out-Null
+  if ($errors.Count -ne 0) { $errors | Format-List | Out-String | Write-Error; throw 'Diagnostics block has PowerShell parse errors.' }
+  git diff --check
+  ```
+
+  Expected: zero AST parse errors and `git diff --check` exits zero. This is a syntax check, not proof of a live red-gate API response. Do not edit status or verification reports; do not mix this fix with Task 17.
+
+---
+
+### Task 17: Cover Notification List Ordering and Presentation
+
+**Files:**
+- Modify: `tests/OpenHab.App.Tests/Notifications/NotificationsPageControlTests.cs`.
+- Inspect only: `src/OpenHab.Windows.Tray/Notifications/NotificationListProjection.cs`, `src/OpenHab.App/Localization/DefaultEnglishTextLocalizer.cs`.
+
+**Scope and decision:** The green analysis `2026-10-30T20:25:29+0000` for `32d4eca9ae028cf4350627d66b1905fa76c6d5e8` reports overall coverage 85.6%, line 89.1%, branch 79.0%, and new coverage 92.3% against 80%; 5,731 lines are coverable, 626 uncovered, and the new period has 1,848 lines, 94 uncovered lines and 125 uncovered conditions. Task 15's five PowerShell exclusions are confirmed effective. The gate is already green, so choose behavior rather than gate pressure.
+
+`NotificationListProjection.cs` has 13 uncovered lines and 10 conditions (75% line / 37.5% branch). It is deterministic projection despite its tray location: existing `NotificationsPageControlTests` cover name sorting and a 12-minute label, but not date order, ties, elapsed boundaries, or read/severity presentation. It uses only the `Visibility` enum, not live WinUI controls or OS calls. `NotificationMediaCache` already tests eviction, age, traversal and atomic cleanup; its remaining misses are less cohesive. `SitemapUiLogic` now mostly has partial guards after Task 14; the runtime controller is much larger and asynchronous. `WindowsFocusInfoReader` has testable injected decisions already exercised, but much of its remaining body is process/OS integration. This task promises no gate or numerical improvement.
+
+- [ ] **Step 1: Capture focused baseline**
+
+  Before editing tests, run the following with a fresh GUID directory, retaining the report path; repeat identically after edits using a new GUID. Do not delete existing results.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-NotificationProjectionCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~NotificationsPageControlTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm `NotificationListProjection.cs` is in the report and use the same configuration, filter and settings both times.
+
+- [ ] **Step 2: Add deterministic projection behavior cases**
+
+  Extend the existing class and its notification factory as appropriate. Use a fixed UTC `now`, `DefaultEnglishTextLocalizer.Instance`, and assertions through `CreateRows` and the returned view models:
+
+  - Verify ascending and descending creation-date order with distinct timestamps; for equal timestamps assert title then message use ordinal case-insensitive order and IDs break remaining ties ordinally. For name order assert the same message/ID tie-breakers and retain the existing null-title localized fallback test. Assert row identity and data are preserved.
+  - Cover elapsed boundaries: future and 59 seconds give `Just now`; 1 minute gives `1m ago`, 59 minutes `59m ago`, 1 hour `1h ago`, 23 hours `23h ago`, and 1 day `1d ago`. Assert results by ID, not assumed input order.
+  - Test all read/dismissed combinations: only neither read nor dismissed is unread; assert `UnreadVisibility` is `Visible` or `Collapsed` accordingly. For null, whitespace and populated severity, assert `SeverityText` preserves non-null text and `SeverityVisibility` is collapsed for blank, visible otherwise. Assert a null title becomes `openHAB` and icon/message values survive projection.
+  - Assert null notifications and null localizer each throw `ArgumentNullException`; empty input returns an empty list. Avoid reflection, actual UI creation, sleeps, machine clock or OS integration.
+
+  No production change or coverage exclusion is in scope. If a case exposes a genuine correctness issue, preserve failure evidence and stop for separate correctness planning instead of changing behavior to raise coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; tests should pass existing behavior rather than necessarily start red:
+
+  ```powershell
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~NotificationsPageControlTests -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`, distinguishing the known DesktopBridge import limitation from test failures. No tray or package build is required for test-only changes.
+
+- [ ] **Step 4: Compare focused coverage and check formatting**
+
+  Repeat Step 1 in a fresh directory. Resolve the target file ID within each module and compare covered/total sequence and branch points, including source lines and per-method points for `CreateRows`, `FormatElapsedTime`, and view-model properties. Report baseline and post counts and unchanged relevant points; retain only distinct meaningful tests if points do not improve. Focused OpenCover is not Sonar new-code coverage; only a subsequent server analysis can establish actual impact. Leave generated reports out of version control.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.App.Tests\Notifications\NotificationsPageControlTests.cs
+  git diff --check
+  ```
+
+  Expected: direct tests and formatting checks pass. Do not edit status or verification reports or add production changes or exclusions absent a separately considered correctness finding.
