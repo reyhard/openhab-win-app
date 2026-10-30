@@ -58,6 +58,173 @@ public sealed class SitemapRowVisualPolicyTests
             SitemapRowVisualPolicy.BuildRowVisualStateKey(onRow, rowIndex: 3));
     }
 
+    [Fact]
+    public void BuildRowIdentityKey_UsesItemFallbackWithEmptyOptionalFields()
+    {
+        var row = KeyRow(
+            RenderControlKind.Slider,
+            label: "Salon",
+            action: RenderActionKind.SendCommand,
+            itemName: "Salon_Dimmer");
+
+        Assert.Equal(
+            "item:Salon_Dimmer:Slider:SendCommand:Salon::::",
+            SitemapRowVisualPolicy.BuildRowIdentityKey(row));
+    }
+
+    [Fact]
+    public void BuildRowIdentityKey_ItemFallbackIncludesEveryOptionalField()
+    {
+        var row = KeyRow(
+            RenderControlKind.Slider,
+            label: "Salon",
+            action: RenderActionKind.SendCommand,
+            itemName: "Salon_Dimmer",
+            iconName: "light",
+            command: "ON",
+            releaseCommand: "OFF",
+            period: "PT1H");
+
+        var identity = SitemapRowVisualPolicy.BuildRowIdentityKey(row);
+
+        Assert.Equal("item:Salon_Dimmer:Slider:SendCommand:Salon:light:ON:OFF:PT1H", identity);
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { ItemName = "Salon_Dimmer_2" }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Control = RenderControlKind.Setpoint }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Action = RenderActionKind.Navigate }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Label = "Salon 2" }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { IconName = "switch" }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Command = "50" }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { ReleaseCommand = "STOP" }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Period = "PT2H" }));
+    }
+
+    [Fact]
+    public void BuildRowIdentityKey_UsesAnonymousFallbackWhenAllIdentitySourcesAreBlank()
+    {
+        var row = KeyRow(
+            RenderControlKind.Text,
+            label: "Ustawienia",
+            action: RenderActionKind.Navigate,
+            itemName: "   ",
+            widgetId: " ",
+            searchResultKey: "\t");
+
+        Assert.Equal(
+            "row:Text:Navigate::Ustawienia",
+            SitemapRowVisualPolicy.BuildRowIdentityKey(row));
+    }
+
+    [Fact]
+    public void BuildRowIdentityKey_AnonymousFallbackReflectsIconControlActionAndLabel()
+    {
+        var row = KeyRow(RenderControlKind.Text, label: "Ustawienia", action: RenderActionKind.Navigate);
+
+        var identity = SitemapRowVisualPolicy.BuildRowIdentityKey(row);
+
+        Assert.Equal("row:Text:Navigate::Ustawienia", identity);
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { IconName = "gear" }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Control = RenderControlKind.Fallback }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Action = RenderActionKind.None }));
+        Assert.NotEqual(identity, SitemapRowVisualPolicy.BuildRowIdentityKey(row with { Label = "Settings" }));
+    }
+
+    [Theory]
+    [InlineData(RenderControlKind.Webview)]
+    [InlineData(RenderControlKind.Mapview)]
+    [InlineData(RenderControlKind.Video)]
+    public void BuildRowVisualStateKey_MediaRowsRefreshForEachMediaInput(RenderControlKind control)
+    {
+        var row = KeyRow(control, label: "Media", widgetId: "media-1");
+
+        var key = SitemapRowVisualPolicy.BuildRowVisualStateKey(row, rowIndex: 0);
+        var expected = $"key:widget:media-1|control:{control}|action:None|label:Media|icon:|command:|release:|url:|raw:|encoding:|height:";
+
+        Assert.Equal(expected, key);
+        Assert.NotEqual(key, SitemapRowVisualPolicy.BuildRowVisualStateKey(row with { Url = "http://openhab.local/cam" }, rowIndex: 0));
+        Assert.NotEqual(key, SitemapRowVisualPolicy.BuildRowVisualStateKey(row with { Encoding = "video/mp4" }, rowIndex: 0));
+        Assert.NotEqual(key, SitemapRowVisualPolicy.BuildRowVisualStateKey(row with { HeightRows = 5 }, rowIndex: 0));
+    }
+
+    [Fact]
+    public void BuildRowVisualStateKey_MediaRawStatePrefersMostSpecificValue()
+    {
+        var row = KeyRow(
+            RenderControlKind.Webview,
+            label: "Media",
+            widgetId: "media-raw",
+            state: "40",
+            rawState: "41",
+            rawItemState: "42");
+
+        var key = SitemapRowVisualPolicy.BuildRowVisualStateKey(row, rowIndex: 0);
+
+        Assert.Equal(
+            "key:widget:media-raw|control:Webview|action:None|label:Media|icon:|command:|release:|url:|raw:42|encoding:|height:",
+            key);
+        Assert.Equal(key, SitemapRowVisualPolicy.BuildRowVisualStateKey(row with { RawState = "39", State = "38" }, rowIndex: 0));
+    }
+
+    [Fact]
+    public void BuildRowVisualStateKey_MediaRawStateFallsThroughToStateAndThenEmpty()
+    {
+        var withRawState = KeyRow(
+            RenderControlKind.Mapview,
+            label: "Media",
+            widgetId: "media-fallback",
+            state: "40",
+            rawState: "41");
+        var withStateOnly = withRawState with { RawState = null };
+
+        var rawStateKey = SitemapRowVisualPolicy.BuildRowVisualStateKey(withRawState, rowIndex: 0);
+        Assert.EndsWith("|raw:41|encoding:|height:", rawStateKey, StringComparison.Ordinal);
+        Assert.Equal(
+            rawStateKey,
+            SitemapRowVisualPolicy.BuildRowVisualStateKey(withRawState with { State = "39" }, rowIndex: 0));
+
+        var stateKey = SitemapRowVisualPolicy.BuildRowVisualStateKey(withStateOnly, rowIndex: 0);
+        Assert.EndsWith("|raw:40|encoding:|height:", stateKey, StringComparison.Ordinal);
+        Assert.NotEqual(
+            stateKey,
+            SitemapRowVisualPolicy.BuildRowVisualStateKey(withStateOnly with { State = "39" }, rowIndex: 0));
+        Assert.EndsWith(
+            "|raw:|encoding:|height:",
+            SitemapRowVisualPolicy.BuildRowVisualStateKey(withStateOnly with { State = null }, rowIndex: 0),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildRowVisualStateKey_NonMediaRowsIgnoreMediaFieldsAndRowIndex()
+    {
+        var row = KeyRow(
+            RenderControlKind.Toggle,
+            label: "Salon",
+            widgetId: "toggle-1",
+            state: "OFF",
+            rawState: "OFF");
+
+        var key = SitemapRowVisualPolicy.BuildRowVisualStateKey(row, rowIndex: 0);
+
+        Assert.Equal(
+            "key:widget:toggle-1|control:Toggle|action:None|label:Salon|icon:|command:|release:",
+            key);
+        Assert.Equal(
+            key,
+            SitemapRowVisualPolicy.BuildRowVisualStateKey(
+                row with { Url = "http://openhab.local", Encoding = "video/mp4", HeightRows = 5, RawItemState = "ON" },
+                rowIndex: 7));
+    }
+
+    [Fact]
+    public void BuildRowVisualStateKey_NonMediaRowsReflectCommandAndReleaseCommand()
+    {
+        var row = KeyRow(RenderControlKind.Button, label: "Salon", widgetId: "button-1", command: "ON");
+
+        var key = SitemapRowVisualPolicy.BuildRowVisualStateKey(row, rowIndex: 0);
+
+        Assert.NotEqual(key, SitemapRowVisualPolicy.BuildRowVisualStateKey(row with { Command = "50" }, rowIndex: 0));
+        Assert.NotEqual(key, SitemapRowVisualPolicy.BuildRowVisualStateKey(row with { ReleaseCommand = "OFF" }, rowIndex: 0));
+    }
+
     [Theory]
     [InlineData("Brightness [42 %%]", 12, "Brightness [12 %%]")]
     [InlineData("42 %%", 0, "0 %%")]
@@ -270,4 +437,41 @@ public sealed class SitemapRowVisualPolicyTests
         string? state,
         IReadOnlyList<SitemapMapOption> options) =>
         new("Row", state, control, RenderActionKind.SendCommand, RenderDensity.Comfortable, options);
+
+    private static SitemapRowDescriptor KeyRow(
+        RenderControlKind control,
+        string label,
+        RenderActionKind action = RenderActionKind.None,
+        string? widgetId = null,
+        string? itemName = null,
+        string? searchResultKey = null,
+        string? iconName = null,
+        string? command = null,
+        string? releaseCommand = null,
+        string? period = null,
+        string? state = null,
+        string? rawState = null,
+        string? rawItemState = null,
+        string? url = null,
+        string? encoding = null,
+        int? heightRows = null) =>
+        new(
+            label,
+            state,
+            control,
+            action,
+            RenderDensity.Compact,
+            [],
+            RawState: rawState,
+            IconName: iconName,
+            RawItemState: rawItemState,
+            Command: command,
+            ReleaseCommand: releaseCommand,
+            Url: url,
+            Period: period,
+            ItemName: itemName,
+            WidgetId: widgetId,
+            HeightRows: heightRows,
+            SearchResultKey: searchResultKey,
+            Encoding: encoding);
 }
