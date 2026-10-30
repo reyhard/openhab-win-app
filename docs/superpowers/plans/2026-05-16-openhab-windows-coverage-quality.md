@@ -1297,3 +1297,99 @@ git commit -m "Record coverage improvement verification"
 - Spec coverage: The plan covers baseline evidence, narrow coverage exclusions, extraction of settings shortcut logic, sitemap visual policy, shared navigation transition logic, Main UI page promotion logic, and verification.
 - Placeholder scan: The plan does not use placeholder implementation steps. All new classes and tests include concrete code.
 - Type consistency: Planned type names are consistent across tasks: `ShortcutActionEditorPlanner`, `SitemapRowVisualPolicy`, `SitemapNavigationTransitionPlanner`, and `MainUiPagePromotionPlanner`.
+
+---
+
+### Task 8: Cover Shortcut Windows Mapper Pure Branches
+
+**Files:**
+- Modify: `tests/OpenHab.App.Tests/Shortcuts/ShortcutWindowsMapperTests.cs`
+
+**Scope and evidence:**
+
+- SonarQube project `reyhard_openhab-win-app`, `main`, analyzed 2026-10-30, reports `77.5%` overall coverage, `79.3%` line coverage, and `73.7%` branch coverage.
+- `src/OpenHab.Windows.Tray/Shortcuts/ShortcutWindowsMapper.cs` is a focused low-risk candidate: `68/103` lines covered (`66.0%` line coverage) and `65/148` conditions covered (`43.9%` branch coverage), leaving 35 lines and 83 conditions uncovered.
+- Source inspection confirms the mapper is already a static, deterministic key/modifier/formatting translation helper. It has no Windows API calls beyond `VirtualKey` enum values, and `tests/OpenHab.App.Tests/OpenHab.App.Tests.csproj` already references the tray project with bootstrap initialization disabled. Extend its existing test class only; do not extract, exclude, or modify production code unless a failing test demonstrates a real mapper correctness defect.
+
+- [ ] **Step 1: Add focused failing mapper coverage tests**
+
+  In `tests/OpenHab.App.Tests/Shortcuts/ShortcutWindowsMapperTests.cs`, add test-first cases that exercise currently untested behavior without asserting implementation details:
+
+  - `TryMap` maps `Alt` alone and the complete `Win`/`Ctrl`/`Alt`/`Shift` combination to their native flag mask, including duplicate/out-of-order modifiers after `ShortcutBindingFormatter` normalization.
+  - `TryMap` rejects a null binding, blank/whitespace key, a valid modifier with an unsupported key, and a normalized binding with no modifiers; assert that both `uint` out values remain zero on each rejection path.
+  - `TryMapVirtualKey(ShortcutBinding?, ...)` rejects null, blank, `None`, unsupported text, and invalid function-key numbers (`F0`, `F25`); assert `VirtualKey.None` is returned on failure.
+  - `TryMapVirtualKey` accepts trimmed/case-insensitive named keys and enum aliases (`" enter "`, `"pageup"`, `"left"`), parses one-character letters/digits, and covers `F1`/`F24` boundary values.
+  - `FormatKey` covers representative supported navigation/editing keys not already covered (`Delete`, `Insert`, arrows, `Home`, `End`, `Enter`, `Tab`) and an unsupported non-modifier key returning an empty display string.
+  - `IsModifierKey` covers the remaining left/right Windows, Control, Menu, and Shift variants plus a non-modifier key.
+
+  Keep the existing key-format and modifier theories where they overlap; consolidate them only when doing so improves clarity. Do not add tests for private members through reflection.
+
+- [ ] **Step 2: Run the focused tests to demonstrate the red state**
+
+  Run before making any production change:
+
+  ```powershell
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~ShortcutWindowsMapperTests --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  Expected: the new tests pass if the existing mapper behavior is correct. If one fails, retain the failure evidence and stop to determine whether it identifies a user-observable mapper contract defect; only then propose a narrowly scoped follow-up source task rather than changing this test-only task's scope.
+
+- [ ] **Step 3: Verify the full App test project**
+
+  Run:
+
+  ```powershell
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  Expected: PASS. This is the direct-logic verification gate for the test-only change; no tray build or package build is required unless production code changes.
+
+- [ ] **Step 4: Collect and inspect scoped coverage**
+
+  Run:
+
+  ```powershell
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~ShortcutWindowsMapperTests --collect "XPlat Code Coverage" --results-directory TestResults\ShortcutWindowsMapper -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+  $report = Get-ChildItem TestResults\ShortcutWindowsMapper -Recurse -Filter coverage.opencover.xml | Select-Object -First 1
+  if ($null -eq $report) { throw "Shortcut Windows Mapper coverage report was not created." }
+  [xml]$coverage = Get-Content $report.FullName
+  $file = $coverage.CoverageSession.Modules.Module.Files.File | Where-Object { $_.fullPath -like '*\src\OpenHab.Windows.Tray\Shortcuts\ShortcutWindowsMapper.cs' }
+  if ($null -eq $file) { throw "ShortcutWindowsMapper.cs was not present in the coverage report." }
+  $file.fullPath
+  ```
+
+  Expected: the report contains `ShortcutWindowsMapper.cs`; record the resulting line/branch improvement from the subsequent Sonar analysis in the implementation evidence, not in this historical plan or the current-state status page.
+
+- [ ] **Step 5: Clean generated coverage output**
+
+  Run:
+
+  ```powershell
+  if (Test-Path TestResults\ShortcutWindowsMapper) {
+    Remove-Item -LiteralPath TestResults\ShortcutWindowsMapper -Recurse -Force
+  }
+  ```
+
+  Expected: only the task's generated coverage directory is removed; do not remove unrelated `TestResults` content.
+
+- [ ] **Step 6: Verify formatting and whitespace**
+
+  Run:
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.App.Tests\Shortcuts\ShortcutWindowsMapperTests.cs
+  git diff --check -- tests\OpenHab.App.Tests\Shortcuts\ShortcutWindowsMapperTests.cs
+  ```
+
+  Expected: both commands pass with no formatting or whitespace errors.
+
+- [ ] **Step 7: Commit the test-only improvement**
+
+  Run:
+
+  ```powershell
+  git add tests\OpenHab.App.Tests\Shortcuts\ShortcutWindowsMapperTests.cs
+  git commit -m "Cover shortcut Windows mapper branches"
+  ```
+
+  Expected: the commit contains test changes only. Do not add coverage exclusions, production-source changes, generated coverage reports, or current-status updates.
