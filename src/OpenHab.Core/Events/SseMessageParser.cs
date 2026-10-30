@@ -23,14 +23,17 @@ public static class SseMessageParser
             using var outerDoc = JsonDocument.Parse(json);
             var root = outerDoc.RootElement;
 
+            if (root.ValueKind != JsonValueKind.Object)
+                return null;
+
             if (!root.TryGetProperty("topic", out var topicElement) ||
                 !root.TryGetProperty("type", out var typeElement) ||
                 !root.TryGetProperty("payload", out var payloadElement))
                 return null;
 
-            var topic = topicElement.GetString();
-            var type = typeElement.GetString();
-            var payloadString = payloadElement.GetString();
+            var topic = GetStringOrNull(topicElement);
+            var type = GetStringOrNull(typeElement);
+            var payloadString = GetStringOrNull(payloadElement);
 
             if (topic is null || type is null || payloadString is null)
                 return null;
@@ -41,6 +44,9 @@ public static class SseMessageParser
 
             using var payloadDoc = JsonDocument.Parse(payloadString);
             var payloadRoot = payloadDoc.RootElement;
+
+            if (payloadRoot.ValueKind != JsonValueKind.Object)
+                return null;
 
             if (!payloadRoot.TryGetProperty("value", out var valueElement))
                 return null;
@@ -73,6 +79,9 @@ public static class SseMessageParser
             return null;
         return segments[2];
     }
+
+    private static string? GetStringOrNull(JsonElement element) =>
+        element.ValueKind == JsonValueKind.String ? element.GetString() : null;
 
     private static string? GetValueAsString(JsonElement element) =>
         element.ValueKind switch

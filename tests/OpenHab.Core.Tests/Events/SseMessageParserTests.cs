@@ -110,9 +110,49 @@ public sealed class SseMessageParserTests
         Assert.Null(SseMessageParser.ParseLine(line));
     }
 
-    // Wrong-typed envelope values (for example a numeric topic) and non-object JSON roots are deliberately not
-    // exercised here: JsonElement.GetString/TryGetProperty throw InvalidOperationException for those shapes and
-    // ParseLine only catches JsonException, so asserting a result would encode unverified behavior.
+    // Wrong-typed envelope values (for example a numeric topic) and non-object JSON roots are guarded before
+    // access: JsonElement.GetString/TryGetProperty throw InvalidOperationException for those shapes and ParseLine
+    // only catches JsonException, so ParseLine checks ValueKind for both roots and each string field.
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData(@"""text""")]
+    public void ParseLine_NonObjectOuterRoot_ReturnsNull(string json)
+    {
+        Assert.Null(SseMessageParser.ParseLine(BuildLine(json)));
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData(@"""text""")]
+    public void ParseLine_NonObjectNestedPayloadRoot_ReturnsNull(string payloadJson)
+    {
+        var line = BuildEnvelope(StateTopic, StateEventType, payloadJson);
+
+        Assert.Null(SseMessageParser.ParseLine(line));
+    }
+
+    [Theory]
+    [InlineData("topic", "42")]
+    [InlineData("topic", "true")]
+    [InlineData("topic", "[]")]
+    [InlineData("topic", "{}")]
+    [InlineData("type", "42")]
+    [InlineData("type", "true")]
+    [InlineData("type", "[]")]
+    [InlineData("type", "{}")]
+    [InlineData("payload", "42")]
+    [InlineData("payload", "true")]
+    [InlineData("payload", "[]")]
+    [InlineData("payload", "{}")]
+    public void ParseLine_WrongKindEnvelopeField_ReturnsNull(string field, string rawValue)
+    {
+        var line = BuildEnvelopeWithWrongKind(field, rawValue);
+
+        Assert.Null(SseMessageParser.ParseLine(line));
+    }
+
     [Theory]
     [InlineData("topic")]
     [InlineData("type")]
@@ -230,6 +270,18 @@ public sealed class SseMessageParserTests
     {
         var fields = DefaultEnvelope(StateTopic, StateEventType, StatePayload);
         fields[field] = null;
+        return BuildLine(JsonSerializer.Serialize(fields));
+    }
+
+    private static string BuildEnvelopeWithWrongKind(string field, string rawValue)
+    {
+        var fields = new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["topic"] = StateTopic,
+            ["type"] = StateEventType,
+            ["payload"] = StatePayload
+        };
+        fields[field] = JsonSerializer.Deserialize<JsonElement>(rawValue);
         return BuildLine(JsonSerializer.Serialize(fields));
     }
 
