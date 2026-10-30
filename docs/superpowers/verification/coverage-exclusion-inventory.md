@@ -24,6 +24,8 @@ Do not apply `[ExcludeFromCodeCoverage]` to files that mix OS glue with parseabl
 - Sonar: list files in `.github/workflows/sonarcloud.yml` under `sonar.coverage.exclusions` using repo-relative `src/...` patterns.
 - Attribute-based tools: use `[ExcludeFromCodeCoverage]` on thin wrapper types. Large WinUI code-behind and control-factory files are excluded through file-pattern configuration after their testable decisions have been extracted to neutral layers.
 
+The five PowerShell tooling entries under `scripts/` and `tests/CompatibilityProbe/` are Sonar-only exclusions. `XPlat Code Coverage` with `coverage.runsettings` instruments .NET assemblies and never reports `.ps1` files, so no `coverage.runsettings` entry exists or is required for them; that is why this documentation point has no third configuration location. The exclusion removes no C# coverage target, `sonar.cpd.exclusions` still lists only the three existing WinUI files, and the scripts remain verified by their own integration and release workflow instead of unit coverage.
+
 ## Excluded Files
 
 | File | Reason | Verification |
@@ -60,6 +62,15 @@ Do not apply `[ExcludeFromCodeCoverage]` to files that mix OS glue with parseabl
 | `src/OpenHab.Windows.Notifications/ShortcutRegistrar.cs` | Windows notification registration | Notification tests and Release build |
 | `src/OpenHab.Windows.Notifications/ToastService.cs` | Windows toast API integration | Notification tests and Release build |
 | `src/OpenHab.Core/Auth/WindowsCredentialStore.cs` | Windows Credential Manager wrapper | Core auth tests for non-Windows abstractions and Release build |
+| `scripts/Test-OpenHabServerCompatibility.ps1` | PowerShell compatibility tooling; not measurable by `dotnet test`/OpenCover | `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` |
+| `scripts/Sync-AppVersion.ps1` | PowerShell release tooling; not measurable by `dotnet test`/OpenCover | `bump-app-version.yml` release run and the CI `scripts/Sync-AppVersion.ps1 -CheckOnly` step |
+| `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` | PowerShell compatibility tooling; not measurable by `dotnet test`/OpenCover | `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` |
+| `tests/CompatibilityProbe/FakeOpenHabCompatibilityServer.ps1` | PowerShell compatibility tooling; not measurable by `dotnet test`/OpenCover | `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` |
+| `tests/CompatibilityProbe/StalledCompatibilityParser.ps1` | PowerShell compatibility tooling; not measurable by `dotnet test`/OpenCover | `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` |
+
+### PowerShell Exclusion Evidence
+
+These five rows are Sonar-only entries for non-.NET tooling. Analysis `2026-10-30T19:39:23+0000` of revision `cbab6e2124f3c2d9e41338c3c60c3a27721d6317` reported 607 of 701 uncovered new lines as PowerShell, all at 0%, distributed as `scripts/Test-OpenHabServerCompatibility.ps1` 304, `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` 133, `scripts/Sync-AppVersion.ps1` 83, `tests/CompatibilityProbe/FakeOpenHabCompatibilityServer.ps1` 79 and `tests/CompatibilityProbe/StalledCompatibilityParser.ps1` 8; the project-level figures `80.0%` overall, `80.5%` line and `79.0%` branch come from the earlier `2026-10-30T16:42:08+0000` analysis of revision `88911d5ddd31ead25a77437f7a7381cf3672cfa5`. The C# coverage collector can only instrument .NET assemblies, so the gate could never cover these lines. The exclusion is scoped to exactly these five files, adds no C# target, removes nothing from `src/`, and does not replace the test work tracked elsewhere in this inventory.
 
 ## Partial Attribute Exclusions
 
