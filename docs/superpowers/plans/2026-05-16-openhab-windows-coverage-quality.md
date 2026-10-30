@@ -1741,3 +1741,157 @@ The other candidates are weaker for a bounded next step. `SitemapRuntimeControll
   Expected: all tests, the coverage comparison and both checks pass, with observed coverage reported rather than an assumed gate result.
 
   This task changes tests only. Do not change production code, add or adjust coverage exclusions, edit the status page or verification documents, or commit generated coverage reports or temporary result directories.
+
+---
+
+### Task 15: Exclude Non-.NET Compatibility Scripts from Coverage
+
+**Files:**
+- Modify: `.github/workflows/sonarcloud.yml`
+- Modify: `docs/superpowers/verification/coverage-exclusion-inventory.md`
+- Verify only, no edit: `coverage.runsettings`, `scripts/Test-OpenHabServerCompatibility.ps1`, `scripts/Sync-AppVersion.ps1`, `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1`, `tests/CompatibilityProbe/FakeOpenHabCompatibilityServer.ps1`, `tests/CompatibilityProbe/StalledCompatibilityParser.ps1`
+
+**Scope and evidence:** The pushed `main` revision `88911d5ddd31ead25a77437f7a7381cf3672cfa5`, analyzed 2026-10-30 at `2026-10-30T16:42:08+0000`, reports overall coverage `80.0%`, line coverage `80.5%`, and branch coverage `79.0%`. The latest analysis, `2026-10-30T19:39:23+0000` on revision `cbab6e2124f3c2d9e41338c3c60c3a27721d6317`, reports the quality gate ERROR only on new-code coverage at `75.97%` against the `80%` threshold; that new-code period contains 2,455 lines to cover, 701 uncovered lines, and 125 uncovered conditions. A per-file ranking of the uncovered new lines in that `cbab6e2` analysis shows 607 of 701 (86.6%) are PowerShell: `scripts/Test-OpenHabServerCompatibility.ps1` (304), `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` (133), `scripts/Sync-AppVersion.ps1` (83), `tests/CompatibilityProbe/FakeOpenHabCompatibilityServer.ps1` (79), and `tests/CompatibilityProbe/StalledCompatibilityParser.ps1` (8). All five report `0%` because the C# OpenCover collection can only instrument .NET assemblies, so `dotnet test` can neither execute nor measure these scripts and those lines cannot be covered by this gate.
+
+The user explicitly approved excluding these non-.NET scripts from Sonar coverage. Scope is exactly those five PowerShell tooling files. The compatibility probe and its fake-server and stalled-parser fixtures are verified by their own integration script (`tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1`) rather than by unit coverage, and `scripts/Sync-AppVersion.ps1` is release tooling exercised by `bump-app-version.yml` and the CI `-CheckOnly` step. No C# file is added to coverage or CPD exclusions: `sonar.cpd.exclusions` keeps only the three existing WinUI files, and every `src/**/*.cs` coverage target from Tasks 1-14 stays visible. This exclusion is not a substitute for the earlier test work and must not be used to hide testable logic; it only stops counting script files that the C# coverage toolchain cannot measure.
+
+- [ ] **Step 1: Add the five paths to `sonar.coverage.exclusions`**
+
+  The workflow currently passes one `sonar.coverage.exclusions` property as a single quoted, comma-separated, repo-relative path list inside the `dotnet-sonarscanner begin` invocation. Keep exactly one `/d:sonar.coverage.exclusions=` argument, because a duplicate `/d:` for the same property overrides the earlier value instead of merging with it.
+
+  Keep the list readable without retyping values or breaking the `begin` arguments: move the existing single-line value into a dedicated array in the same `run:` block before the `begin` command, one path per line, keep the existing entries in their current order, and add the five new paths at the end.
+
+  ```powershell
+  $sonarCoverageExclusions = @(
+    'src/OpenHab.Windows.Tray/App.xaml.cs',
+    'src/OpenHab.Windows.Tray/AcrylicBlurHelper.cs',
+    'src/OpenHab.Windows.Tray/DwmWindowDecorations.cs',
+    'src/OpenHab.Windows.Tray/FlyoutWindow.xaml.cs',
+    'src/OpenHab.Windows.Tray/MainWindow.xaml.cs',
+    'src/OpenHab.Windows.Tray/MainUi/MainUiWebViewHost.xaml.cs',
+    'src/OpenHab.Windows.Tray/Notifications/NotificationsPageControl.xaml.cs',
+    'src/OpenHab.Windows.Tray/Rendering/OpenHabIconImageSourceLoader.cs',
+    'src/OpenHab.Windows.Tray/Rendering/CompositionAnimationHelper.cs',
+    'src/OpenHab.Windows.Tray/Rendering/SitemapComboHelper.cs',
+    'src/OpenHab.Windows.Tray/Rendering/SitemapControlFactory.cs',
+    'src/OpenHab.Windows.Tray/Rendering/SitemapPageTransitionAnimator.cs',
+    'src/OpenHab.Windows.Tray/Rendering/SitemapSurface/SitemapIconAuthResolver.cs',
+    'src/OpenHab.Windows.Tray/Rendering/SitemapSurface/SitemapSurfaceRenderer.cs',
+    'src/OpenHab.Windows.Tray/Settings/SettingsPageControl.xaml.cs',
+    'src/OpenHab.Windows.Tray/Shortcuts/GlobalHotkeyService.cs',
+    'src/OpenHab.Windows.Tray/Shortcuts/HotkeyMessageWindow.cs',
+    'src/OpenHab.Windows.Tray/Shortcuts/RadialCommandMenuWindow.cs',
+    'src/OpenHab.Windows.Tray/Shortcuts/ShortcutInteractiveCommandWindow.cs',
+    'src/OpenHab.Windows.Tray/Shortcuts/ShortcutRecorderControl.cs',
+    'src/OpenHab.Windows.Tray/Shortcuts/ShortcutSettingsControls.cs',
+    'src/OpenHab.Windows.Tray/Tray/TrayIconService.cs',
+    'src/OpenHab.Windows.Tray/Tray/TrayFlyoutPositioner.cs',
+    'src/OpenHab.Windows.Tray/Startup/StartupManager.cs',
+    'src/OpenHab.Windows.Tray/DeviceInfo/WindowsBatteryInfoReader.cs',
+    'src/OpenHab.Windows.Tray/DeviceInfo/WindowsBluetoothInfoReader.cs',
+    'src/OpenHab.Windows.Tray/DeviceInfo/WindowsNetworkInfoReader.cs',
+    'src/OpenHab.Windows.Tray/DeviceInfo/WindowsSessionInfoReader.cs',
+    'src/OpenHab.Windows.Tray/DeviceInfo/WindowsDeviceStateSnapshotSource.cs',
+    'src/OpenHab.Windows.Notifications/ShortcutRegistrar.cs',
+    'src/OpenHab.Windows.Notifications/ToastService.cs',
+    'src/OpenHab.Core/Auth/WindowsCredentialStore.cs',
+    'scripts/Test-OpenHabServerCompatibility.ps1',
+    'scripts/Sync-AppVersion.ps1',
+    'tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1',
+    'tests/CompatibilityProbe/FakeOpenHabCompatibilityServer.ps1',
+    'tests/CompatibilityProbe/StalledCompatibilityParser.ps1'
+  ) -join ','
+  ```
+
+  Then pass that variable as the single property value, preserving the trailing backtick that continues the command so `/d:sonar.qualitygate.wait=true` stays part of the same invocation:
+
+  ```yaml
+              /d:sonar.coverage.exclusions="$sonarCoverageExclusions" `
+  ```
+
+  Use Sonar's comma-separated relative-path glob syntax: repo-relative paths with forward slashes, no `./` prefix, no `**/` prefix, matching how the existing entries are written. Explicit relative paths are sufficient globs for these five single files. Do not touch `sonar.cpd.exclusions`, do not add any `.cs` path, and do not convert the whole property to a wildcard such as `scripts/*.ps1` or `tests/CompatibilityProbe/*.ps1`, which would hide future files that are not part of this approved scope.
+
+- [ ] **Step 2: Update the coverage exclusion inventory**
+
+  In `docs/superpowers/verification/coverage-exclusion-inventory.md`, follow the existing structure instead of adding a new document:
+
+  - Add one row per file to the `## Excluded Files` table, using the same `File | Reason | Verification` columns and the existing backticked repo-relative path style. Use a reason such as `PowerShell compatibility tooling; not measurable by dotnet test/OpenCover` and the verification `tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1` for the compatibility probe, fake server, stalled parser and integration script, and `bump-app-version.yml` plus the CI `Sync-AppVersion.ps1 -CheckOnly` step for `scripts/Sync-AppVersion.ps1`.
+  - Record the evidence in the same entry: analysis `2026-10-30T19:39:23+0000`, revision `cbab6e2124f3c2d9e41338c3c60c3a27721d6317`, the `607` of `701` uncovered new lines, and the per-file counts `304/133/83/79/8`; note that the `80.0`/`80.5`/`79.0` project figures come from the earlier `2026-10-30T16:42:08+0000` analysis of revision `88911d5ddd31ead25a77437f7a7381cf3672cfa5` rather than from the `cbab6e2` analysis.
+  - Extend `## Tool Mapping` with an explicit note that these five entries are Sonar-only: `XPlat Code Coverage` with `coverage.runsettings` instruments .NET assemblies and never reports `.ps1` files, so no `coverage.runsettings` entry exists or is required for them. This records the rationale for the otherwise missing third location instead of silently skipping one of the three documentation points required by `AGENTS.md`.
+  - State in that note that the exclusion removes no C# coverage target and that the scripts remain verified by their own integration/release workflow.
+
+- [ ] **Step 3: Verify the workflow structure and path syntax**
+
+  Run structural assertions instead of relying on eyeballing the long line:
+
+  ```powershell
+  $workflow = Get-Content .github\workflows\sonarcloud.yml -Raw
+  $propertyCount = ([regex]::Matches($workflow, '/d:sonar\.coverage\.exclusions')).Count
+  if ($propertyCount -ne 1) { throw "Expected exactly one sonar.coverage.exclusions argument, found $propertyCount." }
+  if (-not $workflow.Contains('/d:sonar.coverage.exclusions="$sonarCoverageExclusions" `')) { throw 'Coverage exclusions are not passed through the dedicated variable with a continuation backtick.' }
+  if (-not $workflow.Contains("'src/OpenHab.Core/Auth/WindowsCredentialStore.cs'")) { throw 'Existing C# coverage exclusion entries were not preserved.' }
+  if (-not $workflow.Contains(") -join ','")) { throw 'Coverage exclusion array is not joined with commas.' }
+  if (([regex]::Matches($workflow, 'sonar\.cpd\.exclusions')).Count -ne 1) { throw 'Expected exactly one sonar.cpd.exclusions argument.' }
+  $expectedCpd = 'sonar.cpd.exclusions="src/OpenHab.Windows.Tray/FlyoutWindow.xaml.cs,src/OpenHab.Windows.Tray/MainWindow.xaml.cs,src/OpenHab.Windows.Tray/Rendering/SitemapControlFactory.cs"'
+  if (-not $workflow.Contains($expectedCpd)) { throw 'sonar.cpd.exclusions must keep exactly its three existing WinUI entries.' }
+  foreach ($path in @(
+    'scripts/Test-OpenHabServerCompatibility.ps1',
+    'scripts/Sync-AppVersion.ps1',
+    'tests/CompatibilityProbe/Test-OpenHabServerCompatibility.Integration.ps1',
+    'tests/CompatibilityProbe/FakeOpenHabCompatibilityServer.ps1',
+    'tests/CompatibilityProbe/StalledCompatibilityParser.ps1'
+  )) {
+    if (([regex]::Matches($workflow, [regex]::Escape($path))).Count -ne 1) { throw "Expected exactly one occurrence of $path." }
+  }
+  ```
+
+  Expected: all assertions pass, the variable is declared in the same `run:` block before `dotnet-sonarscanner begin`, and the quoted value still ends with the backtick continuation so `/d:sonar.qualitygate.wait=true` remains part of the same command. Also review the rendered `begin` line by reading it after the edit to confirm no stray quote, missing comma, or split-line break was introduced.
+
+  If the `powershell-yaml` module is available, additionally run `Get-Content .github\workflows\sonarcloud.yml -Raw | ConvertFrom-Yaml | Out-Null` and expect no parse error; if it is not installed, rely on the structural assertions plus the line review rather than adding a new tool dependency.
+
+- [ ] **Step 4: Verify whitespace and formatting**
+
+  ```powershell
+  git diff --check -- .github\workflows\sonarcloud.yml docs\superpowers\verification\coverage-exclusion-inventory.md
+  ```
+
+  Expected: no output and exit code `0`, with no trailing-whitespace or mixed line-ending changes in either file.
+
+- [ ] **Step 5: Confirm the .NET gates and the PowerShell verification path**
+
+  Run the C# gates that remain the regression signal for this configuration change:
+
+  ```powershell
+  dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  Expected: C# tests pass. Note the known limitation explicitly: this command cannot validate the five excluded `.ps1` scripts and does not exercise Sonar exclusion behavior, because `XPlat Code Coverage` and `dotnet test` only instrument .NET assemblies; a full-solution run may also surface the known DesktopBridge `.wapproj` import limitation, which must be reported separately from test failures.
+
+  Then run the script-side verification that actually covers the compatibility tooling:
+
+  ```powershell
+  pwsh -NoProfile -File tests\CompatibilityProbe\Test-OpenHabServerCompatibility.Integration.ps1
+  ```
+
+  Expected: PASS against the fake server. If the environment cannot run it, record the reason and do not claim the excluded scripts are verified.
+
+- [ ] **Step 6: Confirm the post-push Sonar analysis recomputes coverage**
+
+  After committing and pushing, wait for the `SonarCloud` workflow and check the analysis of the pushed revision via the Sonar API/UI. Expect:
+
+  - the five `.ps1` paths no longer appear in coverage measures or per-file coverage lists;
+  - `lines_to_cover` and `uncovered_lines` are recomputed without those files, and the new-code metric is recomputed for the new period;
+  - the visible effect is the removal of 607 previously uncounted-for-coverage new lines, so `new_coverage` should be recalculated against a smaller denominator.
+
+  Do not promise a specific gate result or state that the gate is fixed. Report the observed `new_coverage`, `lines_to_cover`, `uncovered_lines` and the presence/absence of the five paths exactly as returned. If the paths still appear, confirm the scanner received the property (the analysis log should show a single merged `sonar.coverage.exclusions` value) before treating it as a coverage-metric problem.
+
+- [ ] **Step 7: Independent review, then commit**
+
+  Ask an independent reviewer to confirm three things before committing: the argument count and quoting in `sonarcloud.yml` are correct and the script still parses; the excluded set is exactly the five approved PowerShell files with no C# additions to `sonar.coverage.exclusions` or `sonar.cpd.exclusions`; and the inventory rows plus the `coverage.runsettings` rationale satisfy the three-place documentation rule.
+
+  ```powershell
+  git add .github\workflows\sonarcloud.yml docs\superpowers\verification\coverage-exclusion-inventory.md
+  git commit -m "Exclude non-.NET compatibility scripts from coverage"
+  ```
+
+  Expected: the commit contains only those two files. Do not change `coverage.runsettings`, production code, tests, workflows beyond the exclusion value, the current-state status page, or other verification evidence as part of this task.
