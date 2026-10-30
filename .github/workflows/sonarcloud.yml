@@ -208,7 +208,7 @@ jobs:
           try {
             $projectKey = [Uri]::EscapeDataString($env:SONAR_PROJECT_KEY)
             $requestUrl = "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$projectKey"
-            if ($env:SONAR_PULL_REQUEST -match '^\d+) {
+            if ($env:SONAR_PULL_REQUEST -match '^\d+$') {
               $requestUrl += "&pullRequest=$env:SONAR_PULL_REQUEST"
             } else {
               $branch = [Uri]::EscapeDataString($env:SONAR_BRANCH)
