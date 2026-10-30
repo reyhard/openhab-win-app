@@ -1618,3 +1618,63 @@ The formatter is a stronger narrow next cohort than chasing overall percentages:
   ```
 
   Expected: focused and direct tests and checks pass; assess measured coverage rather than assuming gate passage.
+
+---
+
+### Task 13: Cover Sitemap Row Identity and Media Refresh Keys
+
+**Files:**
+- Modify: `tests/OpenHab.Rendering.Tests/SitemapSurface/SitemapRowVisualPolicyTests.cs`
+- Inspect only: `src/OpenHab.Rendering/SitemapSurface/SitemapRowVisualPolicy.cs`
+
+**Scope and decision:** The pushed `main` revision `bef8e44de6c8a13ccc377022ac8a9cfa6f91d1ff`, analyzed 2026-10-30 at 15:22:54 UTC, has project coverage 79.5%, line 80.3%, branch 77.9%, 1,248 uncovered lines and 652 uncovered conditions. The quality gate remains ERROR at 75.3% new coverage against 80%. Task 12 improved the visual policy to 85.26% new coverage and 96.1% line / 75.0% branch overall, but Sonar still reports uncovered lines 62–64, line 55 at 1/2 conditions, line 70 at 2/18, and line 74 at 5/6. Source inspection maps these to identity fallback and media visual-key construction, not slider formatting. Existing direct tests cover search and widget identities and non-media state stability, but not the item/anonymous identity fallbacks or media key inputs. These pure keys govern row matching and media refresh, making the cohort meaningful and bounded; compiler-generated conditions may not all be reachable independently.
+
+`SitemapUiLogic.cs` remains at 79.12% new coverage with 3 new lines / 16 conditions missed, but its prior color cohort and aggregate counts alone do not identify a comparably specific uncovered behavior. The asynchronous runtime controller has 18 / 21 misses at 87.25% new coverage and a much larger setup; the notification resolver has 1 / 1 at 86.67% and requires HTTP/cache orchestration. Do not infer gate impact from file percentages or promise passage.
+
+- [ ] **Step 1: Capture a focused baseline**
+
+  Before test changes, collect a report using the command below; retain its path. Repeat with a new GUID after changes. Do not delete existing results.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-RowKeyCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapRowVisualPolicyTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm `SitemapRowVisualPolicy.cs` appears in the report; use the same configuration, filter and settings for both runs.
+
+- [ ] **Step 2: Add public identity and media-key cases**
+
+  Extend the existing test class, asserting observable key strings or equality/inequality:
+
+  - With no search key or widget ID, an item row produces `item:` identity including its item name, control, action, label and optional icon, command, release command and period. Assert null optional values produce empty fields; use populated values to show relevant changes alter the key.
+  - With blank search key, widget ID and item name, assert the anonymous `row:` fallback includes control, action, icon and label; verify null icon produces an empty field and a populated icon changes the identity. Preserve the existing search-over-widget precedence test.
+  - For each of `Webview`, `Mapview` and `Video`, hold identity constant and show URL, encoding and height changes independently change the visual key. Assert a fully null media payload produces empty `url`, `raw`, `encoding` and `height` fields. Test raw-state precedence: `RawItemState` over `RawState` over `State`, falling through to empty only when all are null; changing a lower-priority value while a higher-priority value exists leaves the key unchanged.
+  - For a non-media control, changes to these media-only fields and row index leave the visual key unchanged; changing an included command or release command changes it. Use stable widget identity to isolate visual-key decisions.
+
+  Exercise public APIs only, with no reflection, exclusions or production changes. If a contract reveals a genuine defect, preserve the failing evidence and stop for separate correctness planning rather than altering production behavior to improve coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; new tests should pass existing behavior:
+
+  ```powershell
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapRowVisualPolicyTests -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`, distinguishing the known DesktopBridge import limitation from test failures. No tray or package build is required for test-only changes.
+
+- [ ] **Step 4: Compare coverage and verify formatting**
+
+  Repeat Step 1 in a fresh directory. Resolve the target file ID within each report's module and compare covered/total sequence and branch points for the file and specifically `BuildRowIdentityKey` and `BuildRowVisualStateKey`, including source lines and unchanged points. If targeted points do not improve, inspect inputs and retain only distinct meaningful contracts. Focused OpenCover is not Sonar new-code coverage; only a subsequent server analysis of the pushed revision establishes gate impact. Keep reports out of commits and do not edit status or verification reports.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.Rendering.Tests\SitemapSurface\SitemapRowVisualPolicyTests.cs
+  git diff --check -- tests\OpenHab.Rendering.Tests\SitemapSurface\SitemapRowVisualPolicyTests.cs
+  ```
+
+  Expected: tests and formatting checks pass; report observed coverage rather than assuming any gate result.
