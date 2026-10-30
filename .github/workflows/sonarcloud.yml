@@ -83,9 +83,11 @@ jobs:
             dotnet restore $project
           }
 
-      - name: Build and analyze
+      - name: Build, test and analyze
+        id: analysis
         shell: pwsh
         env:
+          MSBUILDDISABLENODEREUSE: "1"
           SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
           SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -120,7 +122,8 @@ jobs:
             /d:sonar.cpd.exclusions="src/OpenHab.Windows.Tray/FlyoutWindow.xaml.cs,src/OpenHab.Windows.Tray/MainWindow.xaml.cs,src/OpenHab.Windows.Tray/Rendering/SitemapControlFactory.cs" `
             /d:sonar.qualitygate.wait=true
 
-          dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore --no-incremental
+          # Keep resource generation single-threaded; WinUI/MSIX PRI files are shared across referenced projects.
+          dotnet build src\OpenHab.Windows.Tray\OpenHab.Windows.Tray.csproj --configuration Release --no-restore --no-incremental -m:1
 
           $testProjects = @(
             "tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj",
@@ -130,12 +133,77 @@ jobs:
           )
 
           foreach ($testProject in $testProjects) {
+            # Avoid rebuilding shared WinUI dependencies inside the coverage test host.
+            dotnet build $testProject --configuration Release --no-restore -m:1
             dotnet test $testProject `
               --configuration Release `
               --no-restore `
+              --no-build `
               --collect "XPlat Code Coverage" `
               --settings coverage.runsettings `
               --results-directory TestResults
           }
 
+          $reports = @(Get-ChildItem -Path TestResults -Filter coverage.opencover.xml -Recurse -File)
+          if ($reports.Count -ne $testProjects.Count) {
+            throw "Expected $($testProjects.Count) OpenCover reports, found $($reports.Count)."
+          }
+
+          # A failing quality gate makes scanner end return 1. Mark that we reached it
+          # so the diagnostic step does not query an older analysis after a build failure.
+          "analysis_submitted=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+
+      - name: Explain failed SonarCloud quality gate
+        if: ${{ failure() && steps.analysis.outputs.analysis_submitted == 'true' }}
+        shell: pwsh
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_BRANCH: ${{ github.head_ref || github.ref_name }}
+          SONAR_PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          try {
+            $projectKey = [Uri]::EscapeDataString($env:SONAR_PROJECT_KEY)
+            $requestUrl = "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$projectKey"
+            if ($env:SONAR_PULL_REQUEST -match '^\d+) {
+              $requestUrl += "&pullRequest=$env:SONAR_PULL_REQUEST"
+            } else {
+              $branch = [Uri]::EscapeDataString($env:SONAR_BRANCH)
+              $requestUrl += "&branch=$branch"
+            }
+
+            $headers = @{ Authorization = "Bearer $env:SONAR_TOKEN" }
+            $gate = Invoke-RestMethod -Uri $requestUrl -Headers $headers -ErrorAction Stop
+            $failed = @($gate.projectStatus.conditions | Where-Object { $_.status -eq "ERROR" })
+            $summary = @(
+              '### SonarCloud quality gate diagnostics',
+              '' ,
+              "**Status:** $($gate.projectStatus.status)",
+              '',
+              '| Failing metric | Actual | Threshold |',
+              '| --- | --- | --- |'
+            )
+            foreach ($condition in $failed) {
+              $summary += "| $($condition.metricKey) | $($condition.actualValue) | $($condition.errorThreshold) |"
+            }
+            if ($failed.Count -eq 0) {
+              $summary += '| No failing conditions returned | - | - |'
+            }
+            $summaryText = $summary -join "`n"
+            Write-Host $summaryText
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summaryText -Encoding utf8
+          } catch {
+            Write-Warning "Could not retrieve SonarCloud quality gate details: $($_.Exception.Message)"
+          }
+
+      - name: Upload OpenCover reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-opencover
+          path: TestResults/**/coverage.opencover.xml
+          if-no-files-found: warn
+          retention-days: 14
