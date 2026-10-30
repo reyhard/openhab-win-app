@@ -1678,3 +1678,66 @@ The formatter is a stronger narrow next cohort than chasing overall percentages:
   ```
 
   Expected: tests and formatting checks pass; report observed coverage rather than assuming any gate result.
+
+---
+
+### Task 14: Cover Input-Hint Date and Time Normalization
+
+**Files:**
+- Modify: `tests/OpenHab.Rendering.Tests/SitemapUiLogicTests.cs`
+- Inspect only: `src/OpenHab.Rendering/SitemapUiLogic.cs`
+
+**Scope and decision:** The pushed `main` revision `346ac2c85540b318a026b118e095459838e8860f`, analyzed 2026-10-30 at 16:22:09 UTC, reports project coverage 79.8%, line 80.4%, branch 78.6%, 1,245 uncovered lines and 632 uncovered conditions. The quality gate remains ERROR: `new_coverage` is 75.97% against the 80% threshold; the new period has 2,455 lines to cover, 701 uncovered new lines and 125 uncovered new conditions. Task 13 closed `SitemapRowVisualPolicy.cs` at 100% overall and new coverage, so that file no longer offers remaining points. `SitemapUiLogic.cs` is 79.12% new coverage with exactly 3 uncovered new lines and 16 uncovered new conditions (94.0% line / 75.8% branch overall), and Sonar reports lines 247, 248 and 249 as the uncovered ones: the `SitemapInputHint.Date`, `.Time` and `.DateTime` formatted-output arms of public `NormalizeInputByHint`. That is a distinct cohort from Task 10's color arms, and the existing tests cover only the number and color arms.
+
+The other candidates are weaker for a bounded next step. `SitemapRuntimeController.cs` still needs asynchronous runtime, event-stream and reconcile setup spread across a very large file; `NotificationMediaResolver.cs` has very few uncovered new points but needs HTTP, notification-media cache and image orchestration; `SseMessageParser.cs` has no comparable uncovered new lines. Only a later Sonar analysis of the pushed revision can establish gate impact, so this task promises no coverage number and no quality-gate passage.
+
+- [ ] **Step 1: Capture a focused baseline**
+
+  Before editing tests, collect a focused OpenCover report into a fresh task-specific directory using the existing `SitemapUiLogicTests` filter and repository coverage settings; retain the report path for comparison and do not delete existing results:
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-InputHintCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapUiLogicTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm the report contains `SitemapUiLogic.cs`, and use the same filter, configuration and settings for both runs.
+
+- [ ] **Step 2: Add precise public normalization cases**
+
+  Extend the existing test class with the Date, Time and DateTime hints of `NormalizeInputByHint`, asserting exact strings only through the public API. Make the culture assumption explicit: set and restore `CultureInfo.CurrentCulture` inside the test, or assert only invariant inputs, instead of depending on the machine's default culture.
+
+  - Valid invariant inputs produce the documented normalized formats `yyyy-MM-dd`, `hh\:mm\:ss` and `yyyy-MM-dd'T'HH:mm:ss`: Date `"  2024-02-29  "` becomes `"2024-02-29"`; Time `"  12:34  "` becomes `"12:34:00"`, including the seconds the format appends; DateTime `"  2024-02-29T12:34:56  "` becomes `"2024-02-29T12:34:56"`. Add a Date input carrying a time component, such as `"2024-02-29T12:34:56"` to `"2024-02-29"`, as a second deterministic invariant case rather than assuming offset conversion.
+  - Unparsable input falls through to the trimmed raw value: Date `"  not-a-date  "` becomes `"not-a-date"`; Time `"  not-a-time  "` becomes `"not-a-time"`; DateTime `"  not-a-datetime  "` becomes `"not-a-datetime"`.
+  - Culture-specific input parses through the current-culture fallback and still yields the normalized invariant output, for example `"29.02.2024"` under `pl-PL` becoming `"2024-02-29"`. Keep this case only if the runner resolves that culture; otherwise drop it rather than weakening the assertion.
+  - Null, empty and whitespace-only input return `null` for each of the three hints.
+  - The `SitemapInputHint.Number` leading-zero arm already has coverage, so add a plain-number case such as `" 12.50 "` becoming `"12.5"` only if the Step 4 report shows the plain-number arm still uncovered and the case adds distinct meaning.
+
+  Assert public results rather than private parsing helpers. If an expectation exposes a genuine correctness defect, preserve the failing evidence and stop for separate correctness planning instead of changing production behavior to raise coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; these test-only additions are expected to pass against existing behavior rather than start red:
+
+  ```powershell
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapUiLogicTests --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` and report the known DesktopBridge `.wapproj` import limitation separately from test failures. No tray or package build is required for a test-only change.
+
+- [ ] **Step 4: Compare fresh coverage and verify formatting**
+
+  Repeat Step 1 into a new GUID directory. Resolve the `SitemapUiLogic.cs` file ID inside each report's module and compare covered/total sequence and branch points for `NormalizeInputByHint` and its Date, Time and DateTime parsers, including source lines 247, 248 and 249, before and after. Report the before/after counts and any points that did not change, and retain only tests that assert distinct meaningful contracts. Focused OpenCover points are not Sonar new-code metrics; only a subsequent server analysis of the pushed revision establishes gate impact.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.Rendering.Tests\SitemapUiLogicTests.cs
+  git diff --check -- tests\OpenHab.Rendering.Tests\SitemapUiLogicTests.cs
+  ```
+
+  Expected: all tests, the coverage comparison and both checks pass, with observed coverage reported rather than an assumed gate result.
+
+  This task changes tests only. Do not change production code, add or adjust coverage exclusions, edit the status page or verification documents, or commit generated coverage reports or temporary result directories.
