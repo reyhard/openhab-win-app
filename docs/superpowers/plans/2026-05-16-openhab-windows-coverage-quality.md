@@ -1442,3 +1442,63 @@ git commit -m "Record coverage improvement verification"
   ```
 
   Expected: tests and checks pass; inspect the fresh OpenCover report's `ShortcutActionEditorPlanner.cs` sequence and branch points, particularly `DraftEqualsAction`, against a comparable focused pre-change report. Local focused reports are not project-wide Sonar metrics. If no relevant branches improve, inspect the report and test inputs before accepting the cohort; retain tests only when they assert meaningful distinct behavior. Do not claim the Sonar gate is fixed without a subsequent server analysis of the pushed revision. Leave generated reports untracked and out of the commit.
+
+---
+
+### Task 10: Cover Sitemap Color Input and Conversion Decisions
+
+**Files:**
+- Modify: `tests/OpenHab.Rendering.Tests/SitemapUiLogicTests.cs`
+- Inspect only: `src/OpenHab.Rendering/SitemapUiLogic.cs`
+
+**Scope and decision:** The pushed `main` commit `179a708`, analyzed 2026-10-30 at 14:44:52 UTC, reports project coverage `78.5%` (previously `78.2%`), line `79.7%` (+0.1pp), branch `75.9%` (+0.7pp), 1,287 uncovered lines (-7), and 711 uncovered conditions (-19). The quality gate remains ERROR: `new_coverage` is `74.0%` versus `80%` (previously `73.3%`). Task 9's planner improved from `85.5%` line / `34.6%` branch (11 lines / 34 conditions uncovered) to `94.7%` / `71.2%` (4 / 15); the mapper after Task 8 was `83.5%` / `74.3%`. The original `179a708` run failed before scanner end on transient CS2012; its retry submitted analysis and failed only the still-red coverage gate.
+
+`SitemapUiLogic.cs` has `86.2%` line / `55.3%` branch coverage, with 39 lines and 72 conditions uncovered. Its public color-input and conversion helpers are pure and directly affect color widget commands and previews; existing tests cover one HSB parse and one red hex command, but not the hue sectors, malformed input, or hexadecimal forms. This focused cohort has meaningful branch potential without expanding the very large runtime controller (`74.6%` / `61.4%`, 195 lines / 179 conditions uncovered), introducing HTTP/cache setup for the notification resolver, or pursuing unreachable formatter internals. Coverage impact and quality-gate passage are not guaranteed.
+
+- [ ] **Step 1: Capture a comparable focused baseline**
+
+  Before editing tests, collect a focused OpenCover report into a new task-specific directory (replace `$results` with a newly generated path for each run):
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-SitemapColorCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapUiLogicTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Retain the report path for comparison; do not delete existing results. Confirm the report contains `SitemapUiLogic.cs`.
+
+- [ ] **Step 2: Add a focused public-behavior cohort**
+
+  Extend the existing test class with theories/facts asserting:
+
+  - `TryResolveOpenHabColor` converts HSB `0,100,100`, `60,100,100`, `120,100,100`, `180,100,100`, `240,100,100`, `300,100,100`, and `360,100,100` to opaque red, yellow, green, cyan, blue, magenta, and red respectively; assert all ARGB channels. Include `120,0,50` as gray `(255,128,128,128)`.
+  - `BuildOpenHabColorCommand` converts opaque red, yellow, green, cyan, blue, magenta, black and white to `0,100,100`, `60,100,100`, `120,100,100`, `180,100,100`, `240,100,100`, `300,100,100`, `0,0,0` and `0,0,100` respectively. This covers hue selection, negative-hue wrap and achromatic handling using observable commands.
+  - `TryParseOpenHabColorState` clamps `-10,150,-5` to `(0,100,0)` and `400,20,110` to `(360,20,100)`; rejects null/blank, fewer than three components, and invalid first, second, or third components. Assert failure rather than assuming all out parameters are reset after partial parsing.
+  - `TryResolveOpenHabColor` accepts trimmed `#abc`, `#123456`, `#80123456`, and case-insensitive `red`, asserting exact ARGB values; rejects `#12`, `#gggggg`, and an unknown name. `NormalizeInputByHint` with `Color` turns `#00FF00` into `120,100,100` and preserves trimmed invalid input `not-a-color`.
+
+  Use public APIs only. No exclusions, reflection, or production changes are in scope. If an asserted contract reveals an actual correctness problem, preserve the failing evidence and stop for separate correctness planning instead of changing production behavior to raise coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially:
+
+  ```powershell
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapUiLogicTests --logger "console;verbosity=minimal" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  Expected: all pass against existing behavior; this test-only task is not expected to start red. If practical also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false` and report the known DesktopBridge import limitation separately. No tray or package build is required for test-only changes.
+
+- [ ] **Step 4: Compare coverage and check formatting**
+
+  Repeat Step 1 with a fresh results path, compare the focused baseline and new report's sequence and branch points in the color parsing/conversion methods, and confirm relevant points improve. Focused OpenCover results are not project-wide Sonar metrics. Retain only meaningful distinct tests; do not promise gate passage without a subsequent Sonar analysis of the pushed revision. Leave generated reports untracked and out of the commit.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.Rendering.Tests\SitemapUiLogicTests.cs
+  git diff --check -- tests\OpenHab.Rendering.Tests\SitemapUiLogicTests.cs
+  ```
+
+  Expected: both checks pass. Do not edit the status page or verification reports as part of this task.
