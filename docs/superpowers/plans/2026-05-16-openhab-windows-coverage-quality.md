@@ -1992,3 +1992,62 @@ The user explicitly approved excluding these non-.NET scripts from Sonar coverag
   ```
 
   Expected: direct tests and formatting checks pass. Do not edit status or verification reports or add production changes or exclusions absent a separately considered correctness finding.
+
+---
+
+### Task 18: Cover Main UI Page Configuration Value Conversion
+
+**Files:**
+- Create: `tests/OpenHab.Core.Tests/Ui/MainUiPageComponentTests.cs`.
+- Inspect only: `src/OpenHab.Core/Ui/MainUiPageComponent.cs`, `tests/OpenHab.Core.Tests/Api/OpenHabHttpClientMainUiPageTests.cs`.
+
+**Scope and decision:** The verified analysis `2026-10-30T20:53:38+0000` for pushed revision `fe0165204a56f40e3c811b884a60bcbd2f9ff016` has a green gate: overall coverage 85.9%, line 89.3%, branch 79.3%, 5,731 lines to cover, 613 uncovered lines and 610 uncovered conditions. New code has 93.07% coverage, 1,848 lines, 81 uncovered lines and 115 uncovered conditions. Task 16's diagnostics fix was pushed and analyzed successfully; Task 17's `NotificationListProjection.cs` is confirmed at 100% line and branch.
+
+`MainUiPageComponent.cs` has 8 uncovered lines and 12 uncovered conditions (74.2% line / 53.8% branch). Its public conversion methods interpret server-provided JSON for promoted-page labels, sidebar visibility and order. Existing Core API tests exercise common string, boolean and integer values but do not directly cover the conversion matrix. These are bounded, deterministic input decisions, including meaningful fallback behavior, rather than OS/UI integration. `NotificationMediaCache` includes filesystem-failure and defensive paths; `SitemapUiLogic` mostly retains partial guards after Task 14. The runtime controller is much larger and asynchronous, and the media resolver needs HTTP/cache orchestration; the SSE parser is a viable separate cohort but should not be bundled here. No coverage or gate improvement is promised: the gate is already green.
+
+- [ ] **Step 1: Capture a focused baseline**
+
+  Before creating the new tests, collect the existing Main UI page API tests as the comparable focused baseline. Retain its fresh report path and repeat the identical filter, settings and configuration after adding tests; do not delete existing results. The filter includes both the existing class and the new class, so the baseline remains meaningful even before the latter exists.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-MainUiConfigCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --filter "FullyQualifiedName~OpenHabHttpClientMainUiPageTests|FullyQualifiedName~MainUiPageComponentTests" --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm the report contains `MainUiPageComponent.cs` and retain the path for comparison.
+
+- [ ] **Step 2: Add public JSON conversion cases**
+
+  Construct components with cloned `JsonElement` values and assert exact results through their public methods, without HTTP, reflection or UI:
+
+  - `GetConfigString`: missing key and JSON null, object and array return null; string preserves its contents, number returns raw JSON text (including a fractional value), and booleans return lowercase `true` and `false`.
+  - `GetConfigBoolean`: missing key, JSON false, invalid string, number, null and object return false; JSON true and case-insensitive string `"TrUe"` return true; string `"false"` returns false.
+  - `GetConfigInt32`: missing key returns null; numeric and invariant integer strings, including signed and whitespace-padded strings, produce the expected integers; JSON fractional and out-of-range numbers, invalid or out-of-range strings, boolean and null return null. Include both Int32 boundaries.
+
+  Keep cases distinct and independent of machine culture. These are tests of existing behavior, not a request to broaden accepted input. If a case reveals a real correctness issue, preserve its failure and stop for a separate correctness decision; do not change production code or coverage exclusions merely to increase coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; the test-only cases should pass existing behavior:
+
+  ```powershell
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --filter "FullyQualifiedName~OpenHabHttpClientMainUiPageTests|FullyQualifiedName~MainUiPageComponentTests" -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`, reporting the known DesktopBridge import limitation separately from test failures. No tray or package build is required for this test-only change.
+
+- [ ] **Step 4: Compare focused coverage and check formatting**
+
+  Repeat Step 1 in a new GUID directory. Resolve the source file ID within each report's module and compare covered/total sequence and branch points for `MainUiPageComponent.cs` and each of its three conversion methods, including source lines and unchanged points. Report baseline and post counts; if targeted points do not improve, inspect inputs and retain only distinct meaningful behavioral tests. Focused OpenCover points are not project-wide or new-code Sonar metrics; only a later server analysis establishes actual impact. Do not add generated reports to version control.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.Core.Tests\Ui\MainUiPageComponentTests.cs
+  git diff --check
+  ```
+
+  Expected: tests and checks pass. Do not edit status or verification reports, or add production changes or exclusions absent a separately considered correctness finding.
