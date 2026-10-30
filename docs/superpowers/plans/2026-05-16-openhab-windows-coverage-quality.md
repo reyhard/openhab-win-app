@@ -2051,3 +2051,64 @@ The user explicitly approved excluding these non-.NET scripts from Sonar coverag
   ```
 
   Expected: tests and checks pass. Do not edit status or verification reports, or add production changes or exclusions absent a separately considered correctness finding.
+
+---
+
+### Task 19: Cover SSE Event Envelope and Payload Decisions
+
+**Files:**
+- Modify: `tests/OpenHab.Core.Tests/Events/SseMessageParserTests.cs`.
+- Inspect only: `src/OpenHab.Core/Events/SseMessageParser.cs`.
+
+**Scope and decision:** Verified analysis `2026-10-30T21:03:31+0000` of pushed `de248d6611342e7395c212d96a5eb5eb647238bc` has gate OK: overall coverage 86.1%, line 89.4%, branch 79.7%, with 5,731 lines to cover, 605 uncovered lines and 598 uncovered conditions. New code is 93.07%, with 1,848 lines, 81 uncovered lines and 115 uncovered conditions. Task 18 is confirmed at 100% line and branch for `MainUiPageComponent.cs`.
+
+`SseMessageParser.cs` has 9 uncovered lines and 14 conditions (81.6% line / 65.0% branch). Its 84-line pure parser makes a cohesive boundary around incoming SSE messages; existing tests cover three valid event types, a non-item topic, blank lines and comments, but omit malformed JSON, missing envelope fields, topic structure, payload values and unknown event types. These are genuine event acceptance and rejection decisions with no HTTP, filesystem or timing setup. The 1,909-line async runtime controller has a larger opportunity but would require selecting and staging a separate tightly bounded runtime behavior; the media cache's eviction paths already have tests and its remaining paths include filesystem failures, while the resolver requires HTTP/cache orchestration. The shortcut mapper's remaining enum fallbacks are partly redundant after Task 8, and the sitemap parser has broader, mixed widget decisions and substantial existing fixture coverage. None is bundled here. The gate is already green; no numerical improvement or gate outcome is promised.
+
+- [ ] **Step 1: Capture a focused baseline**
+
+  Before editing, collect the existing parser tests into a fresh task-specific directory; retain the report path and repeat the identical command with a new GUID after editing. Do not delete existing results.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-SseParserCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --filter FullyQualifiedName~SseMessageParserTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm `SseMessageParser.cs` appears in the report; use the same configuration, filter and settings for both runs.
+
+- [ ] **Step 2: Add event parsing cases**
+
+  Extend the existing test class through `ParseLine`, constructing valid outer JSON with serialized nested payload strings where useful. Assert:
+
+  - Non-data fields such as `event: update` and `data:{}` without the required space return null; malformed outer JSON and malformed nested payload JSON return null.
+  - Each of `topic`, `type`, and `payload` missing independently, and each explicitly JSON null independently, returns null with the other envelope fields valid. Use object-shaped JSON; do not assume wrong-typed envelope values or a non-object root are caught, since `GetString`/`TryGetProperty` can throw `InvalidOperationException`.
+  - With a valid payload and event type, topics with fewer than three segments, an incorrect first segment, and an incorrect second segment return null. Retain the existing non-item test; do not invent an empty-item-name validation absent from the current parser.
+  - Missing payload `value` and JSON null, object, or array values return null; numeric `12.50` yields the exact raw text `12.50`, and boolean `true` and `false` yield lowercase text in a typed state event. Assert event type, item name, state, topic and type for accepted cases.
+  - A valid envelope and payload with an unsupported event type returns null. Existing string-valued state and command tests remain the positive controls.
+
+  Avoid reflection and real event streams. No production changes or coverage exclusions are in scope; if a case reveals a genuine correctness issue, preserve the failure and stop for separate correctness planning rather than changing behavior to raise coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; test-only additions should pass existing behavior:
+
+  ```powershell
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore --filter FullyQualifiedName~SseMessageParserTests -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`, reporting the known DesktopBridge import limitation separately from test failures. No tray or package build is required for this test-only change.
+
+- [ ] **Step 4: Compare focused coverage and check formatting**
+
+  Repeat Step 1 in a new GUID directory. Resolve the target file ID within each report's module and compare covered/total sequence and branch points for `ParseLine`, `ExtractItemName` and `GetValueAsString`, including source lines, before/after counts and unchanged points. If targeted points do not improve, inspect inputs and retain only distinct meaningful behavioral tests. Focused OpenCover points are not project-wide or new-code Sonar metrics; only a subsequent server analysis establishes actual impact. Do not add generated reports to version control.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.Core.Tests\Events\SseMessageParserTests.cs
+  git diff --check
+  ```
+
+  Expected: tests and checks pass. Do not edit status or verification reports, add production changes or exclusions absent a separately considered correctness finding, or commit as part of planning.
