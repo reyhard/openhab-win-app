@@ -1502,3 +1502,60 @@ git commit -m "Record coverage improvement verification"
   ```
 
   Expected: both checks pass. Do not edit the status page or verification reports as part of this task.
+
+---
+
+### Task 11: Cover State Pattern Formatting Flags and Invalid Patterns
+
+**Files:**
+- Modify: `tests/OpenHab.Sitemaps.Tests/OpenHabStatePatternFormatterTests.cs`
+- Inspect only: `src/OpenHab.Sitemaps/Runtime/OpenHabStatePatternFormatter.cs`
+
+**Scope and decision:** Sonar analysis `2026-10-30T14:58:10+0000`, revision `127b4464759efc5e275b24106c5ed86e1f26b6b0`, reports project coverage 79.1% (line 80.0%, branch 77.0%; 1,265 uncovered lines and 678 uncovered conditions). The quality gate remains ERROR at 74.0% new coverage, threshold 80%. Task 10 raised `SitemapUiLogic.cs` to 94.0% line / 75.8% branch overall, but its new code remains 79.12%, with 3 uncovered lines and 16 conditions.
+
+The formatter is a stronger narrow next cohort than chasing overall percentages: its new code has 81.03% coverage with 17 uncovered lines and 27 conditions, and existing tests cover basic formatting but omit common signs, zero padding, literal escapes, and malformed conversions. These are deterministic, user-visible display and safe-fallback contracts. `SitemapRowVisualPolicy.cs` is also viable (80.77%, 6 lines / 24 conditions), particularly slider precision, but its existing slider tests already exercise the main paths and some remaining conditions overlap formatter calls. The runtime controller has 18 lines / 21 conditions uncovered but 87.25% new coverage and more involved asynchronous setup; the notification resolver has only 1 line / 1 condition at 86.67%. `SseMessageParser.cs` has zero new lines to cover, and the mapper/planner are fully covered on new code. The new-code period and server aggregation determine the actual gate impact; neither an improvement nor reaching 80% is promised.
+
+- [ ] **Step 1: Capture focused baseline**
+
+  Before changing tests, run the following and retain the report path. Repeat with a new GUID after adding tests; never delete existing results.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-PatternCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --filter FullyQualifiedName~OpenHabStatePatternFormatterTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+- [ ] **Step 2: Add public formatting and fallback cases**
+
+  Extend the existing theories with exact output assertions for:
+
+  - Numeric signs and padding: `("%+06.1f", "3.2") -> "+003.2"`; `("%06.1f", "-3.2") -> "-003.2"`; `("%06.1f", "3.2") -> "0003.2"`; `("% 5d", "42") -> "   42"`; `("%-5d", "42") -> "42   "`; `("%+d", "-42") -> "-42"`.
+  - Default float precision and escaped literals on both sides: `("%f", "1.25") -> "1.250000"`; `("%% %d %%", "42") -> "% 42 %"`; string input is not given a numeric sign: `("%+5s", "ab") -> "   ab"`.
+  - Safe rejection (`null` result): null or empty raw state with `%d`; `%`, `%5`, `%.f`, `%q`, `%d %s`, and a trailing unescaped `%` after `%d`, all with raw `"42"`; `%d` with `"not-a-number"`; `%f` with `"not-a-number"`.
+
+  Exercise only public APIs and do not change production code or exclusions. If a case reveals a genuine correctness problem, preserve the failure and stop for separate correctness planning; do not alter the contract merely to raise coverage. Avoid assuming unreachable private defensive branches can be hit.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; the new tests should pass against existing behavior, not necessarily start red:
+
+  ```powershell
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore --filter FullyQualifiedName~OpenHabStatePatternFormatterTests -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`; distinguish the known DesktopBridge import limitation from test failures. No tray or package build is required for test-only changes.
+
+- [ ] **Step 4: Compare fresh OpenCover reports and verify formatting**
+
+  Repeat Step 1 and compare baseline and after reports for `OpenHabStatePatternFormatter.cs`, using file IDs within each module and method sequence/branch points, not report-wide percentages. Inspect visited counts and source lines for the new sign, padding, escape and rejection cases; report covered/total sequence points and branch points before and after, and identify any points that did not change. Confirm both reports contain the target and use the same focused test filter and settings. OpenCover points are not Sonar new-code metrics; only a subsequent server analysis of the pushed revision can establish gate impact. Do not add reports to the commit or update status/verification reports.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.Sitemaps.Tests\OpenHabStatePatternFormatterTests.cs
+  git diff --check -- tests\OpenHab.Sitemaps.Tests\OpenHabStatePatternFormatterTests.cs
+  ```
+
+  Expected: all tests and checks pass and meaningful targeted coverage improves; if it does not, inspect the points and retain only distinct behavioral tests.
