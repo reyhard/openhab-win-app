@@ -1559,3 +1559,62 @@ The formatter is a stronger narrow next cohort than chasing overall percentages:
   ```
 
   Expected: all tests and checks pass and meaningful targeted coverage improves; if it does not, inspect the points and retain only distinct behavioral tests.
+
+---
+
+### Task 12: Cover Slider Precision and Display Fallback Decisions
+
+**Files:**
+- Modify: `tests/OpenHab.Rendering.Tests/SitemapSurface/SitemapRowVisualPolicyTests.cs`
+- Inspect only: `src/OpenHab.Rendering/SitemapSurface/SitemapRowVisualPolicy.cs`
+
+**Scope and decision:** Sonar analysis `2026-10-30T15:11:11+0000`, revision `cf3daaa0715ef062b3e02521e541bc562a996de0`, reports project coverage 79.5%, line 80.3%, branch 77.7%, 1,251 uncovered lines and 656 uncovered conditions; the new-code gate remains ERROR at 75.1% against 80%. Task 11 improved formatter new coverage to 96.55%, with 3 uncovered new lines and 5 conditions. `SitemapRowVisualPolicy.cs` has 80.77% new coverage with 6 uncovered lines and 24 conditions (92.1% line / 70.0% branch overall). Its existing tests cover ordinary slider precision and one pattern rejection, but omit meaningful precision boundaries and fallback inputs. The slider display/command policy is deterministic and user-facing, and offers a bounded new-code opportunity, not merely a low-total-coverage target.
+
+`SitemapUiLogic.cs` is also a candidate at 79.12% new coverage with 3 lines / 16 conditions, but Task 10 already covered its color cohort; without line-level evidence a further broad sweep is less focused. The runtime controller has 18 / 21 new misses but requires navigating a 1,909-line asynchronous controller. The notification resolver has only 1 / 1 new miss, and the SSE parser has no new-code lines. These counts do not establish which particular proposed tests hit Sonar new code; check actual local points and subsequent Sonar analysis. Gate passage is not promised.
+
+- [ ] **Step 1: Capture a focused baseline**
+
+  Before editing tests, run the command below and retain its report path. Repeat with a new GUID after edits; do not delete existing results.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-SliderPolicyCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapRowVisualPolicyTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm the target source appears in the report. Use the same filter, configuration and settings for both runs.
+
+- [ ] **Step 2: Add slider behavior cases**
+
+  Extend existing theories or add focused facts, asserting exact invariant strings through the public APIs:
+
+  - `FormatSliderStateText` with `template: "old 1,000 °C"`, value `2.5`, step `null` returns `"old 2.500 °C"`; template `"no numeric value"`, value `2.5` returns `"2.5"`. A valid pattern `"%.1f °C"` takes precedence over template `"old 1,000 °C"` and step `0.001`, yielding `"2.5 °C"`.
+  - With unsupported pattern `"%q"`, template `"value 1.00 V"`, value `2.5`, step `null`, fallback yields `"value 2.50 V"`; whitespace pattern and negative step with template `null`, value `2.5` yield `"2.5"`.
+  - `FormatSliderStateText(null, 1.23456)` yields `"1.2346"`; template `"0.00000 V"`, value `1.2`, yields `"1.2000 V"`, exercising the four-decimal cap. `FormatSliderCommand(1.23456, null)` yields `"1.2346"`; `FormatSliderCommand(-1.25, 0.01)` yields `"-1.25"`, and `(2d, 0.01)` yields `"2"` after trimming step-driven zeros.
+
+  Assert observable behavior only; no production changes, exclusions, or reflection. If an expected contract fails, preserve evidence and stop for separate correctness planning rather than altering behavior for coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; test-only additions should pass existing behavior:
+
+  ```powershell
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore --filter FullyQualifiedName~SitemapRowVisualPolicyTests -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`, distinguishing the known DesktopBridge import limitation from test failures. No tray or package build is required for test-only changes.
+
+- [ ] **Step 4: Compare coverage and check formatting**
+
+  Repeat Step 1 into a fresh directory. For each report, resolve the target file ID within its module and compare covered/total sequence and branch points for `SitemapRowVisualPolicy.cs`, including source lines and per-method visited points for slider formatting, precision and fallback. Report before/after counts and unchanged relevant points; if no targeted points improve, inspect inputs and retain only distinct meaningful contracts. Focused OpenCover points are not Sonar new-code metrics; only a subsequent server analysis of the pushed revision establishes gate impact. Keep reports out of the commit, and do not edit status or verification reports.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.Rendering.Tests\SitemapSurface\SitemapRowVisualPolicyTests.cs
+  git diff --check -- tests\OpenHab.Rendering.Tests\SitemapSurface\SitemapRowVisualPolicyTests.cs
+  ```
+
+  Expected: focused and direct tests and checks pass; assess measured coverage rather than assuming gate passage.
