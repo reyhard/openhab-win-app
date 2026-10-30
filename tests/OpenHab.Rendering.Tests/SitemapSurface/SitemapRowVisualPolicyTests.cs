@@ -86,6 +86,10 @@ public sealed class SitemapRowVisualPolicyTests
     [InlineData(null, 21.5, 0.5, "21.5")]
     [InlineData("42 %%", 12d, 1d, "12 %%")]
     [InlineData("12", 21.5, 0d, "21.5")]
+    [InlineData("old 1,000 °C", 2.5, null, "old 2.500 °C")]
+    [InlineData("no numeric value", 2.5, null, "2.5")]
+    [InlineData("0.00000 V", 1.2, null, "1.2000 V")]
+    [InlineData(null, 1.23456, null, "1.2346")]
     public void FormatSliderStateText_FallsBackToStepAndTemplatePrecision(
         string? template,
         double value,
@@ -109,12 +113,29 @@ public sealed class SitemapRowVisualPolicyTests
     }
 
     [Theory]
+    [InlineData("%.1f °C", "old 1,000 °C", 2.5, 0.001, "2.5 °C")]
+    [InlineData("%q", "value 1.00 V", 2.5, null, "value 2.50 V")]
+    [InlineData("   ", null, 2.5, -1d, "2.5")]
+    public void FormatSliderStateText_PrefersValidPatternAndFallsBackForUnsupportedPattern(
+        string? statePattern,
+        string? template,
+        double value,
+        double? step,
+        string expected)
+    {
+        Assert.Equal(expected, SitemapRowVisualPolicy.FormatSliderStateText(template, value, step, statePattern));
+    }
+
+    [Theory]
     [InlineData(21.5, 0.5, "21.5")]
     [InlineData(22d, 0.5, "22")]
     [InlineData(21.5, null, "21.5")]
     [InlineData(42d, 1d, "42")]
     [InlineData(42.0000000001, 1d, "42")]
     [InlineData(0.30000000000000004, 0.1, "0.3")]
+    [InlineData(1.23456, null, "1.2346")]
+    [InlineData(-1.25, 0.01, "-1.25")]
+    [InlineData(2d, 0.01, "2")]
     public void FormatSliderCommand_PreservesFractionalStepValues(double value, double? step, string expected)
     {
         Assert.Equal(expected, SitemapRowVisualPolicy.FormatSliderCommand(value, step));
