@@ -2223,3 +2223,63 @@ The user explicitly approved excluding these non-.NET scripts from Sonar coverag
   ```
 
   Expected: tests and checks pass. Review the scoped diff; do not edit status or verification reports, add exclusions or production changes absent a separately considered correctness finding, or commit as part of this task.
+
+---
+
+### Task 22: Cover Shortcut Windows Key Round-Trip Mappings
+
+**Files:**
+- Modify: `tests/OpenHab.App.Tests/Shortcuts/ShortcutWindowsMapperTests.cs`.
+- Inspect only: `src/OpenHab.Windows.Tray/Shortcuts/ShortcutWindowsMapper.cs`, `src/OpenHab.App/Shortcuts/ShortcutBinding.cs`.
+
+**Scope and decision:** Verified analysis `2026-10-30T21:34:11+0000` of pushed `3a3dcadd221641ace010e8d665a69498c77c3719` reports gate OK, overall coverage 86.5% (line 89.7%, branch 80.5%), 5,736 lines to cover, 593 uncovered lines and 576 uncovered conditions; new code is 93.50%, with 1,856 lines, 78 uncovered lines and 107 uncovered conditions. Task 21's `NotificationMediaCache.cs` is confirmed at 89.4% line / 96.2% branch. The gate is already green.
+
+`ShortcutWindowsMapper.cs` has 17 uncovered lines / 38 uncovered conditions (83.5% line / 74.3% branch). Task 8 covered modifier flags, invalid bindings, representative key mappings and all named `FormatKey` arms separately, but most editing/navigation display names have not been mapped back through either binding API. That round trip is a real recorder-to-hotkey contract; it is bounded and deterministic. Do not assume all misses are reachable: `TryNormalize` removes undefined modifiers and blank keys, so the modifier switch default and private empty-key guard cannot be reached through these APIs; `Enum.TryParse` precedes the function-key fallback and most named-key switch arms. In contrast, `Backspace` maps via its alias switch. The private `None` check is reachable through a nonblank binding, and unsupported key rejection is already covered. Numeric enum strings and unusual function spellings need contract review, not coverage-driven assumptions. `NotificationMediaResolver.cs` is a viable later cohort (18 lines / 35 conditions), but needs response/cache setup; the mapper's display-to-binding contract is smaller. No coverage increase or gate outcome is promised.
+
+- [ ] **Step 1: Capture a focused baseline**
+
+  Before editing, collect existing tests into a fresh GUID directory; retain the report path and repeat with a new GUID after editing. Do not delete existing results. Tray mapper tests live in `OpenHab.App.Tests`.
+
+  ```powershell
+  $results = Join-Path $env:TEMP ("OpenHab-ShortcutRoundTripCoverage-" + [guid]::NewGuid().ToString('N'))
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~ShortcutWindowsMapperTests --collect "XPlat Code Coverage" --settings coverage.runsettings --results-directory $results -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  Get-ChildItem $results -Recurse -Filter coverage.opencover.xml | Select-Object -ExpandProperty FullName
+  ```
+
+  Confirm `ShortcutWindowsMapper.cs` appears; use the same configuration, filter and settings for both runs.
+
+- [ ] **Step 2: Add deterministic public mapping cases**
+
+  Extend the existing class through its accessible mapper methods, without reflection or live hotkey registration:
+
+  - For `VirtualKey.Space`, `Back`, `Delete`, `Insert`, `Up`, `Down`, `Left`, `Right`, `PageUp`, `PageDown`, `Home`, `End`, `Enter` and `Tab`, assert the exact existing `FormatKey` display string, then bind that string with Ctrl and assert `TryMapVirtualKey` returns the original key and `TryMap` returns the Ctrl mask and the corresponding native virtual-key value. Explicitly retain `Back` / `Backspace` as the alias case.
+  - Apply the same round trip to boundaries `A`, `Z`, `Number0`, `Number9`, `F1` and `F24`; assert exact display text and values. Test trimmed mixed-case `" backspace "` and `" delete "` with a valid modifier, asserting both APIs agree on the key and modifier mask.
+  - Assert that a binding with only an undefined `ShortcutModifier` and key `A` maps via `TryMapVirtualKey` to `A` but `TryMap` rejects it with zero outputs; with Ctrl plus that undefined modifier, `TryMap` succeeds with only the Ctrl mask. This exercises public normalization behavior without attempting to reach the mapper's impossible modifier default.
+  - Keep existing invalid-key and no-modifier assertions. For an unsupported key with Ctrl, assert the false result and zero key only; do not assert the modifier output is zero after mapping has started. Do not manufacture tests for private defensive branches or assume every new case changes a coverage point.
+
+  These are tests of existing behavior. No production changes or exclusions are in scope; if a case reveals a real correctness issue, preserve the failure and stop for separate correctness planning rather than changing behavior to raise coverage.
+
+- [ ] **Step 3: Run focused and direct logic gates**
+
+  Run sequentially; tests should pass existing behavior:
+
+  ```powershell
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore --filter FullyQualifiedName~ShortcutWindowsMapperTests -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Core.Tests\OpenHab.Core.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Sitemaps.Tests\OpenHab.Sitemaps.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.Rendering.Tests\OpenHab.Rendering.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  dotnet test tests\OpenHab.App.Tests\OpenHab.App.Tests.csproj --no-restore -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false
+  ```
+
+  If practical, also run `dotnet test OpenHab.Windows.sln -m:1 -p:BuildInParallel=false -p:UseSharedCompilation=false`, reporting the known DesktopBridge import limitation separately from test failures. No tray or package build is required for test-only changes.
+
+- [ ] **Step 4: Compare focused coverage and check formatting**
+
+  Repeat Step 1 in a fresh directory. Resolve the target source file ID within each report's module; compare covered/total sequence and branch points, source lines and per-method points for `TryMap`, both `TryMapVirtualKey` overloads and `FormatKey`, including baseline, post and unchanged relevant points. If points do not improve, retain only tests establishing distinct meaningful contracts. Focused OpenCover is not Sonar project-wide or new-code coverage; only a later server analysis establishes actual impact. Leave generated reports untracked.
+
+  ```powershell
+  dotnet format OpenHab.Windows.sln --no-restore --verify-no-changes --include tests\OpenHab.App.Tests\Shortcuts\ShortcutWindowsMapperTests.cs
+  git diff --check -- tests\OpenHab.App.Tests\Shortcuts\ShortcutWindowsMapperTests.cs docs\superpowers\plans\2026-05-16-openhab-windows-coverage-quality.md
+  ```
+
+  Expected: tests and checks pass. Review the scoped diff; do not edit status or verification reports, add production changes or exclusions absent a separately considered correctness finding, or commit as part of planning.
