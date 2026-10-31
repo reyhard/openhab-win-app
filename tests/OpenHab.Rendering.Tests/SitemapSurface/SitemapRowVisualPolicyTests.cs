@@ -58,6 +58,27 @@ public sealed class SitemapRowVisualPolicyTests
             SitemapRowVisualPolicy.BuildRowVisualStateKey(onRow, rowIndex: 3));
     }
 
+
+    [Fact]
+    public void BuildRowVisualStateKey_ChangesWhenFrameHeadingChanges()
+    {
+        var original = new SitemapRowDescriptor(
+            "1 🌱 [Grubosz]",
+            "Grubosz",
+            RenderControlKind.Text,
+            RenderActionKind.None,
+            RenderDensity.Compact,
+            [],
+            IsSectionHeader: true,
+            ItemName: "Miflora_Ficus_Name",
+            WidgetId: "frame-1");
+        var renamed = original with { Label = "1 🌱 [Oregano Kuchnia]", State = "Oregano Kuchnia" };
+
+        Assert.NotEqual(
+            SitemapRowVisualPolicy.BuildRowVisualStateKey(original, rowIndex: 0),
+            SitemapRowVisualPolicy.BuildRowVisualStateKey(renamed, rowIndex: 0));
+    }
+
     [Fact]
     public void BuildRowIdentityKey_UsesItemFallbackWithEmptyOptionalFields()
     {

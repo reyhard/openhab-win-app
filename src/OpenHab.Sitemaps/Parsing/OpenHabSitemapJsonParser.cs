@@ -67,12 +67,16 @@ public static class OpenHabSitemapJsonParser
     private static SitemapWidget ParseWidget(JsonElement widgetElement)
     {
         var rawLabel = GetStringOrDefault(widgetElement, "label");
-        var (label, stateFromLabel) = SplitLabelAndState(rawLabel);
+        var (labelWithoutState, stateFromLabel) = SplitLabelAndState(rawLabel);
 
         var typeRaw = GetStringOrDefault(widgetElement, "type");
         var type = Enum.TryParse<SitemapWidgetType>(typeRaw, ignoreCase: true, out var parsedType)
             ? parsedType
             : SitemapWidgetType.Default;
+
+        // Frame labels are complete section headings. Keep openHAB's already
+        // resolved [%s] value (e.g. "1 🌱 [Grubosz]") in the visible label.
+        var label = type == SitemapWidgetType.Frame ? rawLabel : labelWithoutState;
 
         string? itemName = null;
         string? itemState = null;

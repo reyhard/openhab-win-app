@@ -316,6 +316,50 @@ public sealed class OpenHabSitemapJsonParserTests
         Assert.Equal("22.5", page.Widgets[2].State);
     }
 
+
+    [Theory]
+    [InlineData("1 🌱 [Grubosz]", "Grubosz")]
+    [InlineData("2 🌱 [Oregano Kuchnia]", "Oregano Kuchnia")]
+    [InlineData("ZB1 🌱 [Bazylia]", "Bazylia")]
+    [InlineData("BP1 🌱 [Kaktus]", "Kaktus")]
+    public void ParseHomepagePreservesServerFormattedFrameLabel(string formattedLabel, string plantName)
+    {
+        var json = $"""
+            {
+              "homepage": {
+                "id": "plants",
+                "widgets": [
+                  {
+                    "type": "Frame",
+                    "label": {{JsonSerializer.Serialize(formattedLabel)}},
+                    "item": { "name": "Miflora_Plant_Name", "state": {{JsonSerializer.Serialize(plantName)}} },
+                    "widgets": [
+                      {
+                        "type": "Text",
+                        "label": "Światło [179.0 Lux]",
+                        "item": { "name": "Miflora_Plant_Light", "state": "179.0" }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """;
+
+        var page = OpenHabSitemapJsonParser.ParseHomepage(json);
+
+        Assert.Equal(2, page.Widgets.Count);
+        var frame = page.Widgets[0];
+        Assert.Equal(SitemapWidgetType.Frame, frame.Type);
+        Assert.Equal(formattedLabel, frame.Label);
+        Assert.Equal(plantName, frame.State);
+        Assert.Equal("Miflora_Plant_Name", frame.ItemName);
+
+        var sensor = page.Widgets[1];
+        Assert.Equal("Światło", sensor.Label);
+        Assert.Equal("179.0 Lux", sensor.State);
+    }
+
     [Fact]
     public void ParseWidgetParsesInputHint()
     {
