@@ -162,6 +162,100 @@ public sealed class ShortcutWindowsMapperTests
     }
 
     [Theory]
+    [InlineData(" backspace ", VirtualKey.Back)]
+    [InlineData(" delete ", VirtualKey.Delete)]
+    public void TrimmedMixedCaseKeysMapThroughBothApis(string key, VirtualKey expected)
+    {
+        var binding = new ShortcutBinding([ShortcutModifier.Shift], key);
+
+        Assert.True(ShortcutWindowsMapper.TryMapVirtualKey(binding, out var mappedVirtualKey));
+        Assert.Equal(expected, mappedVirtualKey);
+
+        Assert.True(ShortcutWindowsMapper.TryMap(binding, out var modifiers, out var virtualKey));
+        Assert.Equal(ModShift, modifiers);
+        Assert.Equal((uint)expected, virtualKey);
+    }
+
+    [Fact]
+    public void TryMapVirtualKey_MapsKeyWhenBindingHasOnlyUndefinedModifier()
+    {
+        var binding = new ShortcutBinding([(ShortcutModifier)99], "A");
+
+        Assert.True(ShortcutWindowsMapper.TryMapVirtualKey(binding, out var virtualKey));
+        Assert.Equal(VirtualKey.A, virtualKey);
+    }
+
+    [Fact]
+    public void TryMap_RejectsBindingWithOnlyUndefinedModifierWithoutOutputs()
+    {
+        var binding = new ShortcutBinding([(ShortcutModifier)99], "A");
+
+        var mapped = ShortcutWindowsMapper.TryMap(binding, out var modifiers, out var virtualKey);
+
+        Assert.False(mapped);
+        Assert.Equal(0u, modifiers);
+        Assert.Equal(0u, virtualKey);
+    }
+
+    [Fact]
+    public void TryMap_DropsUndefinedModifierAndKeepsCtrlMask()
+    {
+        var binding = new ShortcutBinding([ShortcutModifier.Ctrl, (ShortcutModifier)99], "A");
+
+        var mapped = ShortcutWindowsMapper.TryMap(binding, out var modifiers, out var virtualKey);
+
+        Assert.True(mapped);
+        Assert.Equal(ModControl, modifiers);
+        Assert.Equal((uint)VirtualKey.A, virtualKey);
+    }
+
+    [Theory]
+    [InlineData(VirtualKey.Space, "Space")]
+    [InlineData(VirtualKey.Back, "Backspace")]
+    [InlineData(VirtualKey.Delete, "Delete")]
+    [InlineData(VirtualKey.Insert, "Insert")]
+    [InlineData(VirtualKey.Up, "Up")]
+    [InlineData(VirtualKey.Down, "Down")]
+    [InlineData(VirtualKey.Left, "Left")]
+    [InlineData(VirtualKey.Right, "Right")]
+    [InlineData(VirtualKey.PageUp, "PageUp")]
+    [InlineData(VirtualKey.PageDown, "PageDown")]
+    [InlineData(VirtualKey.Home, "Home")]
+    [InlineData(VirtualKey.End, "End")]
+    [InlineData(VirtualKey.Enter, "Enter")]
+    [InlineData(VirtualKey.Tab, "Tab")]
+    public void NavigationAndEditingDisplayTextRoundTripsThroughBothApis(VirtualKey key, string displayText)
+    {
+        AssertRoundTripsThroughBothApis(key, displayText);
+    }
+
+    [Theory]
+    [InlineData(VirtualKey.A, "A")]
+    [InlineData(VirtualKey.Z, "Z")]
+    [InlineData(VirtualKey.Number0, "0")]
+    [InlineData(VirtualKey.Number9, "9")]
+    [InlineData(VirtualKey.F1, "F1")]
+    [InlineData(VirtualKey.F24, "F24")]
+    public void BoundaryKeyDisplayTextRoundTripsThroughBothApis(VirtualKey key, string displayText)
+    {
+        AssertRoundTripsThroughBothApis(key, displayText);
+    }
+
+    private static void AssertRoundTripsThroughBothApis(VirtualKey key, string displayText)
+    {
+        Assert.Equal(displayText, ShortcutWindowsMapper.FormatKey(key));
+
+        var binding = new ShortcutBinding([ShortcutModifier.Ctrl], displayText);
+
+        Assert.True(ShortcutWindowsMapper.TryMapVirtualKey(binding, out var mappedVirtualKey));
+        Assert.Equal(key, mappedVirtualKey);
+
+        Assert.True(ShortcutWindowsMapper.TryMap(binding, out var modifiers, out var virtualKey));
+        Assert.Equal(ModControl, modifiers);
+        Assert.Equal((uint)key, virtualKey);
+    }
+
+    [Theory]
     [InlineData(VirtualKey.A, "A")]
     [InlineData(VirtualKey.Number7, "7")]
     [InlineData(VirtualKey.F24, "F24")]
