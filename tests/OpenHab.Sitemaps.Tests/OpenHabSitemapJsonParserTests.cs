@@ -324,15 +324,15 @@ public sealed class OpenHabSitemapJsonParserTests
     [InlineData("BP1 🌱 [Kaktus]", "Kaktus")]
     public void ParseHomepagePreservesServerFormattedFrameLabel(string formattedLabel, string plantName)
     {
-        var json = $"""
+        const string template = """
             {
               "homepage": {
                 "id": "plants",
                 "widgets": [
                   {
                     "type": "Frame",
-                    "label": {{JsonSerializer.Serialize(formattedLabel)}},
-                    "item": { "name": "Miflora_Plant_Name", "state": {{JsonSerializer.Serialize(plantName)}} },
+                    "label": FRAME_LABEL_JSON,
+                    "item": { "name": "Miflora_Plant_Name", "state": PLANT_NAME_JSON },
                     "widgets": [
                       {
                         "type": "Text",
@@ -345,6 +345,9 @@ public sealed class OpenHabSitemapJsonParserTests
               }
             }
             """;
+        var json = template
+            .Replace("FRAME_LABEL_JSON", JsonSerializer.Serialize(formattedLabel), StringComparison.Ordinal)
+            .Replace("PLANT_NAME_JSON", JsonSerializer.Serialize(plantName), StringComparison.Ordinal);
 
         var page = OpenHabSitemapJsonParser.ParseHomepage(json);
 
